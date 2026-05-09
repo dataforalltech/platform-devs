@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +40,7 @@ def _content_hash(content: str) -> str:
 
 def _last_modified_iso(path: Path) -> str:
     ts = path.stat().st_mtime
-    return datetime.fromtimestamp(ts, tz=UTC).isoformat()
+    return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat()
 
 
 def scan_docs(

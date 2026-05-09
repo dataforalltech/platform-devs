@@ -1,0 +1,45 @@
+env: hml
+min_score: 0.70
+
+required_checkers:
+  structure:
+    - has_src_dir
+    - has_tests_dir
+    - has_pyproject_toml
+    - has_dockerfile
+  tests:
+    - has_tests
+    - min_coverage_70
+  security:
+    - no_hardcoded_credentials
+    - no_critical_vulnerabilities
+  docs:
+    - has_readme
+    - has_env_vars_documented
+  lint:
+    - ruff_passing
+
+ideal_checkers:
+  tests:
+    - min_coverage_80
+  docs:
+    - has_adr
+    - has_structured_logs
+
+approval_rules:
+  low:
+    auto_approve_if_score: 0.70
+  medium:
+    required_approvals: 1
+    required_roles:
+      - developer
+  high:
+    required_approvals: 2
+    required_roles:
+      - developer
+      - lead
+  critical:
+    required_approvals: 2
+    required_roles:
+      - developer
+      - lead
