@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,7 @@ def find_stale_docs(
             days_since = int(age_secs / 86400)
 
             if age_secs > threshold_secs:
-                last_updated = datetime.fromtimestamp(last_ts, tz=UTC).isoformat()
+                last_updated = datetime.fromtimestamp(last_ts, tz=timezone.utc).isoformat()
                 rel_path = str(fpath.relative_to(root)).replace("\\", "/")
                 stale_docs.append(
                     {
