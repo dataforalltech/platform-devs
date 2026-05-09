@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "frontzilla-pixelfera-mcp-server": {
+      "command": "node",
+      "args": ["dist/server.js"],
+      "cwd": "/home/dev/repos/platform-devs/frontzilla-pixelfera-mcp-server"
+    }
+  }
+}

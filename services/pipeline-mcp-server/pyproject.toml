@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pipeline-mcp-server"
+version = "1.0.0"
+description = "MCP Server for platform-pipeline — pipeline orchestration and execution"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=0.1.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "httpx>=0.24.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--cov=src --cov-fail-under=80"
