@@ -2,8 +2,9 @@ import asyncio
 import json
 from typing import Any
 
-from mcp import Server, Tool
-from mcp.server import stdio_server
+from mcp.server import Server
+from mcp.server.stdio import stdio_server
+from mcp.types import TextContent, Tool
 
 from ..config.settings import get_settings
 from ..db.store import AuditStore
@@ -207,8 +208,6 @@ def build_server() -> tuple[Server, Any, AuditStore]:
             payload = {"error": "unknown_tool", "tool": name}
         except Exception as exc:
             payload = {"error": "internal_error", "details": str(exc), "tool": name}
-
-        from mcp import TextContent
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
