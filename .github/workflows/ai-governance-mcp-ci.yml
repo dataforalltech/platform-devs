@@ -1,0 +1,112 @@
+name: ai-governance-mcp CI
+
+# Workflow dedicado ao subprojeto ai-governance-mcp-server.
+# Roda apenas quando algo dentro de ai-governance-mcp-server/** muda.
+# Não interfere no CI principal do platform-service-template.
+
+on:
+  push:
+    branches: [master, develop]
+    paths:
+      - "ai-governance-mcp-server/**"
+      - ".github/workflows/ai-governance-mcp-ci.yml"
+  pull_request:
+    branches: [master, develop]
+    paths:
+      - "ai-governance-mcp-server/**"
+      - ".github/workflows/ai-governance-mcp-ci.yml"
+
+defaults:
+  run:
+    working-directory: ai-governance-mcp-server
+
+jobs:
+  test:
+    name: pytest + ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-governance-mcp-server/pyproject.toml
+
+      - name: Install dependencies (editable + dev)
+        run: pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        run: ruff check src/ tests/ scripts/
+
+      - name: Pytest
+        run: pytest -v --tb=short
+
+      - name: Smoke test via stdio MCP client
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+        run: python scripts/smoke_test.py
+
+  graph-validation:
+    name: ecosystem.yaml structural validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-governance-mcp-server/pyproject.toml
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Validate ecosystem.yaml loads with zero structural errors
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          from src.knowledge.ecosystem_graph import EcosystemGraph
+
+          g = EcosystemGraph(Path("knowledge-base/ecosystem.yaml"))
+          r = g.report
+          errors = []
+          if r.broken_edges:
+              errors.append(f"broken_edges: {r.broken_edges}")
+          if r.unknown_kinds:
+              errors.append(f"unknown_kinds: {r.unknown_kinds}")
+          if r.unknown_relations:
+              errors.append(f"unknown_relations: {r.unknown_relations}")
+          if r.orphan_nodes:
+              errors.append(f"orphan_nodes: {r.orphan_nodes}")
+
+          if errors:
+              print("ecosystem.yaml falhou na validação estrutural:")
+              for e in errors:
+                  print(f"  - {e}")
+              sys.exit(1)
+
+          print(f"OK: {r.total_nodes} nós, {r.total_edges} arestas, sem erros estruturais.")
+          PY
+
+      # Scanner roda contra fixtures/tests apenas — em CI não temos os repos
+      # reais montados. O drift contra filesystem real é uma checagem para
+      # rodar localmente / em workflow agendado dedicado, não em PR CI.
+      - name: Scanner self-test (json output)
+        run: |
+          # Cria um pequeno fake-repo dir e roda scanner contra ele.
+          # Garante que o CLI funciona e produz JSON válido.
+          mkdir -p /tmp/fake-repos/platform-foo /tmp/fake-repos/platform-foo/.git
+          cat > /tmp/fake-repos/platform-foo/pyproject.toml <<'TOML'
+          [project]
+          name = "platform-foo"
+          dependencies = ["platform-core-lib>=1.0"]
+          TOML
+          echo "SERVICE_PORT=8050" > /tmp/fake-repos/platform-foo/.env.example
+          python scripts/scan_ecosystem.py --path /tmp/fake-repos --format json | python -c "import sys, json; json.load(sys.stdin); print('Scanner CLI: OK')"

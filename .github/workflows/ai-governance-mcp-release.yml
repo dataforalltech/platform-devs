@@ -1,0 +1,133 @@
+name: ai-governance-mcp release (build + artifact)
+
+# Constrói a imagem Docker do ai-governance-mcp-server quando uma tag
+# `ai-governance-mcp/v*` é criada. NÃO empurra para registry — salva como
+# tarball em GitHub Actions artifact (retenção 90d). O operador puxa o
+# artifact localmente e empurra para o ACR de uma máquina que tenha acesso
+# (ver OPERATIONS.md §6.2).
+#
+# Por que esse fluxo:
+# - Evita expor credenciais do ACR no GitHub Actions.
+# - Funciona mesmo se o ACR tiver Network ACL restringindo IPs externos.
+# - Mantém build reprodutível e auditável em runner CI determinístico.
+# - Operador (humano com acesso ao ACR) controla o push manualmente.
+#
+# Convenção de tag git → tag de imagem:
+#   ai-governance-mcp/v0.1.0  → image:0.1.0 + image:0.1 + image:latest
+#   ai-governance-mcp/v0.1.0-rc1 → image:0.1.0-rc1 (sem :latest)
+#
+# Trigger manual (workflow_dispatch) também produz artifact com a tag
+# fornecida via input.
+
+on:
+  push:
+    tags:
+      - "ai-governance-mcp/v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag da imagem (ex.: 0.1.0-hotfix1). Sem prefixo 'v'."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.tag }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/ai-governance-mcp/v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          IMAGE_REF="ai-governance-mcp-server:${VERSION}"
+          echo "image_ref=$IMAGE_REF" >> "$GITHUB_OUTPUT"
+
+          # Slug seguro p/ nome de arquivo (substitui /, +, etc.)
+          SLUG=$(echo "$VERSION" | tr '/+' '__')
+          echo "slug=$SLUG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build (linux/amd64) and export tarball
+        uses: docker/build-push-action@v5
+        with:
+          context: ai-governance-mcp-server
+          file: ai-governance-mcp-server/Dockerfile
+          platforms: linux/amd64
+          push: false
+          load: false
+          tags: ${{ steps.tag.outputs.image_ref }}
+          outputs: type=docker,dest=/tmp/ai-governance-mcp-server.tar
+          cache-from: type=gha,scope=ai-governance-mcp
+          cache-to: type=gha,scope=ai-governance-mcp,mode=max
+
+      - name: Smoke-test the image (load + python entry)
+        run: |
+          docker load -i /tmp/ai-governance-mcp-server.tar
+          docker run --rm --entrypoint python "${{ steps.tag.outputs.image_ref }}" -c "
+          from pathlib import Path
+          from src.knowledge.governance_repository import GovernanceRepository
+          repo = GovernanceRepository(kb_path=Path('/app/knowledge-base'))
+          assert repo.ecosystem is not None, 'ecosystem.yaml não carregou'
+          stats = repo.ecosystem.stats()
+          assert stats['total_nodes'] >= 70, f'grafo magrelo: {stats}'
+          print(f'OK: image stats = {stats}')
+          "
+
+      - name: Compress artifact (reduz tamanho ~3x)
+        run: |
+          gzip -9 /tmp/ai-governance-mcp-server.tar
+          ls -lh /tmp/ai-governance-mcp-server.tar.gz
+
+      - name: Upload image tarball as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-governance-mcp-server-${{ steps.tag.outputs.slug }}
+          path: /tmp/ai-governance-mcp-server.tar.gz
+          retention-days: 90
+          compression-level: 0  # já comprimido com gzip -9
+
+      - name: Print pull instructions
+        run: |
+          cat <<EOF >> "$GITHUB_STEP_SUMMARY"
+          ## ai-governance-mcp-server v${{ steps.tag.outputs.version }} — image artifact pronto
+
+          ### Como puxar e empurrar para o ACR
+
+          \`\`\`bash
+          # 1. Baixe o artifact desta run (precisa gh CLI logado)
+          gh run download ${{ github.run_id }} \\
+              --repo ${{ github.repository }} \\
+              --name ai-governance-mcp-server-${{ steps.tag.outputs.slug }} \\
+              --dir /tmp/
+
+          # 2. Carregue a imagem no Docker local
+          gunzip -c /tmp/ai-governance-mcp-server.tar.gz | docker load
+
+          # 3. Re-tag para o ACR e empurre (de uma máquina com acesso)
+          docker tag ${{ steps.tag.outputs.image_ref }} \\
+              d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:${{ steps.tag.outputs.version }}
+          docker push d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:${{ steps.tag.outputs.version }}
+
+          # 4. (opcional) tags adicionais :0.1, :latest
+          docker tag ${{ steps.tag.outputs.image_ref }} d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:0.1
+          docker tag ${{ steps.tag.outputs.image_ref }} d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:latest
+          docker push d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:0.1
+          docker push d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:latest
+          \`\`\`
+
+          Ver runbook completo em \`ai-governance-mcp-server/OPERATIONS.md\` §6.2.
+          EOF
