@@ -13,12 +13,13 @@ def _now() -> str:
 
 
 DEFAULT_GATES: dict[str, list[str]] = {
-    "homol": ["qa_tests", "pr_approved"],
-    "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"],
+    "dev": ["audit_compliance"],
+    "homol": ["qa_tests", "pr_approved", "audit_compliance"],
+    "prod": ["qa_tests", "security_scan", "pr_approved", "health_check", "audit_compliance"],
 }
 
 VALID_ENVS = {"dev", "homol", "prod", "blocked", "rollback"}
-VALID_GATE_TYPES = {"qa_tests", "security_scan", "pr_approved", "health_check", "manual_approval"}
+VALID_GATE_TYPES = {"qa_tests", "security_scan", "pr_approved", "health_check", "manual_approval", "audit_compliance"}
 
 
 class PipelineStore:

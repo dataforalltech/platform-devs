@@ -29,7 +29,8 @@ jobs:
           agent-twin-mcp-server,
           config-mcp-server,
           infra-mcp-server,
-          ai-governance-mcp-server
+          ai-governance-mcp-server,
+          audit-mcp-server
         ]
     steps:
       - uses: actions/checkout@v4
