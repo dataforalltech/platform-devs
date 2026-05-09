@@ -1,0 +1,61 @@
+[project]
+name = "ai-governance-mcp-server"
+version = "0.1.0"
+description = "MCP Server centralizado de governança para agentes de IA: diretrizes, políticas, validação de decisão e checklist operacional."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [
+    { name = "dataforalltech platform team" },
+]
+# Dependências com upper bound semver-major (X.*) para reduzir risco de
+# breaking change silenciosa em bump automático. Versões testadas listadas
+# em CHANGELOG.md por release. Revisar bounds quando major bump for
+# aprovado (ex.: pydantic 3.x).
+dependencies = [
+    "mcp>=1.2.0,<2.0",
+    "pydantic>=2.6.0,<3.0",
+    "pydantic-settings>=2.2.0,<3.0",
+    # networkx: grafo in-memory (Python puro, sem servidor externo).
+    "networkx>=3.2,<4.0",
+    # PyYAML: parsing do seed declarativo do ecossistema.
+    "pyyaml>=6.0,<7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0,<9.0",
+    "pytest-asyncio>=0.23.0,<1.0",
+    "ruff>=0.4.0,<1.0",
+]
+
+[project.scripts]
+ai-governance-mcp-server = "src.server.mcp_server:main"
+ai-governance-precommit = "scripts.precommit_validate:main"
+ai-governance-pr-validate = "scripts.pr_validate:main"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-dir]
+"" = "."
+
+include = ["src*", "scripts*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-ra -q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+ignore = ["E501"]

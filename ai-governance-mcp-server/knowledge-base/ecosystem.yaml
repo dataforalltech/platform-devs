@@ -1,0 +1,796 @@
+# ecosystem.yaml — fonte declarativa do grafo de repositórios/serviços/contratos
+#
+# Este arquivo alimenta o EcosystemGraph (in-memory networkx).
+# Edite com revisão humana — assim como qualquer arquivo de governança.
+#
+# Convenções:
+#   - Identificadores são canônicos e únicos.
+#   - status: active | deprecated | planned
+#   - kinds válidos: repository | service | library | contract | team | port
+#   - Use deprecated_by para apontar para o canônico atual.
+#
+# Fonte da verdade para nomes/portas/responsabilidades:
+#   - AGENTS.md §47 (tabela de portas)
+#   - AGENTS.md §49 (mapa de responsabilidades)
+#   - DEVOPS_STANDARDS.md §3
+#
+# Última revisão: 2026-05-08.
+
+nodes:
+  # ============================================================== #
+  # TEAMS                                                          #
+  # ============================================================== #
+  - id: platform-team
+    kind: team
+    name: Platform Team
+    owner: caiog
+
+  # ============================================================== #
+  # LIBRARIES PRIVADAS                                             #
+  # Mudanças exigem LIB CHANGE REQUEST aprovado por @caiog (§18). #
+  # ============================================================== #
+  - id: platform-core-lib
+    kind: library
+    status: active
+    description: Utilitários compartilhados (logger, settings base, helpers).
+    governance: lib_change_request_required
+
+  - id: platform-database-lib
+    kind: library
+    status: active
+    description: Acesso a banco multi-tenant (Postgres + MySQL).
+    governance: lib_change_request_required
+
+  - id: platform-files-lib
+    kind: library
+    status: active
+    description: Operações de arquivo (datalake, S3, local).
+    governance: lib_change_request_required
+
+  - id: platform-db-vector
+    kind: library
+    status: active
+    description: Acesso a vector store. Consumida por agents-factory.
+    governance: lib_change_request_required
+
+  - id: platform-auth-lib
+    kind: library
+    status: active
+    description: JWT validation (decode_token, _verify_token), service tokens, JWTManager FastAPI dependency.
+    governance: lib_change_request_required
+    notes:
+      - "decode_token e _verify_token são idênticos — decode_token é alias público de _verify_token."
+      - "Ambas respeitam AUTH_DEV_BYPASS=true quando ENVIRONMENT=development (skip signature check)."
+      - "Preferir decode_token em código de serviços (API pública, não função prefixada com _)."
+
+  - id: platform-ws-lib
+    kind: library
+    status: active
+    description: WebSocket ConnectionManager, WSRouter (autenticação JWT por query param), register_ws_routers.
+    governance: lib_change_request_required
+    notes:
+      - "WSRouter usa decode_token — respeita AUTH_DEV_BYPASS."
+      - "ConnectionManager.connect() armazena List[WebSocket] por session_id (não single value)."
+      - "Session ID format: {prefix}:{tenant_id}:{sub}."
+
+  - id: platform-events-lib
+    kind: library
+    status: active
+    description: Kafka event bus (producer/consumer), ConsumerManager, build_event_bus.
+    governance: lib_change_request_required
+
+  - id: platform-tenant-lib
+    kind: library
+    status: active
+    description: TenantMiddleware (valida X-Tenant-Id), isolamento de schema por tenant.
+    governance: lib_change_request_required
+    notes:
+      - "Só processa escopo HTTP — conexões WebSocket passam sem interceptação (BaseHTTPMiddleware ignora WS)."
+
+  - id: platform-log-lib
+    kind: library
+    status: active
+    description: Schemas de log de operação, BaseLogRepository e SlowRequestLogMiddleware.
+    governance: lib_change_request_required
+
+  - id: platform-observability-lib
+    kind: library
+    status: active
+    description: Setup OpenTelemetry, Sentry, security headers, rate limiting (slowapi).
+    governance: lib_change_request_required
+
+  - id: platform-data-types-lib
+    kind: library
+    status: active
+    description: DataTypeWrangler — mapeamento canônico de tipos entre engines de banco.
+    governance: lib_change_request_required
+
+  - id: platform-docextract-lib
+    kind: library
+    status: active
+    description: Primitivas de processamento de documentos para pipelines RAG.
+    governance: lib_change_request_required
+
+  - id: platform-agents-lib
+    kind: library
+    status: active
+    description: Modular foundation for AI agents (DataforAll Agents Library).
+    governance: lib_change_request_required
+
+  - id: platform-skills-lib
+    kind: library
+    status: active
+    description: Skills library para Claude Code e agentes da plataforma.
+    governance: lib_change_request_required
+
+  # ============================================================== #
+  # PORTS — desenvolvimento local (canônica = AGENTS.md §47)       #
+  # ============================================================== #
+  - { id: port-8001, kind: port, description: platform-auth }
+  - { id: port-8002, kind: port, description: platform-admin }
+  - { id: port-8003, kind: port, description: platform-governance }
+  - { id: port-8004, kind: port, description: platform-analytics }
+  - { id: port-8005, kind: port, description: platform-scheduler }
+  - { id: port-8006, kind: port, description: platform-connectors }
+  - { id: port-8007, kind: port, description: platform-ml }
+  - { id: port-8008, kind: port, description: platform-cloud }
+  - { id: port-8009, kind: port, description: platform-monitor }
+  - { id: port-8010, kind: port, description: platform-notification }
+  - { id: port-8011, kind: port, description: platform-communication }
+  - { id: port-8012, kind: port, description: platform-dataquality }
+  - { id: port-8013, kind: port, description: platform-docextract }
+  - { id: port-8014, kind: port, description: dataforall-agents-factory }
+  - { id: port-8015, kind: port, description: dataforall-rag-service }
+  - { id: port-8016, kind: port, description: platform-datalake }
+  - { id: port-8017, kind: port, description: platform-cdc }
+  - { id: port-8018, kind: port, description: platform-api-gateway }
+  - { id: port-8019, kind: port, description: platform-iceberg }
+  - { id: port-8020, kind: port, description: platform-flow }
+  - { id: port-8021, kind: port, description: platform-security }
+  - { id: port-8080, kind: port, description: dataforall-ui-connect }
+
+  # ============================================================== #
+  # SERVICES (ativos) — ordenados por porta                        #
+  # ============================================================== #
+  - id: platform-service-template
+    kind: service
+    status: active
+    description: Template canônico Python/FastAPI para novos serviços.
+
+  - id: platform-auth
+    kind: service
+    status: active
+    port: 8001
+    gateway_prefix: /auth
+    description: Emite JWT, JWKS, service tokens, login/logout/refresh, registry PLATFORM_SERVICES.
+    explicit_non_responsibilities:
+      - gestão de perfil de usuário
+      - enforcement de permissão a nível de query
+
+  - id: platform-admin
+    kind: service
+    status: active
+    port: 8002
+    gateway_prefix: /admin
+    description: Usuários, domínios, tenants, perfis, times, role assignments, IAM.
+    explicit_non_responsibilities:
+      - emissão de JWT
+      - enforcement de permissão a request time
+
+  - id: platform-governance
+    kind: service
+    status: active
+    port: 8003
+    gateway_prefix: /governance
+    description: Políticas RLS, row-level security, cache de permissões, controle de acesso a módulo.
+    explicit_non_responsibilities:
+      - CRUD de usuário
+      - emissão de token
+
+  - id: platform-analytics
+    kind: service
+    status: active
+    port: 8004
+    gateway_prefix: /bi
+    description: Dashboards BI, plataformas (Power BI, Looker, Tableau, Metabase, Superset), dashboards, grupos, playlists, sincronização — HTTP e WebSocket /ws/bi/*.
+    explicit_non_responsibilities:
+      - ingestão raw
+      - computações ML
+      - gestão de usuário
+    notes:
+      - "Porta 8004 (host, fora do Docker). GATEWAY_MAPPING: http://host.docker.internal:8004."
+      - "Histórico: ficou em 12000 entre 2026-05-04 e 2026-05-07; revertido para 8004 (canônica per docker-compose SERVICE_PORT default)."
+      - "gateway_prefix /bi corrigido em 2026-05-07 (era /analytics — incompatível com rotas internas)."
+      - "Autenticação WS: usa decode_token (platform-auth-lib) — respeita AUTH_DEV_BYPASS."
+      - "JWT_SECRET_KEY deve bater com platform-auth Docker: XrDsCv3galowl... (ver .env.dev.local)."
+
+  - id: platform-scheduler
+    kind: service
+    status: active
+    port: 8005
+    gateway_prefix: /schedulers
+    description: Definições de cron task, execução agendada, histórico, endpoint URL_SCHEDULER.
+    explicit_non_responsibilities:
+      - executar a lógica do que a task faz
+
+  - id: platform-connectors
+    kind: service
+    status: active
+    port: 8006
+    gateway_prefix: /connectors
+    description: Repositório canônico de conectores (40+ adapters, credenciais externas).
+    explicit_non_responsibilities:
+      - rodar pipelines
+      - rodar ML
+      - entregar dados
+
+  - id: platform-ml
+    kind: service
+    status: active
+    port: 8007
+    gateway_prefix: /ml
+    description: NLP, OCR, clustering, time series, model serving, catálogo de algoritmos.
+    explicit_non_responsibilities:
+      - embeddings  # rag-service é owner
+      - gestão de fontes de dados
+      - orquestração de pipeline
+      - scheduling
+
+  - id: platform-cloud
+    kind: service
+    status: active
+    port: 8008
+    gateway_prefix: /cloud
+    description: Provisionamento de infraestrutura (Terraform), gestão de recursos cloud.
+    explicit_non_responsibilities:
+      - deploy de aplicação (CI/CD)
+      - execução de pipeline
+
+  - id: platform-monitor
+    kind: service
+    status: active
+    port: 8009
+    gateway_prefix: /monitor
+    description: Regras de alerta, monitoramento de threshold, dispatch via webhook/email.
+    notes: quality_monitor migrou para platform-dataquality em 2026-Q1.
+
+  - id: platform-notification
+    kind: service
+    status: active
+    port: 8010
+    gateway_prefix: /notifications
+    description: WebSocket push para /ws/notifications (pessoal) e /ws/queue (progresso).
+    explicit_non_responsibilities:
+      - enviar mensagens reais  # platform-communication faz isso
+
+  - id: platform-communication
+    kind: service
+    status: active
+    port: 8011
+    gateway_prefix: /communication
+    description: Entrega de email, SMS, WhatsApp, push notifications, templates.
+    explicit_non_responsibilities:
+      - lógica de roteamento de notificação
+      - gestão de preferências de usuário
+
+  - id: platform-dataquality
+    kind: service
+    status: active
+    port: 8012
+    gateway_prefix: /dataquality
+    description: Regras de qualidade de dados, runs de validação, métricas DQ. Recebeu quality_monitor de platform-monitor.
+    explicit_non_responsibilities:
+      - ingestão de dados
+      - execução de pipeline
+
+  - id: platform-docextract
+    kind: service
+    status: active
+    port: 8013
+    gateway_prefix: /docextract
+    description: Parsing de documento (PDF/imagens → JSON estruturado).
+    explicit_non_responsibilities:
+      - classificação ML do conteúdo extraído
+
+  - id: dataforall-agents-factory
+    kind: service
+    status: active
+    port: 8014
+    gateway_prefix: /agents
+    description: Agentes IA, orquestração de LLM, histórico de chat, WebSocket /chat, execução de tools.
+    aliases:
+      - agents-factory  # nome curto histórico
+      - platform-agents-factory  # nome no pyproject de algumas versões
+    explicit_non_responsibilities:
+      - treinamento ML raw
+      - scheduling de tasks
+      - entrega de email
+
+  - id: dataforall-rag-service
+    kind: service
+    status: active
+    port: 8015
+    gateway_prefix: /rag
+    description: Owner único de RAG e embeddings.
+    aliases:
+      - rag-service  # nome curto histórico
+    owns:
+      - rag
+      - embeddings
+
+  - id: platform-datalake
+    kind: service
+    status: active
+    port: 8016
+    description: Metadata do data lake, catálogo, queries DuckDB sobre parquet.
+    explicit_non_responsibilities:
+      - execução de pipeline
+      - enforcement de qualidade
+      - ingestão de dados
+
+  - id: platform-cdc
+    kind: service
+    status: active
+    port: 8017
+    description: Change Data Capture de DBs source → datalake, eventos Kafka.
+    explicit_non_responsibilities:
+      - checks de qualidade
+      - queries de analytics
+      - execução de pipeline
+
+  - id: platform-api-gateway
+    kind: service
+    status: active
+    port: 8018
+    description: Roteamento de requests, circuit breaker. Entrada única do tráfego externo.
+
+  - id: platform-iceberg
+    kind: service
+    status: active
+    port: 8019
+    description: Apache Iceberg layer sobre o datalake.
+
+  - id: platform-flow
+    kind: service
+    status: active
+    port: 8020
+    gateway_prefix: /flow
+    description: Orquestração de flows.
+
+  - id: platform-security
+    kind: service
+    status: active
+    port: 8021
+    gateway_prefix: /security
+    description: Controles de segurança transversais.
+
+  - id: platform-pipeline
+    kind: service
+    status: active
+    description: Definições de pipeline, grafo de execução, orquestração de step. Sem porta alocada (interno).
+    explicit_non_responsibilities:
+      - steps de ML  # delegar a platform-ml
+      - acesso a connector  # via platform-connectors
+      - scheduling  # → platform-scheduler
+
+  - id: dataforall-ui-connect
+    kind: service
+    status: active
+    port: 8080
+    description: Frontend do produto.
+
+  - id: platform-dai
+    kind: service
+    status: active
+    description: Plataforma DAI (Data + AI). Hospeda subserviços incluindo platform-mcp.
+    notes:
+      - "platform-mcp é um subserviço deste — repositório platform-mcp permanece como placeholder até consolidação."
+
+  - id: platform-notebook
+    kind: service
+    status: active
+    description: Notebook execution environment compatível com Jupyter para análises ad-hoc.
+
+  - id: platform-operation
+    kind: service
+    status: active
+    description: Implantação, exclusão e gestão das plataformas de clientes (multi-tenancy operations).
+    notes:
+      - "Substituiu run_clients (mantido como deprecated)."
+
+  - id: dataforall-platform-backend
+    kind: service
+    status: active
+    description: Backend do produto DataforAll, camada acima dos platform-* services.
+
+  - id: dataforall-management
+    kind: service
+    status: active
+    description: Frontend administrativo (TypeScript) para gestão da plataforma.
+
+  - id: finance-platform-frontend
+    kind: service
+    status: active
+    description: Frontend do produto Finance (TypeScript) — produto novo da DataforAll.
+    notes:
+      - "Stack TypeScript, fora do template Python."
+
+  - id: data-plataform-v20
+    kind: service
+    status: active
+    description: Data Platform v2.0 — versão atual da plataforma de dados (JavaScript stack).
+    notes:
+      - "Stack JavaScript, paralela ao stack platform-* Python. Substitui platform-19 (v1.9)."
+
+  - id: common-platform
+    kind: service
+    status: active
+    description: Microserviço Java compartilhado da plataforma DataforAll (em produção).
+    notes:
+      - "Stack Java, fora do template Python."
+
+  - id: database-manager
+    kind: service
+    status: active
+    description: Microserviço Java de gestão de bancos da plataforma DataforAll (em produção).
+    notes:
+      - "Stack Java, fora do template Python."
+
+  - id: processor-platform
+    kind: service
+    status: active
+    description: Microserviço Java de processamento da plataforma DataforAll (em produção).
+    notes:
+      - "Stack Java, fora do template Python."
+
+  # ============================================================== #
+  # SERVICES (deprecados)                                          #
+  # ============================================================== #
+  - id: connectors-platform
+    kind: service
+    status: deprecated
+    description: Substituído por platform-connectors.
+
+  - id: schedule-platform
+    kind: service
+    status: deprecated
+    description: Substituído por platform-scheduler.
+
+  - id: run_clients
+    kind: service
+    status: deprecated
+    description: Substituído por platform-operation.
+    aliases:
+      - run_clients-deprecated  # nome real do repositório no GitHub
+
+  - id: finance-platform-new_product
+    kind: service
+    status: deprecated
+    description: Produto Finance antigo. Iteração atual em finance-platform-frontend.
+    aliases:
+      - finance-platform-new_product-  # nome real no GitHub (com dash final)
+
+  - id: platform-19
+    kind: service
+    status: deprecated
+    description: Versão antiga (v1.9) da plataforma de dados. Substituído por data-plataform-v20.
+
+  # ============================================================== #
+  # CONTRATOS — APIs e eventos                                     #
+  # ============================================================== #
+  # APIs (HTTP)
+  - { id: auth.jwt.api, kind: contract, contract_type: api, description: Emissão e validação de JWT (platform-auth). }
+  - { id: auth.jwks.api, kind: contract, contract_type: api, description: JWKS público em /.well-known/jwks.json. }
+  - { id: admin.iam.api, kind: contract, contract_type: api, description: API IAM (platform-admin) referenciada como URL_IAM. }
+  - { id: governance.permissions.api, kind: contract, contract_type: api, description: API de RLS / permissões (platform-governance). }
+  - { id: scheduler.cron.api, kind: contract, contract_type: api, description: API de cron tasks (platform-scheduler) referenciada como URL_SCHEDULER. }
+  - { id: connectors.credentials.api, kind: contract, contract_type: api, description: API de credentials de fontes externas (platform-connectors). }
+  - { id: ml.inference.api, kind: contract, contract_type: api, description: API de inferência ML (platform-ml). }
+  - { id: communication.send.api, kind: contract, contract_type: api, description: API de envio de mensagem (platform-communication). }
+  - { id: dataquality.checks.api, kind: contract, contract_type: api, description: API de checks DQ (platform-dataquality). }
+  - { id: docextract.parse.api, kind: contract, contract_type: api, description: API de parsing de documentos (platform-docextract). }
+  - { id: rag.search.api, kind: contract, contract_type: api, description: API de busca semântica (rag-service). }
+  - { id: rag.embeddings.api, kind: contract, contract_type: api, description: API de geração de embeddings (rag-service). }
+  - { id: datalake.query.api, kind: contract, contract_type: api, description: API de queries DuckDB sobre o datalake. }
+  - { id: notifications.ws, kind: contract, contract_type: api, description: WebSocket /ws/notifications + /ws/queue (platform-notification). }
+  - { id: analytics.bi.ws, kind: contract, contract_type: api, description: "WebSocket /ws/bi/* — platforms, dashboards, groups, playlists, sync, permissions (platform-analytics). Snapshot-on-connect + ping loop 25s." }
+
+  # Eventos (Kafka)
+  - { id: cdc.changes.v1, kind: contract, contract_type: event, description: Stream de mudanças CDC. }
+  - { id: scheduler.jobs.v1, kind: contract, contract_type: event, description: Eventos triggered/completed do scheduler. }
+  - { id: quality.metrics.v1, kind: contract, contract_type: event, description: Métricas de qualidade (platform-dataquality). }
+  - { id: user.created.v1, kind: contract, contract_type: event, description: Evento publicado por platform-auth ao criar usuário. }
+  - { id: user.notification.v1, kind: contract, contract_type: event, description: Evento de notificação consumido por platform-notification. }
+  - { id: task.progress.v1, kind: contract, contract_type: event, description: Eventos de progresso de task (consumido por platform-notification). }
+
+edges:
+  # ============================================================== #
+  # OWNERSHIP de team                                              #
+  # ============================================================== #
+  - { from: platform-team, to: platform-core-lib, relation: owns }
+  - { from: platform-team, to: platform-database-lib, relation: owns }
+  - { from: platform-team, to: platform-files-lib, relation: owns }
+  - { from: platform-team, to: platform-db-vector, relation: owns }
+  - { from: platform-team, to: platform-service-template, relation: owns }
+  - { from: platform-team, to: platform-auth, relation: owns }
+  - { from: platform-team, to: platform-admin, relation: owns }
+  - { from: platform-team, to: platform-governance, relation: owns }
+  - { from: platform-team, to: platform-analytics, relation: owns }
+  - { from: platform-team, to: platform-scheduler, relation: owns }
+  - { from: platform-team, to: platform-connectors, relation: owns }
+  - { from: platform-team, to: platform-ml, relation: owns }
+  - { from: platform-team, to: platform-cloud, relation: owns }
+  - { from: platform-team, to: platform-monitor, relation: owns }
+  - { from: platform-team, to: platform-notification, relation: owns }
+  - { from: platform-team, to: platform-communication, relation: owns }
+  - { from: platform-team, to: platform-dataquality, relation: owns }
+  - { from: platform-team, to: platform-docextract, relation: owns }
+  - { from: platform-team, to: dataforall-agents-factory, relation: owns }
+  - { from: platform-team, to: dataforall-rag-service, relation: owns }
+  - { from: platform-team, to: platform-datalake, relation: owns }
+  - { from: platform-team, to: platform-cdc, relation: owns }
+  - { from: platform-team, to: platform-api-gateway, relation: owns }
+  - { from: platform-team, to: platform-iceberg, relation: owns }
+  - { from: platform-team, to: platform-flow, relation: owns }
+  - { from: platform-team, to: platform-security, relation: owns }
+  - { from: platform-team, to: platform-pipeline, relation: owns }
+  - { from: platform-team, to: dataforall-ui-connect, relation: owns }
+  # Libs adicionadas em 2026-05-08
+  - { from: platform-team, to: platform-log-lib, relation: owns }
+  - { from: platform-team, to: platform-observability-lib, relation: owns }
+  - { from: platform-team, to: platform-data-types-lib, relation: owns }
+  - { from: platform-team, to: platform-docextract-lib, relation: owns }
+  - { from: platform-team, to: platform-agents-lib, relation: owns }
+  - { from: platform-team, to: platform-skills-lib, relation: owns }
+  # Services adicionados em 2026-05-08
+  - { from: platform-team, to: platform-dai, relation: owns }
+  - { from: platform-team, to: platform-notebook, relation: owns }
+  - { from: platform-team, to: platform-operation, relation: owns }
+  - { from: platform-team, to: dataforall-platform-backend, relation: owns }
+  - { from: platform-team, to: dataforall-management, relation: owns }
+  # Services adicionados em 2026-05-08 (parte 2: produtos Finance + data-platform v20 + Java microservices)
+  - { from: platform-team, to: finance-platform-frontend, relation: owns }
+  - { from: platform-team, to: data-plataform-v20, relation: owns }
+  - { from: platform-team, to: common-platform, relation: owns }
+  - { from: platform-team, to: database-manager, relation: owns }
+  - { from: platform-team, to: processor-platform, relation: owns }
+  - { from: platform-team, to: finance-platform-new_product, relation: owns }
+  - { from: platform-team, to: platform-19, relation: owns }
+
+  # ============================================================== #
+  # SUBSTITUIÇÃO (canonicidade)                                    #
+  # ============================================================== #
+  - { from: connectors-platform, to: platform-connectors, relation: deprecated_by }
+  - { from: platform-connectors, to: connectors-platform, relation: replaces }
+  - { from: schedule-platform, to: platform-scheduler, relation: deprecated_by }
+  - { from: platform-scheduler, to: schedule-platform, relation: replaces }
+  - { from: run_clients, to: platform-operation, relation: deprecated_by }
+  - { from: platform-operation, to: run_clients, relation: replaces }
+  - { from: finance-platform-new_product, to: finance-platform-frontend, relation: deprecated_by }
+  - { from: finance-platform-frontend, to: finance-platform-new_product, relation: replaces }
+  - { from: platform-19, to: data-plataform-v20, relation: deprecated_by }
+  - { from: data-plataform-v20, to: platform-19, relation: replaces }
+
+  # ============================================================== #
+  # PORTAS                                                          #
+  # ============================================================== #
+  - { from: platform-auth, to: port-8001, relation: runs_on_port }
+  - { from: platform-admin, to: port-8002, relation: runs_on_port }
+  - { from: platform-governance, to: port-8003, relation: runs_on_port }
+  - { from: platform-analytics, to: port-8004, relation: runs_on_port }
+  - { from: platform-scheduler, to: port-8005, relation: runs_on_port }
+  - { from: platform-connectors, to: port-8006, relation: runs_on_port }
+  - { from: platform-ml, to: port-8007, relation: runs_on_port }
+  - { from: platform-cloud, to: port-8008, relation: runs_on_port }
+  - { from: platform-monitor, to: port-8009, relation: runs_on_port }
+  - { from: platform-notification, to: port-8010, relation: runs_on_port }
+  - { from: platform-communication, to: port-8011, relation: runs_on_port }
+  - { from: platform-dataquality, to: port-8012, relation: runs_on_port }
+  - { from: platform-docextract, to: port-8013, relation: runs_on_port }
+  - { from: dataforall-agents-factory, to: port-8014, relation: runs_on_port }
+  - { from: dataforall-rag-service, to: port-8015, relation: runs_on_port }
+  - { from: platform-datalake, to: port-8016, relation: runs_on_port }
+  - { from: platform-cdc, to: port-8017, relation: runs_on_port }
+  - { from: platform-api-gateway, to: port-8018, relation: runs_on_port }
+  - { from: platform-iceberg, to: port-8019, relation: runs_on_port }
+  - { from: platform-flow, to: port-8020, relation: runs_on_port }
+  - { from: platform-security, to: port-8021, relation: runs_on_port }
+  - { from: dataforall-ui-connect, to: port-8080, relation: runs_on_port }
+
+  # ============================================================== #
+  # PROVIDES_API (cada serviço produz seu(s) contrato(s))           #
+  # ============================================================== #
+  - { from: platform-auth, to: auth.jwt.api, relation: provides_api }
+  - { from: platform-auth, to: auth.jwks.api, relation: provides_api }
+  - { from: platform-admin, to: admin.iam.api, relation: provides_api }
+  - { from: platform-governance, to: governance.permissions.api, relation: provides_api }
+  - { from: platform-scheduler, to: scheduler.cron.api, relation: provides_api }
+  - { from: platform-connectors, to: connectors.credentials.api, relation: provides_api }
+  - { from: platform-ml, to: ml.inference.api, relation: provides_api }
+  - { from: platform-communication, to: communication.send.api, relation: provides_api }
+  - { from: platform-dataquality, to: dataquality.checks.api, relation: provides_api }
+  - { from: platform-docextract, to: docextract.parse.api, relation: provides_api }
+  - { from: dataforall-rag-service, to: rag.search.api, relation: provides_api }
+  - { from: dataforall-rag-service, to: rag.embeddings.api, relation: provides_api }
+  - { from: platform-datalake, to: datalake.query.api, relation: provides_api }
+  - { from: platform-notification, to: notifications.ws, relation: provides_api }
+  - { from: platform-analytics, to: analytics.bi.ws, relation: provides_api }
+
+  # ============================================================== #
+  # PRODUCES_EVENT                                                  #
+  # ============================================================== #
+  - { from: platform-cdc, to: cdc.changes.v1, relation: produces_event }
+  - { from: platform-scheduler, to: scheduler.jobs.v1, relation: produces_event }
+  - { from: platform-dataquality, to: quality.metrics.v1, relation: produces_event }
+  - { from: platform-auth, to: user.created.v1, relation: produces_event }
+  # task.progress.v1 e user.notification.v1 são publicados por múltiplos serviços
+  # (padrão fan-in): cada serviço de domínio emite tasks; aqui registramos só o
+  # consumidor canônico (platform-notification) para não inflar o grafo.
+
+  # ============================================================== #
+  # CONSUMES (HTTP — cross-service da §49)                          #
+  # ============================================================== #
+  # platform-auth chama:
+  - { from: platform-auth, to: admin.iam.api, relation: consumes }   # criação de tenant
+
+  # platform-governance chama:
+  - { from: platform-governance, to: admin.iam.api, relation: consumes }  # URL_IAM
+
+  # platform-analytics chama:
+  - { from: platform-analytics, to: connectors.credentials.api, relation: consumes }
+  - { from: platform-analytics, to: ml.inference.api, relation: consumes }
+  - { from: platform-analytics, to: auth.jwt.api, relation: consumes }  # validação JWT nos WS handlers (decode_token)
+
+  # platform-scheduler dispara pipelines (interno) — não modelamos por enquanto.
+
+  # platform-connectors chama:
+  - { from: platform-connectors, to: auth.jwt.api, relation: consumes }
+  - { from: platform-connectors, to: datalake.query.api, relation: consumes }
+
+  # platform-ml chama:
+  - { from: platform-ml, to: connectors.credentials.api, relation: consumes }
+  - { from: platform-ml, to: datalake.query.api, relation: consumes }
+
+  # platform-cloud chama:
+  - { from: platform-cloud, to: scheduler.cron.api, relation: consumes }
+
+  # platform-monitor chama:
+  - { from: platform-monitor, to: communication.send.api, relation: consumes }
+
+  # platform-cdc chama:
+  - { from: platform-cdc, to: connectors.credentials.api, relation: consumes }
+  - { from: platform-cdc, to: datalake.query.api, relation: consumes }
+
+  # platform-docextract chama:
+  - { from: platform-docextract, to: ml.inference.api, relation: consumes }
+
+  # dataforall-agents-factory chama:
+  - { from: dataforall-agents-factory, to: ml.inference.api, relation: consumes }
+  - { from: dataforall-agents-factory, to: scheduler.cron.api, relation: consumes }
+  - { from: dataforall-agents-factory, to: communication.send.api, relation: consumes }
+  - { from: dataforall-agents-factory, to: rag.search.api, relation: consumes }
+  - { from: dataforall-agents-factory, to: rag.embeddings.api, relation: consumes }
+
+  # platform-datalake chama:
+  - { from: platform-datalake, to: dataquality.checks.api, relation: consumes }
+
+  # platform-pipeline chama:
+  - { from: platform-pipeline, to: ml.inference.api, relation: consumes }
+  - { from: platform-pipeline, to: connectors.credentials.api, relation: consumes }
+  - { from: platform-pipeline, to: scheduler.cron.api, relation: consumes }
+  - { from: platform-pipeline, to: datalake.query.api, relation: consumes }
+
+  # platform-communication chama:
+  - { from: platform-communication, to: admin.iam.api, relation: consumes }
+
+  # platform-dataquality chama:
+  - { from: platform-dataquality, to: datalake.query.api, relation: consumes }
+  - { from: platform-dataquality, to: connectors.credentials.api, relation: consumes }
+
+  # ============================================================== #
+  # CONSUMES_EVENT                                                  #
+  # ============================================================== #
+  - { from: platform-notification, to: user.notification.v1, relation: consumes_event }
+  - { from: platform-notification, to: task.progress.v1, relation: consumes_event }
+  - { from: platform-notification, to: user.created.v1, relation: consumes_event }
+  - { from: platform-monitor, to: quality.metrics.v1, relation: consumes_event }
+  - { from: platform-monitor, to: cdc.changes.v1, relation: consumes_event }
+
+  # ============================================================== #
+  # USES_LIB                                                        #
+  # ============================================================== #
+  # platform-core-lib é fundação de todos os serviços ativos.
+  - { from: platform-auth, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-admin, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-governance, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-analytics, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-scheduler, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-connectors, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-ml, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-cloud, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-monitor, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-notification, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-communication, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-dataquality, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-docextract, to: platform-core-lib, relation: uses_lib }
+  - { from: dataforall-agents-factory, to: platform-core-lib, relation: uses_lib }
+  - { from: dataforall-rag-service, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-datalake, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-cdc, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-api-gateway, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-iceberg, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-flow, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-security, to: platform-core-lib, relation: uses_lib }
+  - { from: platform-pipeline, to: platform-core-lib, relation: uses_lib }
+
+  # platform-auth-lib — JWT validation. Usada por todos os serviços com WS ou autenticação direta.
+  - { from: platform-analytics, to: platform-auth-lib, relation: uses_lib }
+  - { from: platform-notification, to: platform-auth-lib, relation: uses_lib }
+  - { from: dataforall-agents-factory, to: platform-auth-lib, relation: uses_lib }
+
+  # platform-ws-lib — ConnectionManager + WSRouter. Usada por serviços com WebSocket.
+  - { from: platform-analytics, to: platform-ws-lib, relation: uses_lib }
+  - { from: platform-notification, to: platform-ws-lib, relation: uses_lib }
+  - { from: dataforall-agents-factory, to: platform-ws-lib, relation: uses_lib }
+
+  # platform-tenant-lib — TenantMiddleware. Todos os serviços multi-tenant.
+  - { from: platform-analytics, to: platform-tenant-lib, relation: uses_lib }
+  - { from: platform-notification, to: platform-tenant-lib, relation: uses_lib }
+
+  # platform-events-lib — Kafka bus.
+  - { from: platform-notification, to: platform-events-lib, relation: uses_lib }
+  - { from: platform-scheduler, to: platform-events-lib, relation: uses_lib }
+  - { from: platform-cdc, to: platform-events-lib, relation: uses_lib }
+  - { from: platform-dataquality, to: platform-events-lib, relation: uses_lib }
+
+  # platform-database-lib — usada por serviços com persistência multi-tenant.
+  - { from: platform-auth, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-admin, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-governance, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-analytics, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-scheduler, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-connectors, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-ml, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-monitor, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-dataquality, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-docextract, to: platform-database-lib, relation: uses_lib }
+  - { from: dataforall-agents-factory, to: platform-database-lib, relation: uses_lib }
+  - { from: dataforall-rag-service, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-cdc, to: platform-database-lib, relation: uses_lib }
+  - { from: platform-pipeline, to: platform-database-lib, relation: uses_lib }
+
+  # platform-files-lib — storage de arquivos.
+  - { from: platform-docextract, to: platform-files-lib, relation: uses_lib }
+  - { from: platform-datalake, to: platform-files-lib, relation: uses_lib }
+  - { from: platform-connectors, to: platform-files-lib, relation: uses_lib }
+  - { from: platform-iceberg, to: platform-files-lib, relation: uses_lib }
+
+  # platform-db-vector — apenas serviços de RAG/agents.
+  - { from: dataforall-agents-factory, to: platform-db-vector, relation: uses_lib }
+  - { from: dataforall-rag-service, to: platform-db-vector, relation: uses_lib }
+
+  # ============================================================== #
+  # BASED_ON template canônico                                      #
+  # ============================================================== #
+  - { from: platform-auth, to: platform-service-template, relation: based_on }
+  - { from: platform-admin, to: platform-service-template, relation: based_on }
+  - { from: platform-governance, to: platform-service-template, relation: based_on }
+  - { from: platform-analytics, to: platform-service-template, relation: based_on }
+  - { from: platform-scheduler, to: platform-service-template, relation: based_on }
+  - { from: platform-connectors, to: platform-service-template, relation: based_on }
+  - { from: platform-ml, to: platform-service-template, relation: based_on }
+  - { from: platform-cloud, to: platform-service-template, relation: based_on }
+  - { from: platform-monitor, to: platform-service-template, relation: based_on }
+  - { from: platform-notification, to: platform-service-template, relation: based_on }
+  - { from: platform-communication, to: platform-service-template, relation: based_on }
+  - { from: platform-dataquality, to: platform-service-template, relation: based_on }
+  - { from: platform-docextract, to: platform-service-template, relation: based_on }
+  - { from: dataforall-agents-factory, to: platform-service-template, relation: based_on }
+  - { from: dataforall-rag-service, to: platform-service-template, relation: based_on }
+  - { from: platform-datalake, to: platform-service-template, relation: based_on }
+  - { from: platform-cdc, to: platform-service-template, relation: based_on }
+  - { from: platform-iceberg, to: platform-service-template, relation: based_on }
+  - { from: platform-flow, to: platform-service-template, relation: based_on }
+  - { from: platform-security, to: platform-service-template, relation: based_on }
+  - { from: platform-pipeline, to: platform-service-template, relation: based_on }
+  # api-gateway e ui-connect não são FastAPI services do template.

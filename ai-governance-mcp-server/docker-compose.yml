@@ -1,0 +1,34 @@
+# docker-compose.yml — exercise local da imagem.
+#
+# NÃO é o modo de uso primário do MCP — clientes (Claude Code/Desktop) spawnam
+# o container via `docker run -i` por sessão (ver Dockerfile e OPERATIONS §6).
+#
+# Esse compose serve para:
+# - Validar que `docker build` produziu uma imagem que sobe e responde.
+# - Smoke local sem precisar configurar client.
+#
+# Uso:
+#   docker compose -f ai-governance-mcp-server/docker-compose.yml build
+#   docker compose -f ai-governance-mcp-server/docker-compose.yml run --rm mcp \
+#       python -c "from src.knowledge.governance_repository import GovernanceRepository; \
+#                  from pathlib import Path; \
+#                  print(GovernanceRepository(kb_path=Path('/app/knowledge-base')).ecosystem.stats())"
+
+services:
+  mcp:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-governance-mcp-server:local
+    # stdio MCP exige stdin aberto; sem isso o servidor sai imediatamente.
+    stdin_open: true
+    tty: false
+    environment:
+      GOVERNANCE_LOG_LEVEL: DEBUG
+      GOVERNANCE_LOG_FORMAT: json
+    volumes:
+      # Persiste sugestões fora do container — se rodar via compose com
+      # múltiplos invocations, cada um vê o histórico do anterior.
+      - ./knowledge-base/suggestions:/app/knowledge-base/suggestions:rw
+    # Sem ports — stdio. Não há HTTP nesta versão.
+    # Sem restart policy — container é efêmero por design.

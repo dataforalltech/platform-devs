@@ -1,0 +1,90 @@
+# ai-governance-pr.yml — validação de PR via ai-governance-mcp-server.
+#
+# Este workflow é o template canônico. Copie para .github/workflows/ de qualquer
+# repositório do ecossistema dataforalltech que queira validação automática de PR.
+#
+# O que faz:
+#   1. Faz checkout do repositório alvo (o PR atual).
+#   2. Faz checkout do ai-governance-mcp-server (do platform-service-template).
+#   3. Instala dependências do MCP server.
+#   4. Roda pr_validate.py para comparar base..HEAD.
+#   5. Posta o resultado como comentário no PR (via gh CLI).
+#   6. Falha o workflow em risk=critical ou approved=false.
+#
+# Variáveis configuráveis:
+#   PR_VALIDATE_BLOCK_ON_HIGH=1 — falha também em risk=high (default: só critical).
+#
+# Pré-requisitos no repositório que usa este workflow:
+#   - Token GITHUB_TOKEN com permissão de escrita em issues/pull-requests (já incluído por default).
+#   - Python 3.11+ disponível (ubuntu-latest já tem).
+
+name: ai-governance PR validation
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write  # necessário para postar comentário
+
+jobs:
+  governance-validate:
+    name: Validate PR with ai-governance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # necessário para diff base..HEAD
+
+      - name: Checkout ai-governance-mcp-server
+        uses: actions/checkout@v4
+        with:
+          repository: dataforalltech/platform-service-template
+          path: _governance
+          sparse-checkout: ai-governance-mcp-server
+          sparse-checkout-cone-mode: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: _governance/ai-governance-mcp-server/pyproject.toml
+
+      - name: Install ai-governance-mcp-server
+        run: |
+          pip install -e "_governance/ai-governance-mcp-server"
+
+      - name: Run pr_validate.py
+        env:
+          GOVERNANCE_KB_PATH: ${{ github.workspace }}/_governance/ai-governance-mcp-server/knowledge-base
+          PYTHONPATH: ${{ github.workspace }}/_governance/ai-governance-mcp-server
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PRECOMMIT_REPO_NAME: ${{ github.repository }}
+          PR_VALIDATE_BLOCK_ON_HIGH: "0"  # mude para "1" para bloquear em high também
+        run: |
+          python _governance/ai-governance-mcp-server/scripts/pr_validate.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --post-comment
+        # Falha do step = PR bloqueado (risk=critical ou approved=false).
+        # WARN (risk=high/medium) devolve exit 0 — não bloqueia o merge, mas comenta.
+
+      - name: Upload validation comment (artifact)
+        if: always()
+        continue-on-error: true
+        run: |
+          python _governance/ai-governance-mcp-server/scripts/pr_validate.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --output-comment /tmp/governance-comment.md \
+            --dry-run 2>/dev/null || true
+        env:
+          GOVERNANCE_KB_PATH: ${{ github.workspace }}/_governance/ai-governance-mcp-server/knowledge-base
+          PYTHONPATH: ${{ github.workspace }}/_governance/ai-governance-mcp-server
+          PRECOMMIT_REPO_NAME: ${{ github.repository }}
