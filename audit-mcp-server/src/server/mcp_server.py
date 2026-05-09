@@ -216,25 +216,28 @@ def build_server() -> tuple[Server, Any, AuditStore]:
 
 def _dispatch(name: str, args: dict, settings: Any, store: AuditStore) -> dict:
     """Roteia para a tool correta."""
-    if name == "run_audit":
-        return run_audit(store, settings, **args)
-    elif name == "get_audit_status":
-        return get_audit_status(store, settings, **args)
-    elif name == "get_compliance_policy":
-        return get_compliance_policy(store, settings, **args)
-    elif name == "get_compliance_checklist":
-        return get_compliance_checklist(store, settings, **args)
-    elif name == "submit_audit_approval":
-        return submit_audit_approval(store, settings, **args)
-    elif name == "get_audit_report":
-        return get_audit_report(store, settings, **args)
-    elif name == "list_audits":
-        return list_audits(store, settings, **args)
-    elif name == "set_service_criticality":
-        return set_service_criticality(store, settings, **args)
-    elif name == "get_audit_gate_result":
-        return get_audit_gate_result(store, settings, **args)
-    raise KeyError(name)
+    try:
+        if name == "run_audit":
+            return run_audit(store, settings, **args)
+        elif name == "get_audit_status":
+            return get_audit_status(store, settings, **args)
+        elif name == "get_compliance_policy":
+            return get_compliance_policy(store, settings, **args)
+        elif name == "get_compliance_checklist":
+            return get_compliance_checklist(store, settings, **args)
+        elif name == "submit_audit_approval":
+            return submit_audit_approval(store, settings, **args)
+        elif name == "get_audit_report":
+            return get_audit_report(store, settings, **args)
+        elif name == "list_audits":
+            return list_audits(store, settings, **args)
+        elif name == "set_service_criticality":
+            return set_service_criticality(store, settings, **args)
+        elif name == "get_audit_gate_result":
+            return get_audit_gate_result(store, settings, **args)
+        raise KeyError(name)
+    except TypeError as e:
+        return {"error": "invalid_arguments", "message": str(e)}
 
 
 async def _run() -> None:

@@ -13,13 +13,15 @@ class AuditStore:
     def __init__(self, db_path: str = ".audit.db"):
         self.db_path = db_path
         self._lock = threading.Lock()
+        self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+        if db_path != ":memory:":
+            self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.row_factory = sqlite3.Row
         self._init_db()
 
     def _init_db(self) -> None:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.execute("PRAGMA journal_mode=WAL")
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS audits (
@@ -72,8 +74,7 @@ class AuditStore:
                 )
             """)
 
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
     def create_audit(
         self,
@@ -90,8 +91,7 @@ class AuditStore:
         now = datetime.utcnow().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO audits
@@ -112,19 +112,15 @@ class AuditStore:
                     now,
                 ),
             )
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
         return audit_id
 
     def get_audit(self, audit_id: str) -> dict[str, Any] | None:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM audits WHERE id = ?", (audit_id,))
             row = cursor.fetchone()
-            conn.close()
 
             if not row:
                 return None
@@ -133,9 +129,7 @@ class AuditStore:
 
     def get_latest_audit(self, service: str, env: str) -> dict[str, Any] | None:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 SELECT * FROM audits
@@ -146,7 +140,6 @@ class AuditStore:
                 (service, env),
             )
             row = cursor.fetchone()
-            conn.close()
 
             if not row:
                 return None
@@ -162,9 +155,7 @@ class AuditStore:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
 
             query = "SELECT * FROM audits WHERE 1=1"
             params: list[Any] = []
@@ -184,7 +175,6 @@ class AuditStore:
 
             cursor.execute(query, params)
             rows = cursor.fetchall()
-            conn.close()
 
             return [self._row_to_dict(row) for row in rows]
 
@@ -192,8 +182,7 @@ class AuditStore:
         now = datetime.utcnow().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 UPDATE audits
@@ -202,8 +191,7 @@ class AuditStore:
                 """,
                 (status, score, 1 if passed else 0, now, audit_id),
             )
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
     def add_audit_item(
         self,
@@ -215,8 +203,7 @@ class AuditStore:
         details: str | None = None,
     ) -> None:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO audit_items (audit_id, category, name, required, passed, details)
@@ -224,17 +211,13 @@ class AuditStore:
                 """,
                 (audit_id, category, name, 1 if required else 0, 1 if passed else 0, details),
             )
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
     def get_audit_items(self, audit_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM audit_items WHERE audit_id = ?", (audit_id,))
             rows = cursor.fetchall()
-            conn.close()
 
             return [self._row_to_dict(row) for row in rows]
 
@@ -249,8 +232,7 @@ class AuditStore:
         now = datetime.utcnow().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO audit_approvals (audit_id, approved_by, role, decision, notes, created_at)
@@ -258,14 +240,11 @@ class AuditStore:
                 """,
                 (audit_id, approved_by, role, decision, notes, now),
             )
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
     def get_approvals(self, audit_id: str) -> list[dict[str, Any]]:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 SELECT * FROM audit_approvals WHERE audit_id = ?
@@ -274,7 +253,6 @@ class AuditStore:
                 (audit_id,),
             )
             rows = cursor.fetchall()
-            conn.close()
 
             return [self._row_to_dict(row) for row in rows]
 
@@ -282,8 +260,7 @@ class AuditStore:
         now = datetime.utcnow().isoformat()
 
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 """
                 INSERT OR REPLACE INTO service_config (service, criticality, updated_by, updated_at)
@@ -291,19 +268,15 @@ class AuditStore:
                 """,
                 (service, criticality, updated_by, now),
             )
-            conn.commit()
-            conn.close()
+            self._conn.commit()
 
     def get_service_criticality(self, service: str) -> str:
         with self._lock:
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
+            cursor = self._conn.cursor()
             cursor.execute(
                 "SELECT criticality FROM service_config WHERE service = ?", (service,)
             )
             row = cursor.fetchone()
-            conn.close()
 
             return row["criticality"] if row else "medium"
 
