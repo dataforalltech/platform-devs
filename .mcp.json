@@ -18,6 +18,14 @@
     "governance-mcp": {"command": "python3", "args": ["./governance-mcp.py"]},
     "scheduler-mcp": {"command": "python3", "args": ["./scheduler-mcp.py"]},
     "connectors-mcp": {"command": "python3", "args": ["./connectors-mcp.py"]},
-    "cache-mcp": {"command": "python3", "args": ["./cache-mcp.py"]}
+    "cache-mcp": {"command": "python3", "args": ["./cache-mcp.py"]},
+    "archzilla-mcp": {"command": "node", "args": ["./archzilla-mcp-server/dist/server.js"]},
+    "backzilla-mcp": {"command": "node", "args": ["./backzilla-mcp-server/dist/server.js"]},
+    "frontzilla-mcp": {"command": "node", "args": ["./frontzilla-pixelfera-mcp-server/dist/server.js"]},
+    "opszilla-mcp": {"command": "node", "args": ["./opszilla-mcp-server/dist/server.js"]},
+    "pozilla-mcp": {"command": "node", "args": ["./pozilla-mcp-server/dist/server.js"]},
+    "productzilla-mcp": {"command": "node", "args": ["./productzilla-mcp-server/dist/server.js"]},
+    "qazilla-mcp": {"command": "node", "args": ["./qazilla-mcp-server/dist/server.js"]},
+    "seczilla-mcp": {"command": "node", "args": ["./seczilla-mcp-server/dist/server.js"]}
   }
 }
