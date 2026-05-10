@@ -2,9 +2,13 @@ import json
 import sqlite3
 import threading
 import uuid
+import os
+import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 
 class AuditStore:
@@ -18,6 +22,23 @@ class AuditStore:
             self._conn.execute("PRAGMA journal_mode=WAL")
         self._conn.row_factory = sqlite3.Row
         self._init_db()
+
+        # Initialize PostgreSQL sync layer
+        self._postgres_sync = None
+        if os.getenv("POSTGRES_SYNC_ENABLED", "false").lower() == "true":
+            try:
+                from db.postgres_sync import AuditPostgresSync
+                postgres_config = {
+                    "host": os.getenv("POSTGRES_HOST", "claude-dev"),
+                    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+                    "user": os.getenv("POSTGRES_USER", "postgres"),
+                    "password": os.getenv("POSTGRES_PASSWORD", "postgres_password_local_dev"),
+                    "database": os.getenv("POSTGRES_DB", "app"),
+                }
+                self._postgres_sync = AuditPostgresSync(postgres_config, enabled=True)
+                _log.info("✅ AuditStore: PostgreSQL sync enabled")
+            except Exception as e:
+                _log.warning(f"⚠️  AuditStore: PostgreSQL sync disabled: {e}")
 
     def _init_db(self) -> None:
         with self._lock:
@@ -114,6 +135,24 @@ class AuditStore:
             )
             self._conn.commit()
 
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                audit_data = {
+                    'id': audit_id,
+                    'service': service,
+                    'repo': repo,
+                    'env': env,
+                    'criticality': criticality,
+                    'score': score,
+                    'passed': passed,
+                    'status': status,
+                    'checklist': checklist,
+                }
+                self._postgres_sync.sync_audit_created(audit_data)
+            except Exception as e:
+                _log.warning(f"Failed to sync audit created to PostgreSQL: {e}")
+
         return audit_id
 
     def get_audit(self, audit_id: str) -> dict[str, Any] | None:
@@ -193,6 +232,18 @@ class AuditStore:
             )
             self._conn.commit()
 
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                updates = {
+                    'status': status,
+                    'score': score,
+                    'passed': passed,
+                }
+                self._postgres_sync.sync_audit_updated(audit_id, updates)
+            except Exception as e:
+                _log.warning(f"Failed to sync audit updated to PostgreSQL: {e}")
+
     def add_audit_item(
         self,
         audit_id: str,
@@ -212,6 +263,20 @@ class AuditStore:
                 (audit_id, category, name, 1 if required else 0, 1 if passed else 0, details),
             )
             self._conn.commit()
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                item_data = {
+                    'category': category,
+                    'name': name,
+                    'required': required,
+                    'passed': passed,
+                    'details': details,
+                }
+                self._postgres_sync.sync_audit_item_added(audit_id, item_data)
+            except Exception as e:
+                _log.warning(f"Failed to sync audit item to PostgreSQL: {e}")
 
     def get_audit_items(self, audit_id: str) -> list[dict[str, Any]]:
         with self._lock:
@@ -242,6 +307,19 @@ class AuditStore:
             )
             self._conn.commit()
 
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                approval_data = {
+                    'approved_by': approved_by,
+                    'decision': decision,
+                    'role': role,
+                    'notes': notes,
+                }
+                self._postgres_sync.sync_approval_added(audit_id, approval_data)
+            except Exception as e:
+                _log.warning(f"Failed to sync approval to PostgreSQL: {e}")
+
     def get_approvals(self, audit_id: str) -> list[dict[str, Any]]:
         with self._lock:
             cursor = self._conn.cursor()
@@ -269,6 +347,13 @@ class AuditStore:
                 (service, criticality, updated_by, now),
             )
             self._conn.commit()
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                self._postgres_sync.sync_service_criticality(service, criticality, updated_by)
+            except Exception as e:
+                _log.warning(f"Failed to sync service criticality to PostgreSQL: {e}")
 
     def get_service_criticality(self, service: str) -> str:
         with self._lock:

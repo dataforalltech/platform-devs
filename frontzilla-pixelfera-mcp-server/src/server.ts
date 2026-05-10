@@ -5,6 +5,7 @@ import { getSettings } from './config/settings.js';
 import { FrontzillaPixelferaStore } from './db/store.js';
 import { getToolSchemas, dispatchTool } from './tools/index.js';
 import { getFrontzillaPrompt, getPixelferaPrompt, getOrchestratorPrompt } from './prompts/index.js';
+import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
 const store = new FrontzillaPixelferaStore(settings.dbPath);
@@ -94,13 +95,39 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
 
-  if (uri === 'prompt://frontzilla_system_prompt') {
+  // PHASE 4: Support profile-based prompts
+  if (uri.startsWith('prompt://frontzilla_system_prompt')) {
+    const profileMatch = uri.match(/profile=(\w+)/);
+    const profile = (profileMatch ? profileMatch[1] : 'Dev') as Profile;
+
+    const basePrompt = getFrontzillaPrompt();
+    const profileSpecific = getProfilePrompt(profile);
+    const context = getProfileContext(profile);
+    const examples = getProfileExamples(profile);
+
+    const fullPrompt = `${basePrompt}
+
+---
+
+## PHASE 4: Profile-Based Customization
+
+### Current Profile: ${profile}
+### Context: ${context}
+
+${profileSpecific}
+
+${examples}
+
+---
+
+Apply the above guidance based on the ${profile} profile when responding to user requests.`;
+
     return {
       contents: [
         {
           uri,
           mimeType: 'text/plain',
-          text: getFrontzillaPrompt(),
+          text: fullPrompt,
         },
       ],
     };

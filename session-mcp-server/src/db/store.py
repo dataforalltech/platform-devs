@@ -13,6 +13,8 @@ Sete tabelas:
 from __future__ import annotations
 
 import json
+import logging
+import os
 import random
 import sqlite3
 import threading
@@ -20,6 +22,8 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 TASK_STATUSES = ("pending", "in_progress", "completed", "failed", "cancelled")
 TASK_OPEN_STATUSES = ("pending", "in_progress")
@@ -87,6 +91,26 @@ class SessionStore:
         self._db_path = db_path
         self._lock = threading.Lock()
         self._init_db()
+
+        # Initialize PostgreSQL sync layer (Phase 2 integration)
+        self.postgres_sync = None
+        postgres_enabled = os.getenv("POSTGRES_SYNC_ENABLED", "true").lower() == "true"
+        if postgres_enabled:
+            try:
+                from postgres_sync import SessionPostgresSync
+
+                postgres_config = {
+                    "dbname": os.getenv("POSTGRES_DB", "app"),
+                    "user": os.getenv("POSTGRES_USER", "postgres"),
+                    "password": os.getenv("POSTGRES_PASSWORD", "postgres_password_local_dev"),
+                    "host": os.getenv("POSTGRES_HOST", "claude-dev"),
+                    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+                }
+                self.postgres_sync = SessionPostgresSync(postgres_config, enabled=True)
+                logger.info("✅ SessionStore initialized with PostgreSQL sync")
+            except Exception as e:
+                logger.warning(f"⚠️  PostgreSQL sync disabled: {e}")
+                self.postgres_sync = None
 
     # ── Internals ──────────────────────────────────────────────────────────── #
 
@@ -299,7 +323,21 @@ class SessionStore:
                 (session_id, name, title, objective, repo, branch, base_branch, now, now),
             )
             row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
-            return self._row_to_session(row, conn)
+            session_dict = self._row_to_session(row, conn)
+
+            # Sync to PostgreSQL (Phase 2)
+            if self.postgres_sync:
+                self.postgres_sync.sync_session_created({
+                    'id': session_id,
+                    'title': title,
+                    'objective': objective,
+                    'status': 'active',
+                    'repository_id': None,  # Will be linked later
+                    'started_at': now,
+                    'last_updated_at': now,
+                })
+
+            return session_dict
 
     def set_session_branch(
         self,
@@ -380,7 +418,20 @@ class SessionStore:
             row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if not row:
                 return None
-            return self._row_to_session(row, conn)
+            session_dict = self._row_to_session(row, conn)
+
+            # Sync to PostgreSQL (Phase 2)
+            if self.postgres_sync:
+                sync_updates = {}
+                if status:
+                    sync_updates['status'] = status
+                if progress is not None:
+                    sync_updates['progress'] = progress
+                if sync_updates:
+                    sync_updates['last_updated_at'] = now
+                    self.postgres_sync.sync_session_updated(session_id, sync_updates)
+
+            return session_dict
 
     def end_session(
         self,
@@ -415,7 +466,17 @@ class SessionStore:
                     (session_id, f"[FINAL] {final_summary}", now),
                 )
             row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
-            return self._row_to_session(row, conn)
+            session_dict = self._row_to_session(row, conn)
+
+            # Sync to PostgreSQL (Phase 2)
+            if self.postgres_sync:
+                self.postgres_sync.sync_session_updated(session_id, {
+                    'status': 'completed',
+                    'ended_at': now,
+                    'last_updated_at': now,
+                })
+
+            return session_dict
 
     # ── Checkpoints ────────────────────────────────────────────────────────── #
 
@@ -437,6 +498,17 @@ class SessionStore:
                 (now, session_id),
             )
             checkpoint_id = result.lastrowid
+
+        # Sync to PostgreSQL (Phase 2)
+        if self.postgres_sync:
+            self.postgres_sync.adapter.sync_to_postgres('checkpoints', {
+                'session_id': session_id,
+                'summary': summary,
+                'context_snapshot': context,
+                'created_by_id': 1,
+                'created_at': now,
+            })
+
         return {
             "checkpoint_id": checkpoint_id,
             "session_id": session_id,
@@ -463,6 +535,17 @@ class SessionStore:
                 (now, session_id),
             )
             artifact_id = result.lastrowid
+
+        # Sync to PostgreSQL (Phase 2)
+        if self.postgres_sync:
+            self.postgres_sync.adapter.sync_to_postgres('artifacts', {
+                'session_id': session_id,
+                'artifact_type': artifact_type,
+                'content': content,
+                'metadata': {},
+                'created_at': now,
+            })
+
         return {
             "artifact_id": artifact_id,
             "session_id": session_id,
@@ -506,7 +589,19 @@ class SessionStore:
                 (now, session_id),
             )
             row = conn.execute("SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
-            return self._row_to_task(row)
+            task_dict = self._row_to_task(row)
+
+            # Sync to PostgreSQL (Phase 2)
+            if self.postgres_sync:
+                self.postgres_sync.sync_task_created(session_id, {
+                    'title': title,
+                    'description': description or '',
+                    'status': 'pending',
+                    'needs_human_decision': needs_human_decision,
+                    'created_at': now,
+                })
+
+            return task_dict
 
     def create_tasks(
         self,
@@ -639,7 +734,20 @@ class SessionStore:
                 (now, row["session_id"]),
             )
             updated = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
-            return self._row_to_task(updated)
+            task_dict = self._row_to_task(updated)
+
+            # Sync to PostgreSQL (Phase 2)
+            if self.postgres_sync:
+                sync_updates = {'status': new_status}
+                if set_started_at and not row["started_at"]:
+                    sync_updates['started_at'] = now
+                if set_completed_at:
+                    sync_updates['completed_at'] = now
+                if result is not None:
+                    sync_updates['result'] = result
+                self.postgres_sync.sync_task_updated(task_id, sync_updates)
+
+            return task_dict
 
     def start_task(self, task_id: int) -> dict[str, Any] | str | None:
         return self._transition_task(

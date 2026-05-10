@@ -46,6 +46,22 @@ export class MCPClient {
     return this.callTool('ai-governance-mcp', tool, args);
   }
 
+  async callKnowledgeBaseTool(tool: string, args: Record<string, unknown>): Promise<MCPResult> {
+    return this.callTool('knowledge-base-mcp', tool, args);
+  }
+
+  async callValidatorsTool(tool: string, args: Record<string, unknown>): Promise<MCPResult> {
+    return this.callTool('cross-zilla-validators', tool, args);
+  }
+
+  async callQualityGatesTool(tool: string, args: Record<string, unknown>): Promise<MCPResult> {
+    return this.callTool('quality-gates-system', tool, args);
+  }
+
+  async callObservatoryTool(tool: string, args: Record<string, unknown>): Promise<MCPResult> {
+    return this.callTool('zilla-observatory-mcp', tool, args);
+  }
+
   private async callTool(
     service: string,
     tool: string,
@@ -160,6 +176,57 @@ export class MCPClient {
           responsibilities: [],
           message: 'ai-governance-mcp.get_service_ownership called',
         }),
+      },
+      'knowledge-base-mcp': {
+        index_documentation: () => ({ indexed_count: 0, paths: [] }),
+        search_knowledge_base: () => ({ results: [], total_hits: 0 }),
+        get_document: () => ({ content: '', path: '', domain: '', version: '1.0' }),
+        list_documents: () => ({ documents: [], count: 0 }),
+        validate_against_standard: () => ({ passed: true, violations: [] }),
+        subscribe_to_updates: () => ({ subscription_id: '', status: 'subscribed' }),
+      },
+      'cross-zilla-validators': {
+        validate_feature_completeness: () => ({ passed: true, missing: [] }),
+        validate_epic_breakdown: () => ({ passed: true, complexity_score: 0.5 }),
+        validate_acceptance_criteria: () => ({ passed: true, testability_score: 0.8 }),
+        validate_api_contracts: () => ({ passed: true, mismatches: [] }),
+        validate_database_schema: () => ({ passed: true, issues: [] }),
+        validate_integration_points: () => ({ passed: true, gaps: [] }),
+        validate_code_testability: () => ({ passed: true, suggestions: [] }),
+        validate_api_compliance: () => ({ passed: true, violations: [] }),
+        validate_test_coverage: () => ({ passed: true, coverage_score: 0.85 }),
+        validate_accessibility: () => ({ passed: true, violations: [] }),
+        validate_design_system_usage: () => ({ passed: true, inconsistencies: [] }),
+        validate_responsive_design: () => ({ passed: true, issues: [] }),
+        validate_threat_model_completeness: () => ({ passed: true, gaps: [] }),
+        validate_against_standards: () => ({ passed: true, violations: [] }),
+        validate_readiness_for_testing: () => ({ passed: true, missing: [] }),
+        validate_test_plan_coverage: () => ({ passed: true, coverage_gaps: [] }),
+        validate_release_readiness: () => ({ passed: true, blockers: [] }),
+      },
+      'quality-gates-system': {
+        architecture_review_gate: () => ({ passed: true, criteria: [] }),
+        api_contract_validation_gate: () => ({ passed: true, endpoints_validated: 0 }),
+        code_quality_gate: () => ({ passed: true, failures: [] }),
+        security_scan_gate: () => ({ passed: true, findings: [] }),
+        e2e_tests_gate: () => ({ passed: true, failures: [], flaky_tests: [] }),
+        api_tests_gate: () => ({ passed: true, failures: [] }),
+        accessibility_gate: () => ({ passed: true, violations: [] }),
+        performance_gate: () => ({ passed: true, failures: [] }),
+        security_release_gate: () => ({ passed: true, blockers: [] }),
+        release_gate: () => ({ passed: true, all_gates_status: [], blockers: [] }),
+      },
+      'zilla-observatory-mcp': {
+        get_pipeline_health: () => ({ features: [], throughput: 0, blocked_count: 0 }),
+        get_zilla_workload: () => ({ zilla_capacity: {}, cycle_time: {}, utilization: {} }),
+        get_quality_gates_status: () => ({ gates_summary: {}, failures_by_gate: {} }),
+        get_ecosystem_metrics: () => ({ time_to_market: 0, quality_metrics: {}, security_metrics: {} }),
+        get_dependencies_dashboard: () => ({ mcp_calls: [], validator_chains: [], integration_map: {} }),
+        get_bottlenecks: () => ({ blocked_features: [], utilization_heatmap: {} }),
+        get_historical_trends: () => ({ velocity: [], cycle_time: [], bug_escape_rate: [] }),
+        report_metric: () => ({ recorded: true, timestamp: '' }),
+        configure_alert: () => ({ alert_id: '', status: 'configured' }),
+        get_alerts_history: () => ({ alerts: [], status: 'retrieved' }),
       },
     };
 

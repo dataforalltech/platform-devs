@@ -1,0 +1,358 @@
+================================================================================
+                    ZILLAS CI/CD PIPELINE ARCHITECTURE
+================================================================================
+
+                        COMPLETE 8-ZILLA ECOSYSTEM
+
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                                                                       │
+   │  ArchZilla      BackZilla      FrontZilla      OpsZilla             │
+   │  (Architecture) (Backend)      (Frontend/UI)   (DevOps)             │
+   │       │              │              │              │                │
+   │       ├──────────────┼──────────────┼──────────────┤                │
+   │                      │                              │                │
+   │  ProductZilla   POZilla       QAZilla       SecZilla               │
+   │  (Product)      (Project)     (Quality)     (Security)              │
+   │       │              │              │              │                │
+   │       └──────────────┼──────────────┼──────────────┘                │
+   │                      ▼              ▼              ▼                 │
+   │          ┌───────────────────────────────────┐                      │
+   │          │   SHARED SUPPORT SYSTEMS          │                      │
+   │          ├───────────────────────────────────┤                      │
+   │          │ • knowledge-base-mcp              │                      │
+   │          │ • cross-zilla-validators         │                      │
+   │          │ • quality-gates-system           │                      │
+   │          │ • zilla-observatory              │                      │
+   │          └───────────────────────────────────┘                      │
+   │                                                                       │
+   └─────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                           PIPELINE WORKFLOW
+================================================================================
+
+                           DEVELOPMENT FLOW
+
+    Developer commits code
+              │
+              ▼
+    ┌─────────────────────┐
+    │   GitHub Actions    │
+    │  - Run Tests        │
+    │  - Lint Check       │
+    │  - Type Check       │
+    │  - SAST Scan        │
+    └─────────────────────┘
+              │
+              ▼
+    ┌─────────────────────┐
+    │  QA-MCP Evaluation  │
+    │  ┌─────────────────┐│
+    │  │ qa_tests Gate   ││  PASS ✓
+    │  ├─────────────────┤│
+    │  │ pr_approved Gate││  PASS ✓
+    │  └─────────────────┘│
+    └─────────────────────┘
+              │
+              ▼ (AUTO if gates pass)
+    ┌─────────────────────┐
+    │  AUTO MERGE         │
+    │  to develop branch  │
+    └─────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────────────────┐
+    │       DEV ENVIRONMENT ✓                      │
+    │  ┌────────────────────────────────────────┐ │
+    │  │ All 8 Zillas deployed & running        │ │
+    │  │ Current: ArchZilla + BackZilla + ...   │ │
+    │  └────────────────────────────────────────┘ │
+    └──────────────────────────────────────────────┘
+
+
+================================================================================
+                         HOMOLOG (HML) PROMOTION
+
+    ┌──────────────────────────────────┐
+    │ Create Release Branch             │
+    │ release/v1.3.0                    │
+    │ from: develop                     │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────┐
+    │ Create PR: release/v1.3.0         │
+    │ Title: Release v1.3.0             │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────┐
+    │     pipeline-mcp GATE EVALUATION           │
+    │  ┌──────────────────────────────────────┐  │
+    │  │ ✓ qa_tests: Unit 100% | Integ 100%  │  │
+    │  ├──────────────────────────────────────┤  │
+    │  │ ✓ pr_approved: Code reviewed         │  │
+    │  └──────────────────────────────────────┘  │
+    │                                             │
+    │  Status: READY FOR APPROVAL                │
+    └─────────────────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────┐
+    │ HUMAN: Release Manager Reviews    │
+    │ PR in GitHub                      │
+    │ - Code review                     │
+    │ - Gate status                     │
+    │ - Release notes                   │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────┐
+    │ APPROVE via pipeline-mcp          │
+    │ approve_promotion(id, approver)   │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────────────────┐
+    │     HML DEPLOYMENT PIPELINE                  │
+    │  ┌──────────────────────────────────────┐    │
+    │  │ 1. Merge to release/* branch         │    │
+    │  │ 2. Build Docker images               │    │
+    │  │ 3. Push to ACR                       │    │
+    │  │ 4. Deploy to homolog environment     │    │
+    │  │ 5. Run health checks                 │    │
+    │  │ 6. Notify team (Slack)               │    │
+    │  └──────────────────────────────────────┘    │
+    └──────────────────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────────────────┐
+    │       HML ENVIRONMENT ✓                      │
+    │  ┌────────────────────────────────────────┐  │
+    │  │ All Zillas deployed for validation     │  │
+    │  │ Duration: 1-5 days (testing)           │  │
+    │  │ Status: READY FOR PRODUCTION RELEASE   │  │
+    │  └────────────────────────────────────────┘  │
+    └──────────────────────────────────────────────┘
+
+
+================================================================================
+                         PRODUCTION (PROD) PROMOTION
+
+    ┌──────────────────────────────────┐
+    │ Create PR: main branch            │
+    │ Tag: v1.3.0                       │
+    │ from: release/v1.3.0              │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────────────────────┐
+    │     pipeline-mcp GATE EVALUATION (PROD)            │
+    │  ┌──────────────────────────────────────────────┐  │
+    │  │ ✓ qa_tests: Coverage >80%, Tests 100%        │  │
+    │  ├──────────────────────────────────────────────┤  │
+    │  │ ✓ security_scan: No critical vulns found     │  │
+    │  ├──────────────────────────────────────────────┤  │
+    │  │ ✓ pr_approved: Code review completed         │  │
+    │  ├──────────────────────────────────────────────┤  │
+    │  │ ✓ health_check: Service endpoints respond    │  │
+    │  └──────────────────────────────────────────────┘  │
+    │                                                     │
+    │  Status: READY FOR PRODUCTION APPROVAL             │
+    └─────────────────────────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────┐
+    │ HUMAN: Auditor/PM Reviews        │
+    │ PR in GitHub                      │
+    │ - Code review                     │
+    │ - All 4 gates passing             │
+    │ - Release readiness               │
+    │ - Business impact                 │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────┐
+    │ APPROVE via pipeline-mcp          │
+    │ approve_promotion(id, approver)   │
+    └──────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────────────────┐
+    │     PROD DEPLOYMENT PIPELINE                │
+    │  ┌──────────────────────────────────────┐    │
+    │  │ 1. Merge to main branch              │    │
+    │  │ 2. Create git tag v1.3.0             │    │
+    │  │ 3. Build production Docker images    │    │
+    │  │ 4. Push to ACR (production registry) │    │
+    │  │ 5. Deploy canary (5% traffic)        │    │
+    │  │ 6. Monitor metrics (5 min)           │    │
+    │  │ 7. Full rollout (100% traffic)       │    │
+    │  │ 8. Health checks (all endpoints)     │    │
+    │  │ 9. Smoke tests                       │    │
+    │  │ 10. Notify team (Slack + Email)      │    │
+    │  └──────────────────────────────────────┘    │
+    └──────────────────────────────────────────────┘
+              │
+              ▼
+    ┌──────────────────────────────────────────────┐
+    │       PRODUCTION ENVIRONMENT ✓               │
+    │  ┌────────────────────────────────────────┐  │
+    │  │ All 8 Zillas in production             │  │
+    │  │ Serving live traffic                   │  │
+    │  │ Observable health metrics active       │  │
+    │  │ Incident response ready                │  │
+    │  └────────────────────────────────────────┘  │
+    └──────────────────────────────────────────────┘
+
+
+================================================================================
+                        MONITORING & OBSERVABILITY
+================================================================================
+
+    zilla-observatory actively monitors:
+
+    ┌─────────────────────────────────────────────────────────────┐
+    │ REAL-TIME DASHBOARDS                                        │
+    ├─────────────────────────────────────────────────────────────┤
+    │                                                              │
+    │ Pipeline Health                                             │
+    │ ├─ Gate Pass Rate (per gate type)                          │
+    │ ├─ Promotion Success Rate                                  │
+    │ ├─ Cycle Time (dev → hml → prod)                           │
+    │ ├─ Blocked Services & Duration                            │
+    │ └─ At-Risk Features (low coverage, long delays)           │
+    │                                                              │
+    │ Per-Zilla Metrics                                           │
+    │ ├─ ArchZilla: Architecture changes/approvals              │
+    │ ├─ BackZilla: Test coverage, API changes                 │
+    │ ├─ FrontZilla: Accessibility, performance                │
+    │ ├─ OpsZilla: Deployment health, SLA metrics              │
+    │ ├─ ProductZilla: Feature adoption, metrics               │
+    │ ├─ POZilla: Sprint velocity, scope creep                 │
+    │ ├─ QAZilla: Test pass rate, bug escape                   │
+    │ └─ SecZilla: Vulnerability trends, scan results          │
+    │                                                              │
+    │ ALERTS & NOTIFICATIONS                                     │
+    │ ├─ Gate Failure → Slack #releases + developer            │
+    │ ├─ Manual Approval Ready → Slack @releasemgr              │
+    │ ├─ Health Check Failure → Page on-call ops               │
+    │ ├─ Security Scan Critical → Escalate to SecZilla          │
+    │ ├─ Promotion Stuck >4h → Manager review alert             │
+    │ └─ Release Delayed → PM notification                      │
+    │                                                              │
+    └─────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+                            ROLLBACK PROCEDURE
+================================================================================
+
+    If Critical Issue Detected in PROD
+
+    ┌────────────────────────────┐
+    │ 1. Incident Detection      │
+    │    - Manual report OR      │
+    │    - Automated alert       │
+    └────────────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────┐
+    │ 2. Assess Impact           │
+    │    - User impact           │
+    │    - Data integrity        │
+    │    - Service criticality   │
+    └────────────────────────────┘
+              │
+              ▼
+    ┌─────────────────────────────────────┐
+    │ 3. Execute Rollback                  │
+    │    pipeline-mcp.rollback(            │
+    │      service="archzilla",            │
+    │      env="prod",                     │
+    │      to_version="v1.2.3",            │
+    │      reason="Critical bug found",    │
+    │      rolled_back_by="ops@..."        │
+    │    )                                  │
+    └─────────────────────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 4. Verify Rollback Success      │
+    │    - Health checks pass         │
+    │    - Metrics return to normal   │
+    │    - User reports decrease      │
+    └────────────────────────────────┘
+              │
+              ▼
+    ┌────────────────────────────────┐
+    │ 5. Post-Incident Actions        │
+    │    - Create incident ticket     │
+    │    - Root cause analysis        │
+    │    - Fix + test locally         │
+    │    - Create PR with fix         │
+    │    - Promote through pipeline   │
+    └────────────────────────────────┘
+
+
+================================================================================
+                        QUALITY GATES DETAILS
+================================================================================
+
+    qa_tests
+    ├─ Input: Test execution results from CI
+    ├─ Criteria: ALL tests pass
+    ├─ DEV: Unit + integration tests 100%
+    ├─ HML: Coverage >80%, all tests pass
+    ├─ PROD: Coverage >85%, all tests pass
+    └─ Evaluator: QA-MCP / TestRunner
+
+    pr_approved
+    ├─ Input: GitHub PR reviews
+    ├─ Criteria: At least 1 approval, no changes requested
+    ├─ DEV: 1 approval minimum
+    ├─ HML: 1 approval minimum
+    ├─ PROD: 1 approval minimum
+    └─ Evaluator: Human (via GitHub UI)
+
+    security_scan
+    ├─ Input: SAST + SCA + secrets + license scan results
+    ├─ Criteria: No critical/high findings
+    ├─ DEV: Not required
+    ├─ HML: Not required
+    ├─ PROD: REQUIRED - all checks must pass
+    └─ Evaluator: SecZilla / Security Scanner
+
+    health_check
+    ├─ Input: Service health endpoint response
+    ├─ Criteria: HTTP 200 within 2 seconds
+    ├─ DEV: Not evaluated (local)
+    ├─ HML: Optional (post-deployment)
+    ├─ PROD: REQUIRED - validates deployment success
+    └─ Evaluator: Pipeline Health Monitor
+
+
+================================================================================
+                          SUMMARY METRICS
+================================================================================
+
+    Timeline per Release:
+    ├─ DEV (automatic)         : ~5 min   (GitHub CI)
+    ├─ HML (manual approval)   : ~15 min  (human + deploy)
+    ├─ PROD (manual approval)  : ~20 min  (human + canary + rollout)
+    └─ TOTAL (end-to-end)      : ~40 min  + human review time
+
+    Quality Gates (8 Services × 3 Environments):
+    ├─ DEV: 2 gates × 8 = 16 gates evaluated automatically
+    ├─ HML: 2 gates × 8 = 16 gates evaluated automatically
+    └─ PROD: 4 gates × 8 = 32 gates (human + automatic)
+
+    Observable Metrics:
+    ├─ Gate Pass Rate: Target >95%
+    ├─ Promotion Success: Target 100%
+    ├─ Mean Cycle Time: Target <1 hour per environment
+    ├─ Mean Time to PROD: Target <2 hours total
+    └─ Rollback Success: Target 100%
+
+================================================================================

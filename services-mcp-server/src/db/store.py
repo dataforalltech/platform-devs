@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import os
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -21,6 +25,23 @@ class ServiceStore:
         self._con.execute("PRAGMA journal_mode=WAL")
         self._lock = threading.Lock()
         self._migrate()
+
+        # Initialize PostgreSQL sync layer
+        self._postgres_sync = None
+        if os.getenv("POSTGRES_SYNC_ENABLED", "false").lower() == "true":
+            try:
+                from db.postgres_sync import ServicesPostgresSync
+                postgres_config = {
+                    "host": os.getenv("POSTGRES_HOST", "claude-dev"),
+                    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+                    "user": os.getenv("POSTGRES_USER", "postgres"),
+                    "password": os.getenv("POSTGRES_PASSWORD", "postgres_password_local_dev"),
+                    "database": os.getenv("POSTGRES_DB", "app"),
+                }
+                self._postgres_sync = ServicesPostgresSync(postgres_config, enabled=True)
+                _log.info("✅ ServiceStore: PostgreSQL sync enabled")
+            except Exception as e:
+                _log.warning(f"⚠️  ServiceStore: PostgreSQL sync disabled: {e}")
 
     def _migrate(self) -> None:
         self._con.executescript("""
@@ -63,6 +84,15 @@ class ServiceStore:
                     list(fields.values()),
                 )
                 action = "created"
+
+                # Sync to PostgreSQL
+                if self._postgres_sync:
+                    try:
+                        service_data = dict(fields)
+                        service_data["name"] = name
+                        self._postgres_sync.sync_service_registered(service_data)
+                    except Exception as e:
+                        _log.warning(f"Failed to sync service registered to PostgreSQL: {e}")
             else:
                 if "tags" in fields and isinstance(fields["tags"], list):
                     fields["tags"] = json.dumps(fields["tags"])
@@ -75,6 +105,14 @@ class ServiceStore:
                     [*fields.values(), name],
                 )
                 action = "updated"
+
+                # Sync to PostgreSQL
+                if self._postgres_sync:
+                    try:
+                        self._postgres_sync.sync_service_updated(name, fields)
+                    except Exception as e:
+                        _log.warning(f"Failed to sync service updated to PostgreSQL: {e}")
+
             row = self._con.execute("SELECT * FROM services WHERE name=?", (name,)).fetchone()
             return {"action": action, "row": dict(row)}
 
@@ -112,7 +150,16 @@ class ServiceStore:
     def delete(self, name: str) -> bool:
         with self._lock:
             cur = self._con.execute("DELETE FROM services WHERE name=?", (name,))
-            return cur.rowcount > 0
+            deleted = cur.rowcount > 0
+
+            # Sync to PostgreSQL
+            if deleted and self._postgres_sync:
+                try:
+                    self._postgres_sync.sync_service_removed(name)
+                except Exception as e:
+                    _log.warning(f"Failed to sync service removal to PostgreSQL: {e}")
+
+            return deleted
 
     def update_check(self, name: str, ok: bool) -> None:
         with self._lock:
@@ -121,6 +168,14 @@ class ServiceStore:
                 "UPDATE services SET last_check_at=?, last_check_ok=? WHERE name=?",
                 (now, 1 if ok else 0, name),
             )
+
+            # Sync to PostgreSQL
+            if self._postgres_sync:
+                try:
+                    status = "healthy" if ok else "unhealthy"
+                    self._postgres_sync.sync_health_check_result(name, status)
+                except Exception as e:
+                    _log.warning(f"Failed to sync health check to PostgreSQL: {e}")
 
     def close(self) -> None:
         self._con.close()
