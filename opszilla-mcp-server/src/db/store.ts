@@ -6,11 +6,61 @@ import ZillaPostgresSync from '../../../platform-service-template/lib/postgres_s
 
 export class OpsZillaStore {
   private db: Database.Database;
+  private postgres: ZillaPostgresSync | null = null;
+  private logger: any;
 
   constructor(dbPath: string) {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
+    this.logger = this.initializeLogger();
     this.initializeTables();
+
+    // Initialize PostgreSQL sync layer
+    if (process.env.POSTGRES_SYNC_ENABLED === 'true') {
+      try {
+        const postgresConfig = {
+          host: process.env.POSTGRES_HOST || 'claude-dev',
+          port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+          user: process.env.POSTGRES_USER || 'postgres',
+          password: process.env.POSTGRES_PASSWORD || 'postgres_password_local_dev',
+          database: process.env.POSTGRES_DB || 'app',
+        };
+
+        this.postgres = new ZillaPostgresSync('opszilla', postgresConfig);
+        this.logger.info('✅ OpsZillaStore: PostgreSQL sync enabled');
+      } catch (error) {
+        this.logger.warn(`⚠️  OpsZillaStore: PostgreSQL sync disabled: ${error}`);
+      }
+    }
+  }
+
+  private initializeLogger(): any {
+    const logsDir = path.join(process.env.HOME || '/tmp', '.platform', 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    const logFile = path.join(logsDir, 'opszilla.log');
+
+    return {
+      info: (msg: string) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] ℹ️  ${msg}`);
+        fs.appendFileSync(logFile, `[${timestamp}] INFO: ${msg}\n`);
+      },
+      warn: (msg: string) => {
+        const timestamp = new Date().toISOString();
+        console.warn(`[${timestamp}] ⚠️  ${msg}`);
+        fs.appendFileSync(logFile, `[${timestamp}] WARN: ${msg}\n`);
+      },
+      debug: (msg: string) => {
+        if (process.env.DEBUG === 'true') {
+          const timestamp = new Date().toISOString();
+          console.debug(`[${timestamp}] 🐛 ${msg}`);
+          fs.appendFileSync(logFile, `[${timestamp}] DEBUG: ${msg}\n`);
+        }
+      },
+    };
   }
 
   private initializeTables(): void {
@@ -62,12 +112,32 @@ export class OpsZillaStore {
     const id = `deploy_${nanoid()}`;
     const now = new Date().toISOString();
 
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       INSERT INTO deployments (id, application, environment, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?)
     `);
 
     stmt.run(id, application, environment, now, now);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      this.postgres.sync(
+        'deployments',
+        {
+          id,
+          application,
+          environment,
+          status: 'pending',
+          created_at: now,
+          updated_at: now,
+        },
+        'create'
+      ).catch((err) => {
+        this.logger.warn(`Failed to sync deployment created: ${err}`);
+      });
+    }
+
     return { id, created_at: now };
   }
 
@@ -77,6 +147,9 @@ export class OpsZillaStore {
   }
 
   close(): void {
+    if (this.postgres) {
+      this.postgres.close();
+    }
     this.db.close();
   }
 }
