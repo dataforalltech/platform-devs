@@ -1,18 +1,25 @@
-"""MCP Server for Analytics — dashboards, reports, and BI operations."""
+"""MCP Server for Analytics — 7 core tools for dashboards and metrics."""
+
+import json
+import logging
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from src.config.settings import settings
 from src.tools.analytics_tools import (
-    analytics_create_report,
-    analytics_delete_report,
-    analytics_execute_query,
-    analytics_get_dashboard,
-    analytics_get_report,
-    analytics_list_dashboards,
-    analytics_list_reports,
+    create_dashboard,
+    export_dashboard,
+    get_dashboard,
+    get_metrics,
+    list_dashboards,
+    query_data,
+    refresh_dashboard,
 )
+
+logger = logging.getLogger(__name__)
 
 server = Server("analytics-mcp")
 
@@ -22,111 +29,158 @@ async def list_tools() -> list[Tool]:
     """List available analytics tools."""
     return [
         Tool(
-            name="analytics_list_dashboards",
-            description="List all dashboards",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="analytics_get_dashboard",
-            description="Get dashboard details and metadata",
+            name="list_dashboards",
+            description="List all dashboards for a tenant",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dashboard_id": {"type": "string"},
+                    "tenant_id": {"type": "string", "description": "Tenant identifier"},
+                },
+                "required": ["tenant_id"],
+            },
+        ),
+        Tool(
+            name="get_dashboard",
+            description="Get dashboard details",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dashboard_id": {"type": "string", "description": "Dashboard identifier"},
                 },
                 "required": ["dashboard_id"],
             },
         ),
         Tool(
-            name="analytics_create_report",
-            description="Create new analytics report",
+            name="create_dashboard",
+            description="Create a new dashboard",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string"},
-                    "query": {"type": "string"},
-                    "dashboard_id": {"type": "string"},
+                    "name": {"type": "string", "description": "Dashboard name"},
+                    "description": {"type": "string", "description": "Dashboard description"},
+                    "layout": {
+                        "type": "object",
+                        "description": "Dashboard layout configuration",
+                    },
                 },
-                "required": ["name", "query"],
+                "required": ["name", "description", "layout"],
             },
         ),
         Tool(
-            name="analytics_execute_query",
+            name="refresh_dashboard",
+            description="Refresh dashboard data",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dashboard_id": {"type": "string", "description": "Dashboard identifier"},
+                },
+                "required": ["dashboard_id"],
+            },
+        ),
+        Tool(
+            name="get_metrics",
+            description="Get metrics data for a dashboard",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dashboard_id": {"type": "string", "description": "Dashboard identifier"},
+                    "metric_name": {"type": "string", "description": "Metric name"},
+                    "time_range": {
+                        "type": "string",
+                        "description": "Time range (24h, 7d, 30d)",
+                    },
+                },
+                "required": ["dashboard_id", "metric_name", "time_range"],
+            },
+        ),
+        Tool(
+            name="query_data",
             description="Execute analytics query",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string"},
+                    "sql": {"type": "string", "description": "SQL query"},
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum rows to return",
+                        "default": 1000,
+                    },
                 },
-                "required": ["query"],
+                "required": ["sql"],
             },
         ),
         Tool(
-            name="analytics_list_reports",
-            description="List all analytics reports",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="analytics_get_report",
-            description="Get report details",
+            name="export_dashboard",
+            description="Export dashboard to file",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "report_id": {"type": "string"},
+                    "dashboard_id": {"type": "string", "description": "Dashboard identifier"},
+                    "format": {
+                        "type": "string",
+                        "description": "Export format (pdf, png, csv, json)",
+                        "default": "pdf",
+                    },
                 },
-                "required": ["report_id"],
-            },
-        ),
-        Tool(
-            name="analytics_delete_report",
-            description="Delete analytics report",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "report_id": {"type": "string"},
-                },
-                "required": ["report_id"],
+                "required": ["dashboard_id"],
             },
         ),
     ]
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
-    """Execute a tool."""
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
+    """Execute a tool and return result as JSON."""
+    logger.debug(f"Calling tool: {name} with args: {arguments}")
     try:
-        if name == "analytics_list_dashboards":
-            result = await analytics_list_dashboards()
-        elif name == "analytics_get_dashboard":
-            result = await analytics_get_dashboard(arguments["dashboard_id"])
-        elif name == "analytics_create_report":
-            result = await analytics_create_report(
+        if name == "list_dashboards":
+            result = await list_dashboards(arguments["tenant_id"])
+        elif name == "get_dashboard":
+            result = await get_dashboard(arguments["dashboard_id"])
+        elif name == "create_dashboard":
+            result = await create_dashboard(
                 arguments["name"],
-                arguments["query"],
-                arguments.get("dashboard_id"),
+                arguments["description"],
+                arguments["layout"],
             )
-        elif name == "analytics_execute_query":
-            result = await analytics_execute_query(arguments["query"])
-        elif name == "analytics_list_reports":
-            result = await analytics_list_reports()
-        elif name == "analytics_get_report":
-            result = await analytics_get_report(arguments["report_id"])
-        elif name == "analytics_delete_report":
-            result = await analytics_delete_report(arguments["report_id"])
+        elif name == "refresh_dashboard":
+            result = await refresh_dashboard(arguments["dashboard_id"])
+        elif name == "get_metrics":
+            result = await get_metrics(
+                arguments["dashboard_id"],
+                arguments["metric_name"],
+                arguments["time_range"],
+            )
+        elif name == "query_data":
+            limit = arguments.get("limit", 1000)
+            result = await query_data(arguments["sql"], limit)
+        elif name == "export_dashboard":
+            format_type = arguments.get("format", "pdf")
+            result = await export_dashboard(arguments["dashboard_id"], format_type)
         else:
-            result = '{"error": "UnknownTool", "details": "Tool not found"}'
+            result = json.dumps(
+                {"error": "ToolNotFound", "details": f"Tool '{name}' not found"}
+            )
 
         return [TextContent(type="text", text=result)]
     except Exception as e:
-        return [TextContent(type="text", text=f'{{"error": "Exception", "details": "{str(e)}"}}')]
+        logger.exception(f"Error calling tool {name}")
+        error_json = json.dumps({"error": "Exception", "details": str(e)})
+        return [TextContent(type="text", text=error_json)]
 
 
 async def main():
     """Run the MCP server."""
+    logging.basicConfig(
+        level=settings.MCP_ANALYTICS_LOG_LEVEL if hasattr(settings, 'MCP_ANALYTICS_LOG_LEVEL') else 'INFO',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logger.info("Starting analytics-mcp server")
     async with stdio_server(server) as streams:
         await streams.wait_closed()
 
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(main())
