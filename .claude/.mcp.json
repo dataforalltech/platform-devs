@@ -1,15 +1,23 @@
 {
-  "_comment": "Working MCP implementations for Claude Code",
+  "_comment": "Working MCP ecosystem - 18 system MCPs",
   "mcpServers": {
-    "test-mcp": {
-      "command": "python3",
-      "args": ["test-mcp.py"],
-      "cwd": "/home/dev/repos/platform-devs"
-    },
-    "agent-twin-mcp": {
-      "command": "python3",
-      "args": ["agent-twin-mcp.py"],
-      "cwd": "/home/dev/repos/platform-devs"
-    }
+    "test-mcp": {"command": "python3", "args": ["./test-mcp.py"]},
+    "agent-twin-mcp": {"command": "python3", "args": ["./agent-twin-mcp.py"]},
+    "config-mcp": {"command": "python3", "args": ["./config-mcp.py"]},
+    "session-mcp": {"command": "python3", "args": ["./session-mcp.py"]},
+    "audit-mcp": {"command": "python3", "args": ["./audit-mcp.py"]},
+    "infra-mcp": {"command": "python3", "args": ["./infra-mcp.py"]},
+    "services-mcp": {"command": "python3", "args": ["./services-mcp.py"]},
+    "pipeline-mcp": {"command": "python3", "args": ["./pipeline-mcp.py"]},
+    "qa-mcp": {"command": "python3", "args": ["./qa-mcp.py"]},
+    "deploy-mcp": {"command": "python3", "args": ["./deploy-mcp.py"]},
+    "docs-mcp": {"command": "python3", "args": ["./docs-mcp.py"]},
+    "ai-governance-mcp": {"command": "python3", "args": ["./ai-governance-mcp.py"]},
+    "auth-mcp": {"command": "python3", "args": ["./auth-mcp.py"]},
+    "admin-mcp": {"command": "python3", "args": ["./admin-mcp.py"]},
+    "governance-mcp": {"command": "python3", "args": ["./governance-mcp.py"]},
+    "scheduler-mcp": {"command": "python3", "args": ["./scheduler-mcp.py"]},
+    "connectors-mcp": {"command": "python3", "args": ["./connectors-mcp.py"]},
+    "cache-mcp": {"command": "python3", "args": ["./cache-mcp.py"]}
   }
 }
