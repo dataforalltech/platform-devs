@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "monitor-mcp-server"
+version = "0.1.0"
+description = "MCP Server for platform-monitor — service monitoring, alerts, and health checks"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=0.7.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "httpx>=0.24.0",
+]
+
+[project.scripts]
+monitor-mcp = "src.server.mcp_server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=src --cov-report=html --cov-fail-under=80"

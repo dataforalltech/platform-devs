@@ -1,0 +1,50 @@
+{
+  "name": "frontzilla-pixelfera-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: shared capabilities layer for FrontZilla (frontend) and PixelFera (design) AI agents",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7097,
+  "tools": 30,
+  "resources": ["frontzilla_system_prompt", "pixelfera_system_prompt", "orchestrator_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "zod": "^3.22.0",
+    "better-sqlite3": "^9.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "eslint": "^8.50.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "vitest": "^1.0.0"
+  },
+  "agents": {
+    "frontzilla": {
+      "role": "React/Next.js frontend developer",
+      "focus": ["generate_react_component", "generate_nextjs_page", "generate_frontend_tests", "generate_api_service"],
+      "system_prompt_resource": "frontzilla_system_prompt"
+    },
+    "pixelfera": {
+      "role": "UI/UX/Design System specialist",
+      "focus": ["generate_wireframe", "create_design_tokens", "generate_component_spec", "validate_visual_accessibility"],
+      "system_prompt_resource": "pixelfera_system_prompt"
+    },
+    "orchestrator": {
+      "role": "Coordinator between FrontZilla and PixelFera",
+      "focus": ["run_ui_feature_workflow", "analyze_requirement", "split_design_and_frontend_tasks"],
+      "system_prompt_resource": "orchestrator_prompt"
+    }
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["features", "components", "design_tokens", "workflows"]
+  }
+}

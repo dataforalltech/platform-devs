@@ -1,0 +1,514 @@
+version: '3.9'
+
+# Docker Compose for MCP Staging Validation
+# Deploys 18 MCPs + 5 REST APIs + infrastructure services
+# Purpose: Validate all integrations before production deployment
+# Last Updated: 2026-05-09
+
+services:
+  # ============================================================
+  # Infrastructure Services
+  # ============================================================
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: staging-postgres
+    environment:
+      POSTGRES_DB: platform_staging
+      POSTGRES_USER: platform
+      POSTGRES_PASSWORD: staging_password_123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  redis:
+    image: redis:7-alpine
+    container_name: staging-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass staging_redis_pass_123
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: staging-kafka
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions.sh", "--bootstrap-server", "localhost:9092"]
+      interval: 5s
+      timeout: 10s
+      retries: 5
+    networks:
+      - staging
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: staging-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - staging
+
+  # ============================================================
+  # MCP Servers (Infrastructure)
+  # ============================================================
+
+  agent-twin-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/agent-twin-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-agent-twin-mcp
+    environment:
+      MCP_PORT: 7098
+      CONFIG_MCP_URL: http://config-mcp:7099
+      REDIS_URL: redis://:staging_redis_pass_123@redis:6379/0
+      ENVIRONMENT: staging
+    ports:
+      - "7098:7098"
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7098/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  config-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/config-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-config-mcp
+    environment:
+      MCP_PORT: 7099
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      ENVIRONMENT: staging
+    ports:
+      - "7099:7099"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7099/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  docs-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/docs-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-docs-mcp
+    environment:
+      MCP_PORT: 7090
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7090:7090"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7090/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  session-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/session-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-session-mcp
+    environment:
+      MCP_PORT: 7100
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      REDIS_URL: redis://:staging_redis_pass_123@redis:6379/1
+      ENVIRONMENT: staging
+    ports:
+      - "7100:7100"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  services-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/services-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-services-mcp
+    environment:
+      MCP_PORT: 7101
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7101:7101"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7101/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  deploy-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/deploy-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-deploy-mcp
+    environment:
+      MCP_PORT: 7102
+      CONFIG_MCP_URL: http://config-mcp:7099
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      ENVIRONMENT: staging
+    ports:
+      - "7102:7102"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7102/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  qa-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/qa-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-qa-mcp
+    environment:
+      MCP_PORT: 7103
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7103:7103"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7103/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  test-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/test-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-test-mcp
+    environment:
+      MCP_PORT: 7104
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      ENVIRONMENT: staging
+    ports:
+      - "7104:7104"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7104/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  infra-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/infra-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-infra-mcp
+    environment:
+      MCP_PORT: 7105
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7105:7105"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7105/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  pipeline-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/pipeline-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-pipeline-mcp
+    environment:
+      MCP_PORT: 7106
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7106:7106"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7106/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  ai-governance-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/ai-governance-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-ai-governance-mcp
+    environment:
+      MCP_PORT: 7107
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7107:7107"
+    depends_on:
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7107/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  audit-mcp:
+    build:
+      context: /home/dev/repos/platform-devs/audit-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-audit-mcp
+    environment:
+      MCP_PORT: 7108
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      CONFIG_MCP_URL: http://config-mcp:7099
+      ENVIRONMENT: staging
+    ports:
+      - "7108:7108"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7108/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  # ============================================================
+  # REST APIs (Platform Services)
+  # ============================================================
+
+  auth-api:
+    build:
+      context: /home/dev/repos/platform-devs/services/auth-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-auth-api
+    environment:
+      PORT: 8001
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      REDIS_URL: redis://:staging_redis_pass_123@redis:6379/2
+      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      ENVIRONMENT: staging
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      agent-twin-mcp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  admin-api:
+    build:
+      context: /home/dev/repos/platform-devs/services/admin-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-admin-api
+    environment:
+      PORT: 8002
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      AUTH_API_URL: http://auth-api:8001
+      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      ENVIRONMENT: staging
+    ports:
+      - "8002:8002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  governance-api:
+    build:
+      context: /home/dev/repos/platform-devs/services/governance-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-governance-api
+    environment:
+      PORT: 8003
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      AUTH_API_URL: http://auth-api:8001
+      ADMIN_API_URL: http://admin-api:8002
+      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      ENVIRONMENT: staging
+    ports:
+      - "8003:8003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-api:
+        condition: service_healthy
+      admin-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  scheduler-api:
+    build:
+      context: /home/dev/repos/platform-devs/services/scheduler-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-scheduler-api
+    environment:
+      PORT: 8005
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      KAFKA_BROKER: kafka:29092
+      AUTH_API_URL: http://auth-api:8001
+      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      ENVIRONMENT: staging
+    ports:
+      - "8005:8005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      auth-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  connectors-api:
+    build:
+      context: /home/dev/repos/platform-devs/services/connectors-mcp-server
+      dockerfile: Dockerfile
+    container_name: staging-connectors-api
+    environment:
+      PORT: 8006
+      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      AUTH_API_URL: http://auth-api:8001
+      ADMIN_API_URL: http://admin-api:8002
+      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      ENVIRONMENT: staging
+    ports:
+      - "8006:8006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      auth-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  staging:
+    driver: bridge

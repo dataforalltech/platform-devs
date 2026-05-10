@@ -1,0 +1,1 @@
+"""Monitor MCP Server package."""

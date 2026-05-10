@@ -1,0 +1,47 @@
+{
+  "name": "archzilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: ArchZilla — Software Architecture specialist agent",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7100,
+  "tools": 18,
+  "resources": ["archzilla_system_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "agent": {
+    "name": "archzilla",
+    "role": "Software Architecture specialist",
+    "focus": [
+      "analyze_architecture_requirement",
+      "generate_solution_blueprint",
+      "define_system_modules",
+      "define_bounded_contexts",
+      "generate_c4_diagram",
+      "generate_sequence_diagram",
+      "generate_api_guidelines",
+      "generate_event_contracts",
+      "generate_data_architecture",
+      "define_non_functional_requirements",
+      "generate_security_architecture",
+      "generate_observability_architecture",
+      "generate_adr",
+      "review_architecture",
+      "map_architecture_risks",
+      "generate_technical_roadmap",
+      "define_integration_strategy",
+      "evaluate_architecture_tradeoffs"
+    ],
+    "system_prompt_resource": "archzilla_system_prompt"
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["architectures", "decisions", "diagrams", "reviews"]
+  }
+}

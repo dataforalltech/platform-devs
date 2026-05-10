@@ -1,0 +1,40 @@
+{
+  "name": "knowledge-base-mcp",
+  "version": "0.1.0",
+  "description": "MCP Server: Knowledge Base — Centralização de documentação e conhecimento",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node --esm src/server.ts",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest"
+  },
+  "keywords": [
+    "mcp",
+    "knowledge-base",
+    "documentation",
+    "semantic-search",
+    "rag"
+  ],
+  "author": "DataForAll",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "@platform/mcp-client": "file:../shared",
+    "zod": "^3.22.0",
+    "better-sqlite3": "^9.0.0",
+    "nanoid": "^4.0.2"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

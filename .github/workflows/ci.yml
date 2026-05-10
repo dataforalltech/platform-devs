@@ -68,17 +68,60 @@ jobs:
           files: ./${{ matrix.server }}/coverage.xml
           flags: ${{ matrix.server }}
 
+  test-typescript:
+    name: Test TypeScript servers
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        server: [
+          frontzilla-pixelfera-mcp-server
+        ]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: '${{ matrix.server }}/package-lock.json'
+
+      - name: Install dependencies
+        run: |
+          cd ${{ matrix.server }}
+          npm ci
+
+      - name: Lint with ESLint
+        run: |
+          cd ${{ matrix.server }}
+          npm run lint
+
+      - name: Type check with TypeScript
+        run: |
+          cd ${{ matrix.server }}
+          npm run type-check
+
+      - name: Run tests
+        run: |
+          cd ${{ matrix.server }}
+          npm test
+
+      - name: Build
+        run: |
+          cd ${{ matrix.server }}
+          npm run build
+
   security:
     name: Security scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.12'
-      
+
       - name: Run bandit
         run: |
           pip install bandit

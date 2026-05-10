@@ -1,0 +1,48 @@
+{
+  "name": "backzilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: BackZilla — Backend Engineering specialist agent",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7098,
+  "tools": 14,
+  "resources": ["backzilla_system_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "zod": "^3.22.0",
+    "better-sqlite3": "^9.0.0"
+  },
+  "agent": {
+    "name": "backzilla",
+    "role": "Backend Engineering specialist",
+    "focus": [
+      "analyze_backend_requirement",
+      "generate_api_contract",
+      "generate_fastapi_router",
+      "generate_nestjs_controller",
+      "generate_service_layer",
+      "generate_repository_layer",
+      "generate_database_schema",
+      "generate_migration",
+      "generate_auth_policy",
+      "generate_backend_tests",
+      "review_backend_code",
+      "optimize_query",
+      "generate_openapi_spec",
+      "map_integration_flow"
+    ],
+    "system_prompt_resource": "backzilla_system_prompt"
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["apis", "services", "integrations", "workflows"]
+  }
+}
