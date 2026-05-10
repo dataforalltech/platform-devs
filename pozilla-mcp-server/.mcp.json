@@ -1,0 +1,46 @@
+{
+  "name": "pozilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: POZilla — Product Owner specialist agent",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7102,
+  "tools": 17,
+  "resources": ["pozilla_system_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "agent": {
+    "name": "pozilla",
+    "role": "Product Owner specialist",
+    "focus": [
+      "analyze_business_demand",
+      "generate_epic",
+      "generate_feature_breakdown",
+      "generate_user_stories",
+      "generate_acceptance_criteria",
+      "generate_gherkin_scenarios",
+      "define_definition_of_ready",
+      "define_definition_of_done",
+      "prioritize_backlog_items",
+      "map_dependencies",
+      "identify_scope_risks",
+      "prepare_sprint_backlog",
+      "generate_release_notes",
+      "generate_homologation_checklist",
+      "generate_jira_tasks",
+      "refine_feature",
+      "validate_story_readiness"
+    ],
+    "system_prompt_resource": "pozilla_system_prompt"
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["epics", "features", "stories", "tasks"]
+  }
+}

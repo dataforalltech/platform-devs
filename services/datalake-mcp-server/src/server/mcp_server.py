@@ -1,19 +1,26 @@
-"""MCP Server for datalake — dataset operations and schema discovery."""
+"""MCP Server for datalake — 8 core tools for database and table operations."""
+
+import json
+import logging
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from src.config.settings import settings
 from src.tools.datalake_tools import (
-    datalake_compute_statistics,
-    datalake_create_dataset,
-    datalake_get_dataset,
-    datalake_get_schema,
-    datalake_list_datasets,
-    datalake_list_schemas,
-    datalake_prepare_for_ml,
-    datalake_sample_data,
+    create_table,
+    drop_table,
+    get_table_schema,
+    get_table_stats,
+    list_schemas,
+    list_tables,
+    query_data,
+    validate_table,
 )
+
+logger = logging.getLogger(__name__)
 
 # Initialize MCP server
 server = Server("datalake-mcp")
@@ -24,140 +31,172 @@ async def list_tools() -> list[Tool]:
     """List available datalake tools."""
     return [
         Tool(
-            name="datalake_list_schemas",
-            description="List all available schemas in datalake",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="datalake_get_schema",
-            description="Get schema details including tables and columns",
+            name="list_schemas",
+            description="List all schemas in a database",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "schema_name": {"type": "string", "description": "Name of the schema"},
+                    "database": {"type": "string", "description": "Database name"},
                 },
-                "required": ["schema_name"],
+                "required": ["database"],
             },
         ),
         Tool(
-            name="datalake_list_datasets",
-            description="List all available datasets in datalake",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="datalake_get_dataset",
-            description="Get dataset details and metadata",
+            name="list_tables",
+            description="List all tables in a schema",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {"type": "string", "description": "ID of the dataset"},
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
                 },
-                "required": ["dataset_id"],
+                "required": ["database", "schema"],
             },
         ),
         Tool(
-            name="datalake_prepare_for_ml",
-            description="Prepare dataset for ML training (train/test split, normalization, feature engineering)",
+            name="get_table_schema",
+            description="Get column definitions for a table",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {"type": "string", "description": "ID of the dataset"},
-                    "model_type": {
-                        "type": "string",
-                        "description": "Type of ML model (classification, regression, clustering)",
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
+                },
+                "required": ["database", "schema", "table"],
+            },
+        ),
+        Tool(
+            name="create_table",
+            description="Create a new table with specified columns",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
+                    "columns": {
+                        "type": "array",
+                        "description": "List of columns {name, type, nullable}",
+                        "items": {"type": "object"},
                     },
                 },
-                "required": ["dataset_id", "model_type"],
+                "required": ["database", "schema", "table", "columns"],
             },
         ),
         Tool(
-            name="datalake_sample_data",
-            description="Get sample of data from dataset",
+            name="drop_table",
+            description="Drop (delete) a table",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {"type": "string", "description": "ID of the dataset"},
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
+                },
+                "required": ["database", "schema", "table"],
+            },
+        ),
+        Tool(
+            name="query_data",
+            description="Execute a SQL query and return data",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "database": {"type": "string", "description": "Database name"},
+                    "sql": {"type": "string", "description": "SQL query string"},
                     "limit": {
                         "type": "integer",
-                        "description": "Number of rows to return (default: 10)",
-                        "default": 10,
+                        "description": "Maximum rows to return",
+                        "default": 1000,
                     },
                 },
-                "required": ["dataset_id"],
+                "required": ["database", "sql"],
             },
         ),
         Tool(
-            name="datalake_create_dataset",
-            description="Create new dataset in datalake",
+            name="validate_table",
+            description="Validate table integrity and constraints",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Dataset name"},
-                    "schema": {
-                        "type": "object",
-                        "description": "Dataset schema (column definitions)",
-                    },
-                    "description": {
-                        "type": "string",
-                        "description": "Optional description",
-                        "default": "",
-                    },
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
                 },
-                "required": ["name", "schema"],
+                "required": ["database", "schema", "table"],
             },
         ),
         Tool(
-            name="datalake_compute_statistics",
-            description="Compute statistics for dataset (mean, std, percentiles, distribution)",
+            name="get_table_stats",
+            description="Get statistics for a table (rows, columns, size)",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {"type": "string", "description": "ID of the dataset"},
+                    "database": {"type": "string", "description": "Database name"},
+                    "schema": {"type": "string", "description": "Schema name"},
+                    "table": {"type": "string", "description": "Table name"},
                 },
-                "required": ["dataset_id"],
+                "required": ["database", "schema", "table"],
             },
         ),
     ]
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Execute a tool and return result as JSON."""
+    logger.debug(f"Calling tool: {name} with args: {arguments}")
     try:
-        if name == "datalake_list_schemas":
-            result = await datalake_list_schemas()
-        elif name == "datalake_get_schema":
-            result = await datalake_get_schema(arguments["schema_name"])
-        elif name == "datalake_list_datasets":
-            result = await datalake_list_datasets()
-        elif name == "datalake_get_dataset":
-            result = await datalake_get_dataset(arguments["dataset_id"])
-        elif name == "datalake_prepare_for_ml":
-            result = await datalake_prepare_for_ml(
-                arguments["dataset_id"], arguments["model_type"]
+        if name == "list_schemas":
+            result = await list_schemas(arguments["database"])
+        elif name == "list_tables":
+            result = await list_tables(arguments["database"], arguments["schema"])
+        elif name == "get_table_schema":
+            result = await get_table_schema(
+                arguments["database"], arguments["schema"], arguments["table"]
             )
-        elif name == "datalake_sample_data":
-            limit = arguments.get("limit", 10)
-            result = await datalake_sample_data(arguments["dataset_id"], limit)
-        elif name == "datalake_create_dataset":
-            result = await datalake_create_dataset(
-                arguments["name"],
+        elif name == "create_table":
+            result = await create_table(
+                arguments["database"],
                 arguments["schema"],
-                arguments.get("description", ""),
+                arguments["table"],
+                arguments["columns"],
             )
-        elif name == "datalake_compute_statistics":
-            result = await datalake_compute_statistics(arguments["dataset_id"])
+        elif name == "drop_table":
+            result = await drop_table(
+                arguments["database"], arguments["schema"], arguments["table"]
+            )
+        elif name == "query_data":
+            limit = arguments.get("limit", 1000)
+            result = await query_data(arguments["database"], arguments["sql"], limit)
+        elif name == "validate_table":
+            result = await validate_table(
+                arguments["database"], arguments["schema"], arguments["table"]
+            )
+        elif name == "get_table_stats":
+            result = await get_table_stats(
+                arguments["database"], arguments["schema"], arguments["table"]
+            )
         else:
-            result = '{"error": "UnknownTool", "details": "Tool not found"}'
+            result = json.dumps(
+                {"error": "ToolNotFound", "details": f"Tool '{name}' not found"}
+            )
 
         return [TextContent(type="text", text=result)]
     except Exception as e:
-        error_json = f'{{"error": "Exception", "details": "{str(e)}"}}'
+        logger.exception(f"Error calling tool {name}")
+        error_json = json.dumps({"error": "Exception", "details": str(e)})
         return [TextContent(type="text", text=error_json)]
 
 
 async def main():
     """Run the MCP server."""
+    logging.basicConfig(
+        level=settings.MCP_DATALAKE_LOG_LEVEL if hasattr(settings, 'MCP_DATALAKE_LOG_LEVEL') else 'INFO',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logger.info("Starting datalake-mcp server")
     async with stdio_server(server) as streams:
         await streams.wait_closed()
 

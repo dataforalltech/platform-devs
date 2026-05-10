@@ -1,5 +1,6 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { BackzillaStore } from '../db/store.js';
+import { mcpClient } from '@platform/mcp-client';
 import { Settings } from '../config/settings.js';
 
 const TOOL_SCHEMAS: Tool[] = [
@@ -249,13 +250,24 @@ async function analyzeBackendRequirement(args: { requirement: string; context?: 
 }
 
 async function generateApiContract(args: any): Promise<unknown> {
-  return {
+  const contract = {
     tool: 'generate_api_contract',
     endpoint: args.endpoint,
     method: args.method,
     request_schema: args.request_schema || {},
     response_schema: args.response_schema || {},
     status_codes: [200, 400, 401, 403, 404, 500],
+  };
+
+  // Integração: validar contrato com qa-mcp
+  const qaValidation = await mcpClient.callQATool('run_linter', {
+    repo_path: `api/${args.endpoint}`,
+  });
+
+  return {
+    contract,
+    qa_validation: qaValidation,
+    status: 'contract_generated_with_validation',
   };
 }
 
@@ -294,10 +306,21 @@ async function generateRepositoryLayer(args: any): Promise<unknown> {
 }
 
 async function generateDatabaseSchema(args: any): Promise<unknown> {
-  return {
+  const schema = {
     tool: 'generate_database_schema',
     entity: args.entity,
     sql: `CREATE TABLE ${args.entity.toLowerCase()}s (\n  id SERIAL PRIMARY KEY\n);\n`,
+  };
+
+  // Integração: validar schema com qa-mcp
+  const qaValidation = await mcpClient.callQATool('run_linter', {
+    repo_path: `database/schema/${args.entity}`,
+  });
+
+  return {
+    schema,
+    qa_validation: qaValidation,
+    status: 'schema_generated_with_validation',
   };
 }
 
@@ -320,11 +343,23 @@ async function generateAuthPolicy(args: any): Promise<unknown> {
 }
 
 async function generateBackendTests(args: any): Promise<unknown> {
-  return {
+  const tests = {
     tool: 'generate_backend_tests',
     component: args.component,
     test_type: args.test_type,
     code: `# Test for ${args.component}\n`,
+  };
+
+  // Integração: gerar plano de testes com test-mcp
+  const testPlan = await mcpClient.callTestTool('create_test_plan', {
+    title: `Test Plan: ${args.component}`,
+    scope: `Testing ${args.component} backend`,
+  });
+
+  return {
+    tests,
+    test_plan: testPlan,
+    status: 'tests_generated_with_plan',
   };
 }
 

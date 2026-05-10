@@ -1,4 +1,4 @@
-"""ML tools — model training, evaluation, and inference."""
+"""ML tools — 9 core tools for model management, training, and inference."""
 
 import json
 from typing import Any
@@ -8,25 +8,71 @@ import httpx
 from src.config.settings import settings
 
 
-async def ml_train_model(dataset_id: str, model_type: str, hyperparameters: dict[str, Any] | None = None) -> str:
-    """Train a new machine learning model.
+async def list_models(tenant_id: str) -> str:
+    """List all models for a tenant.
 
     Args:
-        dataset_id: ID of the prepared dataset
-        model_type: Type of model (classification, regression, clustering)
-        hyperparameters: Optional model hyperparameters
+        tenant_id: Tenant identifier
 
-    Returns: JSON with trained model info
+    Returns: JSON with list of models
     """
     try:
-        payload = {
-            "dataset_id": dataset_id,
-            "model_type": model_type,
-            "hyperparameters": hyperparameters or {},
-        }
+        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{settings.MCP_ML_BASE_URL}/tenants/{tenant_id}/models",
+                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
+                verify=settings.MCP_ML_VERIFY_SSL,
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Tenant {tenant_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except httpx.HTTPError as e:
+        return json.dumps({"error": "HTTPError", "details": str(e)})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def get_model(model_id: str) -> str:
+    """Get model details.
+
+    Args:
+        model_id: Model identifier
+
+    Returns: JSON with model metadata
+    """
+    try:
+        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{settings.MCP_ML_BASE_URL}/models/{model_id}",
+                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
+                verify=settings.MCP_ML_VERIFY_SSL,
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Model {model_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except httpx.HTTPError as e:
+        return json.dumps({"error": "HTTPError", "details": str(e)})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def create_model(name: str, type: str, config: dict[str, Any]) -> str:
+    """Create a new model definition.
+
+    Args:
+        name: Model name
+        type: Model type (classification, regression, clustering)
+        config: Model configuration
+
+    Returns: JSON with created model
+    """
+    try:
+        payload = {"name": name, "type": type, "config": config}
         async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
             resp = await client.post(
-                f"{settings.MCP_ML_BASE_URL}/models/train",
+                f"{settings.MCP_ML_BASE_URL}/models",
                 json=payload,
                 headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
                 verify=settings.MCP_ML_VERIFY_SSL,
@@ -41,19 +87,71 @@ async def ml_train_model(dataset_id: str, model_type: str, hyperparameters: dict
         return json.dumps({"error": "Exception", "details": str(e)})
 
 
-async def ml_evaluate_model(model_id: str, test_dataset_id: str) -> str:
-    """Evaluate trained model on test dataset.
+async def train_model(model_id: str, dataset_id: str, hyperparams: dict[str, Any] | None = None) -> str:
+    """Train a model.
 
     Args:
-        model_id: ID of the trained model
-        test_dataset_id: ID of the test dataset
+        model_id: Model identifier
+        dataset_id: Dataset identifier
+        hyperparams: Optional hyperparameters
 
-    Returns: JSON with evaluation metrics
+    Returns: JSON with job info
     """
     try:
-        payload = {
-            "test_dataset_id": test_dataset_id,
-        }
+        payload = {"dataset_id": dataset_id, "hyperparams": hyperparams or {}}
+        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS * 2) as client:
+            resp = await client.post(
+                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/train",
+                json=payload,
+                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
+                verify=settings.MCP_ML_VERIFY_SSL,
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Model {model_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except httpx.HTTPError as e:
+        return json.dumps({"error": "HTTPError", "details": str(e)})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def get_training_status(job_id: str) -> str:
+    """Get status of a training job.
+
+    Args:
+        job_id: Job identifier
+
+    Returns: JSON with job status
+    """
+    try:
+        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{settings.MCP_ML_BASE_URL}/jobs/{job_id}",
+                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
+                verify=settings.MCP_ML_VERIFY_SSL,
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Job {job_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except httpx.HTTPError as e:
+        return json.dumps({"error": "HTTPError", "details": str(e)})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def evaluate_model(model_id: str, test_dataset_id: str) -> str:
+    """Evaluate model on test dataset.
+
+    Args:
+        model_id: Model identifier
+        test_dataset_id: Test dataset identifier
+
+    Returns: JSON with metrics
+    """
+    try:
+        payload = {"test_dataset_id": test_dataset_id}
         async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
             resp = await client.post(
                 f"{settings.MCP_ML_BASE_URL}/models/{model_id}/evaluate",
@@ -71,18 +169,22 @@ async def ml_evaluate_model(model_id: str, test_dataset_id: str) -> str:
         return json.dumps({"error": "Exception", "details": str(e)})
 
 
-async def ml_get_model(model_id: str) -> str:
-    """Get model details and metadata.
+async def deploy_model(model_id: str, version: str, environment: str) -> str:
+    """Deploy model to environment.
 
     Args:
-        model_id: ID of the model
+        model_id: Model identifier
+        version: Model version
+        environment: Target environment (dev, staging, prod)
 
-    Returns: JSON with model information
+    Returns: JSON with deployment info
     """
     try:
+        payload = {"version": version, "environment": environment}
         async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
-            resp = await client.get(
-                f"{settings.MCP_ML_BASE_URL}/models/{model_id}",
+            resp = await client.post(
+                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/deploy",
+                json=payload,
                 headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
                 verify=settings.MCP_ML_VERIFY_SSL,
             )
@@ -96,37 +198,17 @@ async def ml_get_model(model_id: str) -> str:
         return json.dumps({"error": "Exception", "details": str(e)})
 
 
-async def ml_list_models() -> str:
-    """List all trained models.
-
-    Returns: JSON with list of models
-    """
-    try:
-        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
-            resp = await client.get(
-                f"{settings.MCP_ML_BASE_URL}/models",
-                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
-                verify=settings.MCP_ML_VERIFY_SSL,
-            )
-            resp.raise_for_status()
-            return json.dumps({"status": "ok", "data": resp.json()})
-    except httpx.HTTPError as e:
-        return json.dumps({"error": "HTTPError", "details": str(e)})
-    except Exception as e:
-        return json.dumps({"error": "Exception", "details": str(e)})
-
-
-async def ml_predict(model_id: str, data: dict[str, Any]) -> str:
-    """Run inference on trained model.
+async def predict(model_id: str, input_data: dict[str, Any]) -> str:
+    """Run inference on model.
 
     Args:
-        model_id: ID of the trained model
-        data: Input data for prediction
+        model_id: Model identifier
+        input_data: Input features
 
     Returns: JSON with predictions
     """
     try:
-        payload = {"data": data}
+        payload = {"data": input_data}
         async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
             resp = await client.post(
                 f"{settings.MCP_ML_BASE_URL}/models/{model_id}/predict",
@@ -144,98 +226,18 @@ async def ml_predict(model_id: str, data: dict[str, Any]) -> str:
         return json.dumps({"error": "Exception", "details": str(e)})
 
 
-async def ml_delete_model(model_id: str) -> str:
-    """Delete a model.
+async def list_experiments(model_id: str) -> str:
+    """List experiments for a model.
 
     Args:
-        model_id: ID of the model to delete
+        model_id: Model identifier
 
-    Returns: JSON with deletion confirmation
-    """
-    try:
-        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
-            resp = await client.delete(
-                f"{settings.MCP_ML_BASE_URL}/models/{model_id}",
-                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
-                verify=settings.MCP_ML_VERIFY_SSL,
-            )
-            if resp.status_code == 404:
-                return json.dumps({"error": "NotFound", "details": f"Model {model_id} not found"})
-            resp.raise_for_status()
-            return json.dumps({"status": "ok", "data": resp.json()})
-    except httpx.HTTPError as e:
-        return json.dumps({"error": "HTTPError", "details": str(e)})
-    except Exception as e:
-        return json.dumps({"error": "Exception", "details": str(e)})
-
-
-async def ml_get_feature_importance(model_id: str) -> str:
-    """Get feature importance for trained model (regression/classification).
-
-    Args:
-        model_id: ID of the trained model
-
-    Returns: JSON with feature importance rankings
+    Returns: JSON with experiments
     """
     try:
         async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
             resp = await client.get(
-                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/feature-importance",
-                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
-                verify=settings.MCP_ML_VERIFY_SSL,
-            )
-            if resp.status_code == 404:
-                return json.dumps({"error": "NotFound", "details": f"Model {model_id} not found"})
-            resp.raise_for_status()
-            return json.dumps({"status": "ok", "data": resp.json()})
-    except httpx.HTTPError as e:
-        return json.dumps({"error": "HTTPError", "details": str(e)})
-    except Exception as e:
-        return json.dumps({"error": "Exception", "details": str(e)})
-
-
-async def ml_export_model(model_id: str, format: str = "onnx") -> str:
-    """Export trained model in specified format.
-
-    Args:
-        model_id: ID of the model
-        format: Export format (onnx, pkl, tf, pytorch)
-
-    Returns: JSON with export URL
-    """
-    try:
-        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS) as client:
-            resp = await client.post(
-                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/export",
-                json={"format": format},
-                headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
-                verify=settings.MCP_ML_VERIFY_SSL,
-            )
-            if resp.status_code == 404:
-                return json.dumps({"error": "NotFound", "details": f"Model {model_id} not found"})
-            resp.raise_for_status()
-            return json.dumps({"status": "ok", "data": resp.json()})
-    except httpx.HTTPError as e:
-        return json.dumps({"error": "HTTPError", "details": str(e)})
-    except Exception as e:
-        return json.dumps({"error": "Exception", "details": str(e)})
-
-
-async def ml_batch_predict(model_id: str, dataset_id: str) -> str:
-    """Run batch inference on entire dataset.
-
-    Args:
-        model_id: ID of the trained model
-        dataset_id: ID of the dataset for predictions
-
-    Returns: JSON with job ID and status
-    """
-    try:
-        payload = {"dataset_id": dataset_id}
-        async with httpx.AsyncClient(timeout=settings.MCP_ML_TIMEOUT_SECONDS * 2) as client:
-            resp = await client.post(
-                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/batch-predict",
-                json=payload,
+                f"{settings.MCP_ML_BASE_URL}/models/{model_id}/experiments",
                 headers={"Authorization": f"Bearer {settings.MCP_ML_API_KEY}"},
                 verify=settings.MCP_ML_VERIFY_SSL,
             )

@@ -1,20 +1,27 @@
-"""MCP Server for ML — model training, evaluation, and inference."""
+"""MCP Server for ML — 9 core tools for model management and training."""
+
+import json
+import logging
+from typing import Any
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
+from src.config.settings import settings
 from src.tools.ml_tools import (
-    ml_batch_predict,
-    ml_delete_model,
-    ml_evaluate_model,
-    ml_export_model,
-    ml_get_feature_importance,
-    ml_get_model,
-    ml_list_models,
-    ml_predict,
-    ml_train_model,
+    create_model,
+    deploy_model,
+    evaluate_model,
+    get_model,
+    get_training_status,
+    list_experiments,
+    list_models,
+    predict,
+    train_model,
 )
+
+logger = logging.getLogger(__name__)
 
 # Initialize MCP server
 server = Server("ml-mcp")
@@ -25,154 +32,185 @@ async def list_tools() -> list[Tool]:
     """List available ML tools."""
     return [
         Tool(
-            name="ml_train_model",
-            description="Train a new machine learning model",
+            name="list_models",
+            description="List all models for a tenant",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "dataset_id": {"type": "string", "description": "ID of the prepared dataset"},
-                    "model_type": {
-                        "type": "string",
-                        "description": "Type of model (classification, regression, clustering)",
-                    },
-                    "hyperparameters": {
-                        "type": "object",
-                        "description": "Optional model hyperparameters",
-                    },
+                    "tenant_id": {"type": "string", "description": "Tenant identifier"},
                 },
-                "required": ["dataset_id", "model_type"],
+                "required": ["tenant_id"],
             },
         ),
         Tool(
-            name="ml_evaluate_model",
-            description="Evaluate trained model on test dataset",
+            name="get_model",
+            description="Get model details and metadata",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "model_id": {"type": "string", "description": "ID of the trained model"},
-                    "test_dataset_id": {"type": "string", "description": "ID of the test dataset"},
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                },
+                "required": ["model_id"],
+            },
+        ),
+        Tool(
+            name="create_model",
+            description="Create a new model definition",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Model name"},
+                    "type": {
+                        "type": "string",
+                        "description": "Model type (classification, regression, clustering)",
+                    },
+                    "config": {
+                        "type": "object",
+                        "description": "Model configuration",
+                    },
+                },
+                "required": ["name", "type", "config"],
+            },
+        ),
+        Tool(
+            name="train_model",
+            description="Train a model",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                    "dataset_id": {"type": "string", "description": "Dataset identifier"},
+                    "hyperparams": {
+                        "type": "object",
+                        "description": "Optional hyperparameters",
+                    },
+                },
+                "required": ["model_id", "dataset_id"],
+            },
+        ),
+        Tool(
+            name="get_training_status",
+            description="Get status of a training job",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "job_id": {"type": "string", "description": "Job identifier"},
+                },
+                "required": ["job_id"],
+            },
+        ),
+        Tool(
+            name="evaluate_model",
+            description="Evaluate model on test dataset",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                    "test_dataset_id": {
+                        "type": "string",
+                        "description": "Test dataset identifier",
+                    },
                 },
                 "required": ["model_id", "test_dataset_id"],
             },
         ),
         Tool(
-            name="ml_get_model",
-            description="Get model details and metadata",
+            name="deploy_model",
+            description="Deploy model to environment",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "model_id": {"type": "string", "description": "ID of the model"},
-                },
-                "required": ["model_id"],
-            },
-        ),
-        Tool(
-            name="ml_list_models",
-            description="List all trained models",
-            inputSchema={"type": "object", "properties": {}},
-        ),
-        Tool(
-            name="ml_predict",
-            description="Run inference on trained model",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "model_id": {"type": "string", "description": "ID of the trained model"},
-                    "data": {"type": "object", "description": "Input data for prediction"},
-                },
-                "required": ["model_id", "data"],
-            },
-        ),
-        Tool(
-            name="ml_delete_model",
-            description="Delete a model",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "model_id": {"type": "string", "description": "ID of the model to delete"},
-                },
-                "required": ["model_id"],
-            },
-        ),
-        Tool(
-            name="ml_get_feature_importance",
-            description="Get feature importance for trained model (regression/classification)",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "model_id": {"type": "string", "description": "ID of the trained model"},
-                },
-                "required": ["model_id"],
-            },
-        ),
-        Tool(
-            name="ml_export_model",
-            description="Export trained model in specified format",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "model_id": {"type": "string", "description": "ID of the model"},
-                    "format": {
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                    "version": {"type": "string", "description": "Model version"},
+                    "environment": {
                         "type": "string",
-                        "description": "Export format (onnx, pkl, tf, pytorch)",
-                        "default": "onnx",
+                        "description": "Target environment (dev, staging, prod)",
                     },
                 },
-                "required": ["model_id"],
+                "required": ["model_id", "version", "environment"],
             },
         ),
         Tool(
-            name="ml_batch_predict",
-            description="Run batch inference on entire dataset",
+            name="predict",
+            description="Run inference on model",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "model_id": {"type": "string", "description": "ID of the trained model"},
-                    "dataset_id": {"type": "string", "description": "ID of the dataset for predictions"},
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                    "input_data": {
+                        "type": "object",
+                        "description": "Input features",
+                    },
                 },
-                "required": ["model_id", "dataset_id"],
+                "required": ["model_id", "input_data"],
+            },
+        ),
+        Tool(
+            name="list_experiments",
+            description="List experiments for a model",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "model_id": {"type": "string", "description": "Model identifier"},
+                },
+                "required": ["model_id"],
             },
         ),
     ]
 
 
 @server.call_tool()
-async def call_tool(name: str, arguments: dict) -> list[TextContent]:
+async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Execute a tool and return result as JSON."""
+    logger.debug(f"Calling tool: {name} with args: {arguments}")
     try:
-        if name == "ml_train_model":
-            result = await ml_train_model(
-                arguments["dataset_id"],
-                arguments["model_type"],
-                arguments.get("hyperparameters"),
+        if name == "list_models":
+            result = await list_models(arguments["tenant_id"])
+        elif name == "get_model":
+            result = await get_model(arguments["model_id"])
+        elif name == "create_model":
+            result = await create_model(
+                arguments["name"], arguments["type"], arguments["config"]
             )
-        elif name == "ml_evaluate_model":
-            result = await ml_evaluate_model(arguments["model_id"], arguments["test_dataset_id"])
-        elif name == "ml_get_model":
-            result = await ml_get_model(arguments["model_id"])
-        elif name == "ml_list_models":
-            result = await ml_list_models()
-        elif name == "ml_predict":
-            result = await ml_predict(arguments["model_id"], arguments["data"])
-        elif name == "ml_delete_model":
-            result = await ml_delete_model(arguments["model_id"])
-        elif name == "ml_get_feature_importance":
-            result = await ml_get_feature_importance(arguments["model_id"])
-        elif name == "ml_export_model":
-            result = await ml_export_model(arguments["model_id"], arguments.get("format", "onnx"))
-        elif name == "ml_batch_predict":
-            result = await ml_batch_predict(arguments["model_id"], arguments["dataset_id"])
+        elif name == "train_model":
+            result = await train_model(
+                arguments["model_id"],
+                arguments["dataset_id"],
+                arguments.get("hyperparams"),
+            )
+        elif name == "get_training_status":
+            result = await get_training_status(arguments["job_id"])
+        elif name == "evaluate_model":
+            result = await evaluate_model(
+                arguments["model_id"], arguments["test_dataset_id"]
+            )
+        elif name == "deploy_model":
+            result = await deploy_model(
+                arguments["model_id"], arguments["version"], arguments["environment"]
+            )
+        elif name == "predict":
+            result = await predict(arguments["model_id"], arguments["input_data"])
+        elif name == "list_experiments":
+            result = await list_experiments(arguments["model_id"])
         else:
-            result = '{"error": "UnknownTool", "details": "Tool not found"}'
+            result = json.dumps(
+                {"error": "ToolNotFound", "details": f"Tool '{name}' not found"}
+            )
 
         return [TextContent(type="text", text=result)]
     except Exception as e:
-        error_json = f'{{"error": "Exception", "details": "{str(e)}"}}'
+        logger.exception(f"Error calling tool {name}")
+        error_json = json.dumps({"error": "Exception", "details": str(e)})
         return [TextContent(type="text", text=error_json)]
 
 
 async def main():
     """Run the MCP server."""
+    logging.basicConfig(
+        level=settings.MCP_ML_LOG_LEVEL if hasattr(settings, 'MCP_ML_LOG_LEVEL') else 'INFO',
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    logger.info("Starting ml-mcp server")
     async with stdio_server(server) as streams:
         await streams.wait_closed()
 

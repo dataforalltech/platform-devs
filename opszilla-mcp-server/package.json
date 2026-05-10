@@ -1,0 +1,41 @@
+{
+  "name": "opszilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: OpsZilla — DevOps/Platform Engineering specialist agent",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "ts-node --esm src/server.ts",
+    "lint": "eslint src --ext .ts",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "keywords": [
+    "mcp",
+    "devops",
+    "ci-cd",
+    "kubernetes",
+    "terraform",
+    "docker"
+  ],
+  "author": "DataForAll",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "zod": "^3.22.0",
+    "@platform/mcp-client": "file:../shared",
+    "better-sqlite3": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.50.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0"
+  }
+}

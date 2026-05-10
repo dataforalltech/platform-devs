@@ -1,0 +1,53 @@
+{
+  "name": "opszilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: OpsZilla — DevOps/Platform Engineering specialist agent",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7099,
+  "tools": 19,
+  "resources": ["opszilla_system_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.2.0",
+    "zod": "^3.22.0",
+    "better-sqlite3": "^9.0.0"
+  },
+  "agent": {
+    "name": "opszilla",
+    "role": "DevOps/Platform Engineering specialist",
+    "focus": [
+      "analyze_infrastructure_requirement",
+      "generate_dockerfile",
+      "generate_docker_compose",
+      "generate_github_actions_pipeline",
+      "generate_gitlab_ci_pipeline",
+      "generate_kubernetes_manifest",
+      "generate_helm_chart",
+      "generate_terraform_module",
+      "generate_cloud_run_deploy",
+      "generate_gke_deploy",
+      "generate_iam_policy",
+      "generate_secret_strategy",
+      "generate_observability_plan",
+      "generate_prometheus_rules",
+      "generate_grafana_dashboard",
+      "generate_runbook",
+      "review_devops_config",
+      "review_cloud_security",
+      "generate_release_checklist"
+    ],
+    "system_prompt_resource": "opszilla_system_prompt"
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["deployments", "pipelines", "infrastructure", "incidents"]
+  }
+}

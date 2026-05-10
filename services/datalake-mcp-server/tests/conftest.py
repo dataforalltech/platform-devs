@@ -1,0 +1,50 @@
+"""Test configuration and fixtures."""
+
+import json
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+
+@pytest.fixture
+def mock_settings():
+    """Mock settings for tests."""
+    with patch("src.config.settings.settings") as mock:
+        mock.MCP_DATALAKE_BASE_URL = "http://localhost:8005/api/v1"
+        mock.MCP_DATALAKE_API_KEY = "test-key"
+        mock.MCP_DATALAKE_TIMEOUT_SECONDS = 30
+        mock.MCP_DATALAKE_VERIFY_SSL = False
+        yield mock
+
+
+@pytest.fixture
+def mock_http_client():
+    """Mock httpx AsyncClient."""
+    with patch("src.tools.datalake_tools.httpx.AsyncClient") as mock:
+        yield mock
+
+
+@pytest.fixture
+def mock_successful_response():
+    """Create a mock successful HTTP response."""
+    response = MagicMock()
+    response.status_code = 200
+    response.json.return_value = {"status": "ok", "data": []}
+    return response
+
+
+@pytest.fixture
+def mock_not_found_response():
+    """Create a mock 404 response."""
+    response = MagicMock()
+    response.status_code = 404
+    return response
+
+
+@pytest.fixture
+def mock_bad_request_response():
+    """Create a mock 400 response."""
+    response = MagicMock()
+    response.status_code = 400
+    response.text = "Invalid request"
+    return response

@@ -1,0 +1,47 @@
+{
+  "name": "productzilla-mcp-server",
+  "version": "0.1.0",
+  "description": "MCP Server: ProductZilla — Product Manager specialist agent",
+  "type": "mcp",
+  "language": "typescript",
+  "command": "node",
+  "args": ["dist/server.js"],
+  "port": 7101,
+  "tools": 18,
+  "resources": ["productzilla_system_prompt"],
+  "capabilities": {
+    "tools": true,
+    "resources": true,
+    "prompts": true
+  },
+  "agent": {
+    "name": "productzilla",
+    "role": "Product Manager specialist",
+    "focus": [
+      "analyze_product_problem",
+      "define_product_vision",
+      "map_user_personas",
+      "map_user_journey",
+      "generate_feature_spec",
+      "generate_user_stories",
+      "generate_acceptance_criteria",
+      "prioritize_backlog",
+      "calculate_rice_score",
+      "define_mvp_scope",
+      "define_product_metrics",
+      "generate_release_plan",
+      "generate_discovery_questions",
+      "map_product_risks",
+      "generate_go_to_market_brief",
+      "generate_handoff_to_design",
+      "generate_handoff_to_architecture",
+      "generate_handoff_to_engineering"
+    ],
+    "system_prompt_resource": "productzilla_system_prompt"
+  },
+  "database": {
+    "type": "sqlite",
+    "wal_enabled": true,
+    "tables": ["features", "user_stories", "backlogs", "releases"]
+  }
+}
