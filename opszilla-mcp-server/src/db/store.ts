@@ -1,5 +1,8 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
+import * as path from 'path';
+import * as fs from 'fs';
+import ZillaPostgresSync from '../../../platform-service-template/lib/postgres_sync';
 
 export class OpsZillaStore {
   private db: Database.Database;

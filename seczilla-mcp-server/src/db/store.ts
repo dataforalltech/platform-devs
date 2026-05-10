@@ -1,5 +1,8 @@
 import Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
+import * as path from 'path';
+import * as fs from 'fs';
+import ZillaPostgresSync from '../../../platform-service-template/lib/postgres_sync';
 
 export interface ThreatModel {
   id: string;
@@ -184,6 +187,12 @@ export class SecZillaStore {
     }
     stmt = this.db.prepare('SELECT * FROM security_checklists ORDER BY created_at DESC');
     return stmt.all() as SecurityChecklist[];
+  }
+
+  // PHASE 2: Additional helper method for security integration
+  getControls(modelId: string): SecurityControl[] {
+    const stmt = this.db.prepare('SELECT * FROM security_controls WHERE model_id = ? ORDER BY priority, created_at');
+    return stmt.all(modelId) as SecurityControl[];
   }
 
   close(): void {

@@ -15,6 +15,7 @@
     "@platform/mcp-client": "file:../shared",
     "better-sqlite3": "^9.0.0",
     "nanoid": "^4.0.0",
+    "pg": "^8.11.0",
     "zod": "^3.22.0"
   },
   "devDependencies": {
