@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-config-mcp - FastAPI HTTP Service
-Port: 7100
+deploy-mcp - FastAPI HTTP Service
+Port: 7110
 """
 import os
 from fastapi import FastAPI
@@ -13,7 +13,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="config-mcp",
+    title="deploy-mcp",
     version="1.0.0"
 )
 
@@ -29,11 +29,11 @@ class MCPResponse(BaseModel):
     result: Optional[Dict[str, Any]] = None
     error: Optional[Dict[str, Any]] = None
 
-class ConfigMcpMCPService:
+class DeployMcpMCPService:
     def __init__(self):
-        self.name = "config-mcp"
+        self.name = "deploy-mcp"
         self.version = "1.0"
-        # TODO: Import tools from original config-mcp.py
+        # TODO: Import tools from original deploy-mcp.py
         self.tools = []
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
@@ -50,7 +50,7 @@ class ConfigMcpMCPService:
         logger.info(f"Tool {tool_name} called with {arguments}")
         return f"Tool {tool_name} executed"
 
-service = ConfigMcpMCPService()
+service = DeployMcpMCPService()
 
 @app.post("/mcp/initialize")
 async def mcp_initialize(request: MCPRequest) -> MCPResponse:
@@ -83,13 +83,13 @@ async def health():
 
 @app.get("/info")
 async def info():
-    return {"name": "config-mcp", "version": "1.0", "tools": len(service.tools)}
+    return {"name": "deploy-mcp", "version": "1.0", "tools": len(service.tools)}
 
 @app.get("/")
 async def root():
-    return {"service": "config-mcp", "version": "1.0"}
+    return {"service": "deploy-mcp", "version": "1.0"}
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.environ.get("PORT", 7100))
+    port = int(os.environ.get("PORT", 7110))
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

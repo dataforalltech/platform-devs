@@ -15,6 +15,7 @@ import sys
 import json
 import os
 from pathlib import Path
+from typing import List, Dict, Any
 
 TEMPLATE_FASTAPI = '''#!/usr/bin/env python3
 """
