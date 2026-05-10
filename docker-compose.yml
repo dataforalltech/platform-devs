@@ -1,0 +1,286 @@
+version: '3.9'
+
+services:
+  # ============================================================================
+  # System MCPs (Python - FastAPI)
+  # ============================================================================
+
+  config-mcp:
+    build:
+      context: ./config-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7100:7100"
+    environment:
+      PORT: 7100
+      HOST: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=config-mcp"
+      - "type=system"
+      - "language=python"
+
+  agent-twin-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./agent-twin-mcp.py:/app/agent-twin-mcp.py
+    command: bash -c "pip install fastapi uvicorn pydantic && python agent-twin-mcp.py"
+    ports:
+      - "7101:7101"
+    environment:
+      PORT: 7101
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=agent-twin-mcp"
+      - "type=system"
+
+  session-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./session-mcp.py:/app/session-mcp.py
+    command: bash -c "pip install fastapi uvicorn pydantic && python session-mcp.py"
+    ports:
+      - "7102:7102"
+    environment:
+      PORT: 7102
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=session-mcp"
+      - "type=system"
+
+  auth-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./auth-mcp.py:/app/auth-mcp.py
+    command: bash -c "pip install fastapi uvicorn pydantic && python auth-mcp.py"
+    ports:
+      - "7103:7103"
+    environment:
+      PORT: 7103
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=auth-mcp"
+      - "type=system"
+
+  admin-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./admin-mcp.py:/app/admin-mcp.py
+    command: bash -c "pip install fastapi uvicorn pydantic && python admin-mcp.py"
+    ports:
+      - "7104:7104"
+    environment:
+      PORT: 7104
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=admin-mcp"
+      - "type=system"
+
+  audit-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./audit-mcp.py:/app/audit-mcp.py
+    command: bash -c "pip install fastapi uvicorn pydantic && python audit-mcp.py"
+    ports:
+      - "7105:7105"
+    environment:
+      PORT: 7105
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=audit-mcp"
+      - "type=system"
+
+  # ... (mais 12 system MCPs nas portas 7106-7117)
+
+  # ============================================================================
+  # Zilla MCPs (Node.js - já vêm em Docker)
+  # ============================================================================
+
+  archzilla-mcp:
+    build:
+      context: ./archzilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7118:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=archzilla-mcp"
+      - "type=zilla"
+      - "language=nodejs"
+
+  backzilla-mcp:
+    build:
+      context: ./backzilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7119:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=backzilla-mcp"
+      - "type=zilla"
+
+  frontzilla-mcp:
+    build:
+      context: ./frontzilla-pixelfera-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7120:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=frontzilla-mcp"
+      - "type=zilla"
+
+  opszilla-mcp:
+    build:
+      context: ./opszilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7121:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=opszilla-mcp"
+      - "type=zilla"
+
+  pozilla-mcp:
+    build:
+      context: ./pozilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7122:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=pozilla-mcp"
+      - "type=zilla"
+
+  productzilla-mcp:
+    build:
+      context: ./productzilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7123:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=productzilla-mcp"
+      - "type=zilla"
+
+  qazilla-mcp:
+    build:
+      context: ./qazilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7124:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=qazilla-mcp"
+      - "type=zilla"
+
+  seczilla-mcp:
+    build:
+      context: ./seczilla-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7125:7100"
+    environment:
+      NODE_ENV: production
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=seczilla-mcp"
+      - "type=zilla"
+
+  # ============================================================================
+  # MCP Gateway / Registry (Optional - discovers all MCPs)
+  # ============================================================================
+
+  mcp-registry:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./mcp-registry.py:/app/mcp-registry.py
+    command: bash -c "pip install fastapi uvicorn && python mcp-registry.py"
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+    depends_on:
+      - config-mcp
+      - agent-twin-mcp
+      - archzilla-mcp
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=mcp-registry"
+      - "type=gateway"
+
+networks:
+  mcp-network:
+    driver: bridge
+
+# ============================================================================
+# Volume Definitions (for persistence if needed)
+# ============================================================================
+volumes:
+  config-data:
+  session-data:
+  auth-data:
