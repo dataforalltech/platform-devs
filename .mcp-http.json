@@ -1,0 +1,51 @@
+{
+  "_comment": "MCP HTTP Configuration - Shared across all users",
+  "_description": "All MCPs run as HTTP services on Docker. Use this config to connect via HTTP Wrapper.",
+  "_registry": "http://claude-dev:8000",
+  "_fallback_ip": "34.193.217.90:8000",
+  "mcpServers": {
+    "mcp-http-wrapper": {
+      "command": "python3",
+      "args": ["./mcp-http-wrapper.py"],
+      "disabled": false,
+      "alwaysAllow": ["mcp__mcp_http_wrapper__*"]
+    }
+  },
+  "system-mcps": {
+    "config-mcp": "http://localhost:7100",
+    "agent-twin-mcp": "http://localhost:7101",
+    "session-mcp": "http://localhost:7102",
+    "auth-mcp": "http://localhost:7103",
+    "admin-mcp": "http://localhost:7104",
+    "audit-mcp": "http://localhost:7105",
+    "infra-mcp": "http://localhost:7106",
+    "services-mcp": "http://localhost:7107",
+    "pipeline-mcp": "http://localhost:7108",
+    "qa-mcp": "http://localhost:7109",
+    "deploy-mcp": "http://localhost:7110",
+    "docs-mcp": "http://localhost:7111",
+    "ai-governance-mcp": "http://localhost:7112",
+    "governance-mcp": "http://localhost:7113",
+    "scheduler-mcp": "http://localhost:7114",
+    "connectors-mcp": "http://localhost:7115",
+    "cache-mcp": "http://localhost:7116"
+  },
+  "zilla-mcps": {
+    "archzilla-mcp": "http://localhost:7118",
+    "backzilla-mcp": "http://localhost:7119",
+    "frontzilla-mcp": "http://localhost:7120",
+    "opszilla-mcp": "http://localhost:7121",
+    "pozilla-mcp": "http://localhost:7122",
+    "productzilla-mcp": "http://localhost:7123",
+    "qazilla-mcp": "http://localhost:7124",
+    "seczilla-mcp": "http://localhost:7125"
+  },
+  "registry": {
+    "discovery": "http://localhost:8000",
+    "endpoints": {
+      "services": "/services",
+      "stats": "/stats",
+      "health": "/health"
+    }
+  }
+}
