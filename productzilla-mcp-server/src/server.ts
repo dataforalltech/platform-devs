@@ -11,6 +11,7 @@ import { TOOL_SCHEMAS, dispatch } from './tools/index.js';
 import { ProductZillaStore } from './db/store.js';
 import { getSettings } from './config/settings.js';
 import { getProductZillaPrompt } from './prompts/productzillaPrompt.js';
+import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
 const store = new ProductZillaStore(settings.dbPath);
@@ -45,13 +46,41 @@ async function handleReadResource(request: {
   params: { uri: string };
 }) {
   const { uri } = request.params;
-  if (uri === 'productzilla_system_prompt') {
+
+  // PHASE 4: Support profile-based prompts
+  if (uri.startsWith('productzilla_system_prompt')) {
+    // Extract profile from URI: productzilla_system_prompt?profile=Dev
+    const profileMatch = uri.match(/profile=(\w+)/);
+    const profile = (profileMatch ? profileMatch[1] : 'Dev') as Profile;
+
+    const basePrompt = getProductZillaPrompt();
+    const profileSpecific = getProfilePrompt(profile);
+    const context = getProfileContext(profile);
+    const examples = getProfileExamples(profile);
+
+    const fullPrompt = `${basePrompt}
+
+---
+
+## PHASE 4: Profile-Based Customization
+
+### Current Profile: ${profile}
+### Context: ${context}
+
+${profileSpecific}
+
+${examples}
+
+---
+
+Apply the above guidance based on the ${profile} profile when responding to user requests.`;
+
     return {
       contents: [
         {
-          uri: 'productzilla_system_prompt',
+          uri,
           mimeType: 'text/plain',
-          text: getProductZillaPrompt(),
+          text: fullPrompt,
         } as TextResourceContents,
       ],
     };

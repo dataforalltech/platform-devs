@@ -5,6 +5,7 @@ import { getSettings } from './config/settings.js';
 import { OpsZillaStore } from './db/store.js';
 import { getToolSchemas, dispatchTool } from './tools/index.js';
 import { getOpsZillaPrompt } from './prompts/index.js';
+import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
 const store = new OpsZillaStore(settings.dbPath);
@@ -82,13 +83,39 @@ server.setRequestHandler(ListResourcesRequestSchema, async () => {
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
 
-  if (uri === 'prompt://opszilla_system_prompt') {
+  // PHASE 4: Support profile-based prompts
+  if (uri.startsWith('prompt://opszilla_system_prompt')) {
+    const profileMatch = uri.match(/profile=(\w+)/);
+    const profile = (profileMatch ? profileMatch[1] : 'Dev') as Profile;
+
+    const basePrompt = getOpsZillaPrompt();
+    const profileSpecific = getProfilePrompt(profile);
+    const context = getProfileContext(profile);
+    const examples = getProfileExamples(profile);
+
+    const fullPrompt = `${basePrompt}
+
+---
+
+## PHASE 4: Profile-Based Customization
+
+### Current Profile: ${profile}
+### Context: ${context}
+
+${profileSpecific}
+
+${examples}
+
+---
+
+Apply the above guidance based on the ${profile} profile when responding to user requests.`;
+
     return {
       contents: [
         {
           uri,
           mimeType: 'text/plain',
-          text: getOpsZillaPrompt(),
+          text: fullPrompt,
         },
       ],
     };
