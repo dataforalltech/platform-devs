@@ -11,6 +11,7 @@ import { TOOL_SCHEMAS, dispatch } from './tools/index.js';
 import { QAZillaStore } from './db/store.js';
 import { getSettings } from './config/settings.js';
 import { QAZILLA_SYSTEM_PROMPT } from './prompts/qazillaPrompt.js';
+import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
 const store = new QAZillaStore(settings.dbPath);
@@ -45,13 +46,40 @@ async function handleReadResource(request: {
   params: { uri: string };
 }) {
   const { uri } = request.params;
-  if (uri === 'qazilla_system_prompt') {
+
+  // PHASE 4: Support profile-based prompts
+  if (uri.startsWith('qazilla_system_prompt')) {
+    // Extract profile from URI: qazilla_system_prompt?profile=Dev
+    const profileMatch = uri.match(/profile=(\w+)/);
+    const profile = (profileMatch ? profileMatch[1] : 'Dev') as Profile;
+
+    const profileSpecific = getProfilePrompt(profile);
+    const context = getProfileContext(profile);
+    const examples = getProfileExamples(profile);
+
+    const fullPrompt = `${QAZILLA_SYSTEM_PROMPT}
+
+---
+
+## PHASE 4: Profile-Based Customization
+
+### Current Profile: ${profile}
+### Context: ${context}
+
+${profileSpecific}
+
+${examples}
+
+---
+
+Apply the above guidance based on the ${profile} profile when responding to user requests.`;
+
     return {
       contents: [
         {
-          uri: 'qazilla_system_prompt',
+          uri,
           mimeType: 'text/plain',
-          text: QAZILLA_SYSTEM_PROMPT,
+          text: fullPrompt,
         } as TextResourceContents,
       ],
     };
