@@ -1,5 +1,8 @@
 import Database from 'better-sqlite3';
 import { generateId } from '../utils/validators.js';
+import * as path from 'path';
+import * as fs from 'fs';
+import ZillaPostgresSync from '../../../platform-service-template/lib/postgres_sync';
 
 export interface Feature {
   id: string;
@@ -45,11 +48,61 @@ export interface Workflow {
 
 export class FrontzillaPixelferaStore {
   private db: Database.Database;
+  private postgres: ZillaPostgresSync | null = null;
+  private logger: any;
 
   constructor(dbPath: string = '.frontzilla-pixelfera.db') {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
+    this.logger = this.initializeLogger();
     this.initDb();
+
+    // Initialize PostgreSQL sync layer
+    if (process.env.POSTGRES_SYNC_ENABLED === 'true') {
+      try {
+        const postgresConfig = {
+          host: process.env.POSTGRES_HOST || 'claude-dev',
+          port: parseInt(process.env.POSTGRES_PORT || '5432', 10),
+          user: process.env.POSTGRES_USER || 'postgres',
+          password: process.env.POSTGRES_PASSWORD || 'postgres_password_local_dev',
+          database: process.env.POSTGRES_DB || 'app',
+        };
+
+        this.postgres = new ZillaPostgresSync('frontzilla', postgresConfig);
+        this.logger.info('✅ FrontzillaPixelferaStore: PostgreSQL sync enabled');
+      } catch (error) {
+        this.logger.warn(`⚠️  FrontzillaPixelferaStore: PostgreSQL sync disabled: ${error}`);
+      }
+    }
+  }
+
+  private initializeLogger(): any {
+    const logsDir = path.join(process.env.HOME || '/tmp', '.platform', 'logs');
+    if (!fs.existsSync(logsDir)) {
+      fs.mkdirSync(logsDir, { recursive: true });
+    }
+
+    const logFile = path.join(logsDir, 'frontzilla.log');
+
+    return {
+      info: (msg: string) => {
+        const timestamp = new Date().toISOString();
+        console.log(`[${timestamp}] ℹ️  ${msg}`);
+        fs.appendFileSync(logFile, `[${timestamp}] INFO: ${msg}\n`);
+      },
+      warn: (msg: string) => {
+        const timestamp = new Date().toISOString();
+        console.warn(`[${timestamp}] ⚠️  ${msg}`);
+        fs.appendFileSync(logFile, `[${timestamp}] WARN: ${msg}\n`);
+      },
+      debug: (msg: string) => {
+        if (process.env.DEBUG === 'true') {
+          const timestamp = new Date().toISOString();
+          console.debug(`[${timestamp}] 🐛 ${msg}`);
+          fs.appendFileSync(logFile, `[${timestamp}] DEBUG: ${msg}\n`);
+        }
+      },
+    };
   }
 
   private initDb(): void {
@@ -117,12 +170,33 @@ export class FrontzillaPixelferaStore {
     const id = generateId('feat');
     const now = new Date().toISOString();
 
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       INSERT INTO features (id, name, raw_req, analysis, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, 'draft', ?, ?)
     `);
 
     stmt.run(id, name, raw_req, JSON.stringify(analysis), now, now);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      this.postgres.sync(
+        'features',
+        {
+          id,
+          name,
+          raw_req,
+          analysis: JSON.stringify(analysis),
+          status: 'draft',
+          created_at: now,
+          updated_at: now,
+        },
+        'create'
+      ).catch((err) => {
+        this.logger.warn(`Failed to sync feature created: ${err}`);
+      });
+    }
+
     return { id, name, raw_req, analysis, status: 'draft', created_at: now, updated_at: now };
   }
 
@@ -151,10 +225,25 @@ export class FrontzillaPixelferaStore {
 
   updateFeatureStatus(id: string, status: string, spec?: Record<string, unknown>): void {
     const now = new Date().toISOString();
+
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       UPDATE features SET status = ?, spec = ?, updated_at = ? WHERE id = ?
     `);
     stmt.run(status, spec ? JSON.stringify(spec) : null, now, id);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      const pgData = {
+        id,
+        status,
+        spec: spec ? JSON.stringify(spec) : null,
+        updated_at: now,
+      };
+      this.postgres.sync('features', pgData, 'update').catch((err) => {
+        this.logger.warn(`Failed to sync feature status: ${err}`);
+      });
+    }
   }
 
   // ─── Components ──────────────────────────────────────────────────────────── //
@@ -169,12 +258,34 @@ export class FrontzillaPixelferaStore {
     const id = generateId('comp');
     const now = new Date().toISOString();
 
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       INSERT INTO components (id, feature_id, name, category, agent, spec, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(id, feature_id || null, name, category, agent, JSON.stringify(spec), now, now);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      this.postgres.sync(
+        'components',
+        {
+          id,
+          feature_id: feature_id || null,
+          name,
+          category,
+          agent,
+          spec: JSON.stringify(spec),
+          created_at: now,
+          updated_at: now,
+        },
+        'create'
+      ).catch((err) => {
+        this.logger.warn(`Failed to sync component created: ${err}`);
+      });
+    }
+
     return {
       id,
       feature_id,
@@ -238,9 +349,22 @@ export class FrontzillaPixelferaStore {
     values.push(now);
     values.push(id);
 
+    // SQLite write (PRIMARY)
     const query = `UPDATE components SET ${fields.join(', ')} WHERE id = ?`;
     const stmt = this.db.prepare(query);
     stmt.run(...values);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      const pgData: Record<string, unknown> = { id, updated_at: now };
+      if (updates.doc !== undefined) pgData.doc = updates.doc;
+      if (updates.story !== undefined) pgData.story = updates.story;
+      if (updates.spec !== undefined) pgData.spec = JSON.stringify(updates.spec);
+
+      this.postgres.sync('components', pgData, 'update').catch((err) => {
+        this.logger.warn(`Failed to sync component updated: ${err}`);
+      });
+    }
   }
 
   // ─── Design Tokens ──────────────────────────────────────────────────────── //
@@ -254,12 +378,32 @@ export class FrontzillaPixelferaStore {
     const id = generateId('tok');
     const now = new Date().toISOString();
 
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       INSERT INTO design_tokens (id, feature_id, name, tokens, format, created_at)
       VALUES (?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(id, feature_id || null, name, JSON.stringify(tokens), format, now);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      this.postgres.sync(
+        'design_tokens',
+        {
+          id,
+          feature_id: feature_id || null,
+          name,
+          tokens: JSON.stringify(tokens),
+          format,
+          created_at: now,
+        },
+        'create'
+      ).catch((err) => {
+        this.logger.warn(`Failed to sync design tokens created: ${err}`);
+      });
+    }
+
     return {
       id,
       feature_id,
@@ -288,12 +432,31 @@ export class FrontzillaPixelferaStore {
     const id = generateId('wf');
     const now = new Date().toISOString();
 
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       INSERT INTO workflows (id, feature_id, status, created_at, updated_at)
       VALUES (?, ?, 'running', ?, ?)
     `);
 
     stmt.run(id, feature_id, now, now);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      this.postgres.sync(
+        'workflows',
+        {
+          id,
+          feature_id,
+          status: 'running',
+          created_at: now,
+          updated_at: now,
+        },
+        'create'
+      ).catch((err) => {
+        this.logger.warn(`Failed to sync workflow created: ${err}`);
+      });
+    }
+
     return {
       id,
       feature_id,
@@ -311,10 +474,25 @@ export class FrontzillaPixelferaStore {
 
   completeWorkflow(id: string, status: string, result: Record<string, unknown>): void {
     const now = new Date().toISOString();
+
+    // SQLite write (PRIMARY)
     const stmt = this.db.prepare(`
       UPDATE workflows SET status = ?, result = ?, updated_at = ? WHERE id = ?
     `);
     stmt.run(status, JSON.stringify(result), now, id);
+
+    // PostgreSQL write (SECONDARY)
+    if (this.postgres) {
+      const pgData = {
+        id,
+        status,
+        result: JSON.stringify(result),
+        updated_at: now,
+      };
+      this.postgres.sync('workflows', pgData, 'update').catch((err) => {
+        this.logger.warn(`Failed to sync workflow completed: ${err}`);
+      });
+    }
   }
 
   // ─── Parsing helpers ────────────────────────────────────────────────────── //
@@ -370,6 +548,9 @@ export class FrontzillaPixelferaStore {
   }
 
   close(): void {
+    if (this.postgres) {
+      this.postgres.close();
+    }
     this.db.close();
   }
 }
