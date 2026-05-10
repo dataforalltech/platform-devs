@@ -6,11 +6,16 @@ from mcp.types import TextContent, Tool
 
 from src.tools.dai_tools import (
     dai_analyze,
+    dai_audit_log,
     dai_chat,
     dai_execute_workflow,
     dai_generate_workflow,
     dai_get_knowledge_base,
+    dai_get_profile,
     dai_get_session_history,
+    dai_get_workflow_status,
+    dai_list_workflows,
+    dai_set_profile,
 )
 
 server = Server("dai-mcp")
@@ -46,7 +51,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="dai_generate_workflow",
-            description="Ask DAI to generate workflow for specific objective",
+            description="Ask DAI to generate workflow for specific objective with constraints",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -58,7 +63,7 @@ async def list_tools() -> list[Tool]:
         ),
         Tool(
             name="dai_execute_workflow",
-            description="Execute workflow via DAI orchestrator",
+            description="Execute workflow via DAI orchestrator with inputs",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -69,14 +74,66 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="dai_get_session_history",
-            description="Get session history and memory from DAI",
+            name="dai_get_workflow_status",
+            description="Get workflow execution status (pending|running|completed|failed) with progress and results",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "session_id": {"type": "string"},
+                    "execution_id": {"type": "string"},
                 },
-                "required": ["session_id"],
+                "required": ["execution_id"],
+            },
+        ),
+        Tool(
+            name="dai_list_workflows",
+            description="List all available workflows for a tenant",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tenant_id": {"type": "string"},
+                },
+                "required": ["tenant_id"],
+            },
+        ),
+        Tool(
+            name="dai_get_profile",
+            description="Get user profile with type, LLM model, risk max level",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tenant_id": {"type": "string"},
+                    "user_id": {"type": "string"},
+                },
+                "required": ["tenant_id", "user_id"],
+            },
+        ),
+        Tool(
+            name="dai_set_profile",
+            description="Set user profile type (data_engineer|analyst|data_scientist|admin)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tenant_id": {"type": "string"},
+                    "user_id": {"type": "string"},
+                    "profile_type": {
+                        "type": "string",
+                        "enum": ["data_engineer", "analyst", "data_scientist", "admin"],
+                    },
+                },
+                "required": ["tenant_id", "user_id", "profile_type"],
+            },
+        ),
+        Tool(
+            name="dai_get_session_history",
+            description="Get session history for a user",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tenant_id": {"type": "string"},
+                    "user_id": {"type": "string"},
+                    "limit": {"type": "integer", "default": 50},
+                },
+                "required": ["tenant_id", "user_id"],
             },
         ),
         Tool(
@@ -89,10 +146,24 @@ async def list_tools() -> list[Tool]:
                     "kb_type": {
                         "type": "string",
                         "description": "Knowledge base type (business or technical)",
+                        "enum": ["business", "technical"],
                         "default": "business",
                     },
                 },
                 "required": ["query"],
+            },
+        ),
+        Tool(
+            name="dai_audit_log",
+            description="Get audit log with optional action filter",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tenant_id": {"type": "string"},
+                    "filter_action": {"type": "string", "description": "Filter by action (optional)"},
+                    "limit": {"type": "integer", "default": 100},
+                },
+                "required": ["tenant_id"],
             },
         ),
     ]
@@ -116,12 +187,34 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 arguments["workflow_id"],
                 arguments.get("inputs"),
             )
+        elif name == "dai_get_workflow_status":
+            result = await dai_get_workflow_status(arguments["execution_id"])
+        elif name == "dai_list_workflows":
+            result = await dai_list_workflows(arguments["tenant_id"])
+        elif name == "dai_get_profile":
+            result = await dai_get_profile(arguments["tenant_id"], arguments["user_id"])
+        elif name == "dai_set_profile":
+            result = await dai_set_profile(
+                arguments["tenant_id"],
+                arguments["user_id"],
+                arguments["profile_type"],
+            )
         elif name == "dai_get_session_history":
-            result = await dai_get_session_history(arguments["session_id"])
+            result = await dai_get_session_history(
+                arguments["tenant_id"],
+                arguments["user_id"],
+                arguments.get("limit", 50),
+            )
         elif name == "dai_get_knowledge_base":
             result = await dai_get_knowledge_base(
                 arguments["query"],
                 arguments.get("kb_type", "business"),
+            )
+        elif name == "dai_audit_log":
+            result = await dai_audit_log(
+                arguments["tenant_id"],
+                arguments.get("filter_action"),
+                arguments.get("limit", 100),
             )
         else:
             result = '{"error": "UnknownTool", "details": "Tool not found"}'

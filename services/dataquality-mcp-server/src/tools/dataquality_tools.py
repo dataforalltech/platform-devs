@@ -144,3 +144,71 @@ async def dataquality_delete_rule(rule_id: str) -> str:
             return json.dumps({"status": "ok", "data": resp.json()})
     except Exception as e:
         return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def dataquality_get_validation_history(dataset_id: str, limit: int = 50) -> str:
+    """Get validation history for a dataset."""
+    try:
+        params = {"limit": limit}
+        async with httpx.AsyncClient(timeout=settings.MCP_DATAQUALITY_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{settings.MCP_DATAQUALITY_BASE_URL}/datasets/{dataset_id}/validation-history",
+                params=params,
+                headers={"Authorization": f"Bearer {settings.MCP_DATAQUALITY_API_KEY}"},
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Dataset {dataset_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def dataquality_get_data_profile(dataset_id: str, columns: list[str] | None = None) -> str:
+    """Get data profile with distributions, outliers, and missing percentages."""
+    try:
+        payload = {"columns": columns or []}
+        async with httpx.AsyncClient(timeout=settings.MCP_DATAQUALITY_TIMEOUT_SECONDS) as client:
+            resp = await client.post(
+                f"{settings.MCP_DATAQUALITY_BASE_URL}/datasets/{dataset_id}/profile",
+                json=payload,
+                headers={"Authorization": f"Bearer {settings.MCP_DATAQUALITY_API_KEY}"},
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Dataset {dataset_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def dataquality_export_report(dataset_id: str, format: str = "pdf") -> str:
+    """Export data quality report in specified format (pdf, csv, json)."""
+    try:
+        params = {"format": format}
+        async with httpx.AsyncClient(timeout=settings.MCP_DATAQUALITY_TIMEOUT_SECONDS) as client:
+            resp = await client.post(
+                f"{settings.MCP_DATAQUALITY_BASE_URL}/datasets/{dataset_id}/export-report",
+                params=params,
+                headers={"Authorization": f"Bearer {settings.MCP_DATAQUALITY_API_KEY}"},
+            )
+            if resp.status_code == 404:
+                return json.dumps({"error": "NotFound", "details": f"Dataset {dataset_id} not found"})
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
+
+
+async def dataquality_health_check() -> str:
+    """Check if platform-dataquality service is healthy."""
+    try:
+        async with httpx.AsyncClient(timeout=settings.MCP_DATAQUALITY_TIMEOUT_SECONDS) as client:
+            resp = await client.get(
+                f"{settings.MCP_DATAQUALITY_BASE_URL}/health",
+                headers={"Authorization": f"Bearer {settings.MCP_DATAQUALITY_API_KEY}"},
+            )
+            resp.raise_for_status()
+            return json.dumps({"status": "ok", "data": resp.json()})
+    except Exception as e:
+        return json.dumps({"error": "Exception", "details": str(e)})
