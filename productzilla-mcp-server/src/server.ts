@@ -13,7 +13,7 @@ import { getSettings } from './config/settings.js';
 import { getProductZillaPrompt } from './prompts/productzillaPrompt.js';
 
 const settings = getSettings();
-const store = new ProductZillaStore(settings.dbPath);
+const store = new ProductZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

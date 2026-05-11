@@ -7,7 +7,7 @@ import { getToolSchemas, dispatchTool } from './tools/index.js';
 import { getFrontzillaPrompt, getPixelferaPrompt, getOrchestratorPrompt } from './prompts/index.js';
 
 const settings = getSettings();
-const store = new FrontzillaPixelferaStore(settings.dbPath);
+const store = new FrontzillaPixelferaStore();
 
 const server = new Server(
   {

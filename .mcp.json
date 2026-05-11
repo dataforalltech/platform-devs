@@ -26,6 +26,12 @@
     "pozilla-mcp": {"command": "node", "args": ["./pozilla-mcp-server/dist/server.js"]},
     "productzilla-mcp": {"command": "node", "args": ["./productzilla-mcp-server/dist/server.js"]},
     "qazilla-mcp": {"command": "node", "args": ["./qazilla-mcp-server/dist/server.js"]},
-    "seczilla-mcp": {"command": "node", "args": ["./seczilla-mcp-server/dist/server.js"]}
+    "seczilla-mcp": {"command": "node", "args": ["./seczilla-mcp-server/dist/server.js"]},
+    "datalake-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/datalake-mcp-server"},
+    "ml-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/ml-mcp-server"},
+    "analytics-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/analytics-mcp-server"},
+    "monitor-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/monitor-mcp-server"},
+    "dataquality-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/dataquality-mcp-server"},
+    "dai-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/dai-mcp-server"}
   }
 }

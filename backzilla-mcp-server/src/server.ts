@@ -7,7 +7,7 @@ import { getToolSchemas, dispatchTool } from './tools/index.js';
 import { getBackzillaPrompt } from './prompts/index.js';
 
 const settings = getSettings();
-const store = new BackzillaStore(settings.dbPath);
+const store = new BackzillaStore();
 
 const server = new Server(
   {

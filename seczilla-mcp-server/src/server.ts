@@ -14,7 +14,7 @@ import { getSettings } from './config/settings.js';
 import { SECZILLA_SYSTEM_PROMPT } from './prompts/seczillaPrompt.js';
 
 const settings = getSettings();
-const store = new SecZillaStore(settings.dbPath);
+const store = new SecZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

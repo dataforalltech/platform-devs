@@ -7,7 +7,7 @@ import { getToolSchemas, dispatchTool } from './tools/index.js';
 import { getOpsZillaPrompt } from './prompts/index.js';
 
 const settings = getSettings();
-const store = new OpsZillaStore(settings.dbPath);
+const store = new OpsZillaStore();
 
 const server = new Server(
   {

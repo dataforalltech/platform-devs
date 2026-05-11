@@ -13,7 +13,7 @@ import { getSettings } from './config/settings.js';
 import { QAZILLA_SYSTEM_PROMPT } from './prompts/qazillaPrompt.js';
 
 const settings = getSettings();
-const store = new QAZillaStore(settings.dbPath);
+const store = new QAZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
