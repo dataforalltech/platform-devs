@@ -58,7 +58,7 @@ export interface QualityGate {
 export class QAZillaStore {
   private db: Database.Database;
 
-  constructor(dbPath: string) {
+  constructor(dbPath?: string) {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.initializeTables();

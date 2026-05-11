@@ -4,7 +4,7 @@ import { nanoid } from 'nanoid';
 export class POZillaStore {
   private db: Database.Database;
 
-  constructor(dbPath: string) {
+  constructor(dbPath?: string) {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.initializeTables();
