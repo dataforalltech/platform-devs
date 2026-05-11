@@ -34,7 +34,7 @@ class SessionMcpMCPService:
         self.name = "session-mcp"
         self.version = "1.0"
         # TODO: Import tools from original session-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "start_session", "description": "start session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "resume_session", "description": "resume session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "save_checkpoint", "description": "save checkpoint", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_sessions", "description": "list sessions", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "end_session", "description": "end session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_session", "description": "get session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_session", "description": "update session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "archive_session", "description": "archive session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "restore_session", "description": "restore session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "cleanup_sessions", "description": "cleanup sessions", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

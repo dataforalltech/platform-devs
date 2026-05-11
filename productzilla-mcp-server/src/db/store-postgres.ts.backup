@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import * as /home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts from '/home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts';
+import * as path from 'path';
 import * as fs from 'fs';
 import { ZillaPostgresStore } from '../../../platform-service-template/lib/postgres_sync';
 
@@ -7,7 +7,7 @@ import { ZillaPostgresStore } from '../../../platform-service-template/lib/postg
 // Interfaces
 // ============================================================================
 
-export interface Epic {
+export interface Feature {
   id: string;
   title: string;
   feature: string;
@@ -18,7 +18,7 @@ export interface Epic {
   updated_at: string;
 }
 
-export interface Feature {
+export interface UserStory {
   id: string;
   plan_id?: string;
   title: string;
@@ -29,7 +29,7 @@ export interface Feature {
   created_at: string;
 }
 
-export interface Story {
+export interface Backlog {
   id: string;
   plan_id?: string;
   title: string;
@@ -80,7 +80,7 @@ export interface Checklist {
   created_at: string;
 }
 
-export interface Task {
+export interface Release {
   id: string;
   plan_id?: string;
   status: string;
@@ -90,10 +90,10 @@ export interface Task {
 }
 
 // ============================================================================
-// PozillaStore — PostgreSQL Primary
+// ProductzillaStore — PostgreSQL Primary
 // ============================================================================
 
-export class PozillaStore {
+export class ProductzillaStore {
   private pg: ZillaPostgresStore;
   private logger: any;
 
@@ -109,21 +109,21 @@ export class PozillaStore {
     this.logger = this.initializeLogger();
 
     try {
-      this.pg = new ZillaPostgresStore('pozilla', postgresConfig);
-      this.logger.info('✅ PozillaStore: PostgreSQL initialized');
+      this.pg = new ZillaPostgresStore('productzilla', postgresConfig);
+      this.logger.info('✅ ProductzillaStore: PostgreSQL initialized');
     } catch (error) {
-      this.logger.error(`❌ PozillaStore: Failed to initialize: ${error}`);
+      this.logger.error(`❌ ProductzillaStore: Failed to initialize: ${error}`);
       throw error;
     }
   }
 
   private initializeLogger(): any {
-    const logsDir = /home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
+    const logsDir = /home/dev/repos/platform-devs/productzilla-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
-    const logFile = /home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts.join(logsDir, 'pozilla.log');
+    const logFile = /home/dev/repos/platform-devs/productzilla-mcp-server/src/db/store-postgres.ts.join(logsDir, 'productzilla.log');
 
     return {
       info: (msg: string) => {
@@ -155,12 +155,12 @@ export class PozillaStore {
   // Test Plans
   // ============================================================================
 
-  async createTestPlan(data: Omit<Epic, 'id' | 'created_at' | 'updated_at'>): Promise<Epic> {
+  async createTestPlan(data: Omit<Feature, 'id' | 'created_at' | 'updated_at'>): Promise<Feature> {
     const id = `tp_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO epics (id, title, feature, scope, objectives, status, created_at, updated_at)
+      `INSERT INTO product_features (id, title, feature, scope, objectives, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.title, data.feature, data.scope, data.objectives, data.status, now, now]
     );
@@ -168,25 +168,25 @@ export class PozillaStore {
     return { ...data, id, created_at: now, updated_at: now };
   }
 
-  async getTestPlan(id: string): Promise<Epic | null> {
-    const rows = await this.pg.query<Epic>('SELECT * FROM epics WHERE id = $1', [id]);
+  async getTestPlan(id: string): Promise<Feature | null> {
+    const rows = await this.pg.query<Feature>('SELECT * FROM product_features WHERE id = $1', [id]);
     return rows[0] || null;
   }
 
-  async listTestPlans(): Promise<Epic[]> {
-    return this.pg.query<Epic>('SELECT * FROM epics ORDER BY created_at DESC', []);
+  async listTestPlans(): Promise<Feature[]> {
+    return this.pg.query<Feature>('SELECT * FROM product_features ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Cases
   // ============================================================================
 
-  async createTestCase(data: Omit<Feature, 'id' | 'created_at'>): Promise<Feature> {
+  async createTestCase(data: Omit<UserStory, 'id' | 'created_at'>): Promise<UserStory> {
     const id = `tc_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO po_features (id, plan_id, title, type, steps, expected_result, status, created_at)
+      `INSERT INTO user_stories (id, plan_id, title, type, steps, expected_result, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.plan_id, data.title, data.type, data.steps, data.expected_result, data.status, now]
     );
@@ -194,26 +194,26 @@ export class PozillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async listTestCases(planId?: string): Promise<Feature[]> {
+  async listTestCases(planId?: string): Promise<UserStory[]> {
     if (planId) {
-      return this.pg.query<Feature>(
-        'SELECT * FROM po_features WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<UserStory>(
+        'SELECT * FROM user_stories WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Feature>('SELECT * FROM po_features ORDER BY created_at DESC', []);
+    return this.pg.query<UserStory>('SELECT * FROM user_stories ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Scenarios
   // ============================================================================
 
-  async createTestScenario(data: Omit<Story, 'id' | 'created_at'>): Promise<Story> {
+  async createTestScenario(data: Omit<Backlog, 'id' | 'created_at'>): Promise<Backlog> {
     const id = `ts_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO po_stories (id, plan_id, title, scenario, tags, created_at)
+      `INSERT INTO backlogs (id, plan_id, title, scenario, tags, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, data.plan_id, data.title, data.scenario, data.tags, now]
     );
@@ -221,18 +221,18 @@ export class PozillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async addTestScenario(planId: string, data: Omit<Story, 'id' | 'created_at' | 'plan_id'>): Promise<Story> {
+  async addTestScenario(planId: string, data: Omit<Backlog, 'id' | 'created_at' | 'plan_id'>): Promise<Backlog> {
     return this.createTestScenario({ ...data, plan_id: planId });
   }
 
-  async listTestScenarios(planId?: string): Promise<Story[]> {
+  async listTestScenarios(planId?: string): Promise<Backlog[]> {
     if (planId) {
-      return this.pg.query<Story>(
-        'SELECT * FROM po_stories WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<Backlog>(
+        'SELECT * FROM backlogs WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Story>('SELECT * FROM po_stories ORDER BY created_at DESC', []);
+    return this.pg.query<Backlog>('SELECT * FROM backlogs ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
@@ -325,12 +325,12 @@ export class PozillaStore {
   // QA Executions
   // ============================================================================
 
-  async createQAExecution(data: Omit<Task, 'id' | 'created_at'>): Promise<Task> {
+  async createQAExecution(data: Omit<Release, 'id' | 'created_at'>): Promise<Release> {
     const id = `qa_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO po_tasks (id, plan_id, status, started_at, completed_at, created_at)
+      `INSERT INTO releases (id, plan_id, status, started_at, completed_at, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, data.plan_id, data.status, data.started_at, data.completed_at, now]
     );

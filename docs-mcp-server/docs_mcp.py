@@ -34,7 +34,7 @@ class DocsMcpMCPService:
         self.name = "docs-mcp"
         self.version = "1.0"
         # TODO: Import tools from original docs-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "generate_doc", "description": "generate doc", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "audit_docs", "description": "audit docs", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_template", "description": "validate template", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "lint_markdown", "description": "lint markdown", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "publish_docs", "description": "publish docs", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_api_docs", "description": "generate api docs", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_architecture_docs", "description": "generate architecture docs", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_user_guide", "description": "generate user guide", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_links", "description": "validate links", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "build_docs", "description": "build docs", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

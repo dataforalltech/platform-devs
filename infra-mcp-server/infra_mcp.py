@@ -34,7 +34,7 @@ class InfraMcpMCPService:
         self.name = "infra-mcp"
         self.version = "1.0"
         # TODO: Import tools from original infra-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "create_infrastructure", "description": "create infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "plan_terraform", "description": "plan terraform", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "apply_policy", "description": "apply policy", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "scan_compliance", "description": "scan compliance", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_adr", "description": "generate adr", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_infrastructure", "description": "validate infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "destroy_infrastructure", "description": "destroy infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_infrastructure", "description": "update infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "rollback_infrastructure", "description": "rollback infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "export_infrastructure", "description": "export infrastructure", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

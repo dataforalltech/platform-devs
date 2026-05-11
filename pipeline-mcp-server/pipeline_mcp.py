@@ -34,7 +34,7 @@ class PipelineMcpMCPService:
         self.name = "pipeline-mcp"
         self.version = "1.0"
         # TODO: Import tools from original pipeline-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "trigger_pipeline", "description": "trigger pipeline", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_status", "description": "check status", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_gates", "description": "list gates", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "promote_build", "description": "promote build", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "rollback", "description": "rollback", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "skip_gate", "description": "skip gate", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "view_logs", "description": "view logs", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_artifacts", "description": "get artifacts", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "retry_stage", "description": "retry stage", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "cancel_pipeline", "description": "cancel pipeline", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

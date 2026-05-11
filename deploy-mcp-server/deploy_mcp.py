@@ -34,7 +34,7 @@ class DeployMcpMCPService:
         self.name = "deploy-mcp"
         self.version = "1.0"
         # TODO: Import tools from original deploy-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "create_commit", "description": "create commit", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_pr", "description": "create pr", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "merge_branch", "description": "merge branch", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "trigger_workflow", "description": "trigger workflow", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "push_acr", "description": "push acr", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_release", "description": "create release", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "tag_release", "description": "tag release", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "push_to_registry", "description": "push to registry", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_changelog", "description": "generate changelog", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_deployment", "description": "create deployment", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

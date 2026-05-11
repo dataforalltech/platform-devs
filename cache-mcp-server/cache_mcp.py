@@ -34,7 +34,7 @@ class CacheMcpMCPService:
         self.name = "cache-mcp"
         self.version = "1.0"
         # TODO: Import tools from original cache-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "set_cache", "description": "set cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_cache", "description": "get cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "invalidate_cache", "description": "invalidate cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "clear_cache", "description": "clear cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_stats", "description": "check stats", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "configure_cache", "description": "configure cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "view_cache_contents", "description": "view cache contents", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "export_cache", "description": "export cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "import_cache", "description": "import cache", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "analyze_cache_performance", "description": "analyze cache performance", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

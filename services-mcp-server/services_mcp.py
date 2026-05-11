@@ -34,7 +34,7 @@ class ServicesMcpMCPService:
         self.name = "services-mcp"
         self.version = "1.0"
         # TODO: Import tools from original services-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "register_service", "description": "register service", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_health", "description": "check health", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_services", "description": "list services", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_port", "description": "get port", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_service", "description": "update service", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "deregister_service", "description": "deregister service", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_service_metrics", "description": "get service metrics", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "configure_service", "description": "configure service", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "restart_service", "description": "restart service", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "monitor_service", "description": "monitor service", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {
