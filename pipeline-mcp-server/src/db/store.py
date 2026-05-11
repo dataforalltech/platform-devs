@@ -3,9 +3,13 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
+import os
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -31,6 +35,23 @@ class PipelineStore:
         self._con.execute("PRAGMA journal_mode=WAL")
         self._lock = threading.Lock()
         self._migrate()
+
+        # Initialize PostgreSQL sync layer
+        self._postgres_sync = None
+        if os.getenv("POSTGRES_SYNC_ENABLED", "false").lower() == "true":
+            try:
+                from db.postgres_sync import PipelinePostgresSync
+                postgres_config = {
+                    "host": os.getenv("POSTGRES_HOST", "claude-dev"),
+                    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+                    "user": os.getenv("POSTGRES_USER", "postgres"),
+                    "password": os.getenv("POSTGRES_PASSWORD", "postgres_password_local_dev"),
+                    "database": os.getenv("POSTGRES_DB", "app"),
+                }
+                self._postgres_sync = PipelinePostgresSync(postgres_config, enabled=True)
+                _log.info("✅ PipelineStore: PostgreSQL sync enabled")
+            except Exception as e:
+                _log.warning(f"⚠️  PipelineStore: PostgreSQL sync disabled: {e}")
 
     def _migrate(self) -> None:
         self._con.executescript("""
@@ -107,7 +128,17 @@ class PipelineStore:
             row = self._con.execute(
                 "SELECT * FROM pipelines WHERE service=?", (service,)
             ).fetchone()
-            return {"action": action, "pipeline": _pipeline_row(row)}
+            result = {"action": action, "pipeline": _pipeline_row(row)}
+
+        # Sync to PostgreSQL (outside lock)
+        if self._postgres_sync:
+            try:
+                pipeline_data = result["pipeline"]
+                self._postgres_sync.sync_pipeline_registered(pipeline_data)
+            except Exception as e:
+                _log.warning(f"Failed to sync pipeline registered to PostgreSQL: {e}")
+
+        return result
 
     def get_pipeline(self, service: str) -> dict | None:
         with self._lock:
@@ -154,6 +185,13 @@ class PipelineStore:
                 (env, version, now, service),
             )
 
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                self._postgres_sync.sync_pipeline_env_updated(service, env, version)
+            except Exception as e:
+                _log.warning(f"Failed to sync pipeline env update to PostgreSQL: {e}")
+
     def block_pipeline(self, service: str, reason: str, blocked_by: str) -> dict:
         with self._lock:
             now = _now()
@@ -166,7 +204,16 @@ class PipelineStore:
             row = self._con.execute(
                 "SELECT * FROM pipelines WHERE service=?", (service,)
             ).fetchone()
-            return _pipeline_row(row) if row else {}
+            result = _pipeline_row(row) if row else {}
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                self._postgres_sync.sync_pipeline_blocked(service, reason, blocked_by)
+            except Exception as e:
+                _log.warning(f"Failed to sync pipeline blocked to PostgreSQL: {e}")
+
+        return result
 
     def set_gates_config(self, service: str, gates_required: dict) -> dict:
         with self._lock:
@@ -208,14 +255,43 @@ class PipelineStore:
                     pr_number, pr_url, status, now,
                 ),
             )
-            return cur.lastrowid  # type: ignore[return-value]
+            promotion_id = cur.lastrowid
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                promotion_data = {
+                    'service': service,
+                    'from_env': from_env,
+                    'to_env': to_env,
+                    'promoted_by': promoted_by,
+                    'reason': reason,
+                    'gates_snapshot': gates_snapshot,
+                    'deploy_ref': deploy_ref,
+                    'pr_number': pr_number,
+                    'pr_url': pr_url,
+                    'status': status,
+                }
+                self._postgres_sync.sync_promotion_created(promotion_data)
+            except Exception as e:
+                _log.warning(f"Failed to sync promotion to PostgreSQL: {e}")
+
+        return promotion_id  # type: ignore[return-value]
 
     def complete_promotion(self, promotion_id: int, status: str) -> None:
         with self._lock:
+            completed_at = _now()
             self._con.execute(
                 "UPDATE promotions SET status=?, completed_at=? WHERE id=?",
-                (status, _now(), promotion_id),
+                (status, completed_at, promotion_id),
             )
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                self._postgres_sync.sync_promotion_completed(promotion_id, status, completed_at)
+            except Exception as e:
+                _log.warning(f"Failed to sync promotion completed to PostgreSQL: {e}")
 
     def approve_promotion(self, promotion_id: int, approved_by: str) -> dict | None:
         with self._lock:
@@ -227,7 +303,16 @@ class PipelineStore:
             row = self._con.execute(
                 "SELECT * FROM promotions WHERE id=?", (promotion_id,)
             ).fetchone()
-            return dict(row) if row else None
+            result = dict(row) if row else None
+
+        # Sync to PostgreSQL
+        if result and self._postgres_sync:
+            try:
+                self._postgres_sync.sync_promotion_approved(promotion_id, approved_by, now)
+            except Exception as e:
+                _log.warning(f"Failed to sync promotion approved to PostgreSQL: {e}")
+
+        return result
 
     def get_promotion(self, promotion_id: int) -> dict | None:
         with self._lock:
@@ -279,7 +364,17 @@ class PipelineStore:
                 "SELECT * FROM gates WHERE service=? AND env=? AND gate_type=?",
                 (service, env, gate_type),
             ).fetchone()
-            return dict(row) if row else {}
+            result = dict(row) if row else {}
+
+        # Sync to PostgreSQL
+        if self._postgres_sync:
+            try:
+                details_dict = json.loads(details) if isinstance(details, str) else details
+                self._postgres_sync.sync_gate_evaluated(service, env, gate_type, passed, details_dict)
+            except Exception as e:
+                _log.warning(f"Failed to sync gate evaluated to PostgreSQL: {e}")
+
+        return result
 
     def get_gates(self, service: str, env: str) -> list[dict]:
         with self._lock:

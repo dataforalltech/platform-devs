@@ -1,0 +1,244 @@
+version: '3.9'
+
+services:
+  # System MCPs (Python - FastAPI)
+
+  config-mcp:
+    build:
+      context: ./config-mcp-server
+      dockerfile: Dockerfile
+    ports:
+      - "7100:7100"
+    environment:
+      PORT: 7100
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  auth-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./auth-mcp-server/auth_mcp.py:/app/auth_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python auth_mcp.py"
+    ports:
+      - "7103:7103"
+    environment:
+      PORT: 7103
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  session-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./session-mcp-server/session_mcp.py:/app/session_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python session_mcp.py"
+    ports:
+      - "7102:7102"
+    environment:
+      PORT: 7102
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  admin-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./admin-mcp-server/admin_mcp.py:/app/admin_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python admin_mcp.py"
+    ports:
+      - "7104:7104"
+    environment:
+      PORT: 7104
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  audit-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./audit-mcp-server/audit_mcp.py:/app/audit_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python audit_mcp.py"
+    ports:
+      - "7105:7105"
+    environment:
+      PORT: 7105
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  infra-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./infra-mcp-server/infra_mcp.py:/app/infra_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python infra_mcp.py"
+    ports:
+      - "7106:7106"
+    environment:
+      PORT: 7106
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  services-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./services-mcp-server/services_mcp.py:/app/services_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python services_mcp.py"
+    ports:
+      - "7107:7107"
+    environment:
+      PORT: 7107
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  pipeline-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./pipeline-mcp-server/pipeline_mcp.py:/app/pipeline_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python pipeline_mcp.py"
+    ports:
+      - "7108:7108"
+    environment:
+      PORT: 7108
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  qa-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./qa-mcp-server/qa_mcp.py:/app/qa_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python qa_mcp.py"
+    ports:
+      - "7109:7109"
+    environment:
+      PORT: 7109
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  deploy-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./deploy-mcp-server/deploy_mcp.py:/app/deploy_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python deploy_mcp.py"
+    ports:
+      - "7110:7110"
+    environment:
+      PORT: 7110
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  docs-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./docs-mcp-server/docs_mcp.py:/app/docs_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python docs_mcp.py"
+    ports:
+      - "7111:7111"
+    environment:
+      PORT: 7111
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  ai-governance-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./ai-governance-mcp-server/ai_governance_mcp.py:/app/ai_governance_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python ai_governance_mcp.py"
+    ports:
+      - "7112:7112"
+    environment:
+      PORT: 7112
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  governance-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./governance-mcp-server/governance_mcp.py:/app/governance_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python governance_mcp.py"
+    ports:
+      - "7113:7113"
+    environment:
+      PORT: 7113
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  scheduler-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./scheduler-mcp-server/scheduler_mcp.py:/app/scheduler_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python scheduler_mcp.py"
+    ports:
+      - "7114:7114"
+    environment:
+      PORT: 7114
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  connectors-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./connectors-mcp-server/connectors_mcp.py:/app/connectors_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python connectors_mcp.py"
+    ports:
+      - "7115:7115"
+    environment:
+      PORT: 7115
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  cache-mcp:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./cache-mcp-server/cache_mcp.py:/app/cache_mcp.py
+    command: bash -c "pip install -q fastapi uvicorn pydantic && python cache_mcp.py"
+    ports:
+      - "7116:7116"
+    environment:
+      PORT: 7116
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+  mcp-registry:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./mcp-registry.py:/app/mcp-registry.py
+    command: bash -c "pip install -q fastapi uvicorn aiohttp && python mcp-registry.py"
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: 8000
+    networks:
+      - mcp-network
+    restart: unless-stopped
+
+networks:
+  mcp-network:
+    driver: bridge

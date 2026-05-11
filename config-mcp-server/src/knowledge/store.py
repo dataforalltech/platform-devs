@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -47,6 +48,23 @@ class ConfigStore:
         self._data: dict[str, dict[str, str]] = {}
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._load()
+
+        # Initialize PostgreSQL sync layer
+        self._postgres_sync = None
+        if os.getenv("POSTGRES_SYNC_ENABLED", "false").lower() == "true":
+            try:
+                from db.postgres_sync import ConfigPostgresSync
+                postgres_config = {
+                    "host": os.getenv("POSTGRES_HOST", "claude-dev"),
+                    "port": int(os.getenv("POSTGRES_PORT", "5432")),
+                    "user": os.getenv("POSTGRES_USER", "postgres"),
+                    "password": os.getenv("POSTGRES_PASSWORD", "postgres_password_local_dev"),
+                    "database": os.getenv("POSTGRES_DB", "app"),
+                }
+                self._postgres_sync = ConfigPostgresSync(postgres_config, enabled=True)
+                _log.info("✅ ConfigStore: PostgreSQL sync enabled")
+            except Exception as e:
+                _log.warning(f"⚠️  ConfigStore: PostgreSQL sync disabled: {e}")
 
     # ── I/O ───────────────────────────────────────────────────────────────── #
 
@@ -88,6 +106,13 @@ class ConfigStore:
         self._save()
         _log.info("config_store_set ns=%s key=%s", namespace, key)
 
+        # Sync to PostgreSQL (metadata only, encrypted value stays in file)
+        if self._postgres_sync:
+            try:
+                self._postgres_sync.sync_credential_created(namespace, key)
+            except Exception as e:
+                _log.warning(f"Failed to sync credential to PostgreSQL: {e}")
+
     def delete(self, namespace: str, key: str) -> bool:
         """Remove uma chave. Retorna True se existia."""
         if namespace in self._data and key in self._data[namespace]:
@@ -96,6 +121,14 @@ class ConfigStore:
                 del self._data[namespace]
             self._save()
             _log.info("config_store_deleted ns=%s key=%s", namespace, key)
+
+            # Sync to PostgreSQL
+            if self._postgres_sync:
+                try:
+                    self._postgres_sync.sync_credential_deleted(namespace, key)
+                except Exception as e:
+                    _log.warning(f"Failed to sync credential deletion to PostgreSQL: {e}")
+
             return True
         return False
 
