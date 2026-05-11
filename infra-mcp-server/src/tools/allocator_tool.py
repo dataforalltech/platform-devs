@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from ..knowledge.allocator_store import (
+from ..db.allocator_store import (
     AllocatorStore,
     AllocatorStoreError,
     LeaseNotFound,

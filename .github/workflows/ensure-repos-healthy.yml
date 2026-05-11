@@ -1,0 +1,284 @@
+name: 🏥 Ensure Repos Healthy (CI + ACR)
+
+on:
+  schedule:
+    # Segunda-feira 6:00 AM UTC — verificação semanal completa
+    - cron: '0 6 * * 1'
+    # Diário 7:00 AM UTC — verificação rápida CI-only
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Modo de execução'
+        required: true
+        default: 'report'
+        type: choice
+        options:
+          - report       # só relatório, sem ações
+          - fix          # dispara CI para repos com problema
+          - ci-only      # verifica só CI (sem ACR)
+          - full         # report completo CI + ACR
+
+env:
+  POSTGRES_HOST: ${{ secrets.POSTGRES_HOST }}
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+  POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+  POSTGRES_DB: app
+  DEPLOY_ACR_REGISTRY: d4all.azurecr.io
+  DEPLOY_ACR_NAMESPACE: dataforall/3.0
+  DEPLOY_ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+  DEPLOY_ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+
+jobs:
+  # ============================================================================
+  # Stage 1: Validate CI status for all eligible repos
+  # ============================================================================
+  validate-ci:
+    name: 🔍 Validate CI Workflows
+    runs-on: ubuntu-latest
+
+    outputs:
+      ci_failing: ${{ steps.check.outputs.ci_failing }}
+      no_workflow: ${{ steps.check.outputs.no_workflow }}
+      healthy: ${{ steps.check.outputs.healthy }}
+      total: ${{ steps.check.outputs.total }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: 🔍 Check CI status (all eligible repos)
+        id: check
+        run: |
+          python3 db/validate_repos_health.py --ci-only --json > /tmp/ci-report.json 2>&1 || true
+          python3 db/validate_repos_health.py --ci-only 2>&1 | tee /tmp/ci-report.txt
+
+          # Extrair métricas do JSON
+          HEALTHY=$(python3 -c "import json; d=json.load(open('/tmp/ci-report.json')); print(d['summary']['healthy'])" 2>/dev/null || echo "0")
+          TOTAL=$(python3 -c "import json; d=json.load(open('/tmp/ci-report.json')); print(d['summary']['total'])" 2>/dev/null || echo "0")
+          CI_FAIL=$(python3 -c "import json; d=json.load(open('/tmp/ci-report.json')); print(d['summary']['ci_failing'])" 2>/dev/null || echo "0")
+          NO_WF=$(python3 -c "import json; d=json.load(open('/tmp/ci-report.json')); print(d['summary']['no_workflow'])" 2>/dev/null || echo "0")
+
+          echo "healthy=$HEALTHY" >> $GITHUB_OUTPUT
+          echo "total=$TOTAL" >> $GITHUB_OUTPUT
+          echo "ci_failing=$CI_FAIL" >> $GITHUB_OUTPUT
+          echo "no_workflow=$NO_WF" >> $GITHUB_OUTPUT
+
+      - name: 📊 CI Report Summary
+        run: |
+          echo "## 🔍 CI Validation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Métrica | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ✅ Healthy | ${{ steps.check.outputs.healthy }} / ${{ steps.check.outputs.total }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| ❌ CI Failing | ${{ steps.check.outputs.ci_failing }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 🚫 Sem workflow | ${{ steps.check.outputs.no_workflow }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Ver relatório completo</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/ci-report.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload CI report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ci-health-report
+          path: |
+            /tmp/ci-report.txt
+            /tmp/ci-report.json
+          retention-days: 30
+
+  # ============================================================================
+  # Stage 2: Validate ACR images (weekly ou manual full)
+  # ============================================================================
+  validate-acr:
+    name: 🐳 Validate ACR Images
+    runs-on: ubuntu-latest
+    # Roda só na segunda-feira (schedule semanal) ou no modo full/report manual
+    if: |
+      github.event.schedule == '0 6 * * 1' ||
+      github.event.inputs.mode == 'full' ||
+      github.event.inputs.mode == 'report'
+
+    outputs:
+      acr_missing: ${{ steps.check.outputs.acr_missing }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: 🐳 Check ACR images
+        id: check
+        run: |
+          python3 db/validate_repos_health.py --json > /tmp/full-report.json 2>&1 || true
+          python3 db/validate_repos_health.py 2>&1 | tee /tmp/full-report.txt
+
+          ACR_MISS=$(python3 -c "import json; d=json.load(open('/tmp/full-report.json')); print(d['summary']['acr_missing'])" 2>/dev/null || echo "0")
+          echo "acr_missing=$ACR_MISS" >> $GITHUB_OUTPUT
+
+      - name: 📊 ACR Report Summary
+        run: |
+          echo "## 🐳 ACR Validation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Métrica | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ⚠️ ACR images ausentes | ${{ steps.check.outputs.acr_missing }} |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload full report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: full-health-report
+          path: |
+            /tmp/full-report.txt
+            /tmp/full-report.json
+          retention-days: 30
+
+  # ============================================================================
+  # Stage 3: Auto-remediate repos with no CI workflow or no runs
+  # ============================================================================
+  remediate:
+    name: 🔧 Remediate Failing Repos
+    runs-on: ubuntu-latest
+    needs: validate-ci
+    # Só roda se há repos com problema E modo não é só report
+    if: |
+      (needs.validate-ci.outputs.ci_failing > 0 || needs.validate-ci.outputs.no_workflow > 0) &&
+      (github.event.inputs.mode == 'fix' || github.event.schedule != '')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install psycopg2-binary
+
+      - name: Authenticate GitHub CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: 🔧 Trigger CI for failing repos
+        id: fix
+        run: |
+          python3 db/validate_repos_health.py --failing --fix 2>&1 | tee /tmp/remediation.txt
+          echo "Remediação concluída"
+
+      - name: 📊 Remediation Summary
+        run: |
+          echo "## 🔧 Remediation Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Repos com CI falhando: **${{ needs.validate-ci.outputs.ci_failing }}**" >> $GITHUB_STEP_SUMMARY
+          echo "Repos sem workflow:    **${{ needs.validate-ci.outputs.no_workflow }}**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "<details><summary>Log de remediação</summary>" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/remediation.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "</details>" >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload remediation log
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: remediation-log
+          path: /tmp/remediation.txt
+          retention-days: 30
+
+  # ============================================================================
+  # Stage 4: Quality Gate — falha se muitos repos com problema
+  # ============================================================================
+  quality-gate:
+    name: 🚦 Quality Gate
+    runs-on: ubuntu-latest
+    needs: [validate-ci, validate-acr]
+    if: always()
+
+    steps:
+      - name: 🚦 Evaluate gates
+        run: |
+          HEALTHY=${{ needs.validate-ci.outputs.healthy || 0 }}
+          TOTAL=${{ needs.validate-ci.outputs.total || 0 }}
+          CI_FAIL=${{ needs.validate-ci.outputs.ci_failing || 0 }}
+          ACR_MISS=${{ needs.validate-acr.outputs.acr_missing || 0 }}
+
+          echo "## 🚦 Quality Gate" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Gate 1: >= 80% dos repos com CI passando (crítico)
+          if [ "$TOTAL" -gt 0 ]; then
+            PCT=$(( HEALTHY * 100 / TOTAL ))
+            echo "| Gate | Status | Valor |" >> $GITHUB_STEP_SUMMARY
+            echo "|------|--------|-------|" >> $GITHUB_STEP_SUMMARY
+
+            if [ "$PCT" -ge 80 ]; then
+              echo "| CI Coverage >= 80% | ✅ PASS | ${PCT}% (${HEALTHY}/${TOTAL}) |" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "| CI Coverage >= 80% | ❌ FAIL | ${PCT}% (${HEALTHY}/${TOTAL}) |" >> $GITHUB_STEP_SUMMARY
+              echo "❌ GATE FAIL: Menos de 80% dos repos com CI passando (${PCT}%)"
+              exit 1
+            fi
+
+            # Gate 2: ACR — warning se > 10 imagens ausentes (não falha)
+            if [ "$ACR_MISS" -gt 10 ]; then
+              echo "| ACR images <= 10 ausentes | ⚠️ WARN | ${ACR_MISS} ausentes |" >> $GITHUB_STEP_SUMMARY
+              echo "⚠️  WARNING: ${ACR_MISS} imagens ausentes no ACR"
+            else
+              echo "| ACR images <= 10 ausentes | ✅ PASS | ${ACR_MISS} ausentes |" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+
+  # ============================================================================
+  # Stage 5: Notify
+  # ============================================================================
+  notify:
+    name: 📢 Notify
+    runs-on: ubuntu-latest
+    needs: [validate-ci, validate-acr, quality-gate]
+    if: always()
+
+    steps:
+      - name: 📢 Final status
+        run: |
+          echo "✅ Health check concluído"
+          echo "CI: ${{ needs.validate-ci.outputs.healthy }}/${{ needs.validate-ci.outputs.total }} healthy"
+          echo "ACR missing: ${{ needs.validate-acr.outputs.acr_missing || 'N/A' }}"
+          echo "Quality gate: ${{ needs.quality-gate.result }}"
+
+          # Notificação Slack se quality gate falhou
+          if [ "${{ needs.quality-gate.result }}" = "failure" ]; then
+            echo "🚨 Quality gate falhou — notificar #devops"
+            # curl -X POST "${{ secrets.SLACK_WEBHOOK_URL }}" \
+            #   -H 'Content-type: application/json' \
+            #   --data "{\"text\":\"🚨 *Repo Health Check FAILED*\nCI: ${{ needs.validate-ci.outputs.healthy }}/${{ needs.validate-ci.outputs.total }} healthy\nACR: ${{ needs.validate-acr.outputs.acr_missing }} missing\"}"
+          fi

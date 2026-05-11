@@ -17,7 +17,7 @@ from ..knowledge.session import (
     UserSession,
     collect_environment_context,
 )
-from ..knowledge.token_store import TokenStore
+from ..db.token_store import TokenStore
 
 # Thresholds para recomendação de /compact
 _COMPACT_WARN_CALLS = 80   # aviso

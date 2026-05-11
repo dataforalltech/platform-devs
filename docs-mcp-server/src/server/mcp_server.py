@@ -347,7 +347,7 @@ assert set(_TOOL_SCHEMAS.keys()) == _EXPECTED, (
 # ---------------------------------------------------------------------- #
 def build_server() -> tuple[Server, DocsSettings, DocsStore]:
     settings = get_settings()
-    store = DocsStore(db_path=settings.db_path)
+    store = DocsStore(settings=settings)
     server: Server = Server("docs-mcp-server")
 
     @server.list_tools()

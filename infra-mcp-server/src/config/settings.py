@@ -79,13 +79,23 @@ class Settings(BaseSettings):
     )
 
     # --------------------------------------------------------------------- #
-    # Banco SQLite do allocator. Valor especial ":memory:" → banco em memória (testes).
+    # PostgreSQL connection for allocator store (Phase 2 → PostgreSQL migration)
+    pg_host: str = Field(default="claude-dev", description="PostgreSQL host")
+    pg_port: int = Field(default=5432, description="PostgreSQL port")
+    pg_db: str = Field(default="app", description="PostgreSQL database name")
+    pg_user: str = Field(default="postgres", description="PostgreSQL user")
+    pg_password: str = Field(default="postgres_password_local_dev", description="PostgreSQL password")
+    pg_min_conn: int = Field(default=2, description="Minimum pool connections")
+    pg_max_conn: int = Field(default=10, description="Maximum pool connections")
+
+    # SQLite for testing (if INFRA_USE_SQLITE_FOR_TESTING=true, use :memory: for tests)
+    use_sqlite_for_testing: bool = Field(default=False, description="Use SQLite :memory: for tests")
     db_path: str = Field(
-        default="allocator.db",
+        default=":memory:",
         description=(
-            "Caminho do banco SQLite do allocator (Phase 2b+). "
-            "':memory:' para testes sem persistência. "
-            "Default: 'allocator.db' no cwd do processo."
+            "Caminho do banco SQLite do allocator (apenas para testes/development). "
+            "Default: ':memory:' (testes sem persistência). "
+            "Production deve usar PostgreSQL."
         ),
     )
 
@@ -156,6 +166,11 @@ class Settings(BaseSettings):
     @classmethod
     def _resolve_terraform_root(cls, v: Path | None) -> Path | None:
         return v.expanduser().resolve() if v is not None else None
+
+    @property
+    def pg_dsn(self) -> str:
+        """Return PostgreSQL connection string."""
+        return f"host={self.pg_host} port={self.pg_port} dbname={self.pg_db} user={self.pg_user} password={self.pg_password}"
 
 
 @lru_cache(maxsize=1)

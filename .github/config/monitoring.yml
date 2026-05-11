@@ -1,0 +1,312 @@
+# OpsZilla Monitoring Configuration
+# Repository Synchronization Metrics & Observability
+
+opszilla:
+  # ============================================================================
+  # Dashboard: Repository Sync Metrics
+  # ============================================================================
+  dashboards:
+    repo_sync_metrics:
+      name: Repository Synchronization
+      description: Real-time metrics on repo sync status
+      refresh_interval: 300  # 5 minutes
+
+      panels:
+        - title: Clone Coverage
+          type: gauge
+          metric: clone_coverage
+          unit: "%"
+          thresholds:
+            green: 95
+            yellow: 80
+            red: 60
+
+        - title: Develop Branch Coverage
+          type: gauge
+          metric: develop_coverage
+          unit: "%"
+          thresholds:
+            green: 90
+            yellow: 70
+            red: 50
+
+        - title: Repos Cloned Over Time
+          type: line
+          metric: repos_cloned
+          time_range: 30d
+          aggregation: daily
+
+        - title: Sync Status
+          type: table
+          columns:
+            - name: Repository
+            - name: Status
+            - name: Last Sync
+            - name: Branch
+            - name: Coverage
+
+        - title: Sync Failures (24h)
+          type: counter
+          metric: sync_failures_24h
+          unit: failures
+          alert_threshold: 5
+
+        - title: Discrepancies Trend
+          type: line
+          metric: discrepancies
+          time_range: 7d
+          aggregation: daily
+
+  # ============================================================================
+  # Metrics Collection
+  # ============================================================================
+  metrics:
+    # Clone metrics
+    repos_cloned:
+      description: Total repositories cloned locally
+      unit: count
+      type: gauge
+      frequency: hourly
+      source: postgresql
+      query: "SELECT COUNT(*) FROM repositories WHERE active = true AND last_sync_at IS NOT NULL"
+
+    clone_coverage:
+      description: Percentage of repos cloned
+      unit: percent
+      type: gauge
+      frequency: hourly
+      formula: "(repos_cloned / total_active_repos) * 100"
+
+    # Branch metrics
+    with_develop:
+      description: Repos with develop branch
+      unit: count
+      type: gauge
+      frequency: hourly
+      source: postgresql
+      query: "SELECT COUNT(DISTINCT rb.repository_id) FROM repository_branches rb WHERE rb.branch_name = 'develop'"
+
+    develop_coverage:
+      description: Percentage of repos with develop
+      unit: percent
+      type: gauge
+      frequency: hourly
+      formula: "(with_develop / total_active_repos) * 100"
+
+    # Sync metrics
+    synced_24h:
+      description: Repos synced in last 24 hours
+      unit: count
+      type: gauge
+      frequency: hourly
+      source: postgresql
+      query: "SELECT COUNT(*) FROM repositories WHERE active = true AND last_sync_at > NOW() - INTERVAL '24 hours'"
+
+    sync_failures_24h:
+      description: Failed sync operations in last 24 hours
+      unit: count
+      type: counter
+      frequency: per_event
+      source: log_aggregator
+
+    last_sync_timestamp:
+      description: Last successful sync timestamp
+      unit: unix_timestamp
+      type: gauge
+      frequency: per_event
+      source: postgresql
+
+    # Data quality metrics
+    discrepancies:
+      description: Number of discrepancies between sources
+      unit: count
+      type: gauge
+      frequency: daily
+      source: postgresql
+      query: "SELECT COUNT(*) FROM validation_results WHERE status = 'discrepancy'"
+
+    reconciled:
+      description: Reconciled discrepancies percentage
+      unit: percent
+      type: gauge
+      frequency: daily
+      formula: "(reconciled_count / total_discrepancies) * 100"
+
+  # ============================================================================
+  # Alerts & Thresholds
+  # ============================================================================
+  alerts:
+    # Critical alerts
+    - id: alert_low_clone_coverage
+      name: Low Clone Coverage
+      metric: clone_coverage
+      condition: "< 90"
+      severity: critical
+      duration: 10m
+      actions:
+        - notify_slack: "#devops"
+        - notify_email: "caiog@dataforall.tech"
+        - create_incident: true
+
+    - id: alert_no_develop
+      name: Low Develop Branch Coverage
+      metric: develop_coverage
+      condition: "< 70"
+      severity: critical
+      duration: 10m
+      actions:
+        - notify_slack: "#devops"
+        - page_oncall: true
+
+    - id: alert_sync_failures
+      name: High Sync Failure Rate
+      metric: sync_failures_24h
+      condition: "> 5"
+      severity: critical
+      duration: 5m
+      actions:
+        - notify_slack: "#devops"
+        - create_incident: true
+        - create_issue:
+            repo: platform-devs
+            labels: ["bug", "sync-failure"]
+
+    - id: alert_high_discrepancies
+      name: High Discrepancy Count
+      metric: discrepancies
+      condition: "> 30"
+      severity: high
+      duration: 30m
+      actions:
+        - notify_slack: "#devops"
+        - create_issue:
+            repo: platform-devs
+            labels: ["sync", "data-quality"]
+
+    # Warning alerts
+    - id: alert_stale_sync
+      name: Stale Synchronization
+      metric: last_sync_timestamp
+      condition: "older_than_24h"
+      severity: warning
+      duration: 30m
+      actions:
+        - notify_slack: "#devops"
+
+    - id: alert_low_reconciliation
+      name: Low Reconciliation Rate
+      metric: reconciled
+      condition: "< 80"
+      severity: warning
+      duration: 1h
+      actions:
+        - notify_slack: "#devops"
+
+  # ============================================================================
+  # SLOs (Service Level Objectives)
+  # ============================================================================
+  slos:
+    repo_sync_availability:
+      name: Repository Sync Availability
+      description: Percentage of time sync operations succeed
+      target: 99.9
+      window: 30d
+      metric: sync_success_rate
+
+    develop_coverage_slo:
+      name: Develop Branch Coverage SLO
+      description: Maintain >= 90% of repos with develop
+      target: 90
+      window: 7d
+      metric: develop_coverage
+
+    discrepancy_resolution_slo:
+      name: Discrepancy Resolution SLO
+      description: Resolve discrepancies within 24 hours
+      target: 95
+      window: 7d
+      metric: discrepancies_resolved_24h
+
+  # ============================================================================
+  # Runbooks & Incident Response
+  # ============================================================================
+  runbooks:
+    - trigger: alert_low_clone_coverage
+      runbook: "CLONE_COVERAGE_LOW"
+      steps:
+        - "Check GitHub Actions workflow status"
+        - "Verify PostgreSQL connectivity"
+        - "Review failed clone operations"
+        - "Re-run clone_and_sync_repos.py --clone"
+
+    - trigger: alert_no_develop
+      runbook: "DEVELOP_NOT_SYNCED"
+      steps:
+        - "Identify repos without develop"
+        - "Check if develop exists remotely"
+        - "Run ensure_develop_branch.py --all"
+        - "Validate sync completion"
+
+    - trigger: alert_sync_failures
+      runbook: "SYNC_FAILURES"
+      steps:
+        - "Check GitHub Actions logs"
+        - "Verify PostgreSQL health"
+        - "Check network connectivity"
+        - "Run manual sync: python3 db/clone_and_sync_repos.py --all"
+
+  # ============================================================================
+  # Retention & Cleanup
+  # ============================================================================
+  retention:
+    metrics: 90d
+    logs: 30d
+    incidents: 365d
+
+  # ============================================================================
+  # Integration with Pipeline-MCP
+  # ============================================================================
+  pipeline_integration:
+    enabled: true
+    gates:
+      - gate_id: repo_completeness
+        metric: clone_coverage
+        threshold: 95
+        fail_on_breach: true
+
+      - gate_id: develop_sync
+        metric: develop_coverage
+        threshold: 80
+        fail_on_breach: false
+
+      - gate_id: data_quality
+        metric: discrepancies
+        threshold: 20
+        fail_on_breach: true
+
+  # ============================================================================
+  # Notification Channels
+  # ============================================================================
+  channels:
+    slack:
+      enabled: true
+      webhook_url: "${{ secrets.SLACK_WEBHOOK_URL }}"
+      channels:
+        - name: "#devops"
+          severity: [critical, high]
+        - name: "#dev-notifications"
+          severity: [warning]
+
+    email:
+      enabled: true
+      recipients:
+        - caiog@dataforall.tech
+      on_severity: [critical, high]
+
+    pagerduty:
+      enabled: false
+      integration_key: "${{ secrets.PAGERDUTY_KEY }}"
+      severity_map:
+        critical: "critical"
+        high: "error"
+        warning: "warning"

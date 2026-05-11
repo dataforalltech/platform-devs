@@ -1,10 +1,11 @@
-from .allocator_store import (
+# Re-export from db module (PostgreSQL migration)
+from ..db.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
     LeaseNotFound,
 )
-from .provisioner import (
+from ..db.provisioner import (
     ImmediateProvisioner,
     OnDone,
     OnFailed,
@@ -12,7 +13,7 @@ from .provisioner import (
     Provisioner,
     TerraformProvisioner,
 )
-from .ssh_key import (
+from ..db.ssh_key import (
     decrypt_private_key,
     encrypt_private_key,
     generate_fernet_key,

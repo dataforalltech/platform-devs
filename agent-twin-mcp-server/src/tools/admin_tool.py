@@ -12,7 +12,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
-from ..knowledge.token_store import TokenStore
+from ..db.token_store import TokenStore
 
 
 def _check_admin(admin_token: str, provided: str) -> dict[str, Any] | None:

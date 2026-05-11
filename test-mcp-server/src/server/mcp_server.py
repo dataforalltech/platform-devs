@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def build_server() -> tuple[Server, TestSettings, TestStore]:
     settings = get_settings()
-    store = TestStore(settings.db_path)
+    store = TestStore(settings=settings)
     server = Server("test-mcp-server")
 
     # ── Tool definitions ───────────────────────────────────────────────────── #
