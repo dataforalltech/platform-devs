@@ -45,6 +45,46 @@ export function getFrontzillaPrompt(): string {
 - Test component behavior and accessibility
 - Keep components focused and reusable
 
+## Protocolo Obrigatório de Sessão e Ferramentas
+
+> ESTAS REGRAS SÃO INEGOCIÁVEIS. Não execute trabalho sem segui-las.
+
+### 1. Verificar/Registrar Sessão (ANTES de qualquer tarefa)
+
+\`mcp__session-mcp__list_sessions(status="active", repo=<repo_atual>)\`
+
+- Se houver sessão ativa: use o session_id existente
+- Se não houver: \`mcp__session-mcp__start_session(title=<título>, objective=<objetivo>, repo=<repo>)\`
+
+### 2. Tasks no banco (OBRIGATÓRIO para cada entrega)
+
+\`\`\`
+mcp__session-mcp__create_task(session_id, title, description)
+mcp__session-mcp__start_task(session_id, task_id)
+mcp__session-mcp__complete_task(session_id, task_id, result, commit_sha)
+\`\`\`
+
+### 3. Checkpoints e Artifacts (OBRIGATÓRIO ao concluir etapas)
+
+\`\`\`
+mcp__session-mcp__save_checkpoint(session_id, summary)
+mcp__session-mcp__add_artifact(session_id, "file_changed"|"decision"|"note", content)
+\`\`\`
+
+### 4. ToolSearch antes de qualquer ferramenta MCP (OBRIGATÓRIO)
+
+NUNCA invoque um tool MCP sem carregar o schema primeiro:
+
+\`ToolSearch("select:mcp__<servidor>__<tool1>,mcp__<servidor>__<tool2>")\`
+
+Invocar sem schema → InputValidationError. Nunca presuma parâmetros.
+
+### 5. Encerrar sessão ao finalizar
+
+\`\`\`
+mcp__session-mcp__end_session(session_id, actor={type:"agent",id:"FrontZilla"}, rationale, final_summary)
+\`\`\`
+
 ## Response Format
 When FrontZilla tools return StructuredPayload, always:
 1. Review the payload and instructions
@@ -106,6 +146,46 @@ When PixelFera tools return StructuredPayload, always:
 3. Export designs to Figma or design tool
 4. Share specifications with FrontZilla
 5. Request feedback and iterate
+
+## Protocolo Obrigatório de Sessão e Ferramentas
+
+> ESTAS REGRAS SÃO INEGOCIÁVEIS. Não execute trabalho sem segui-las.
+
+### 1. Verificar/Registrar Sessão (ANTES de qualquer tarefa)
+
+\`mcp__session-mcp__list_sessions(status="active", repo=<repo_atual>)\`
+
+- Se houver sessão ativa: use o session_id existente
+- Se não houver: \`mcp__session-mcp__start_session(title=<título>, objective=<objetivo>, repo=<repo>)\`
+
+### 2. Tasks no banco (OBRIGATÓRIO para cada entrega)
+
+\`\`\`
+mcp__session-mcp__create_task(session_id, title, description)
+mcp__session-mcp__start_task(session_id, task_id)
+mcp__session-mcp__complete_task(session_id, task_id, result, commit_sha)
+\`\`\`
+
+### 3. Checkpoints e Artifacts (OBRIGATÓRIO ao concluir etapas)
+
+\`\`\`
+mcp__session-mcp__save_checkpoint(session_id, summary)
+mcp__session-mcp__add_artifact(session_id, "file_changed"|"decision"|"note", content)
+\`\`\`
+
+### 4. ToolSearch antes de qualquer ferramenta MCP (OBRIGATÓRIO)
+
+NUNCA invoque um tool MCP sem carregar o schema primeiro:
+
+\`ToolSearch("select:mcp__<servidor>__<tool1>,mcp__<servidor>__<tool2>")\`
+
+Invocar sem schema → InputValidationError. Nunca presuma parâmetros.
+
+### 5. Encerrar sessão ao finalizar
+
+\`\`\`
+mcp__session-mcp__end_session(session_id, actor={type:"agent",id:"PixelFera"}, rationale, final_summary)
+\`\`\`
 
 ## Best Practices
 - Start with user research and requirements
