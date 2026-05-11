@@ -9,7 +9,7 @@ export class ArchZillaStore {
   private postgres: ZillaPostgresSync | null = null;
   private logger: any;
 
-  constructor(dbPath: string) {
+  constructor(dbPath?: string) {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.logger = this.initializeLogger();
