@@ -185,7 +185,7 @@ assert set(_TOOL_SCHEMAS.keys()) == _EXPECTED, "Tool schemas mismatch"
 def build_server() -> tuple[Server, Any, AuditStore]:
     """Constrói o servidor MCP."""
     settings = get_settings()
-    store = AuditStore(db_path=settings.db_path)
+    store = AuditStore(settings=settings)
     server: Server = Server("audit-mcp-server")
 
     @server.list_tools()

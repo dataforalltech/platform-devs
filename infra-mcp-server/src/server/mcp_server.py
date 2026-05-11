@@ -11,8 +11,8 @@ from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import Settings, get_settings
-from ..knowledge.allocator_store import AllocatorPolicy, AllocatorStore
-from ..knowledge.provisioner import ImmediateProvisioner, TerraformProvisioner
+from ..db.allocator_store import AllocatorPolicy, AllocatorStore
+from ..db.provisioner import ImmediateProvisioner, TerraformProvisioner
 from ..tools import (
     cancel_queued_request,
     cost_estimate_infracost,
@@ -345,20 +345,19 @@ def build_server() -> tuple[Server, Settings, AllocatorStore]:
         provisioner = ImmediateProvisioner()
         _log.info("provisioner_immediate", extra={"extras": {}})
 
-    # AllocatorStore SQLite-backed (Phase 2b+) com provisioner injetado (Phase 2c).
+    # AllocatorStore PostgreSQL-backed (Phase 2b+ → PostgreSQL migration).
     # Phase 2f: lease_secret para cifrar chaves SSH por VM.
     allocator = AllocatorStore(
-        db_path=settings.db_path,
+        settings=settings,
         policy=AllocatorPolicy(),
         provisioner=provisioner,
-        tf_modules_root=settings.tf_modules_root,
-        provision_timeout_sec=settings.provision_timeout_sec,
         lease_secret=settings.lease_secret,
     )
     _log.info(
         "allocator_ready",
         extra={"extras": {
-            "db_path": settings.db_path,
+            "pg_host": settings.pg_host,
+            "pg_db": settings.pg_db,
             "tf_modules_root": str(settings.tf_modules_root) if settings.tf_modules_root else None,
             "provisioner": type(provisioner).__name__,
             "max_cost_usd_per_hour": allocator.policy.max_cost_usd_per_hour,

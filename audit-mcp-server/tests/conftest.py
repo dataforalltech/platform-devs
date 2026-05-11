@@ -19,16 +19,24 @@ def tmp_repo():
 
 
 @pytest.fixture
-def store():
-    """SQLite store em memória."""
-    return AuditStore(db_path=":memory:")
+def store(settings):
+    """PostgreSQL store para testes."""
+    store = AuditStore(settings=settings)
+    yield store
+    store.close()
 
 
 @pytest.fixture
 def settings(tmp_path):
-    """Configurações para testes."""
+    """Configurações para testes com PostgreSQL."""
     return AuditSettings(
-        db_path=":memory:",
+        pg_host="claude-dev",
+        pg_port=5432,
+        pg_db="app",
+        pg_user="postgres",
+        pg_password="postgres_password_local_dev",
+        pg_min_conn=1,
+        pg_max_conn=5,
         github_token="test_token",
         policies_path=str(Path(__file__).parent.parent / "src" / "policies"),
     )

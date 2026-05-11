@@ -25,7 +25,7 @@ from mcp.types import TextContent, Tool
 
 from ..api.router import make_router
 from ..config.settings import AgentTwinSettings, get_settings
-from ..knowledge.token_store import TokenStore
+from ..db.token_store import TokenStore
 from ..knowledge.session import SessionManager
 from ..tools import (
     authenticate,
@@ -234,12 +234,12 @@ def build_server() -> tuple[Server, TokenStore, AgentTwinSettings]:
     settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
-    store = TokenStore(settings.db_path)
+    store = TokenStore(settings)
 
     if settings.api_enabled:
         _start_http_api(settings)
 
-    _log.info("agent_twin_mcp_ready db=%s api_port=%d", settings.db_path, settings.api_port)
+    _log.info("agent_twin_mcp_ready pg_host=%s pg_db=%s api_port=%d", settings.pg_host, settings.pg_db, settings.api_port)
 
     server: Server = Server("agent-twin-mcp-server")
 

@@ -1,4 +1,4 @@
-"""Servidor MCP deploy — 19 tools para Git, PR, GitHub Actions, pipeline CI/CD e ACR.
+"""Servidor MCP deploy — 20 tools para Git, PR, GitHub Actions, pipeline CI/CD e ACR.
 
 Tools:
   Git (4):      list_repos, create_branch, list_branches, commit_files
@@ -29,6 +29,7 @@ from ..tools import (
     create_branch,
     create_pr,
     deploy,
+    ensure_all_repos_healthy,
     get_deploy_status,
     get_pipeline_templates,
     get_pr,
@@ -555,6 +556,57 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    # ── Healthcheck ───────────────────────────────────────────────────────────── #
+    "ensure_all_repos_healthy": {
+        "description": (
+            "Verifica e garante que todos os repositórios elegíveis para automação "
+            "(active=true AND allows_automation=true — ADR-002) tenham CI passando "
+            "e imagem Docker publicada no ACR.\n\n"
+            "Para cada repo classifica: HEALTHY | CI_FAILING | ACR_MISSING | CI_FAILING_AND_ACR_MISSING.\n\n"
+            "Remediação automática (dry_run=false):\n"
+            "  • CI falhando/ausente → scaffold ci+cd-dev se necessário → trigger ci.yml → polling\n"
+            "  • ACR ausente → setup_repo (injeta secrets ACR) → trigger cd-dev.yml\n\n"
+            "Use dry_run=true para apenas inspecionar sem modificar nada."
+        ),
+        "schema": {
+            "type": "object",
+            "properties": {
+                "org": {
+                    "type": "string",
+                    "description": "Organização GitHub. Default: dataforalltech.",
+                    "default": "dataforalltech",
+                },
+                "workflow_id": {
+                    "type": "string",
+                    "description": "Arquivo do workflow CI a verificar/disparar. Default: ci.yml.",
+                    "default": "ci.yml",
+                },
+                "cd_workflow_id": {
+                    "type": "string",
+                    "description": "Arquivo do workflow CD para build ACR. Default: cd-dev.yml.",
+                    "default": "cd-dev.yml",
+                },
+                "ref": {
+                    "type": "string",
+                    "description": "Branch para verificar e disparar workflows. Default: develop.",
+                    "default": "develop",
+                },
+                "wait_minutes": {
+                    "type": "integer",
+                    "description": "Tempo máximo aguardando CI após remediação (minutos). Default: 10.",
+                    "minimum": 1,
+                    "maximum": 60,
+                    "default": 10,
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "description": "Se true, apenas inspeciona e reporta sem executar nenhuma ação. Default: false.",
+                    "default": False,
+                },
+            },
+            "additionalProperties": False,
+        },
+    },
     "list_acr_images": {
         "description": (
             "Lista as tags disponíveis de uma imagem no ACR, ordenadas por data (mais recente primeiro). "
@@ -775,6 +827,18 @@ def _dispatch(
             settings,
             service_name=args.get("service_name"),
             limit=args.get("limit", 20),
+        )
+    # ── Healthcheck ───────────────────────────────────────────────────────────── #
+    if name == "ensure_all_repos_healthy":
+        return ensure_all_repos_healthy(
+            client,
+            settings,
+            org=args.get("org", "dataforalltech"),
+            workflow_id=args.get("workflow_id", "ci.yml"),
+            cd_workflow_id=args.get("cd_workflow_id", "cd-dev.yml"),
+            ref=args.get("ref", "develop"),
+            wait_minutes=args.get("wait_minutes", 10),
+            dry_run=args.get("dry_run", False),
         )
 
     raise KeyError(name)
