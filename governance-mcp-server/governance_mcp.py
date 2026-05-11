@@ -34,7 +34,7 @@ class GovernanceMcpMCPService:
         self.name = "governance-mcp"
         self.version = "1.0"
         # TODO: Import tools from original governance-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "list_policies", "description": "list policies", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_permission", "description": "check permission", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "enforce_rls", "description": "enforce rls", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "audit_access", "description": "audit access", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_governance", "description": "validate governance", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_policy", "description": "create policy", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_policy", "description": "update policy", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "delete_policy", "description": "delete policy", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_access_report", "description": "generate access report", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "analyze_permissions", "description": "analyze permissions", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

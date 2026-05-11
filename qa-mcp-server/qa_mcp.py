@@ -34,7 +34,7 @@ class QaMcpMCPService:
         self.name = "qa-mcp"
         self.version = "1.0"
         # TODO: Import tools from original qa-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "run_tests", "description": "run tests", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_coverage", "description": "check coverage", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "lint_code", "description": "lint code", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "scan_security", "description": "scan security", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_report", "description": "generate report", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "run_performance_tests", "description": "run performance tests", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "analyze_test_results", "description": "analyze test results", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "generate_coverage_report", "description": "generate coverage report", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_code_quality", "description": "validate code quality", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_accessibility", "description": "check accessibility", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

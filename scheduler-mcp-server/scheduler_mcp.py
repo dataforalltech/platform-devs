@@ -34,7 +34,7 @@ class SchedulerMcpMCPService:
         self.name = "scheduler-mcp"
         self.version = "1.0"
         # TODO: Import tools from original scheduler-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "create_task", "description": "create task", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "schedule_job", "description": "schedule job", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_scheduled", "description": "list scheduled", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "cancel_task", "description": "cancel task", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_history", "description": "check history", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_schedule", "description": "update schedule", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_task_status", "description": "get task status", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "retry_task", "description": "retry task", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "pause_task", "description": "pause task", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "resume_task", "description": "resume task", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

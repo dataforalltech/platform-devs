@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import * as /home/dev/repos/platform-devs/backzilla-mcp-server/src/db/store-postgres.ts from '/home/dev/repos/platform-devs/backzilla-mcp-server/src/db/store-postgres.ts';
+import * as path from 'path';
 import * as fs from 'fs';
 import { ZillaPostgresStore } from '../../../platform-service-template/lib/postgres_sync';
 
@@ -7,7 +7,7 @@ import { ZillaPostgresStore } from '../../../platform-service-template/lib/postg
 // Interfaces
 // ============================================================================
 
-export interface API {
+export interface Feature {
   id: string;
   title: string;
   feature: string;
@@ -18,7 +18,7 @@ export interface API {
   updated_at: string;
 }
 
-export interface Service {
+export interface Component {
   id: string;
   plan_id?: string;
   title: string;
@@ -29,7 +29,7 @@ export interface Service {
   created_at: string;
 }
 
-export interface Integration {
+export interface DesignToken {
   id: string;
   plan_id?: string;
   title: string;
@@ -90,10 +90,10 @@ export interface QAExecution {
 }
 
 // ============================================================================
-// BackzillaStore — PostgreSQL Primary
+// FrontzillaStore — PostgreSQL Primary
 // ============================================================================
 
-export class BackzillaStore {
+export class FrontzillaStore {
   private pg: ZillaPostgresStore;
   private logger: any;
 
@@ -109,21 +109,21 @@ export class BackzillaStore {
     this.logger = this.initializeLogger();
 
     try {
-      this.pg = new ZillaPostgresStore('backzilla', postgresConfig);
-      this.logger.info('✅ BackzillaStore: PostgreSQL initialized');
+      this.pg = new ZillaPostgresStore('frontzilla', postgresConfig);
+      this.logger.info('✅ FrontzillaStore: PostgreSQL initialized');
     } catch (error) {
-      this.logger.error(`❌ BackzillaStore: Failed to initialize: ${error}`);
+      this.logger.error(`❌ FrontzillaStore: Failed to initialize: ${error}`);
       throw error;
     }
   }
 
   private initializeLogger(): any {
-    const logsDir = /home/dev/repos/platform-devs/backzilla-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
+    const logsDir = /home/dev/repos/platform-devs/frontzilla-pixelfera-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
-    const logFile = /home/dev/repos/platform-devs/backzilla-mcp-server/src/db/store-postgres.ts.join(logsDir, 'backzilla.log');
+    const logFile = /home/dev/repos/platform-devs/frontzilla-pixelfera-mcp-server/src/db/store-postgres.ts.join(logsDir, 'frontzilla.log');
 
     return {
       info: (msg: string) => {
@@ -155,12 +155,12 @@ export class BackzillaStore {
   // Test Plans
   // ============================================================================
 
-  async createTestPlan(data: Omit<API, 'id' | 'created_at' | 'updated_at'>): Promise<API> {
+  async createTestPlan(data: Omit<Feature, 'id' | 'created_at' | 'updated_at'>): Promise<Feature> {
     const id = `tp_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO apis (id, title, feature, scope, objectives, status, created_at, updated_at)
+      `INSERT INTO front_features (id, title, feature, scope, objectives, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.title, data.feature, data.scope, data.objectives, data.status, now, now]
     );
@@ -168,25 +168,25 @@ export class BackzillaStore {
     return { ...data, id, created_at: now, updated_at: now };
   }
 
-  async getTestPlan(id: string): Promise<API | null> {
-    const rows = await this.pg.query<API>('SELECT * FROM apis WHERE id = $1', [id]);
+  async getTestPlan(id: string): Promise<Feature | null> {
+    const rows = await this.pg.query<Feature>('SELECT * FROM front_features WHERE id = $1', [id]);
     return rows[0] || null;
   }
 
-  async listTestPlans(): Promise<API[]> {
-    return this.pg.query<API>('SELECT * FROM apis ORDER BY created_at DESC', []);
+  async listTestPlans(): Promise<Feature[]> {
+    return this.pg.query<Feature>('SELECT * FROM front_features ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Cases
   // ============================================================================
 
-  async createTestCase(data: Omit<Service, 'id' | 'created_at'>): Promise<Service> {
+  async createTestCase(data: Omit<Component, 'id' | 'created_at'>): Promise<Component> {
     const id = `tc_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO back_services (id, plan_id, title, type, steps, expected_result, status, created_at)
+      `INSERT INTO components (id, plan_id, title, type, steps, expected_result, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.plan_id, data.title, data.type, data.steps, data.expected_result, data.status, now]
     );
@@ -194,26 +194,26 @@ export class BackzillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async listTestCases(planId?: string): Promise<Service[]> {
+  async listTestCases(planId?: string): Promise<Component[]> {
     if (planId) {
-      return this.pg.query<Service>(
-        'SELECT * FROM back_services WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<Component>(
+        'SELECT * FROM components WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Service>('SELECT * FROM back_services ORDER BY created_at DESC', []);
+    return this.pg.query<Component>('SELECT * FROM components ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Scenarios
   // ============================================================================
 
-  async createTestScenario(data: Omit<Integration, 'id' | 'created_at'>): Promise<Integration> {
+  async createTestScenario(data: Omit<DesignToken, 'id' | 'created_at'>): Promise<DesignToken> {
     const id = `ts_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO back_integrations (id, plan_id, title, scenario, tags, created_at)
+      `INSERT INTO design_tokens (id, plan_id, title, scenario, tags, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, data.plan_id, data.title, data.scenario, data.tags, now]
     );
@@ -221,18 +221,18 @@ export class BackzillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async addTestScenario(planId: string, data: Omit<Integration, 'id' | 'created_at' | 'plan_id'>): Promise<Integration> {
+  async addTestScenario(planId: string, data: Omit<DesignToken, 'id' | 'created_at' | 'plan_id'>): Promise<DesignToken> {
     return this.createTestScenario({ ...data, plan_id: planId });
   }
 
-  async listTestScenarios(planId?: string): Promise<Integration[]> {
+  async listTestScenarios(planId?: string): Promise<DesignToken[]> {
     if (planId) {
-      return this.pg.query<Integration>(
-        'SELECT * FROM back_integrations WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<DesignToken>(
+        'SELECT * FROM design_tokens WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Integration>('SELECT * FROM back_integrations ORDER BY created_at DESC', []);
+    return this.pg.query<DesignToken>('SELECT * FROM design_tokens ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
@@ -313,7 +313,7 @@ export class BackzillaStore {
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO back_workflows (id, title, items, status, created_at)
+      `INSERT INTO front_workflows (id, title, items, status, created_at)
        VALUES ($1, $2, $3, $4, $5)`,
       [id, data.title, JSON.stringify(data.items), data.status, now]
     );

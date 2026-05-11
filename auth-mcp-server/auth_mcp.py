@@ -34,7 +34,7 @@ class AuthMcpMCPService:
         self.name = "auth-mcp"
         self.version = "1.0"
         # TODO: Import tools from original auth-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "validate_token", "description": "validate token", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_jwt", "description": "create jwt", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "check_session", "description": "check session", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "revoke_token", "description": "revoke token", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_active_sessions", "description": "list active sessions", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "refresh_token", "description": "refresh token", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_api_key", "description": "create api key", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "revoke_api_key", "description": "revoke api key", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "verify_permissions", "description": "verify permissions", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "get_user_roles", "description": "get user roles", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

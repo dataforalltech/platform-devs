@@ -34,7 +34,7 @@ class ConnectorsMcpMCPService:
         self.name = "connectors-mcp"
         self.version = "1.0"
         # TODO: Import tools from original connectors-mcp.py
-        self.tools = []
+        self.tools = [ { "name": "list_connectors", "description": "list connectors", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "create_connector", "description": "create connector", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "test_connection", "description": "test connection", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "update_credentials", "description": "update credentials", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "delete_connector", "description": "delete connector", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "enable_connector", "description": "enable connector", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "disable_connector", "description": "disable connector", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "validate_credentials", "description": "validate credentials", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "list_integrations", "description": "list integrations", "inputSchema": { "type": "object", "properties": {}, "required": [] } }, { "name": "sync_data", "description": "sync data", "inputSchema": { "type": "object", "properties": {}, "required": [] } } ]
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import * as /home/dev/repos/platform-devs/opszilla-mcp-server/src/db/store-postgres.ts from '/home/dev/repos/platform-devs/opszilla-mcp-server/src/db/store-postgres.ts';
+import * as path from 'path';
 import * as fs from 'fs';
 import { ZillaPostgresStore } from '../../../platform-service-template/lib/postgres_sync';
 
@@ -7,7 +7,7 @@ import { ZillaPostgresStore } from '../../../platform-service-template/lib/postg
 // Interfaces
 // ============================================================================
 
-export interface Deployment {
+export interface Epic {
   id: string;
   title: string;
   feature: string;
@@ -18,7 +18,7 @@ export interface Deployment {
   updated_at: string;
 }
 
-export interface Pipeline {
+export interface Feature {
   id: string;
   plan_id?: string;
   title: string;
@@ -29,7 +29,7 @@ export interface Pipeline {
   created_at: string;
 }
 
-export interface Infrastructure {
+export interface Story {
   id: string;
   plan_id?: string;
   title: string;
@@ -38,7 +38,7 @@ export interface Infrastructure {
   created_at: string;
 }
 
-export interface Incident {
+export interface BugReport {
   id: string;
   title: string;
   severity: string;
@@ -80,7 +80,7 @@ export interface Checklist {
   created_at: string;
 }
 
-export interface QAExecution {
+export interface Task {
   id: string;
   plan_id?: string;
   status: string;
@@ -90,10 +90,10 @@ export interface QAExecution {
 }
 
 // ============================================================================
-// OpszillaStore — PostgreSQL Primary
+// PozillaStore — PostgreSQL Primary
 // ============================================================================
 
-export class OpszillaStore {
+export class PozillaStore {
   private pg: ZillaPostgresStore;
   private logger: any;
 
@@ -109,21 +109,21 @@ export class OpszillaStore {
     this.logger = this.initializeLogger();
 
     try {
-      this.pg = new ZillaPostgresStore('opszilla', postgresConfig);
-      this.logger.info('✅ OpszillaStore: PostgreSQL initialized');
+      this.pg = new ZillaPostgresStore('pozilla', postgresConfig);
+      this.logger.info('✅ PozillaStore: PostgreSQL initialized');
     } catch (error) {
-      this.logger.error(`❌ OpszillaStore: Failed to initialize: ${error}`);
+      this.logger.error(`❌ PozillaStore: Failed to initialize: ${error}`);
       throw error;
     }
   }
 
   private initializeLogger(): any {
-    const logsDir = /home/dev/repos/platform-devs/opszilla-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
+    const logsDir = /home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts.join(process.env.HOME || '/tmp', '.platform', 'logs');
     if (!fs.existsSync(logsDir)) {
       fs.mkdirSync(logsDir, { recursive: true });
     }
 
-    const logFile = /home/dev/repos/platform-devs/opszilla-mcp-server/src/db/store-postgres.ts.join(logsDir, 'opszilla.log');
+    const logFile = /home/dev/repos/platform-devs/pozilla-mcp-server/src/db/store-postgres.ts.join(logsDir, 'pozilla.log');
 
     return {
       info: (msg: string) => {
@@ -155,12 +155,12 @@ export class OpszillaStore {
   // Test Plans
   // ============================================================================
 
-  async createTestPlan(data: Omit<Deployment, 'id' | 'created_at' | 'updated_at'>): Promise<Deployment> {
+  async createTestPlan(data: Omit<Epic, 'id' | 'created_at' | 'updated_at'>): Promise<Epic> {
     const id = `tp_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO deployments (id, title, feature, scope, objectives, status, created_at, updated_at)
+      `INSERT INTO epics (id, title, feature, scope, objectives, status, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.title, data.feature, data.scope, data.objectives, data.status, now, now]
     );
@@ -168,25 +168,25 @@ export class OpszillaStore {
     return { ...data, id, created_at: now, updated_at: now };
   }
 
-  async getTestPlan(id: string): Promise<Deployment | null> {
-    const rows = await this.pg.query<Deployment>('SELECT * FROM deployments WHERE id = $1', [id]);
+  async getTestPlan(id: string): Promise<Epic | null> {
+    const rows = await this.pg.query<Epic>('SELECT * FROM epics WHERE id = $1', [id]);
     return rows[0] || null;
   }
 
-  async listTestPlans(): Promise<Deployment[]> {
-    return this.pg.query<Deployment>('SELECT * FROM deployments ORDER BY created_at DESC', []);
+  async listTestPlans(): Promise<Epic[]> {
+    return this.pg.query<Epic>('SELECT * FROM epics ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Cases
   // ============================================================================
 
-  async createTestCase(data: Omit<Pipeline, 'id' | 'created_at'>): Promise<Pipeline> {
+  async createTestCase(data: Omit<Feature, 'id' | 'created_at'>): Promise<Feature> {
     const id = `tc_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO pipelines (id, plan_id, title, type, steps, expected_result, status, created_at)
+      `INSERT INTO po_features (id, plan_id, title, type, steps, expected_result, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
       [id, data.plan_id, data.title, data.type, data.steps, data.expected_result, data.status, now]
     );
@@ -194,26 +194,26 @@ export class OpszillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async listTestCases(planId?: string): Promise<Pipeline[]> {
+  async listTestCases(planId?: string): Promise<Feature[]> {
     if (planId) {
-      return this.pg.query<Pipeline>(
-        'SELECT * FROM pipelines WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<Feature>(
+        'SELECT * FROM po_features WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Pipeline>('SELECT * FROM pipelines ORDER BY created_at DESC', []);
+    return this.pg.query<Feature>('SELECT * FROM po_features ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Test Scenarios
   // ============================================================================
 
-  async createTestScenario(data: Omit<Infrastructure, 'id' | 'created_at'>): Promise<Infrastructure> {
+  async createTestScenario(data: Omit<Story, 'id' | 'created_at'>): Promise<Story> {
     const id = `ts_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO infrastructure (id, plan_id, title, scenario, tags, created_at)
+      `INSERT INTO po_stories (id, plan_id, title, scenario, tags, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, data.plan_id, data.title, data.scenario, data.tags, now]
     );
@@ -221,30 +221,30 @@ export class OpszillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async addTestScenario(planId: string, data: Omit<Infrastructure, 'id' | 'created_at' | 'plan_id'>): Promise<Infrastructure> {
+  async addTestScenario(planId: string, data: Omit<Story, 'id' | 'created_at' | 'plan_id'>): Promise<Story> {
     return this.createTestScenario({ ...data, plan_id: planId });
   }
 
-  async listTestScenarios(planId?: string): Promise<Infrastructure[]> {
+  async listTestScenarios(planId?: string): Promise<Story[]> {
     if (planId) {
-      return this.pg.query<Infrastructure>(
-        'SELECT * FROM infrastructure WHERE plan_id = $1 ORDER BY created_at DESC',
+      return this.pg.query<Story>(
+        'SELECT * FROM po_stories WHERE plan_id = $1 ORDER BY created_at DESC',
         [planId]
       );
     }
-    return this.pg.query<Infrastructure>('SELECT * FROM infrastructure ORDER BY created_at DESC', []);
+    return this.pg.query<Story>('SELECT * FROM po_stories ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
   // Bug Reports
   // ============================================================================
 
-  async createBugReport(data: Omit<Incident, 'id' | 'created_at'>): Promise<Incident> {
+  async createBugReport(data: Omit<BugReport, 'id' | 'created_at'>): Promise<BugReport> {
     const id = `bug_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO incidents (id, title, severity, priority, steps_to_reproduce, expected, actual, environment, status, created_at)
+      `INSERT INTO bug_reports (id, title, severity, priority, steps_to_reproduce, expected, actual, environment, status, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
       [id, data.title, data.severity, data.priority, data.steps_to_reproduce, data.expected, data.actual, data.environment, data.status, now]
     );
@@ -252,8 +252,8 @@ export class OpszillaStore {
     return { ...data, id, created_at: now };
   }
 
-  async listBugReports(): Promise<Incident[]> {
-    return this.pg.query<Incident>('SELECT * FROM incidents ORDER BY created_at DESC', []);
+  async listBugReports(): Promise<BugReport[]> {
+    return this.pg.query<BugReport>('SELECT * FROM bug_reports ORDER BY created_at DESC', []);
   }
 
   // ============================================================================
@@ -325,12 +325,12 @@ export class OpszillaStore {
   // QA Executions
   // ============================================================================
 
-  async createQAExecution(data: Omit<QAExecution, 'id' | 'created_at'>): Promise<QAExecution> {
+  async createQAExecution(data: Omit<Task, 'id' | 'created_at'>): Promise<Task> {
     const id = `qa_${nanoid()}`;
     const now = new Date().toISOString();
 
     await this.pg.execute(
-      `INSERT INTO qa_executions (id, plan_id, status, started_at, completed_at, created_at)
+      `INSERT INTO po_tasks (id, plan_id, status, started_at, completed_at, created_at)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [id, data.plan_id, data.status, data.started_at, data.completed_at, now]
     );
