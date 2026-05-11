@@ -659,13 +659,14 @@ class TestSessionIncludesServiceDependencies:
 class TestResumeWarnsWhenRepoMissing:
     def test_warning_present_for_legacy_session(self, store):
         # Insere uma sessão direto no DB sem repo (simulando legado)
-        with store._lock, store._connect() as conn:
-            conn.execute(
-                """INSERT INTO sessions (id, name, title, objective, repo, branch,
-                   status, started_at, last_updated_at)
-                   VALUES (?, ?, ?, ?, NULL, NULL, 'active', ?, ?)""",
-                ("sess_legacy", "old-name", "Legacy", "obj antigo", "2020-01-01", "2020-01-01"),
-            )
+        with store._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO sessions (id, name, title, objective, repo, branch,
+                       status, started_at, last_updated_at)
+                       VALUES (%s, %s, %s, %s, NULL, NULL, %s, %s, %s)""",
+                    ("sess_legacy", "old-name", "Legacy", "obj antigo", "active", "2020-01-01", "2020-01-01"),
+                )
         result = resume_session(store, session_id="sess_legacy")
         assert any("REPO_MISSING" in w for w in result["warnings"])
         assert "REPO_MISSING" in result["resume_hint"]

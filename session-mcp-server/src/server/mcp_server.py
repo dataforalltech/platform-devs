@@ -660,7 +660,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------- #
 def build_server() -> tuple[Server, SessionSettings, SessionStore]:
     settings = get_settings()
-    store = SessionStore(db_path=settings.db_path)
+    store = SessionStore(settings)
 
     server: Server = Server("session-mcp-server")
 

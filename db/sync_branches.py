@@ -39,7 +39,7 @@ def sync_all_branches():
     cur = conn.cursor()
 
     # Pegar todos os repos ativos
-    cur.execute("SELECT id, name FROM repositories WHERE active = true ORDER BY name")
+    cur.execute("SELECT id, name FROM repositories WHERE active = true AND allows_automation = true ORDER BY name")
     repos = cur.fetchall()
 
     print(f"\n{'='*80}")

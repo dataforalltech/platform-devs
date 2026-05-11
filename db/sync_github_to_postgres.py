@@ -144,7 +144,7 @@ def sync_branches(conn, org):
     cur = conn.cursor()
 
     # Pegar todos os repos
-    cur.execute("SELECT id, name FROM repositories WHERE active = true")
+    cur.execute("SELECT id, name FROM repositories WHERE active = true AND allows_automation = true")
     repos = cur.fetchall()
 
     total_branches = 0

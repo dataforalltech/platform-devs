@@ -18,7 +18,7 @@ def create_session_http_server(session_store):
     Create FastAPI application for session-mcp HTTP endpoints.
 
     Args:
-        session_store: SessionStore instance with postgres_sync attribute
+        session_store: SessionStore instance
 
     Returns:
         FastAPI application ready to serve HTTP requests
@@ -26,7 +26,7 @@ def create_session_http_server(session_store):
     from .http_endpoints import SessionHTTPEndpoints
 
     # Initialize endpoints
-    endpoints = SessionHTTPEndpoints(session_store.postgres_sync)
+    endpoints = SessionHTTPEndpoints(session_store)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

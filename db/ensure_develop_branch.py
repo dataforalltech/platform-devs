@@ -14,36 +14,21 @@ import os
 import sys
 from pathlib import Path
 
-# ============================================================================
-# Configuration
-# ============================================================================
+from repo_filters import get_automation_repos, POSTGRES_CONFIG, REPOS_DIR, ORG
 
-ORG = "dataforalltech"
-REPOS_DIR = Path(os.getenv('PLATFORM_REPOS_DIR', os.path.expanduser('~/repos')))
-
-POSTGRES_CONFIG = {
-    'host': os.getenv('POSTGRES_HOST', 'claude-dev'),
-    'port': int(os.getenv('POSTGRES_PORT', '5432')),
-    'user': os.getenv('POSTGRES_USER', 'postgres'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'postgres_password_local_dev'),
-    'database': os.getenv('POSTGRES_DB', 'app'),
-}
+# ============================================================================
+# Configuration (canônico em repo_filters.py — ADR-002)
+# ============================================================================
 
 # ============================================================================
 # Helper Functions
 # ============================================================================
 
 def get_active_repos():
-    """Lista repos não-arquivados do PostgreSQL."""
+    """Lista repos elegíveis para automação (active=true AND allows_automation=true)."""
     try:
         conn = psycopg2.connect(**POSTGRES_CONFIG)
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT id, name FROM repositories
-            WHERE active = true ORDER BY name
-        """)
-        repos = [{'id': r[0], 'name': r[1], 'path': REPOS_DIR / r[1]} for r in cur.fetchall()]
-        cur.close()
+        repos = get_automation_repos(conn)
         conn.close()
         return repos
     except Exception as e:
