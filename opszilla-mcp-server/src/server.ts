@@ -8,7 +8,7 @@ import { getOpsZillaPrompt } from './prompts/index.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new OpsZillaStore(settings.dbPath);
+const store = new OpsZillaStore();
 
 const server = new Server(
   {

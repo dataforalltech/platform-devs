@@ -14,7 +14,7 @@ import { QAZILLA_SYSTEM_PROMPT } from './prompts/qazillaPrompt.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new QAZillaStore(settings.dbPath);
+const store = new QAZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

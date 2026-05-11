@@ -8,7 +8,7 @@ import { getBackzillaPrompt } from './prompts/index.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new BackzillaStore(settings.dbPath);
+const store = new BackzillaStore();
 
 const server = new Server(
   {

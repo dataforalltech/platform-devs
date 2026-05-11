@@ -15,7 +15,7 @@ import { getArchZillaPrompt } from './prompts/archzillaPrompt.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new ArchZillaStore(settings.dbPath);
+const store = new ArchZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

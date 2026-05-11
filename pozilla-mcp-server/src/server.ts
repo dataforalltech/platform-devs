@@ -14,7 +14,7 @@ import { getPOZillaPrompt } from './prompts/pozillaPrompt.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new POZillaStore(settings.dbPath);
+const store = new POZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

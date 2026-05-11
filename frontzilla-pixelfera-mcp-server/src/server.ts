@@ -8,7 +8,7 @@ import { getFrontzillaPrompt, getPixelferaPrompt, getOrchestratorPrompt } from '
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new FrontzillaPixelferaStore(settings.dbPath);
+const store = new FrontzillaPixelferaStore();
 
 const server = new Server(
   {

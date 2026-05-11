@@ -26,12 +26,10 @@
     "@modelcontextprotocol/sdk": "^1.2.0",
     "zod": "^3.22.0",
     "@platform/mcp-client": "file:../shared",
-    "better-sqlite3": "^9.0.0",
     "pg": "^8.11.0",
     "nanoid": "^4.0.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.8",
     "@types/node": "^20.0.0",
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",

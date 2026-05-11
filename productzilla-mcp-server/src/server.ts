@@ -14,7 +14,7 @@ import { getProductZillaPrompt } from './prompts/productzillaPrompt.js';
 import { getProfilePrompt, getProfileContext, getProfileExamples, Profile } from './prompts/profilePrompts.js';
 
 const settings = getSettings();
-const store = new ProductZillaStore(settings.dbPath);
+const store = new ProductZillaStore();
 
 async function handleListTools() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
