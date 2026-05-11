@@ -11,11 +11,80 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass, asdict
 from uuid import uuid4
+from enum import Enum
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
+
+# ============================================================================
+# Pydantic Input Validation Models (Security Fix: Input Validation)
+# ============================================================================
+
+class CreateTestPlanRequest(BaseModel):
+    """Validated input for creating test plans"""
+    title: str = Field(..., min_length=1, max_length=255, description="Test plan title")
+    feature: str = Field(..., min_length=1, max_length=255, description="Feature being tested")
+    scope: str = Field(..., min_length=1, max_length=1000, description="Test scope")
+    objectives: str = Field(..., min_length=1, max_length=2000, description="Test objectives")
+    status: str = Field(default="draft", description="Initial status")
+
+    @validator("status")
+    def validate_status(cls, v):
+        if v not in ["draft", "ready", "in_progress", "completed", "failed"]:
+            raise ValueError(f"Invalid status: {v}. Must be one of: draft, ready, in_progress, completed, failed")
+        return v
+
+class UpdateTestPlanRequest(BaseModel):
+    """Validated input for updating test plans"""
+    title: Optional[str] = Field(None, min_length=1, max_length=255)
+    feature: Optional[str] = Field(None, min_length=1, max_length=255)
+    scope: Optional[str] = Field(None, min_length=1, max_length=1000)
+    objectives: Optional[str] = Field(None, min_length=1, max_length=2000)
+    status: Optional[str] = Field(None)
+
+    @validator("status")
+    def validate_status(cls, v):
+        if v is not None and v not in ["draft", "ready", "in_progress", "completed", "failed"]:
+            raise ValueError(f"Invalid status: {v}")
+        return v
+
+class CreateTestCaseRequest(BaseModel):
+    """Validated input for creating test cases"""
+    plan_id: str = Field(..., min_length=1, description="Parent test plan ID")
+    title: str = Field(..., min_length=1, max_length=255, description="Test case title")
+    type: str = Field(..., description="Test case type")
+    steps: Optional[str] = Field(None, max_length=5000)
+    expected_result: Optional[str] = Field(None, max_length=5000)
+
+    @validator("type")
+    def validate_type(cls, v):
+        if v not in ["positive", "negative", "edge_case", "boundary", "performance"]:
+            raise ValueError(f"Invalid type: {v}")
+        return v
+
+class CreateBugReportRequest(BaseModel):
+    """Validated input for creating bug reports"""
+    title: str = Field(..., min_length=1, max_length=255)
+    severity: str = Field(..., description="Bug severity level")
+    priority: str = Field(..., description="Bug priority level")
+    steps_to_reproduce: str = Field(..., min_length=1, max_length=5000)
+    expected: str = Field(..., min_length=1, max_length=2000)
+    actual: str = Field(..., min_length=1, max_length=2000)
+    environment: str = Field(..., min_length=1, max_length=500)
+
+    @validator("severity")
+    def validate_severity(cls, v):
+        if v not in ["critical", "high", "medium", "low"]:
+            raise ValueError(f"Invalid severity: {v}")
+        return v
+
+    @validator("priority")
+    def validate_priority(cls, v):
+        if v not in ["blocker", "high", "medium", "low", "trivial"]:
+            raise ValueError(f"Invalid priority: {v}")
+        return v
 
 # ============================================================================
 # Logging Setup
