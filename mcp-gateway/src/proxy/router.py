@@ -10,6 +10,7 @@ from src.auth.token_validator import authenticate_request
 from src.auth.rbac import is_authorized
 from src.middleware.rate_limiter import check_rate_limit
 from src.middleware.audit_logger import log_tool_call
+from src.persistence.tool_interceptor import ToolInterceptor
 
 MCP_REGISTRY = {
     # System MCPs
@@ -43,7 +44,7 @@ async def _get_user_or_fail(authorization: str | None):
         raise HTTPException(403, "Unauthorized")
     return user
 
-def setup_proxy_routes(app: FastAPI):
+def setup_proxy_routes(app: FastAPI, interceptor: ToolInterceptor | None = None):
     """Add proxy routes to FastAPI app."""
 
     @app.get("/mcp")
@@ -125,6 +126,18 @@ def setup_proxy_routes(app: FastAPI):
                 resp.raise_for_status()
                 result = resp.json()
                 duration_ms = int((time.time() - start_time) * 1000)
+
+                # Persist result to database (async, non-blocking)
+                if interceptor:
+                    try:
+                        await interceptor.intercept(
+                            tool_name=tool_name,
+                            args=request.get("arguments", {}),
+                            result=result,
+                            mcp=mcp_name,
+                        )
+                    except Exception as e:
+                        print(f"⚠️  Interceptor error: {e}")
 
                 # Log successful call
                 await log_tool_call(

@@ -17,9 +17,9 @@ def get_connection():
         _conn = psycopg2.connect(
             host=os.getenv("PG_HOST", "postgres"),
             port=int(os.getenv("PG_PORT", "5432")),
-            database=os.getenv("PG_DB", "platform_dev"),
-            user=os.getenv("PG_USER", "postgres"),
-            password=os.getenv("PG_PASSWORD", "postgres"),
+            database=os.getenv("PG_DB", "platform_staging"),
+            user=os.getenv("PG_USER", "platform"),
+            password=os.getenv("PG_PASSWORD", "staging_password_123"),
             connect_timeout=5,
         )
     return _conn
