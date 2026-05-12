@@ -81,7 +81,11 @@ class HybridMCPServer:
 
         @app.get("/tools")
         async def list_tools_http():
-            return {"tools": list(self.tools_dict.values())}
+            tools = [
+                {**tool_meta, "name": name}
+                for name, tool_meta in self.tools_dict.items()
+            ]
+            return {"tools": tools}
 
         @app.post("/tools/call")
         async def call_tool_http(request: dict):
