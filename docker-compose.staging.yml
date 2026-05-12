@@ -18,7 +18,7 @@ services:
       POSTGRES_USER: platform
       POSTGRES_PASSWORD: staging_password_123
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -33,7 +33,7 @@ services:
     image: redis:7-alpine
     container_name: staging-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     command: redis-server --appendonly yes --requirepass staging_redis_pass_123
     volumes:
       - redis_data:/data
@@ -354,6 +354,37 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7108/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - staging
+
+  mcp-gateway:
+    build:
+      context: /home/dev/repos/platform-devs/mcp-gateway
+      dockerfile: Dockerfile
+    container_name: staging-mcp-gateway
+    environment:
+      PG_HOST: postgres
+      PG_PORT: 5432
+      PG_DB: platform_staging
+      PG_USER: platform
+      PG_PASSWORD: staging_password_123
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: staging_redis_pass_123
+      REDIS_DB: 3
+      ENVIRONMENT: staging
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 5s
       timeout: 5s
       retries: 5

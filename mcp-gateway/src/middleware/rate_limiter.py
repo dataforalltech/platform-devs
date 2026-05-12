@@ -1,6 +1,7 @@
 """Rate limiting middleware using Redis."""
 from __future__ import annotations
 
+import os
 import time
 import redis.asyncio as aioredis
 from fastapi import HTTPException
@@ -17,7 +18,13 @@ async def get_redis():
     """Get or create Redis connection."""
     global _redis
     if _redis is None:
-        _redis = await aioredis.from_url("redis://redis:6379", decode_responses=True)
+        redis_host = os.getenv("REDIS_HOST", "redis")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_password = os.getenv("REDIS_PASSWORD", None)
+        redis_db = int(os.getenv("REDIS_DB", "3"))
+
+        redis_url = f"redis://:{redis_password}@{redis_host}:{redis_port}/{redis_db}" if redis_password else f"redis://{redis_host}:{redis_port}/{redis_db}"
+        _redis = await aioredis.from_url(redis_url, decode_responses=True)
     return _redis
 
 async def check_rate_limit(user_id: str, role: str) -> None:
@@ -47,4 +54,4 @@ async def close_redis():
     """Close Redis connection."""
     global _redis
     if _redis:
-        await _redis.close()
+        await _redis.aclose()
