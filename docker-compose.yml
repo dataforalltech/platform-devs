@@ -265,6 +265,8 @@ services:
     environment:
       PORT: 8080
     depends_on:
+      - redis
+      - postgres
       - qazilla-mcp
       - backzilla-mcp
       - archzilla-mcp
@@ -301,6 +303,34 @@ services:
       - "service=mcp-registry"
       - "type=gateway"
 
+  # ============================================================================
+  # Infrastructure Services (Redis + PostgreSQL for gateway)
+  # ============================================================================
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=redis"
+      - "type=infrastructure"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: platform_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=postgres"
+      - "type=infrastructure"
+
 networks:
   mcp-network:
     driver: bridge
@@ -312,3 +342,4 @@ volumes:
   config-data:
   session-data:
   auth-data:
+  postgres-data:

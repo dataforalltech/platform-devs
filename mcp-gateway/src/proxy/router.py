@@ -1,12 +1,15 @@
 """Proxy router — routes requests to internal MCP servers."""
 from __future__ import annotations
 
-from fastapi import FastAPI, HTTPException, Header
+import time
+from fastapi import FastAPI, HTTPException, Header, Request
 import httpx
 import json
 
 from src.auth.token_validator import authenticate_request
 from src.auth.rbac import is_authorized
+from src.middleware.rate_limiter import check_rate_limit
+from src.middleware.audit_logger import log_tool_call
 
 MCP_REGISTRY = {
     "qazilla-mcp": "http://qazilla-mcp:7100",
@@ -63,11 +66,16 @@ def setup_proxy_routes(app: FastAPI):
     @app.post("/mcp/{mcp_name}/tools/call")
     async def call_tool(
         mcp_name: str,
+        http_request: Request,
         request: dict,
         authorization: str | None = Header(None),
     ):
         """Call a tool on an MCP."""
+        start_time = time.time()
         user = await _get_user_or_fail(authorization)
+
+        # Check rate limits
+        await check_rate_limit(user.user_id, user.role)
 
         if mcp_name not in MCP_REGISTRY:
             raise HTTPException(404, f"MCP not found: {mcp_name}")
@@ -77,6 +85,19 @@ def setup_proxy_routes(app: FastAPI):
             raise HTTPException(400, "Missing 'name' in request")
 
         if not is_authorized(user, mcp_name, tool_name):
+            await log_tool_call(
+                user_id=user.user_id,
+                role=user.role,
+                tenant_id=user.tenant_id,
+                mcp=mcp_name,
+                tool=tool_name,
+                arguments=request.get("arguments", {}),
+                result={"error": "forbidden"},
+                duration_ms=int((time.time() - start_time) * 1000),
+                status="forbidden",
+                client_ip=http_request.client.host if http_request.client else "unknown",
+                user_agent=http_request.headers.get("user-agent", ""),
+            )
             raise HTTPException(403, f"Not authorized to call {tool_name} on {mcp_name}")
 
         mcp_url = MCP_REGISTRY[mcp_name]
@@ -88,10 +109,53 @@ def setup_proxy_routes(app: FastAPI):
                     timeout=30,
                 )
                 resp.raise_for_status()
-                return resp.json()
+                result = resp.json()
+                duration_ms = int((time.time() - start_time) * 1000)
+
+                # Log successful call
+                await log_tool_call(
+                    user_id=user.user_id,
+                    role=user.role,
+                    tenant_id=user.tenant_id,
+                    mcp=mcp_name,
+                    tool=tool_name,
+                    arguments=request.get("arguments", {}),
+                    result=result,
+                    duration_ms=duration_ms,
+                    status="success",
+                    client_ip=http_request.client.host if http_request.client else "unknown",
+                    user_agent=http_request.headers.get("user-agent", ""),
+                )
+                return result
             except httpx.HTTPStatusError as e:
+                await log_tool_call(
+                    user_id=user.user_id,
+                    role=user.role,
+                    tenant_id=user.tenant_id,
+                    mcp=mcp_name,
+                    tool=tool_name,
+                    arguments=request.get("arguments", {}),
+                    result={"error": e.response.text},
+                    duration_ms=int((time.time() - start_time) * 1000),
+                    status="error",
+                    client_ip=http_request.client.host if http_request.client else "unknown",
+                    user_agent=http_request.headers.get("user-agent", ""),
+                )
                 raise HTTPException(e.response.status_code, e.response.text)
             except Exception as e:
+                await log_tool_call(
+                    user_id=user.user_id,
+                    role=user.role,
+                    tenant_id=user.tenant_id,
+                    mcp=mcp_name,
+                    tool=tool_name,
+                    arguments=request.get("arguments", {}),
+                    result={"error": str(e)},
+                    duration_ms=int((time.time() - start_time) * 1000),
+                    status="error",
+                    client_ip=http_request.client.host if http_request.client else "unknown",
+                    user_agent=http_request.headers.get("user-agent", ""),
+                )
                 raise HTTPException(503, f"Failed to call tool: {str(e)}")
 
     @app.get("/admin/quotas")

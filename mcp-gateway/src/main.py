@@ -1,17 +1,27 @@
 """MCP Gateway — Central proxy for multi-tenant, multi-protocol MCP access."""
 from __future__ import annotations
 
-import asyncio
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 import uvicorn
 
 from src.proxy.router import setup_proxy_routes
+from src.middleware.audit_logger import init_audit_table, close_connection as close_pg
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown events."""
+    # Startup
+    init_audit_table()
+    yield
+    # Shutdown
+    close_pg()
 
 app = FastAPI(
     title="MCP Gateway",
     version="1.0.0",
     description="Central proxy for multi-tenant, multi-protocol access to Model Context Protocol servers",
+    lifespan=lifespan,
 )
 
 @app.get("/health")
