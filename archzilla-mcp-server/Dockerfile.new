@@ -1,0 +1,31 @@
+FROM node:20-alpine AS build-shared
+
+WORKDIR /shared
+COPY shared/package*.json ./
+RUN npm ci --omit=dev
+COPY shared/src ./src
+COPY shared/tsconfig.json ./
+RUN npm run build
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copiar shared compilado
+COPY --from=build-shared /shared/dist /shared/dist
+COPY --from=build-shared /shared/node_modules /shared/node_modules
+COPY --from=build-shared /shared/package.json /shared/package.json
+
+# Instalar dependências do Zilla
+COPY archzilla-mcp-server/package*.json ./
+RUN npm ci --omit=dev
+
+# Copiar code compilado
+COPY archzilla-mcp-server/dist ./dist
+
+EXPOSE 7100
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:7100/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+CMD ["node", "dist/server.js"]

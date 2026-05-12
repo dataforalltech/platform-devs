@@ -29,21 +29,26 @@ services:
       - "language=python"
 
   agent-twin-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./agent-twin-mcp.py:/app/agent-twin-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python agent-twin-mcp.py"
+    build:
+      context: .
+      dockerfile: Dockerfile.agent-twin-mcp
     ports:
       - "7101:7101"
     environment:
       PORT: 7101
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7101/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     networks:
       - mcp-network
     restart: unless-stopped
     labels:
       - "mcp=agent-twin-mcp"
       - "type=system"
+      - "language=python"
 
   session-mcp:
     image: python:3.11-slim
@@ -121,8 +126,8 @@ services:
 
   archzilla-mcp:
     build:
-      context: ./archzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./archzilla-mcp-server/Dockerfile
     ports:
       - "7118:7100"
     environment:
@@ -138,8 +143,8 @@ services:
 
   backzilla-mcp:
     build:
-      context: ./backzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backzilla-mcp-server/Dockerfile
     ports:
       - "7119:7100"
     environment:
@@ -154,12 +159,11 @@ services:
 
   frontzilla-mcp:
     build:
-      context: ./frontzilla-pixelfera-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./frontzilla-mcp-server/Dockerfile
     ports:
       - "7120:7100"
     environment:
-      NODE_ENV: production
       PORT: 7100
     networks:
       - mcp-network
@@ -170,8 +174,8 @@ services:
 
   opszilla-mcp:
     build:
-      context: ./opszilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./opszilla-mcp-server/Dockerfile
     ports:
       - "7121:7100"
     environment:
@@ -186,8 +190,8 @@ services:
 
   pozilla-mcp:
     build:
-      context: ./pozilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./pozilla-mcp-server/Dockerfile
     ports:
       - "7122:7100"
     environment:
@@ -202,8 +206,8 @@ services:
 
   productzilla-mcp:
     build:
-      context: ./productzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./productzilla-mcp-server/Dockerfile
     ports:
       - "7123:7100"
     environment:
@@ -218,8 +222,8 @@ services:
 
   qazilla-mcp:
     build:
-      context: ./qazilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./qazilla-mcp-server/Dockerfile
     ports:
       - "7124:7100"
     environment:
@@ -234,8 +238,8 @@ services:
 
   seczilla-mcp:
     build:
-      context: ./seczilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./seczilla-mcp-server/Dockerfile
     ports:
       - "7125:7100"
     environment:
@@ -251,6 +255,30 @@ services:
   # ============================================================================
   # MCP Gateway / Registry (Optional - discovers all MCPs)
   # ============================================================================
+
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: ./mcp-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+    depends_on:
+      - qazilla-mcp
+      - backzilla-mcp
+      - archzilla-mcp
+      - seczilla-mcp
+      - opszilla-mcp
+      - productzilla-mcp
+      - frontzilla-mcp
+      - pozilla-mcp
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=mcp-gateway"
+      - "type=gateway"
 
   mcp-registry:
     image: python:3.11-slim
