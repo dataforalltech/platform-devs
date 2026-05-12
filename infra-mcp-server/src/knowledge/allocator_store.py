@@ -1,3 +1,4 @@
+import os
 """AllocatorStore — Phase 2h (priority queue + preemption).
 
 Mudanças Phase 2h vs Phase 2f:
@@ -34,7 +35,8 @@ Thread-safety:
 
 from __future__ import annotations
 
-import sqlite3
+import psycopg2
+import psycopg2.pool
 import threading
 import uuid
 from dataclasses import dataclass
@@ -148,25 +150,41 @@ class AllocatorStore:
                 }},
             )
 
-        self._con = sqlite3.connect(
-            db_path,
-            check_same_thread=False,
-            isolation_level=None,  # autocommit
+        self._pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            dsn=os.getenv("PG_DSN", "postgresql://localhost/infra_mcp"),
         )
-        self._con.row_factory = sqlite3.Row
-        self._con.execute("PRAGMA journal_mode=WAL")
-        self._con.execute("PRAGMA foreign_keys=ON")
         self._init_schema()
+
+    # ------------------------------------------------------------------ #
+    # Connection Management                                               #
+    # ------------------------------------------------------------------ #
+
+    @contextmanager
+    def _get_conn(self):
+        """Get connection from pool with transaction management."""
+        conn = self._pool.getconn()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self._pool.putconn(conn)
 
     # ------------------------------------------------------------------ #
     # Lifecycle                                                            #
     # ------------------------------------------------------------------ #
     def close(self) -> None:
-        self._con.close()
+        if self._pool:
+            self._pool.closeall()
 
     def __del__(self) -> None:
         try:
-            self._con.close()
+            if self._pool:
+                self._pool.closeall()
         except Exception:  # noqa: BLE001
             pass
 
