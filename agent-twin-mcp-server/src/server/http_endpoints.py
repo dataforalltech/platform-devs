@@ -338,6 +338,10 @@ class AgentTwinHTTPEndpoints:
         return None
 
     def _revoke_token(self, token: str) -> bool:
-        """Revoke token in SQLite."""
-        # TODO: Implement token revocation
-        return True
+        """Revoke token in PostgreSQL."""
+        try:
+            result = self.token_store.revoke(token)
+            return result.get("revoked", False)
+        except Exception as e:
+            _log.error(f"Failed to revoke token: {e}")
+            return False

@@ -142,7 +142,8 @@ test.describe('{feature}', () => {{
     return {"feature": feature, "framework": framework, "base_url": base_url, "code": code}
 
 
-def generate_api_tests(endpoint: str, method: str = "GET", base_url: str = "http://localhost:8000") -> dict:
+def generate_api_tests(endpoint: str, method: str = "GET", base_url: str | None = None) -> dict:
+    base_url = base_url or os.getenv("TEST_API_URL", "http://localhost:8000")
     return {
         "endpoint": endpoint,
         "method": method,
@@ -232,7 +233,8 @@ def generate_cypress_tests(feature: str, base_url: str | None = None) -> dict:
     return generate_e2e_tests(feature, "cypress", base_url)
 
 
-def generate_postman_collection(api_name: str, base_url: str = "http://localhost:8000", endpoints: list[str] | None = None) -> dict:
+def generate_postman_collection(api_name: str, base_url: str | None = None, endpoints: list[str] | None = None) -> dict:
+    base_url = base_url or os.getenv("TEST_API_URL", "http://localhost:8000")
     endpoints = endpoints or ["/health", "/api/v1/resource"]
     items = []
     for ep in endpoints:

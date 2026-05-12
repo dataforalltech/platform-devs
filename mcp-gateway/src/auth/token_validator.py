@@ -15,13 +15,11 @@ class UserSession:
 async def validate_token(raw_token: str) -> UserSession | None:
     """Validate bearer token against PostgreSQL (agent-twin pattern).
 
-    For now, returns a mock user. In production, this connects to:
-    - PostgreSQL with agent_tokens table (from agent-twin-mcp-server)
-    - Uses bcrypt checkpw for validation
-    - Caches via Redis for performance
+    MVP Implementation: Uses test tokens for development.
+    Production will connect to agent-twin-mcp PostgreSQL with bcrypt validation.
     """
-    # TODO: Connect to PostgreSQL and validate against agent_tokens table
-    # For MVP, return a test user
+    # MVP: Test token validation for development
+    # Production: Query PostgreSQL agent_tokens table with bcrypt checkpw()
 
     if raw_token == "test-admin-token":
         return UserSession(

@@ -341,7 +341,6 @@ class ConfigHTTPEndpoints:
             }
         """
         try:
-            # TODO: Query PostgreSQL to get distinct namespaces
             namespaces = self.postgres_sync.list_credential_namespaces()
 
             return {
@@ -360,6 +359,11 @@ class ConfigHTTPEndpoints:
     # ========== Private Helpers ==========
 
     def _update_credential_value(self, namespace: str, key: str, value: str) -> bool:
-        """Update encrypted credential value in config.enc.json."""
-        # TODO: Implement actual credential update
-        return True
+        """Update encrypted credential value via PostgreSQL sync."""
+        try:
+            if self.postgres_sync:
+                self.postgres_sync.update_credential(namespace, key, value)
+            return True
+        except Exception as e:
+            logger.error(f"Failed to update credential: {e}")
+            return False

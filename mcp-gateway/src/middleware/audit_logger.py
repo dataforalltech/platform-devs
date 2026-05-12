@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime
 import psycopg2
@@ -14,11 +15,11 @@ def get_connection():
     global _conn
     if _conn is None or _conn.closed:
         _conn = psycopg2.connect(
-            host="postgres",
-            port=5432,
-            database="platform_dev",
-            user="postgres",
-            password="postgres",
+            host=os.getenv("PG_HOST", "postgres"),
+            port=int(os.getenv("PG_PORT", "5432")),
+            database=os.getenv("PG_DB", "platform_dev"),
+            user=os.getenv("PG_USER", "postgres"),
+            password=os.getenv("PG_PASSWORD", "postgres"),
             connect_timeout=5,
         )
     return _conn

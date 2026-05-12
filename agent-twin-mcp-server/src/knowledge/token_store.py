@@ -1,7 +1,7 @@
-"""TokenStore — tabela SQLite de tokens de usuários/agentes (bcrypt).
+"""TokenStore — tabela PostgreSQL de tokens de usuários/agentes (bcrypt).
 
 Schema:
-  id            INTEGER PK AUTOINCREMENT
+  id            SERIAL PK
   token         TEXT UNIQUE    — bcrypt hash do token portador (nunca plaintext)
   token_prefix  TEXT           — primeiros 8 chars do token original (lookup rápido)
   user_id       TEXT           — identificador único do usuário/agente
@@ -25,10 +25,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import secrets
-import sqlite3
+import psycopg2
+import psycopg2.pool
+import psycopg2.extras
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any
 
 import bcrypt
@@ -37,18 +40,18 @@ _log = logging.getLogger(__name__)
 
 _CREATE_TABLE = """
 CREATE TABLE IF NOT EXISTS tokens (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    token        TEXT    UNIQUE NOT NULL,
+    id           SERIAL PRIMARY KEY,
+    token        TEXT UNIQUE NOT NULL,
     token_prefix TEXT,
-    user_id      TEXT           NOT NULL,
-    name         TEXT           NOT NULL,
-    email        TEXT           NOT NULL,
-    role         TEXT           NOT NULL DEFAULT 'developer',
-    scopes       TEXT           NOT NULL DEFAULT '["*"]',
-    environment  TEXT           NOT NULL DEFAULT 'dev',
+    user_id      TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    email        TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'developer',
+    scopes       TEXT NOT NULL DEFAULT '["*"]',
+    environment  TEXT NOT NULL DEFAULT 'dev',
     tenant_id    TEXT,
-    active       INTEGER        NOT NULL DEFAULT 1,
-    created_at   TEXT           NOT NULL,
+    active       INTEGER NOT NULL DEFAULT 1,
+    created_at   TEXT NOT NULL,
     last_used_at TEXT,
     expires_at   TEXT
 )
@@ -56,14 +59,11 @@ CREATE TABLE IF NOT EXISTS tokens (
 
 _CREATE_INDEXES = """
 CREATE INDEX IF NOT EXISTS idx_token_prefix ON tokens(token_prefix);
-CREATE INDEX IF NOT EXISTS idx_user_id      ON tokens(user_id);
-CREATE INDEX IF NOT EXISTS idx_active       ON tokens(active);
-CREATE INDEX IF NOT EXISTS idx_tenant_id    ON tokens(tenant_id);
-CREATE INDEX IF NOT EXISTS idx_expires_at   ON tokens(expires_at);
+CREATE INDEX IF NOT EXISTS idx_user_id ON tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_active ON tokens(active);
+CREATE INDEX IF NOT EXISTS idx_tenant_id ON tokens(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_expires_at ON tokens(expires_at);
 """
-
-_MIGRATE_ADD_TENANT = "ALTER TABLE tokens ADD COLUMN tenant_id TEXT"
-_MIGRATE_ADD_PREFIX = "ALTER TABLE tokens ADD COLUMN token_prefix TEXT"
 
 
 class TokenStoreError(RuntimeError):
@@ -71,39 +71,39 @@ class TokenStoreError(RuntimeError):
 
 
 class TokenStore:
-    """Gerencia tokens de autenticação em SQLite (armazenados como bcrypt hash)."""
+    """Gerencia tokens de autenticação em PostgreSQL (armazenados como bcrypt hash)."""
 
-    def __init__(self, db_path: str) -> None:
-        self._db = Path(db_path).expanduser().resolve()
-        self._db.parent.mkdir(parents=True, exist_ok=True)
+    def __init__(self, db_url: str | None = None) -> None:
+        dsn = db_url or os.getenv("PG_DSN", "postgresql://localhost/agent_twin")
+        self._pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            dsn=dsn,
+        )
         self._init_db()
-        _log.info("token_store_ready path=%s", self._db)
+        _log.info("token_store_ready dsn=%s", dsn)
 
-    def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._db)
-        conn.row_factory = sqlite3.Row
-        return conn
+    @contextmanager
+    def _conn(self):
+        conn = self._pool.getconn()
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            self._pool.putconn(conn)
 
     def _init_db(self) -> None:
         with self._conn() as conn:
-            conn.execute(_CREATE_TABLE)
-            # Migrações incrementais (antes dos índices — colunas devem existir)
-            cols = {row[1] for row in conn.execute("PRAGMA table_info(tokens)").fetchall()}
-            if "tenant_id" not in cols:
-                conn.execute(_MIGRATE_ADD_TENANT)
-                _log.info("token_store_migrated: added tenant_id column")
-            if "token_prefix" not in cols:
-                conn.execute(_MIGRATE_ADD_PREFIX)
-                # Tokens sem hash bcrypt (plaintext antigos) são invalidados
-                conn.execute("UPDATE tokens SET active = 0 WHERE token_prefix IS NULL")
-                _log.info(
-                    "token_store_migrated: added token_prefix, invalidated plaintext tokens"
-                )
-            # Índices para performance (após migrations para garantir colunas existem)
-            for stmt in _CREATE_INDEXES.strip().splitlines():
-                stmt = stmt.strip()
-                if stmt:
-                    conn.execute(stmt)
+            with conn.cursor() as cur:
+                cur.execute(_CREATE_TABLE)
+                for stmt in _CREATE_INDEXES.strip().splitlines():
+                    stmt = stmt.strip()
+                    if stmt:
+                        cur.execute(stmt)
+                _log.info("token_store_schema initialized")
 
     # ── Validação ─────────────────────────────────────────────────────────── #
 
@@ -117,25 +117,24 @@ class TokenStore:
         now = datetime.now(timezone.utc)
 
         with self._conn() as conn:
-            rows = conn.execute(
-                "SELECT * FROM tokens WHERE token_prefix = ? AND active = 1",
-                (prefix,),
-            ).fetchall()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM tokens WHERE token_prefix = %s AND active = 1",
+                    (prefix,),
+                )
+                rows = cur.fetchall()
 
         for row in rows:
             record = dict(row)
-            # Checa expiração
             if record["expires_at"]:
                 expires = datetime.fromisoformat(record["expires_at"])
                 if now > expires:
                     _log.warning("token_expired user_id=%s", record["user_id"])
                     continue
-            # Verificação bcrypt
             try:
                 if bcrypt.checkpw(token.encode(), record["token"].encode()):
                     return record
-            except Exception:  # noqa: BLE001
-                continue
+            except Exception:
                 continue
 
         return None
@@ -172,17 +171,18 @@ class TokenStore:
 
         try:
             with self._conn() as conn:
-                conn.execute(
-                    """INSERT INTO tokens
-                       (token, token_prefix, user_id, name, email, role, scopes, environment,
-                        tenant_id, active, created_at, expires_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)""",
-                    (
-                        token_hash, token_prefix, user_id, name, email, role,
-                        scopes_json, environment, tenant_id, now, expires_at,
-                    ),
-                )
-        except sqlite3.IntegrityError as exc:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """INSERT INTO tokens
+                           (token, token_prefix, user_id, name, email, role, scopes, environment,
+                            tenant_id, active, created_at, expires_at)
+                           VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s)""",
+                        (
+                            token_hash, token_prefix, user_id, name, email, role,
+                            scopes_json, environment, tenant_id, now, expires_at,
+                        ),
+                    )
+        except psycopg2.IntegrityError as exc:
             raise TokenStoreError(f"Erro ao registrar token: {exc}") from exc
 
         _log.info(
@@ -208,30 +208,30 @@ class TokenStore:
         Retorna quantos registros foram afetados.
         """
         with self._conn() as conn:
-            # Tenta por user_id primeiro (mais eficiente — usa índice)
-            cur = conn.execute(
-                "UPDATE tokens SET active = 0 WHERE user_id = ? AND active = 1",
-                (identifier,),
-            )
-            affected = cur.rowcount
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "UPDATE tokens SET active = 0 WHERE user_id = %s AND active = 1",
+                    (identifier,),
+                )
+                affected = cur.rowcount
 
-            if affected == 0:
-                # Tentativa por token bruto: prefix lookup + bcrypt
-                prefix = identifier[:8]
-                rows = conn.execute(
-                    "SELECT id, token FROM tokens WHERE token_prefix = ? AND active = 1",
-                    (prefix,),
-                ).fetchall()
-                for row in rows:
-                    try:
-                        if bcrypt.checkpw(identifier.encode(), row["token"].encode()):
-                            conn.execute(
-                                "UPDATE tokens SET active = 0 WHERE id = ?", (row["id"],)
-                            )
-                            affected = 1
-                            break
-                    except Exception:  # noqa: BLE001
-                        continue
+                if affected == 0:
+                    prefix = identifier[:8]
+                    cur.execute(
+                        "SELECT id, token FROM tokens WHERE token_prefix = %s AND active = 1",
+                        (prefix,),
+                    )
+                    rows = cur.fetchall()
+                    for row in rows:
+                        try:
+                            if bcrypt.checkpw(identifier.encode(), row["token"].encode()):
+                                cur.execute(
+                                    "UPDATE tokens SET active = 0 WHERE id = %s", (row["id"],)
+                                )
+                                affected = 1
+                                break
+                        except Exception:
+                            continue
 
         _log.info("token_revoked identifier=%s affected=%d", identifier, affected)
         return {"revoked": affected > 0, "affected": affected, "identifier": identifier}
@@ -243,20 +243,21 @@ class TokenStore:
             identifier: user_id do usuário a ter o token rotacionado.
         """
         with self._conn() as conn:
-            row = conn.execute(
-                "SELECT * FROM tokens WHERE user_id = ? AND active = 1",
-                (identifier,),
-            ).fetchone()
-            if not row:
-                raise TokenStoreError(
-                    f"user_id '{identifier}' não encontrado ou já revogado."
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM tokens WHERE user_id = %s AND active = 1",
+                    (identifier,),
                 )
-            record = dict(row)
-            # Revoga dentro da mesma conexão (2 round trips → 1 transação)
-            conn.execute(
-                "UPDATE tokens SET active = 0 WHERE user_id = ? AND active = 1",
-                (identifier,),
-            )
+                row = cur.fetchone()
+                if not row:
+                    raise TokenStoreError(
+                        f"user_id '{identifier}' não encontrado ou já revogado."
+                    )
+                record = dict(row)
+                cur.execute(
+                    "UPDATE tokens SET active = 0 WHERE user_id = %s AND active = 1",
+                    (identifier,),
+                )
 
         return self.register(
             name=record["name"],
@@ -271,10 +272,11 @@ class TokenStore:
         """Atualiza last_used_at para o usuário."""
         now = datetime.now(timezone.utc).isoformat()
         with self._conn() as conn:
-            conn.execute(
-                "UPDATE tokens SET last_used_at = ? WHERE user_id = ? AND active = 1",
-                (now, user_id),
-            )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE tokens SET last_used_at = %s WHERE user_id = %s AND active = 1",
+                    (now, user_id),
+                )
 
     def list_all(
         self,
@@ -293,15 +295,17 @@ class TokenStore:
         if not include_revoked:
             query = (
                 f"SELECT {cols} FROM tokens WHERE active = 1 "
-                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                "ORDER BY created_at DESC LIMIT %s OFFSET %s"
             )
         else:
             query = (
                 f"SELECT {cols} FROM tokens "
-                "ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                "ORDER BY created_at DESC LIMIT %s OFFSET %s"
             )
         with self._conn() as conn:
-            rows = conn.execute(query, (limit, offset)).fetchall()
+            with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                cur.execute(query, (limit, offset))
+                rows = cur.fetchall()
         result = []
         for row in rows:
             r = dict(row)
