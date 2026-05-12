@@ -33,11 +33,11 @@ _LAYER_POLICIES: dict[str, dict] = {
         ],
         "wrong_examples": [
             "try { return await api.createOrder(p); } catch { return {id:-1, status:'pending'}; }",
-            "const API_URL = 'https://prod.example.com/api';  // hardcoded",
+            "const API_URL = process.env.API_BASE_URL || 'https://api.example.com';  // hardcoded fallback",
         ],
         "correct_examples": [
             "try { return await api.createOrder(p); } catch (err) { throw new OrderCreationError(err.message, {cause: err}); }",
-            "const API_URL = config.apiBaseUrl;  // vem de configuração",
+            "const API_URL = process.env.API_BASE_URL;  if (!API_URL) throw new Error('API_BASE_URL env var required');",
         ],
     },
     "backend": {

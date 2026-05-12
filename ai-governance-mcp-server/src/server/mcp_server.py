@@ -15,12 +15,13 @@ Para rodar: `python -m src.server.mcp_server` ou `ai-governance-mcp-server`
 
 from __future__ import annotations
 
+import os
+
 import asyncio
 import json
 from typing import Any
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from fastapi import FastAPI
 from mcp.types import TextContent, Tool
 
 from ..config.settings import get_settings
@@ -612,13 +613,20 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------- #
 
 
-def build_server() -> tuple[Server, GovernanceRepository]:
+def _build_http_app() -> FastAPI:
+    """Build FastAPI app for Ai Governance HTTP on port 7100."""
+    app = FastAPI(title="Ai Governance API", version="0.1.0", docs_url="/docs")
+    return app
+
+
+def build_server() -> tuple[Any, ...]:
     """Cria o servidor MCP, registra tools e devolve junto o repositório.
 
     Separado de `main()` para permitir testes que carregam o servidor sem
     abrir conexão stdio.
     """
     settings = get_settings()
+    http_app = _build_http_app()
     setup_logging(level=settings.log_level, fmt=settings.log_format)
 
     repo = GovernanceRepository(
@@ -682,7 +690,7 @@ def build_server() -> tuple[Server, GovernanceRepository]:
 
     return server, repo
 
-
+, http_app
 def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore) -> dict:
     """Roteia a chamada para a função pura correspondente."""
     if name == "get_agent_guidelines":
@@ -845,13 +853,26 @@ def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit
 
 
 async def _run() -> None:
-    server, _ = build_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options(),
-        )
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, *rest = build_server()
+    http_app = rest[-1]
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:

@@ -1,0 +1,26 @@
+# Multi-stage build para Zillas com dependência shared
+FROM node:20-alpine AS shared-builder
+
+WORKDIR /shared
+COPY shared/package*.json ./
+RUN npm ci --omit=dev
+COPY shared/src ./src
+COPY shared/tsconfig.json ./
+RUN npm run build
+
+# Base para todos os Zillas
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Copiar shared compilado do stage anterior
+COPY --from=shared-builder /shared/dist /shared/dist
+COPY --from=shared-builder /shared/node_modules /shared/node_modules
+COPY --from=shared-builder /shared/package.json /shared/package.json
+
+EXPOSE 7100
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD node -e "require('http').get('http://localhost:7100/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
+
+CMD ["node", "dist/server.js"]

@@ -1,14 +1,9 @@
-FROM node:20-alpine
-
+FROM python:3.11-slim
 WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --omit=dev
-COPY dist ./dist
-
+COPY archzilla-mcp-server/pyproject.toml .
+COPY archzilla-mcp-server/src/ ./src/
+COPY shared/ ./shared/
+RUN pip install --no-cache-dir .
+ENV PYTHONPATH=/app:$PYTHONPATH
 EXPOSE 7100
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD node -e "require('http').get('http://localhost:7100/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"
-
-CMD ["node", "dist/server.js"]
+CMD ["archzilla-mcp-server"]

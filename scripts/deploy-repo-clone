@@ -1,0 +1,130 @@
+#!/bin/bash
+# Deploy-MCP Skill: Clone and Sync Repositories
+# Garante que todos os repos ativos estejam clonados com develop atualizado
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DB_SCRIPT="$SCRIPT_DIR/db/clone_and_sync_repos.py"
+
+# Cores
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Help
+show_help() {
+    cat << EOF
+${BLUE}╔═══════════════════════════════════════════════════════════════╗${NC}
+${BLUE}║     Deploy-MCP: Clone & Sync Repositories Skill               ║${NC}
+${BLUE}╚═══════════════════════════════════════════════════════════════╝${NC}
+
+USAGE:
+    deploy-repo-clone [COMMAND] [OPTIONS]
+
+COMMANDS:
+    ${GREEN}clone${NC}       - Clonar repos não-clonados
+    ${GREEN}sync${NC}        - Sincronizar branch develop
+    ${GREEN}prune${NC}       - Limpar branches remotas
+    ${GREEN}report${NC}      - Gerar relatório de status
+    ${GREEN}status${NC}      - Clone + Sync + Report (padrão)
+    ${GREEN}help${NC}        - Mostrar esta ajuda
+
+OPTIONS:
+    --all              Clone + Sync + Prune + Report (completo)
+    --parallel N       Processar N repos em paralelo (default: 1)
+    --depth N          Clone com profundidade N (default: 5)
+    --timeout N        Timeout por repo em segundos (default: 300)
+
+EXAMPLES:
+    # Clonar repos não-clonados
+    deploy-repo-clone clone
+
+    # Sincronizar develop
+    deploy-repo-clone sync
+
+    # Status completo
+    deploy-repo-clone status
+
+    # Tudo junto (com paralelo)
+    deploy-repo-clone --all --parallel 5
+
+EOF
+}
+
+# Status functions
+status_ok() { echo -e "${GREEN}✅ $1${NC}"; }
+status_warn() { echo -e "${YELLOW}⚠️  $1${NC}"; }
+status_error() { echo -e "${RED}❌ $1${NC}"; }
+status_info() { echo -e "${BLUE}ℹ️  $1${NC}"; }
+
+# Main
+main() {
+    local cmd="${1:-status}"
+    local arg2="${2:-}"
+
+    # Verificar Python
+    if ! command -v python3 &> /dev/null; then
+        status_error "Python3 não encontrado"
+        exit 1
+    fi
+
+    # Verificar script
+    if [ ! -f "$DB_SCRIPT" ]; then
+        status_error "Script não encontrado: $DB_SCRIPT"
+        exit 1
+    fi
+
+    case "$cmd" in
+        clone|cl)
+            status_info "Clonando repositórios não-clonados..."
+            python3 "$DB_SCRIPT" --clone
+            ;;
+
+        sync|sy)
+            status_info "Sincronizando branch develop..."
+            python3 "$DB_SCRIPT" --sync
+            status_ok "Sincronização concluída"
+            ;;
+
+        prune|pr)
+            status_info "Limpando branches remotas..."
+            python3 "$DB_SCRIPT" --prune
+            status_ok "Limpeza concluída"
+            ;;
+
+        report|rep)
+            status_info "Gerando relatório..."
+            python3 "$DB_SCRIPT" --report
+            ;;
+
+        status|stat)
+            status_info "Processando repositories..."
+            python3 "$DB_SCRIPT" --clone --sync --report
+            status_ok "Processo concluído"
+            ;;
+
+        --all)
+            status_info "Executando: Clone + Sync + Prune + Report..."
+            python3 "$DB_SCRIPT" --all
+            status_ok "Processo completo finalizado"
+            ;;
+
+        help|--help|-h)
+            show_help
+            ;;
+
+        *)
+            status_error "Comando desconhecido: $cmd"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Executa
+main "$@"
+exit $?

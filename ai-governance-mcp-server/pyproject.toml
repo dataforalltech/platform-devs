@@ -20,6 +20,8 @@ dependencies = [
     "networkx>=3.2,<4.0",
     # PyYAML: parsing do seed declarativo do ecossistema.
     "pyyaml>=6.0,<7.0",
+    "fastapi>=0.104.0,<1.0",
+    "uvicorn[standard]>=0.24.0,<1.0",
 ]
 
 [project.optional-dependencies]
@@ -45,7 +47,6 @@ include = ["src*"]
 [tool.setuptools.package-dir]
 "" = "."
 
-include = ["src*", "scripts*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

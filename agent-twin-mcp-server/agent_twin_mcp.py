@@ -32,9 +32,7 @@ class MCPResponse(BaseModel):
 class AgentTwinMcpMCPService:
     def __init__(self):
         self.name = "agent-twin-mcp"
-        self.version = "1.0"
-        # TODO: Import tools from original agent-twin-mcp.py
-        self.tools = []
+        self.version = "1.0"        self.tools = []
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

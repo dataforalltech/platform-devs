@@ -5,15 +5,36 @@ services:
   # System MCPs (Python - FastAPI)
   # ============================================================================
 
+  agent-twin-mcp:
+    build:
+      context: .
+      dockerfile: agent-twin-mcp-server/Dockerfile
+    ports:
+      - "7101:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=agent-twin-mcp"
+      - "type=system"
+      - "language=python"
+
   config-mcp:
     build:
-      context: ./config-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: config-mcp-server/Dockerfile
     ports:
-      - "7100:7100"
+      - "7102:7100"
     environment:
-      PORT: 7100
-      HOST: 0.0.0.0
+      PYTHONPATH: /app:/app/shared
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
       interval: 30s
@@ -28,92 +49,225 @@ services:
       - "type=system"
       - "language=python"
 
-  agent-twin-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./agent-twin-mcp.py:/app/agent-twin-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python agent-twin-mcp.py"
-    ports:
-      - "7101:7101"
-    environment:
-      PORT: 7101
-    networks:
-      - mcp-network
-    restart: unless-stopped
-    labels:
-      - "mcp=agent-twin-mcp"
-      - "type=system"
-
   session-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./session-mcp.py:/app/session-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python session-mcp.py"
+    build:
+      context: .
+      dockerfile: session-mcp-server/Dockerfile
     ports:
-      - "7102:7102"
+      - "7103:7100"
     environment:
-      PORT: 7102
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     networks:
       - mcp-network
     restart: unless-stopped
     labels:
       - "mcp=session-mcp"
       - "type=system"
-
-  auth-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./auth-mcp.py:/app/auth-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python auth-mcp.py"
-    ports:
-      - "7103:7103"
-    environment:
-      PORT: 7103
-    networks:
-      - mcp-network
-    restart: unless-stopped
-    labels:
-      - "mcp=auth-mcp"
-      - "type=system"
-
-  admin-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./admin-mcp.py:/app/admin-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python admin-mcp.py"
-    ports:
-      - "7104:7104"
-    environment:
-      PORT: 7104
-    networks:
-      - mcp-network
-    restart: unless-stopped
-    labels:
-      - "mcp=admin-mcp"
-      - "type=system"
+      - "language=python"
 
   audit-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./audit-mcp.py:/app/audit-mcp.py
-    command: bash -c "pip install fastapi uvicorn pydantic && python audit-mcp.py"
+    build:
+      context: .
+      dockerfile: audit-mcp-server/Dockerfile
     ports:
-      - "7105:7105"
+      - "7104:7100"
     environment:
-      PORT: 7105
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
     networks:
       - mcp-network
     restart: unless-stopped
     labels:
       - "mcp=audit-mcp"
       - "type=system"
+      - "language=python"
 
-  # ... (mais 12 system MCPs nas portas 7106-7117)
+  deploy-mcp:
+    build:
+      context: .
+      dockerfile: deploy-mcp-server/Dockerfile
+    ports:
+      - "7105:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=deploy-mcp"
+      - "type=system"
+      - "language=python"
+
+  docs-mcp:
+    build:
+      context: .
+      dockerfile: docs-mcp-server/Dockerfile
+    ports:
+      - "7106:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=docs-mcp"
+      - "type=system"
+      - "language=python"
+
+  infra-mcp:
+    build:
+      context: .
+      dockerfile: infra-mcp-server/Dockerfile
+    ports:
+      - "7107:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=infra-mcp"
+      - "type=system"
+      - "language=python"
+
+  pipeline-mcp:
+    build:
+      context: .
+      dockerfile: pipeline-mcp-server/Dockerfile
+    ports:
+      - "7108:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=pipeline-mcp"
+      - "type=system"
+      - "language=python"
+
+  qa-mcp:
+    build:
+      context: .
+      dockerfile: qa-mcp-server/Dockerfile
+    ports:
+      - "7109:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=qa-mcp"
+      - "type=system"
+      - "language=python"
+
+  services-mcp:
+    build:
+      context: .
+      dockerfile: services-mcp-server/Dockerfile
+    ports:
+      - "7110:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=services-mcp"
+      - "type=system"
+      - "language=python"
+
+  test-mcp:
+    build:
+      context: .
+      dockerfile: test-mcp-server/Dockerfile
+    ports:
+      - "7111:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=test-mcp"
+      - "type=system"
+      - "language=python"
+
+  ai-governance-mcp:
+    build:
+      context: .
+      dockerfile: ai-governance-mcp-server/Dockerfile
+    ports:
+      - "7112:7100"
+    environment:
+      PYTHONPATH: /app:/app/shared
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=ai-governance-mcp"
+      - "type=system"
+      - "language=python"
 
   # ============================================================================
   # Zilla MCPs (Node.js - já vêm em Docker)
@@ -121,8 +275,8 @@ services:
 
   archzilla-mcp:
     build:
-      context: ./archzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./archzilla-mcp-server/Dockerfile
     ports:
       - "7118:7100"
     environment:
@@ -138,8 +292,8 @@ services:
 
   backzilla-mcp:
     build:
-      context: ./backzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./backzilla-mcp-server/Dockerfile
     ports:
       - "7119:7100"
     environment:
@@ -154,12 +308,11 @@ services:
 
   frontzilla-mcp:
     build:
-      context: ./frontzilla-pixelfera-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./frontzilla-mcp-server/Dockerfile
     ports:
       - "7120:7100"
     environment:
-      NODE_ENV: production
       PORT: 7100
     networks:
       - mcp-network
@@ -170,8 +323,8 @@ services:
 
   opszilla-mcp:
     build:
-      context: ./opszilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./opszilla-mcp-server/Dockerfile
     ports:
       - "7121:7100"
     environment:
@@ -186,8 +339,8 @@ services:
 
   pozilla-mcp:
     build:
-      context: ./pozilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./pozilla-mcp-server/Dockerfile
     ports:
       - "7122:7100"
     environment:
@@ -202,8 +355,8 @@ services:
 
   productzilla-mcp:
     build:
-      context: ./productzilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./productzilla-mcp-server/Dockerfile
     ports:
       - "7123:7100"
     environment:
@@ -218,8 +371,8 @@ services:
 
   qazilla-mcp:
     build:
-      context: ./qazilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./qazilla-mcp-server/Dockerfile
     ports:
       - "7124:7100"
     environment:
@@ -234,8 +387,8 @@ services:
 
   seczilla-mcp:
     build:
-      context: ./seczilla-mcp-server
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./seczilla-mcp-server/Dockerfile
     ports:
       - "7125:7100"
     environment:
@@ -251,6 +404,44 @@ services:
   # ============================================================================
   # MCP Gateway / Registry (Optional - discovers all MCPs)
   # ============================================================================
+
+  mcp-gateway:
+    build:
+      context: .
+      dockerfile: ./mcp-gateway/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+    depends_on:
+      - redis
+      - postgres
+      - agent-twin-mcp
+      - config-mcp
+      - session-mcp
+      - audit-mcp
+      - deploy-mcp
+      - docs-mcp
+      - infra-mcp
+      - pipeline-mcp
+      - qa-mcp
+      - services-mcp
+      - test-mcp
+      - ai-governance-mcp
+      - qazilla-mcp
+      - backzilla-mcp
+      - archzilla-mcp
+      - seczilla-mcp
+      - opszilla-mcp
+      - productzilla-mcp
+      - frontzilla-mcp
+      - pozilla-mcp
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=mcp-gateway"
+      - "type=gateway"
 
   mcp-registry:
     image: python:3.11-slim
@@ -273,6 +464,34 @@ services:
       - "service=mcp-registry"
       - "type=gateway"
 
+  # ============================================================================
+  # Infrastructure Services (Redis + PostgreSQL for gateway)
+  # ============================================================================
+
+  redis:
+    image: redis:7-alpine
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=redis"
+      - "type=infrastructure"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: platform_dev
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "service=postgres"
+      - "type=infrastructure"
+
 networks:
   mcp-network:
     driver: bridge
@@ -284,3 +503,4 @@ volumes:
   config-data:
   session-data:
   auth-data:
+  postgres-data:

@@ -109,6 +109,58 @@ todos seguem a Parte I.
 
 ---
 
+## §0. ENFORCEMENT — session-mcp e ToolSearch obrigatórios
+
+### Regra 1: Todo trabalho deve ser registrado no banco via session-mcp
+
+**Inegociável.** Antes de qualquer tarefa, análise ou geração de código:
+
+1. Chame `mcp__session-mcp__list_sessions(status="active", repo=<repo_atual>)`
+   - Se houver: use o `session_id` existente
+   - Se não houver: `mcp__session-mcp__start_session(title=<título>, objective=<objetivo>, repo=<repo>)`
+
+2. Para cada entrega ou sub-tarefa, registre no banco:
+   ```
+   mcp__session-mcp__create_task(session_id, title, description)
+   mcp__session-mcp__start_task(session_id, task_id)
+   mcp__session-mcp__complete_task(session_id, task_id, result, commit_sha)
+   ```
+
+3. Ao concluir etapas significativas:
+   ```
+   mcp__session-mcp__save_checkpoint(session_id, summary)
+   mcp__session-mcp__add_artifact(session_id, type, content)
+   ```
+
+4. Ao finalizar todo o trabalho:
+   ```
+   mcp__session-mcp__end_session(session_id, actor={type:"agent",id:"<NomeZilla>"}, rationale, final_summary)
+   ```
+
+**Impacto**: Sem registro, o trabalho é invisível ao sistema, não tem rastreabilidade, não pode ser auditado e quebrará compliance.
+
+### Regra 2: Carregue schemas antes de invocar qualquer ferramenta MCP
+
+**Obrigatório.** NUNCA invoque uma ferramenta MCP sem primeiro carregar seu schema:
+
+```
+ToolSearch("select:mcp__<servidor>__<tool1>,mcp__<servidor>__<tool2>")
+```
+
+Exemplos:
+- `ToolSearch("select:mcp__session-mcp__start_session,mcp__session-mcp__create_task")`
+- `ToolSearch("select:mcp__deploy-mcp__create_pr,mcp__deploy-mcp__merge_branch")`
+
+**Por quê**: Schemas mudam entre versões. Presunção de parâmetros causa `InputValidationError`. Sempre carregue o schema atual antes de montar a chamada.
+
+### Onde aplica
+
+- **Todos os Zillas** (QAZilla, SecZilla, ArchZilla, BackZilla, FrontZilla, OpsZilla, POZilla, ProductZilla)
+- **Todos os agentes Claude Code** neste ecossistema
+- **Todos os MCPs** que invocam outros MCPs
+
+---
+
 ## 1. Princípios gerais
 
 Estes são os 6 princípios que orientam toda atuação. Tudo neste documento é uma

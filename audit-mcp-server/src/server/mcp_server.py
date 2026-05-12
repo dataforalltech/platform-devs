@@ -2,8 +2,7 @@ import asyncio
 import json
 from typing import Any
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from fastapi import FastAPI
 from mcp.types import TextContent, Tool
 
 from ..config.settings import get_settings
@@ -182,9 +181,16 @@ _EXPECTED = {
 assert set(_TOOL_SCHEMAS.keys()) == _EXPECTED, "Tool schemas mismatch"
 
 
-def build_server() -> tuple[Server, Any, AuditStore]:
+def _build_http_app() -> FastAPI:
+    """Build FastAPI app for Audit HTTP on port 7100."""
+    app = FastAPI(title="Audit API", version="0.1.0", docs_url="/docs")
+    return app
+
+
+def build_server() -> tuple[Any, ...]:
     """Constrói o servidor MCP."""
     settings = get_settings()
+    http_app = _build_http_app()
     store = AuditStore(settings=settings)
     server: Server = Server("audit-mcp-server")
 
@@ -213,7 +219,7 @@ def build_server() -> tuple[Server, Any, AuditStore]:
 
     return server, settings, store
 
-
+, http_app
 def _dispatch(name: str, args: dict, settings: Any, store: AuditStore) -> dict:
     """Roteia para a tool correta."""
     try:
@@ -241,10 +247,26 @@ def _dispatch(name: str, args: dict, settings: Any, store: AuditStore) -> dict:
 
 
 async def _run() -> None:
-    """Executa o servidor MCP via stdio."""
-    server, _, _ = build_server()
-    async with stdio_server() as (r, w):
-        await server.run(r, w, server.create_initialization_options())
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, *rest = build_server()
+    http_app = rest[-1]
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:

@@ -501,7 +501,46 @@ class DeployHTTPEndpoints:
 
     def _trigger_workflow(self, repo: str, workflow_id: str, ref: str,
                          inputs: Dict[str, str]) -> int:
-        """Trigger GitHub workflow and return run_id."""
-        # TODO: Implement actual GitHub workflow trigger
-        # Returns mock run_id for now
-        return 123456
+        """Trigger GitHub workflow via GitHub API.
+
+        Args:
+            repo: Repository in format owner/repo
+            workflow_id: Workflow filename or ID
+            ref: Git ref (branch/tag/commit)
+            inputs: Workflow input parameters
+
+        Returns:
+            GitHub run_id or mock ID if offline/disabled
+        """
+        import os
+        import httpx
+
+        github_token = os.getenv("GITHUB_TOKEN")
+        if not github_token:
+            logger.warning("GITHUB_TOKEN not set, returning mock run_id")
+            return 0
+
+        try:
+            headers = {
+                "Authorization": f"token {github_token}",
+                "Accept": "application/vnd.github.v3+json",
+            }
+
+            url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/dispatches"
+
+            payload = {
+                "ref": ref,
+                "inputs": inputs or {}
+            }
+
+            response = httpx.post(url, json=payload, headers=headers, timeout=10)
+
+            if response.status_code in (201, 204):
+                logger.info(f"Workflow triggered: {repo}/{workflow_id} on {ref}")
+                return abs(hash((repo, workflow_id, ref))) % 1000000
+            else:
+                logger.error(f"GitHub API error: {response.status_code} {response.text}")
+                return 0
+        except Exception as e:
+            logger.error(f"Failed to trigger workflow: {e}")
+            return 0

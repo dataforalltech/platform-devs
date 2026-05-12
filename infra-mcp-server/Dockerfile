@@ -1,8 +1,11 @@
 FROM python:3.11-slim
 WORKDIR /app
-RUN pip install --no-cache-dir fastapi==0.104.1 uvicorn[standard]==0.24.0 pydantic==2.4.2
-COPY infra_mcp.py .
-EXPOSE 7106
+COPY infra-mcp-server/pyproject.toml .
+COPY infra-mcp-server/src/ ./src/
+COPY shared/ ./shared/
+RUN pip install --no-cache-dir .
+ENV PYTHONPATH=/app:$PYTHONPATH
+EXPOSE 7100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:7106/health')" || exit 1
-CMD ["python3", "-m", "uvicorn", "infra_mcp:app", "--host", "0.0.0.0", "--port", "7106"]
+    CMD curl -f http://localhost:7100/health || exit 1
+CMD ["infra-mcp-server"]

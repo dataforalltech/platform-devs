@@ -15,6 +15,8 @@ Tools:
 
 from __future__ import annotations
 
+import os
+
 import asyncio
 import json
 import logging
@@ -24,8 +26,7 @@ from typing import Any
 
 import uvicorn
 from fastapi import FastAPI
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from fastapi import FastAPI
 from mcp.types import TextContent, Tool
 
 from ..config.settings import PipelineSettings, get_settings
@@ -566,16 +567,26 @@ def _dispatch(
 
 
 async def _run() -> None:
-    settings = get_settings()
-    Path(settings.db_path).parent.mkdir(parents=True, exist_ok=True)
-    store = PipelineStore(settings.db_path)
-    server = build_server(settings, store)
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options(),
-        )
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, *rest = build_server()
+    http_app = rest[-1]
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
