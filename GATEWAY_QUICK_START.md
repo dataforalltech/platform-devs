@@ -2,7 +2,7 @@
 
 ## Overview
 
-The MCP Gateway (port 8080) provides centralized access to all 26 MCPs with authentication, RBAC, rate limiting, and audit logging.
+The MCP Gateway (port 28080) provides centralized access to all 26 MCPs with authentication, RBAC, rate limiting, and audit logging.
 
 ## Starting the Gateway
 
@@ -11,7 +11,7 @@ The MCP Gateway (port 8080) provides centralized access to all 26 MCPs with auth
 docker compose -f docker-compose.staging.yml up -d postgres redis mcp-gateway
 
 # Verify it's running
-curl http://localhost:8080/health
+curl http://localhost:28080/health
 ```
 
 ## Test Tokens
@@ -34,13 +34,13 @@ TOKEN="test-readonly-token"
 ### List All MCPs
 ```bash
 curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:8080/mcp | jq .
+  http://localhost:28080/mcp | jq .
 ```
 
 ### List Tools for an MCP
 ```bash
 curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools | jq .
+  http://localhost:28080/mcp/qazilla-mcp/tools | jq .
 ```
 
 ### Call a Tool
@@ -49,13 +49,13 @@ curl -X POST \
   -H "Authorization: Bearer test-admin-token" \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_test_cases", "arguments": {"scenario": "login flow"}}' \
-  http://localhost:8080/mcp/qazilla-mcp/tools/call | jq .
+  http://localhost:28080/mcp/qazilla-mcp/tools/call | jq .
 ```
 
 ### Check Rate Limit Usage (Admin Only)
 ```bash
 curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:8080/admin/quotas | jq .
+  http://localhost:28080/admin/quotas | jq .
 ```
 
 ## Audit Logging
