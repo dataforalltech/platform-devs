@@ -8,22 +8,21 @@ Tools:
   Tenants (4):     get_tenant_config, set_tenant_config, list_tenants,
                    get_session_tenant_config
 
-HTTP API interna (porta 7099 por padrão):
+HTTP API na porta 7100:
   Consumida por outros MCP servers (deploy-mcp, qa-mcp, etc.) via ConfigClient.
   Ver shared/config_client.py para o cliente.
+Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP).
 """
 from __future__ import annotations
+
+import os
 
 import asyncio
 import json
 import logging
-import threading
 from typing import Any
 
-import uvicorn
 from fastapi import FastAPI
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from ..api.router import make_router
@@ -304,29 +303,18 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ─────────────────────────────────────────────────────────────────────────── #
 # HTTP API (sidecar para outros MCPs)                                          #
 # ─────────────────────────────────────────────────────────────────────────── #
-def _start_http_api(store: ConfigStore, settings: ConfigMcpSettings) -> None:
-    """Inicia a HTTP API em thread separada (não bloqueia o loop MCP)."""
+def _build_http_app(store: ConfigStore, settings: ConfigMcpSettings) -> FastAPI:
+    """Constrói a FastAPI app para config-mcp HTTP na porta 7100."""
     app = FastAPI(title="config-mcp API", version="0.1.0", docs_url="/docs")
     router = make_router(store, settings.api_token)
     app.include_router(router)
-
-    cfg = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=settings.api_port,
-        log_level="warning",
-        access_log=False,
-    )
-    server = uvicorn.Server(cfg)
-    thread = threading.Thread(target=server.run, daemon=True, name="config-mcp-http")
-    thread.start()
-    _log.info("config_mcp_http_started port=%d", settings.api_port)
+    return app
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
 # MCP Server                                                                   #
 # ─────────────────────────────────────────────────────────────────────────── #
-def build_server() -> tuple[Server, ConfigStore, ConfigMcpSettings]:
+def build_server() -> tuple[Any, ConfigStore, ConfigMcpSettings, FastAPI]:
     settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
@@ -339,14 +327,11 @@ def build_server() -> tuple[Server, ConfigStore, ConfigMcpSettings]:
         raise SystemExit(1)
     store = ConfigStore(settings.store_path, encryptor)
 
-    if settings.api_enabled:
-        _start_http_api(store, settings)
+    http_app = _build_http_app(store, settings)
 
     _log.info(
-        "config_mcp_ready store=%s api_port=%d api_enabled=%s",
+        "config_mcp_ready store=%s",
         settings.store_path,
-        settings.api_port,
-        settings.api_enabled,
     )
 
     server: Server = Server("config-mcp-server")
@@ -373,7 +358,7 @@ def build_server() -> tuple[Server, ConfigStore, ConfigMcpSettings]:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, store, settings
+    return server, store, settings, http_app
 
 
 def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
@@ -437,9 +422,25 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
 
 
 async def _run() -> None:
-    server, _store, _settings = build_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, _store, _settings, http_app = build_server()
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:

@@ -7,20 +7,19 @@ Tools:
 authenticate é a PRIMEIRA tool chamada em toda sessão de agente.
 Valida o token do usuário, carrega perfil e captura contexto de ambiente.
 
-HTTP API :7098 — outros MCPs consultam /v1/session para saber quem opera.
+HTTP API :7100 — outros MCPs consultam /tools e /tools/call via HTTP.
+Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP).
 """
 from __future__ import annotations
+
+import os
 
 import asyncio
 import json
 import logging
-import threading
 from typing import Any
 
-import uvicorn
 from fastapi import FastAPI
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
 from mcp.types import TextContent, Tool
 
 from ..api.router import make_router
@@ -216,30 +215,21 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
-def _start_http_api(settings: AgentTwinSettings) -> None:
+def _build_http_app(settings: AgentTwinSettings) -> FastAPI:
     app = FastAPI(title="agent-twin-mcp API", version="0.1.0", docs_url="/docs")
     router = make_router(settings.api_token)
     app.include_router(router)
-    cfg = uvicorn.Config(
-        app, host="127.0.0.1", port=settings.api_port,
-        log_level="warning", access_log=False,
-    )
-    server = uvicorn.Server(cfg)
-    thread = threading.Thread(target=server.run, daemon=True, name="agent-twin-http")
-    thread.start()
-    _log.info("agent_twin_http_started port=%d", settings.api_port)
+    return app
 
 
-def build_server() -> tuple[Server, TokenStore, AgentTwinSettings]:
+def build_server() -> tuple[Any, TokenStore, AgentTwinSettings, FastAPI]:
     settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
     store = TokenStore(settings)
+    http_app = _build_http_app(settings)
 
-    if settings.api_enabled:
-        _start_http_api(settings)
-
-    _log.info("agent_twin_mcp_ready pg_host=%s pg_db=%s api_port=%d", settings.pg_host, settings.pg_db, settings.api_port)
+    _log.info("agent_twin_mcp_ready pg_host=%s pg_db=%s", settings.pg_host, settings.pg_db)
 
     server: Server = Server("agent-twin-mcp-server")
 
@@ -265,7 +255,7 @@ def build_server() -> tuple[Server, TokenStore, AgentTwinSettings]:
             _log.exception("tool_internal_error: %s", name)
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, store, settings
+    return server, store, settings, http_app
 
 
 def _dispatch(
@@ -322,9 +312,25 @@ def _dispatch(
 
 
 async def _run() -> None:
-    server, _store, _settings = build_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, _store, _settings, http_app = build_server()
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:

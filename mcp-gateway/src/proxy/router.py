@@ -12,14 +12,28 @@ from src.middleware.rate_limiter import check_rate_limit
 from src.middleware.audit_logger import log_tool_call
 
 MCP_REGISTRY = {
-    "qazilla-mcp": "http://qazilla-mcp:7100",
-    "backzilla-mcp": "http://backzilla-mcp:7100",
+    # System MCPs
+    "agent-twin-mcp": "http://agent-twin-mcp:7100",
+    "config-mcp": "http://config-mcp:7100",
+    "session-mcp": "http://session-mcp:7100",
+    "audit-mcp": "http://audit-mcp:7100",
+    "deploy-mcp": "http://deploy-mcp:7100",
+    "docs-mcp": "http://docs-mcp:7100",
+    "infra-mcp": "http://infra-mcp:7100",
+    "pipeline-mcp": "http://pipeline-mcp:7100",
+    "qa-mcp": "http://qa-mcp:7100",
+    "services-mcp": "http://services-mcp:7100",
+    "test-mcp": "http://test-mcp:7100",
+    "ai-governance-mcp": "http://ai-governance-mcp:7100",
+    # Zilla MCPs
     "archzilla-mcp": "http://archzilla-mcp:7100",
-    "seczilla-mcp": "http://seczilla-mcp:7100",
-    "opszilla-mcp": "http://opszilla-mcp:7100",
-    "productzilla-mcp": "http://productzilla-mcp:7100",
+    "backzilla-mcp": "http://backzilla-mcp:7100",
     "frontzilla-mcp": "http://frontzilla-mcp:7100",
+    "opszilla-mcp": "http://opszilla-mcp:7100",
     "pozilla-mcp": "http://pozilla-mcp:7100",
+    "productzilla-mcp": "http://productzilla-mcp:7100",
+    "qazilla-mcp": "http://qazilla-mcp:7100",
+    "seczilla-mcp": "http://seczilla-mcp:7100",
 }
 
 async def _get_user_or_fail(authorization: str | None):
@@ -165,5 +179,17 @@ def setup_proxy_routes(app: FastAPI):
         if user.role != "admin":
             raise HTTPException(403, "Admin only")
 
-        # TODO: Return actual quota data from Redis
-        return {"quotas": {}}
+        try:
+            import redis.asyncio as aioredis
+            redis_client = aioredis.from_url("redis://redis:6379")
+            keys = await redis_client.keys("quota:*")
+
+            quotas = {}
+            for key in keys:
+                user_quota = await redis_client.get(key)
+                quotas[key.decode() if isinstance(key, bytes) else key] = int(user_quota) if user_quota else 0
+
+            await redis_client.close()
+            return {"quotas": quotas, "timestamp": int(__import__("time").time())}
+        except Exception as e:
+            return {"quotas": {}, "error": str(e), "timestamp": int(__import__("time").time())}

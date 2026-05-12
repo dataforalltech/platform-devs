@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 
 from src.prompts.system_prompt import SYSTEM_PROMPT
 from src.tools.qazilla_tools import (
@@ -26,6 +27,10 @@ from src.tools.qazilla_tools import (
     validate_story_testability,
 )
 from shared.hybrid_server import HybridMCPServer
+
+# Default URLs from environment variables
+DEFAULT_WEB_URL = os.getenv("TEST_APP_URL", "http://localhost:3000")
+DEFAULT_API_URL = os.getenv("TEST_API_URL", "http://localhost:8000")
 
 _TOOLS: dict[str, dict] = {
     "analyze_quality_requirement": {
@@ -252,12 +257,12 @@ _DISPATCH = {
     "generate_test_plan": lambda a: generate_test_plan(a["feature"], a.get("scope", "full"), a.get("team")),
     "generate_test_cases": lambda a: generate_test_cases(a["feature"], a.get("test_type", "functional"), a.get("count", 5)),
     "generate_gherkin_scenarios": lambda a: generate_gherkin_scenarios(a["feature"], a.get("scenarios")),
-    "generate_e2e_tests": lambda a: generate_e2e_tests(a["feature"], a.get("framework", "playwright"), a.get("base_url", "http://localhost:3000")),
-    "generate_api_tests": lambda a: generate_api_tests(a["endpoint"], a.get("method", "GET"), a.get("base_url", "http://localhost:8000")),
+    "generate_e2e_tests": lambda a: generate_e2e_tests(a["feature"], a.get("framework", "playwright"), a.get("base_url", DEFAULT_WEB_URL)),
+    "generate_api_tests": lambda a: generate_api_tests(a["endpoint"], a.get("method", "GET"), a.get("base_url", DEFAULT_API_URL)),
     "generate_unit_tests": lambda a: generate_unit_tests(a["module"], a.get("language", "python")),
-    "generate_playwright_tests": lambda a: generate_playwright_tests(a["feature"], a.get("base_url", "http://localhost:3000")),
-    "generate_cypress_tests": lambda a: generate_cypress_tests(a["feature"], a.get("base_url", "http://localhost:3000")),
-    "generate_postman_collection": lambda a: generate_postman_collection(a["api_name"], a.get("base_url", "http://localhost:8000"), a.get("endpoints")),
+    "generate_playwright_tests": lambda a: generate_playwright_tests(a["feature"], a.get("base_url", DEFAULT_WEB_URL)),
+    "generate_cypress_tests": lambda a: generate_cypress_tests(a["feature"], a.get("base_url", DEFAULT_WEB_URL)),
+    "generate_postman_collection": lambda a: generate_postman_collection(a["api_name"], a.get("base_url", DEFAULT_API_URL), a.get("endpoints")),
     "classify_bug_severity": lambda a: classify_bug_severity(a["description"], a.get("impact", "medium"), a.get("frequency", "sometimes")),
     "generate_bug_report": lambda a: generate_bug_report(a["title"], a.get("steps"), a.get("severity", "P2")),
     "validate_story_testability": lambda a: validate_story_testability(a["story"], a.get("acceptance_criteria")),
@@ -272,7 +277,7 @@ _DISPATCH = {
 
 def main() -> None:
     server = HybridMCPServer("qazilla-mcp-server", _TOOLS, _DISPATCH, SYSTEM_PROMPT)
-    asyncio.run(server.run(http_port=7100))
+    asyncio.run(server.run(http_port=int(os.getenv("MCP_PORT", "7100"))))
 
 
 if __name__ == "__main__":

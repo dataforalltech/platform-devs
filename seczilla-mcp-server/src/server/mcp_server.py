@@ -1,6 +1,8 @@
 """SecZilla MCP Server — Security & Compliance Specialist."""
 from __future__ import annotations
 
+import os
+
 import asyncio
 from src.prompts.system_prompt import SYSTEM_PROMPT
 from src.tools.seczilla_tools import stub_tool
@@ -16,7 +18,7 @@ _DISPATCH = {
 
 def main() -> None:
     server = HybridMCPServer("seczilla-mcp-server", _TOOLS, _DISPATCH, SYSTEM_PROMPT)
-    asyncio.run(server.run(http_port=7100))
+    asyncio.run(server.run(http_port=int(os.getenv("MCP_PORT", "7100"))))
 
 if __name__ == "__main__":
     main()

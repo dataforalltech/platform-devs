@@ -32,9 +32,7 @@ class MCPResponse(BaseModel):
 class TestMcpMCPService:
     def __init__(self):
         self.name = "test-mcp"
-        self.version = "1.0"
-        # TODO: Import tools from original test-mcp.py
-        self.tools = []
+        self.version = "1.0"        self.tools = []
 
     def initialize(self, msg_id: int) -> Dict[str, Any]:
         return {

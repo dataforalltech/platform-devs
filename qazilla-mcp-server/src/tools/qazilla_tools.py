@@ -1,6 +1,8 @@
 """QAZilla tools — funções puras que retornam dict."""
 from __future__ import annotations
 
+import os
+
 
 def analyze_quality_requirement(requirement: str, context: dict | None = None) -> dict:
     ctx = context or {}
@@ -88,7 +90,8 @@ def generate_gherkin_scenarios(feature: str, scenarios: list[str] | None = None)
     }
 
 
-def generate_e2e_tests(feature: str, framework: str = "playwright", base_url: str = "http://localhost:3000") -> dict:
+def generate_e2e_tests(feature: str, framework: str = "playwright", base_url: str | None = None) -> dict:
+    base_url = base_url or os.getenv("TEST_APP_URL", "http://localhost:3000")
     if framework == "playwright":
         code = f"""import {{ test, expect }} from '@playwright/test';
 
@@ -221,11 +224,11 @@ describe('{module}', () => {{
     return {"module": module, "language": language, "code": code}
 
 
-def generate_playwright_tests(feature: str, base_url: str = "http://localhost:3000") -> dict:
+def generate_playwright_tests(feature: str, base_url: str | None = None) -> dict:
     return generate_e2e_tests(feature, "playwright", base_url)
 
 
-def generate_cypress_tests(feature: str, base_url: str = "http://localhost:3000") -> dict:
+def generate_cypress_tests(feature: str, base_url: str | None = None) -> dict:
     return generate_e2e_tests(feature, "cypress", base_url)
 
 

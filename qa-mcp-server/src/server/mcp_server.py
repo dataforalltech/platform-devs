@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import os
+
 import asyncio
 import json
 from typing import Any
 
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from fastapi import FastAPI
 from mcp.types import TextContent, Tool
 
 from ..config.settings import QASettings, get_settings
@@ -385,8 +386,15 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------- #
 # Server                                                                  #
 # ---------------------------------------------------------------------- #
-def build_server() -> tuple[Server, QASettings, QAStore]:
+def _build_http_app() -> FastAPI:
+    """Build FastAPI app for Qa HTTP on port 7100."""
+    app = FastAPI(title="Qa API", version="0.1.0", docs_url="/docs")
+    return app
+
+
+def build_server() -> tuple[Any, ...]:
     settings = get_settings()
+    http_app = _build_http_app()
 
     store = QAStore(db_path=settings.db_path)
 
@@ -424,7 +432,7 @@ def _dispatch(
     name: str,
     args: dict[str, Any],
     settings: QASettings,
-    store: QAStore,
+    store: QAStore,, http_app
 ) -> dict:
     # ---- test_tool ----
     if name == "run_unit_tests":
@@ -545,13 +553,26 @@ def _dispatch(
 
 
 async def _run() -> None:
-    server, _settings, _store = build_server()
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(
-            read_stream,
-            write_stream,
-            server.create_initialization_options(),
-        )
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, *rest = build_server()
+    http_app = rest[-1]
+
+    cfg = uvicorn.Config(
+        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
+        log_level="warning", access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:

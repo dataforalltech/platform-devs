@@ -1,6 +1,8 @@
 """POZilla MCP Server — Product Management Specialist."""
 from __future__ import annotations
 
+import os
+
 import asyncio
 from src.prompts.system_prompt import SYSTEM_PROMPT
 from src.tools.pozilla_tools import (
@@ -55,7 +57,7 @@ _DISPATCH = {
 
 def main() -> None:
     server = HybridMCPServer("pozilla-mcp-server", _TOOLS, _DISPATCH, SYSTEM_PROMPT)
-    asyncio.run(server.run(http_port=7100))
+    asyncio.run(server.run(http_port=int(os.getenv("MCP_PORT", "7100"))))
 
 if __name__ == "__main__":
     main()
