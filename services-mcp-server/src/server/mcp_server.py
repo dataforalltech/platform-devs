@@ -1,4 +1,4 @@
-“””Servidor MCP services â€” 19 tools para registro e monitoramento de serviÃ§os.
+"""Servidor MCP services  -  22 tools pararegistro e monitoramento de servicos.
 
 Tools:
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -7,7 +7,8 @@ Tools:
   Composite (3):  service_status, list_environments, reload_service
   Gateway (3):    get_gateway_map, update_service_gateway, sync_registry
   Launch (2):     launch_service, stop_service
-“””
+  Env (3):        read_env_file, set_env_var, sync_service_urls
+"""
 
 from __future__ import annotations
 
@@ -40,8 +41,11 @@ from ..tools import (
     scan_processes,
     service_status,
     launch_service,
+    read_env_file,
+    set_env_var,
     stop_service,
     sync_registry,
+    sync_service_urls,
     unregister_service,
     update_service,
     update_service_gateway,
@@ -49,46 +53,46 @@ from ..tools import (
 
 _log = logging.getLogger(__name__)
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 # Schemas                                                                      #
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
-    # â”€â”€ Registry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Registry â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     "register_service": {
         "description": (
-            "Registra ou atualiza um serviÃ§o no registry local. "
-            "Se o serviÃ§o jÃ¡ existir, atualiza os campos fornecidos. "
-            "Retorna action=created ou action=updated."
+            "Registraou atualizaum servico no registry local. "
+            "Se o servico ja existir, atualizaos campos fornecidos. "
+            "Retornaaction=created ou action=updated."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome Ãºnico do serviÃ§o."},
+                "name": {"type": "string", "description": "Nome unico do servico."},
                 "host": {
                     "type": "string",
-                    "description": "Host onde o serviÃ§o roda. Default: localhost.",
+                    "description": "Host onde o servico roda. Default: localhost.",
                     "default": "localhost",
                 },
                 "port": {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "Porta TCP do serviÃ§o.",
+                    "description": "PortaTCP do servico.",
                 },
                 "url": {
                     "type": "string",
-                    "description": "URL base do serviÃ§o (ex: http://localhost:8080).",
+                    "description": "URL base do servico (ex: http://localhost:8080).",
                 },
                 "type": {
                     "type": "string",
                     "enum": ["docker", "process", "remote", "unknown"],
-                    "description": "Tipo do serviÃ§o. Default: unknown.",
+                    "description": "Tipo do servico. Default: unknown.",
                     "default": "unknown",
                 },
                 "environment": {
                     "type": "string",
                     "enum": ["local", "dev", "hml", "prod"],
-                    "description": "Ambiente do serviÃ§o. Default: local.",
+                    "description": "Ambiente do servico. Default: local.",
                     "default": "local",
                 },
                 "health_path": {
@@ -99,7 +103,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "tags": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Tags para classificaÃ§Ã£o.",
+                    "description": "Tags paraclassificacaoo.",
                 },
                 "metadata": {
                     "type": "object",
@@ -112,11 +116,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "get_service": {
-        "description": "Retorna os dados de um serviÃ§o pelo nome.",
+        "description": "Retornaos dados de um servico pelo nome.",
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o."},
+                "name": {"type": "string", "description": "Nome do servico."},
             },
             "required": ["name"],
             "additionalProperties": False,
@@ -124,8 +128,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_services": {
         "description": (
-            "Lista serviÃ§os registrados. "
-            "Suporta filtros por environment, type, status e tag."
+            "Listaservicos registrados. "
+            "Suportafiltros por environment, type, status e tag."
         ),
         "schema": {
             "type": "object",
@@ -155,13 +159,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_service": {
         "description": (
-            "Atualiza campos de um serviÃ§o existente. "
-            "Pelo menos um campo deve ser informado alÃ©m do name."
+            "Atualizacampos de um servico existente. "
+            "Pelo menos um campo deve ser informado alem do name."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o a atualizar."},
+                "name": {"type": "string", "description": "Nome do servico aatualizar."},
                 "host": {"type": "string"},
                 "port": {"type": "integer", "minimum": 1, "maximum": 65535},
                 "url": {"type": "string"},
@@ -186,21 +190,21 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "unregister_service": {
-        "description": "Remove um serviÃ§o do registry.",
+        "description": "Remove um servico do registry.",
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o a remover."},
+                "name": {"type": "string", "description": "Nome do servico aremover."},
             },
             "required": ["name"],
             "additionalProperties": False,
         },
     },
-    # â”€â”€ PortMap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ PortMap â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     "get_port_map": {
         "description": (
-            "Retorna mapa de porta â†’ serviÃ§o para todos os serviÃ§os registrados com porta. "
-            "Ãštil para detectar conflitos de porta."
+            "Retornamapade portaâ†’ servico paratodos os servicos registrados com porta. "
+            "Ãštil paradetectar conflitos de porta."
         ),
         "schema": {
             "type": "object",
@@ -209,7 +213,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "find_by_port": {
-        "description": "Encontra o serviÃ§o registrado em uma porta especÃ­fica.",
+        "description": "Encontrao servico registrado em umaportaespecifica.",
         "schema": {
             "type": "object",
             "properties": {
@@ -217,18 +221,18 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "Porta TCP a consultar.",
+                    "description": "PortaTCP aconsultar.",
                 },
             },
             "required": ["port"],
             "additionalProperties": False,
         },
     },
-    # â”€â”€ Discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Discovery â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     "scan_docker": {
         "description": (
-            "Executa `docker ps` e sincroniza containers em execuÃ§Ã£o no registry. "
-            "Requer Docker instalado e acessÃ­vel no PATH."
+            "Executa`docker ps` e sincronizacontainers em execucaoo no registry. "
+            "Requer Docker instalado e acessivel no PATH."
         ),
         "schema": {
             "type": "object",
@@ -237,7 +241,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 60,
-                    "description": "Timeout em segundos para o comando docker. Default: 10.",
+                    "description": "Timeout em segundos parao comando docker. Default: 10.",
                     "default": 10,
                 },
             },
@@ -246,8 +250,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "scan_processes": {
         "description": (
-            "Usa psutil para listar processos em LISTEN. "
-            "Retorna lista de processos com pid, nome e porta."
+            "Usapsutil paralistar processos em LISTEN. "
+            "Retornalistade processos com pid, nome e porta."
         ),
         "schema": {
             "type": "object",
@@ -256,7 +260,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "type": "integer",
                     "minimum": 1,
                     "maximum": 65535,
-                    "description": "Porta mÃ­nima a incluir. Default: 1024.",
+                    "description": "Portaminimaaincluir. Default: 1024.",
                     "default": 1024,
                 },
             },
@@ -265,13 +269,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "check_health": {
         "description": (
-            "Realiza HTTP GET no health endpoint de um serviÃ§o registrado. "
-            "Atualiza last_check_at e last_check_ok no registry."
+            "RealizaHTTP GET no health endpoint de um servico registrado. "
+            "Atualizalast_check_at e last_check_ok no registry."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o."},
+                "name": {"type": "string", "description": "Nome do servico."},
                 "timeout": {
                     "type": "number",
                     "minimum": 0.1,
@@ -286,8 +290,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "check_all_health": {
         "description": (
-            "Verifica saÃºde de todos os serviÃ§os com health_path definido. "
-            "Atualiza status automaticamente: healthyâ†’running, unhealthyâ†’stopped."
+            "Verificasaude de todos os servicos com health_path definido. "
+            "Atualizastatus automaticamente: healthyâ†’running, unhealthyâ†’stopped."
         ),
         "schema": {
             "type": "object",
@@ -303,16 +307,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â”€â”€ Composite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Composite â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     "service_status": {
         "description": (
-            "Retorna dados do serviÃ§o + health check em uma Ãºnica chamada. "
+            "Retornadados do servico + health check em umaunicachamada. "
             "overall_status: healthy | unhealthy | unknown."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o."},
+                "name": {"type": "string", "description": "Nome do servico."},
                 "timeout": {
                     "type": "number",
                     "minimum": 0.1,
@@ -327,8 +331,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_environments": {
         "description": (
-            "Agrupa serviÃ§os por environment e retorna contagens. "
-            "Mostra total/running/stopped/unknown por ambiente."
+            "Agrupaservicos por environment e retornacontagens. "
+            "Mostratotal/running/stopped/unknown por ambiente."
         ),
         "schema": {
             "type": "object",
@@ -338,44 +342,44 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "reload_service": {
         "description": (
-            "Recarrega/reinicia um serviÃ§o registrado. "
-            "EstratÃ©gia automÃ¡tica por tipo: "
+            "Recarrega/reiniciaum servico registrado. "
+            "Estrategiaautomaticapor tipo: "
             "docker â†’ `docker restart <name>` | "
-            "process â†’ mata processo na porta (espera reinÃ­cio pelo process manager) | "
+            "process â†’ mataprocesso naporta(esperareinicio pelo process manager) | "
             "remote â†’ POST em /reload ou /actuator/restart | "
-            "unknown â†’ re-verifica health. "
-            "Aguarda wait_seconds e faz health check automÃ¡tico apÃ³s o reload."
+            "unknown â†’ re-verificahealth. "
+            "Aguardawait_seconds e faz health check automatico apos o reload."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o a recarregar."},
+                "name": {"type": "string", "description": "Nome do servico arecarregar."},
                 "wait_seconds": {
                     "type": "number",
                     "minimum": 0,
                     "maximum": 60,
                     "default": 3.0,
-                    "description": "Segundos para aguardar antes de verificar health. Default: 3.",
+                    "description": "Segundos paraaguardar antes de verificar health. Default: 3.",
                 },
                 "health_timeout": {
                     "type": "number",
                     "minimum": 0.5,
                     "maximum": 30,
                     "default": 5.0,
-                    "description": "Timeout do health check pÃ³s-reload em segundos. Default: 5.",
+                    "description": "Timeout do health check pos-reload em segundos. Default: 5.",
                 },
             },
             "required": ["name"],
             "additionalProperties": False,
         },
     },
-    # â”€â”€ Gateway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Gateway â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     "get_gateway_map": {
         "description": (
-            "Retorna o MAPPING_GATEWAY â€” mapa de todos os serviÃ§os com URLs interna e externa. "
-            "Para cada serviÃ§o informa: external_url (localhost:porta), internal_url (container:porta), "
+            "Retornao MAPPING_GATEWAY  -  mapade todos os servicos com URLs internae externa. "
+            "Paracadaservico informa: external_url (localhost:porta), internal_url (container:porta), "
             "active_url (qual usar no contexto atual), context (docker ou local) e status. "
-            "Use para rotear chamadas entre serviÃ§os corretamente em Docker e uvicorn."
+            "Use pararotear chamadas entre servicos corretamente em Docker e uvicorn."
         ),
         "schema": {
             "type": "object",
@@ -385,25 +389,25 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_service_gateway": {
         "description": (
-            "Atualiza as URLs de gateway (internal_url e external_url) de um serviÃ§o no banco. "
-            "Se internal_url nÃ£o fornecida, deriva do nome do container. "
-            "Se external_url nÃ£o fornecida, deriva de host:port. "
-            "Com probe=true, testa as URLs antes de salvar e marca o status."
+            "Atualizaas URLs de gateway (internal_url e external_url) de um servico no banco. "
+            "Se internal_url naoo fornecida, derivado nome do container. "
+            "Se external_url naoo fornecida, derivade host:port. "
+            "Com probe=true, testaas URLs antes de salvar e marcao status."
         ),
         "schema": {
             "type": "object",
             "properties": {
-                "name": {"type": "string", "description": "Nome do serviÃ§o."},
+                "name": {"type": "string", "description": "Nome do servico."},
                 "internal_url": {
                     "type": "string",
-                    "description": "URL interna Docker (ex: http://container-name:7100).",
+                    "description": "URL internaDocker (ex: http://container-name:7100).",
                 },
                 "external_url": {
                     "type": "string",
-                    "description": "URL externa acessÃ­vel do host (ex: http://localhost:27101).",
+                    "description": "URL externaacessivel do host (ex: http://localhost:27101).",
                 },
                 "host": {"type": "string", "description": "Host externo."},
-                "port": {"type": "integer", "description": "Porta externa."},
+                "port": {"type": "integer", "description": "Portaexterna."},
                 "probe": {
                     "type": "boolean",
                     "default": True,
@@ -416,10 +420,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "sync_registry": {
         "description": (
-            "Scan completo de descoberta â€” sincroniza banco e MAPPING_GATEWAY. "
+            "Scan completo de descoberta -  sincronizabanco e MAPPING_GATEWAY. "
             "Executa: (1) scan Docker (docker ps) descobrindo containers e portas; "
-            "(2) scan de portas nos ranges configurados procurando serviÃ§os HTTP; "
-            "(3) scan por nomes de serviÃ§os via Docker DNS ou localhost. "
+            "(2) scan de portas nos ranges configurados procurando servicos HTTP; "
+            "(3) scan por nomes de servicos viaDocker DNS ou localhost. "
             "Chamado automaticamente no startup do services-mcp."
         ),
         "schema": {
@@ -427,12 +431,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "properties": {
                 "port_ranges": {
                     "type": "string",
-                    "description": "Ranges de porta separados por vÃ­rgula. Ex: '8000-8100,27100-27130'. Default: PORT_SCAN_RANGES env ou '8000-8100'.",
+                    "description": "Ranges de portaseparados por virgula. Ex: '8000-8100,27100-27130'. Default: PORT_SCAN_RANGES env ou '8000-8100'.",
                 },
                 "service_names": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Lista de nomes de serviÃ§os para resolver via DNS. Default: SERVICE_NAMES env.",
+                    "description": "Listade nomes de servicos pararesolver viaDNS. Default: SERVICE_NAMES env.",
                 },
                 "include_docker": {
                     "type": "boolean",
@@ -442,87 +446,157 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "probe_health": {
                     "type": "boolean",
                     "default": True,
-                    "description": "Probar /health em cada serviÃ§o encontrado.",
+                    "description": "Probar /health em cadaservico encontrado.",
                 },
                 "docker_timeout": {
                     "type": "integer",
                     "default": 10,
-                    "description": "Timeout em segundos para docker ps.",
+                    "description": "Timeout em segundos paradocker ps.",
                 },
             },
-            “additionalProperties”: False,
+            "additionalProperties": False,
         },
     },
-    # â”€â”€ Launch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
-    “launch_service”: {
-        “description”: (
-            “Sobe um serviÃ§o via uvicorn, docker run ou docker-compose e registra no registry. “
-            “ApÃ³s o start faz polling no health_path atÃ© wait_timeout segundos. “
-            “Modos: 'uvicorn' (requer app), 'docker' (requer image), 'docker-compose' (usa compose_file/compose_service). “
-            “Retorna: started, healthy, ready_in_ms, attempts, external_url, pid/container_id.”
+    # â"€â"€ Launch â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    "launch_service": {
+        "description": (
+            "Sobe um servico viauvicorn, docker run ou docker-compose e registrano registry. "
+            "Apos o start faz polling no health_path ate wait_timeout segundos. "
+            "Modos: 'uvicorn' (requer app), 'docker' (requer image), 'docker-compose' (usacompose_file/compose_service). "
+            "Retorna: started, healthy, ready_in_ms, attempts, external_url, pid/container_id."
         ),
-        “schema”: {
-            “type”: “object”,
-            “required”: [“name”, “mode”, “port”],
-            “additionalProperties”: False,
-            “properties”: {
-                “name”: {“type”: “string”, “description”: “Nome do serviÃ§o (usado no registry e como container name).”},
-                “mode”: {
-                    “type”: “string”,
-                    “enum”: [“uvicorn”, “docker”, “docker-compose”],
-                    “description”: “Modo de start.”,
+        "schema": {
+            "type": "object",
+            "required": ["name", "mode", "port"],
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string", "description": "Nome do servico (usado no registry e como container name)."},
+                "mode": {
+                    "type": "string",
+                    "enum": ["uvicorn", "docker", "docker-compose"],
+                    "description": "Modo de start.",
                 },
-                “port”: {“type”: “integer”, “minimum”: 1, “maximum”: 65535, “description”: “Porta do host.”},
-                “app”: {“type”: “string”, “description”: “uvicorn: caminho ASGI (ex: 'mypackage.main:app').”},
-                “host”: {“type”: “string”, “default”: “localhost”, “description”: “Host para uvicorn. Default: localhost.”},
-                “cwd”: {“type”: “string”, “description”: “DiretÃ³rio de trabalho (uvicorn / docker-compose).”},
-                “extra_args”: {“type”: “array”, “items”: {“type”: “string”}, “description”: “Args extras passados ao comando.”},
-                “env_vars”: {“type”: “object”, “additionalProperties”: {“type”: “string”}, “description”: “VariÃ¡veis de ambiente.”},
-                “image”: {“type”: “string”, “description”: “docker: imagem Docker (ex: 'nginx:latest').”},
-                “container_port”: {“type”: “integer”, “description”: “docker: porta interna do container. Default: igual ao port.”},
-                “container_name”: {“type”: “string”, “description”: “docker: nome do container. Default: igual ao name.”},
-                “compose_file”: {“type”: “string”, “description”: “docker-compose: path para o compose file. Default: docker-compose.yml.”},
-                “compose_service”: {“type”: “string”, “description”: “docker-compose: nome do serviÃ§o no compose. Default: igual ao name.”},
-                “health_path”: {“type”: “string”, “default”: “/v1/health”, “description”: “Path do health check. Default: /v1/health.”},
-                “environment”: {
-                    “type”: “string”,
-                    “enum”: [“local”, “dev”, “hml”, “prod”],
-                    “default”: “local”,
-                    “description”: “Ambiente para registro.”,
+                "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "Portado host."},
+                "app": {"type": "string", "description": "uvicorn: caminho ASGI (ex: 'mypackage.main:app')."},
+                "host": {"type": "string", "default": "localhost", "description": "Host parauvicorn. Default: localhost."},
+                "cwd": {"type": "string", "description": "Diretorio de trabalho (uvicorn / docker-compose)."},
+                "extra_args": {"type": "array", "items": {"type": "string"}, "description": "Args extras passados ao comando."},
+                "env_vars": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Variaveis de ambiente."},
+                "image": {"type": "string", "description": "docker: imagem Docker (ex: 'nginx:latest')."},
+                "container_port": {"type": "integer", "description": "docker: portainternado container. Default: igual ao port."},
+                "container_name": {"type": "string", "description": "docker: nome do container. Default: igual ao name."},
+                "compose_file": {"type": "string", "description": "docker-compose: path parao compose file. Default: docker-compose.yml."},
+                "compose_service": {"type": "string", "description": "docker-compose: nome do servico no compose. Default: igual ao name."},
+                "health_path": {"type": "string", "default": "/v1/health", "description": "Path do health check. Default: /v1/health."},
+                "environment": {
+                    "type": "string",
+                    "enum": ["local", "dev", "hml", "prod"],
+                    "default": "local",
+                    "description": "Ambiente pararegistro.",
                 },
-                “tags”: {“type”: “array”, “items”: {“type”: “string”}, “description”: “Tags para o serviÃ§o.”},
-                “wait_timeout”: {“type”: “integer”, “minimum”: 1, “maximum”: 300, “default”: 30, “description”: “Segundos aguardando o serviÃ§o responder. Default: 30.”},
-                “detach”: {“type”: “boolean”, “default”: True, “description”: “Rodar em background. Default: true.”},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags parao servico."},
+                "wait_timeout": {"type": "integer", "minimum": 1, "maximum": 300, "default": 30, "description": "Segundos aguardando o servico responder. Default: 30."},
+                "detach": {"type": "boolean", "default": True, "description": "Rodar em background. Default: true."},
             },
         },
     },
-    “stop_service”: {
-        “description”: (
-            “Para um serviÃ§o registrado. “
-            “Detecta automaticamente o tipo: docker/docker-compose â†' docker stop; process/uvicorn â†' SIGTERM no PID. “
-            “Atualiza status=stopped no registry apÃ³s parar.”
+    "stop_service": {
+        "description": (
+            "Paraum servico registrado. "
+            "Detectaautomaticamente o tipo: docker/docker-compose â†' docker stop; process/uvicorn â†' SIGTERM no PID. "
+            "Atualizastatus=stopped no registry apos parar."
         ),
-        “schema”: {
-            “type”: “object”,
-            “required”: [“name”],
-            “additionalProperties”: False,
-            “properties”: {
-                “name”: {“type”: “string”, “description”: “Nome do serviÃ§o a parar.”},
-                “mode”: {
-                    “type”: “string”,
-                    “enum”: [“docker”, “docker-compose”, “process”],
-                    “description”: “ForÃ§ar tipo de stop. Se omitido, detecta pelo registro.”,
+        "schema": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string", "description": "Nome do servico aparar."},
+                "mode": {
+                    "type": "string",
+                    "enum": ["docker", "docker-compose", "process"],
+                    "description": "Forcar tipo de stop. Se omitido, detectapelo registro.",
                 },
-                “timeout”: {“type”: “integer”, “minimum”: 1, “maximum”: 120, “default”: 10, “description”: “Timeout em segundos para docker stop. Default: 10.”},
+                "timeout": {"type": "integer", "minimum": 1, "maximum": 120, "default": 10, "description": "Timeout em segundos paradocker stop. Default: 10."},
+            },
+        },
+    },
+    # â"€â"€ Env â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    "read_env_file": {
+        "description": (
+            "Le um arquivo .env e retornaas variaveis como dict. "
+            "Suportafiltro por substring no nome das chaves."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho absoluto ou relativo do arquivo .env."},
+                "key_filter": {"type": "string", "description": "Substring parafiltrar chaves (case-insensitive). Ex: 'URL' retornaapenas vars URL_*."},
+            },
+        },
+    },
+    "set_env_var": {
+        "description": (
+            "Define ou atualizaumavariavel em um arquivo .env. "
+            "Preservacomentarios, ordem e formatação existente. "
+            "Se avariavel naoo existir, adicionaao final (create_if_missing=true)."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path", "key", "value"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho do arquivo .env."},
+                "key": {"type": "string", "description": "Nome davariavel. Ex: URL_ADMIN."},
+                "value": {"type": "string", "description": "Novo valor."},
+                "create_if_missing": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Criar avariavel se naoo existir. Default: true.",
+                },
+                "comment": {"type": "string", "description": "Comentario aadicionar acimadavariavel (so quando criando)."},
+            },
+        },
+    },
+    "sync_service_urls": {
+        "description": (
+            "Sincronizavariaveis URL_* de um arquivo .env com as URLs registradas no registry. "
+            "ParacadaURL_<NAME>, buscao servico 'name' ou 'platform-name' no registry e atualizao valor. "
+            "Preservao path existente daURL (ex: /api/v1) amenos que url_suffix sejainformado. "
+            "Use url_map paramapeamentos explicitos. Use dry_run=true parasimular sem alterar."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho do arquivo .env aatualizar."},
+                "url_map": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "Mapeamento explicito {ENV_VAR: service_name}. Ex: {\"URL_ADMIN\": \"platform-admin\"}.",
+                },
+                "url_suffix": {
+                    "type": "string",
+                    "default": "",
+                    "description": "Sufixo de path aforcar. Ex: '/api/v1'. Se vazio, preservao path atual.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Se true, apenas simulaas mudancas sem alterar o arquivo.",
+                },
             },
         },
     },
 }
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
-# HTTP API (sidecar para discovery por outros MCPs, ex: agent-twin)            #
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+# HTTP API (sidecar paradiscovery por outros MCPs, ex: agent-twin)            #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 def _build_http_app(store: ServiceStore) -> FastAPI:
     app = FastAPI(title="services-mcp API", version="0.1.0", docs_url="/docs")
 
@@ -541,9 +615,9 @@ def _build_http_app(store: ServiceStore) -> FastAPI:
     return app
 
 
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 # Server                                                                       #
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 def build_server() -> tuple[Any, ServiceStore, ServicesSettings, FastAPI]:
     settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
@@ -552,7 +626,7 @@ def build_server() -> tuple[Any, ServiceStore, ServicesSettings, FastAPI]:
 
     _log.info("services_mcp_ready")
 
-    # Sincroniza gateway no startup (non-blocking â€” ignora erros)
+    # Sincronizagateway no startup (non-blocking  -  ignoraerros)
     try:
         _log.info("sync_registry starting...")
         result = sync_registry(store, include_docker=True, probe_health=False)
@@ -604,7 +678,7 @@ def _dispatch(
     settings: ServicesSettings,
     store: ServiceStore,
 ) -> dict:
-    # â”€â”€ Registry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Registry â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     if name == "register_service":
         return register_service(
             store,
@@ -633,12 +707,12 @@ def _dispatch(
         return update_service(store, name=args["name"], **update_args)
     if name == "unregister_service":
         return unregister_service(store, name=args["name"])
-    # â”€â”€ PortMap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ PortMap â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     if name == "get_port_map":
         return get_port_map(store)
     if name == "find_by_port":
         return find_by_port(store, port=args["port"])
-    # â”€â”€ Discovery â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Discovery â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     if name == "scan_docker":
         return scan_docker(store, timeout=args.get("timeout", settings.docker_timeout))
     if name == "scan_processes":
@@ -649,7 +723,7 @@ def _dispatch(
         )
     if name == "check_all_health":
         return check_all_health(store, timeout=args.get("timeout", settings.health_timeout))
-    # â”€â”€ Composite â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Composite â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     if name == "service_status":
         return service_status(
             store, name=args["name"], timeout=args.get("timeout", settings.health_timeout)
@@ -663,7 +737,7 @@ def _dispatch(
             wait_seconds=args.get("wait_seconds", 3.0),
             health_timeout=args.get("health_timeout", settings.health_timeout),
         )
-    # â”€â”€ Gateway â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # â"€â"€ Gateway â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
     if name == "get_gateway_map":
         return get_gateway_map(store)
     if name == "update_service_gateway":
@@ -714,6 +788,26 @@ def _dispatch(
             name=args["name"],
             mode=args.get("mode"),
             timeout=args.get("timeout", 10),
+        )
+    # â"€â"€ Env â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    if name == "read_env_file":
+        return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
+    if name == "set_env_var":
+        return set_env_var(
+            store,
+            path=args["path"],
+            key=args["key"],
+            value=args["value"],
+            create_if_missing=args.get("create_if_missing", True),
+            comment=args.get("comment"),
+        )
+    if name == "sync_service_urls":
+        return sync_service_urls(
+            store,
+            path=args["path"],
+            url_map=args.get("url_map"),
+            url_suffix=args.get("url_suffix", ""),
+            dry_run=args.get("dry_run", False),
         )
 
     raise KeyError(name)
