@@ -7,7 +7,7 @@ Tools:
   Composite (3):  service_status, list_environments, reload_service
   Gateway (3):    get_gateway_map, update_service_gateway, sync_registry
   Launch (2):     launch_service, stop_service
-  Env (3):        read_env_file, set_env_var, sync_service_urls
+  Env (5):        read_env_file, set_env_var, sync_service_urls, audit_env_files, redact_env_secrets
 """
 
 from __future__ import annotations
@@ -588,6 +588,44 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "default": False,
                     "description": "Se true, apenas simulaas mudancas sem alterar o arquivo.",
                 },
+            },
+        },
+    },
+    "audit_env_files": {
+        "description": (
+            "Escaneia todos os arquivos .env.* de um diretorio e reporta problemas. "
+            "Detecta: secrets hardcoded (JWT_SECRET_KEY, DB_PASSWORD, TOKEN, etc), "
+            "URLs que nao batem com o registry, vars ausentes em alguns perfis, "
+            "arquivos fora do padrao canonico (local-dev, local-hml, cloud-dev, cloud-hml, cloud-prod). "
+            "Use antes de redact_env_secrets para ver o que precisa ser corrigido."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["directory"],
+            "additionalProperties": False,
+            "properties": {
+                "directory": {"type": "string", "description": "Caminho do diretorio a escanear."},
+                "include_pattern": {"type": "string", "default": ".env*", "description": "Glob para os arquivos. Default: .env*."},
+                "check_registry_urls": {"type": "boolean", "default": True, "description": "Verificar URLs contra o registry. Default: true."},
+            },
+        },
+    },
+    "redact_env_secrets": {
+        "description": (
+            "Substitui valores hardcoded de secrets por referencias ${VAR_NAME} em arquivos .env. "
+            "Ex: JWT_SECRET_KEY=XrDsC... vira JWT_SECRET_KEY=${JWT_SECRET_KEY}. "
+            "O valor real passa a vir do shell, CI/CD ou k8s secret. "
+            "Use dry_run=true para simular antes de aplicar."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["paths"],
+            "additionalProperties": False,
+            "properties": {
+                "paths": {"type": "array", "items": {"type": "string"}, "description": "Lista de caminhos dos arquivos .env a processar."},
+                "keys": {"type": "array", "items": {"type": "string"}, "description": "Chaves explicitas a redact (ex: [JWT_SECRET_KEY]). Se omitido, usa auto_detect."},
+                "auto_detect": {"type": "boolean", "default": True, "description": "Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: true."},
+                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar arquivos. Default: false."},
             },
         },
     },

@@ -1,20 +1,27 @@
-"""Ferramentas de gestão de arquivos .env — leitura, escrita e sync com o registry.
+"""Ferramentas de gestão de arquivos .env — leitura, escrita, audit e sync.
 
 Tools
 -----
 - read_env_file        : lê um arquivo .env e retorna o dict de variáveis
 - set_env_var          : define/atualiza uma variável num arquivo .env (preserva comentários)
 - sync_service_urls    : detecta vars URL_* no .env e atualiza com as URLs do registry
+- audit_env_files      : escaneia todos .env.* de um diretório e reporta problemas
+- redact_env_secrets   : substitui valores hardcoded de secrets por ${VAR_NAME} references
 
 Convenção de nomes
 ------------------
-`URL_ADMIN` → serviço chamado `platform-admin` ou `admin`
-`URL_AUTH`  → `platform-auth` ou `auth`
+`URL_ADMIN` -> serviço chamado `platform-admin` ou `admin`
+`URL_AUTH`  -> `platform-auth` ou `auth`
 
 A busca no registry é feita por:
-  1. Nome exato da chave sem prefixo URL_ (case-insensitive) — ex: URL_ADMIN → "admin"
+  1. Nome exato da chave sem prefixo URL_ (case-insensitive) — ex: URL_ADMIN -> "admin"
   2. Nome com prefixo "platform-" — ex: "platform-admin"
   3. Mapeamento explícito passado pelo chamador via `url_map`
+
+Padrão de secrets
+-----------------
+Vars consideradas secrets: chaves contendo SECRET, PASSWORD, TOKEN, KEY, DSN, CERT, PRIVATE.
+Valores safe: vazio, `${VAR}`, `*` (placeholder), valores começando com `/run/secrets/`.
 """
 
 from __future__ import annotations
@@ -291,9 +298,310 @@ def sync_service_urls(
 
 
 def _extract_url_path(url: str) -> str:
-    """Extrai o path de uma URL. Ex: 'http://localhost:8000/api/v1' → '/api/v1'."""
-    # Remove scheme://host:port
+    """Extrai o path de uma URL. Ex: 'http://localhost:8000/api/v1' -> '/api/v1'."""
     match = re.match(r"https?://[^/]+(/.*)$", url)
     if match:
         return match.group(1)
     return ""
+
+
+# ── Padrões de secrets ────────────────────────────────────────────────────────
+
+# Regex que identifica se uma variável é um secret pelo nome.
+# Regras:
+#   - Sufixos exactos: _TOKEN, _KEY, _SECRET, _PASSWORD, _PASSWD, _DSN, _CERT, _CREDENTIAL
+#   - TOKEN/KEY só batem quando no FINAL do nome (ex: INTERNAL_API_TOKEN sim, TOKEN_EXPIRE nao)
+#   - PRIVATE em qualquer posição: PRIVATE_KEY, RSA_PRIVATE
+#   - API_KEY como bloco: URL_API_KEY_SOMETHING
+_SECRET_KEY_RE = re.compile(
+    r"(_TOKEN|_KEY|_SECRET|_PASSWORD|_PASSWD|_DSN|_CERT|_CREDENTIAL)$"
+    r"|PRIVATE"   # chaves privadas em qualquer posição
+    r"|API_KEY"   # API_KEY como token de API
+    r"|_SASL_PASSWORD"
+, re.IGNORECASE)
+
+# Valores que são considerados seguros (não são secrets expostos)
+_SAFE_VALUE_PATTERNS = re.compile(
+    r"^$"                              # vazio
+    r"|^\s*$"                          # apenas espaços
+    r"|^\$\{[A-Z_][A-Z0-9_]*\}$"      # ${VAR_NAME}
+    r"|^\*+$"                          # placeholder ***
+    r"|^/run/secrets/"                 # k8s secret mount
+    r"|^/vault/"                       # vault mount
+    r"|^#"                             # comentário (ex: no .env.example)
+    r"|^dev-"                          # dev prefix placeholder
+    r"|^placeholder"                   # placeholder explícito
+    r"|^change.?me"                    # changeme, change_me
+    r"|^replace.?me"                   # replace-me
+    r"|^your[-_]"                      # your-secret-here
+    r"|^<.+>$"                         # <SECRET_HERE>
+    r"|^todo$"                         # todo
+    r"|^xxx+$"                         # xxx, xxxx
+, re.IGNORECASE)
+
+
+def _is_secret_key(key: str) -> bool:
+    return bool(_SECRET_KEY_RE.search(key))
+
+
+def _is_safe_value(value: str) -> bool:
+    return bool(_SAFE_VALUE_PATTERNS.match(value))
+
+
+def _is_ref_value(value: str) -> bool:
+    """Verifica se o valor já é uma referência ${VAR}."""
+    return bool(re.match(r"^\$\{[A-Z_][A-Z0-9_]*\}$", value))
+
+
+# ── audit_env_files ───────────────────────────────────────────────────────────
+
+def audit_env_files(
+    store: ServiceStore,
+    *,
+    directory: str,
+    include_pattern: str = ".env*",
+    check_registry_urls: bool = True,
+) -> dict[str, Any]:
+    """Escaneia todos os arquivos .env.* de um diretório e reporta problemas.
+
+    Detecta:
+    - Secrets hardcoded (valores não-vazios em vars *KEY, *SECRET, *PASSWORD, *TOKEN)
+    - URLs que não batem com o registry (se check_registry_urls=True)
+    - Vars ausentes em alguns perfis mas presentes em outros (cobertura cruzada)
+    - Arquivos fora do padrão canônico de perfis
+
+    Args:
+        directory: Diretório a escanear (ex: '/path/to/platform-auth').
+        include_pattern: Glob para os arquivos (default: '.env*').
+        check_registry_urls: Verificar URLs contra o registry. Default: True.
+    """
+    base = Path(directory).expanduser().resolve()
+    if not base.exists():
+        return {"error": "DirectoryNotFound", "path": str(base)}
+
+    # Perfis canônicos esperados
+    canonical_profiles = {"local-dev", "local-hml", "cloud-dev", "cloud-hml", "cloud-prod"}
+
+    # Arquivos utilitários conhecidos (não são perfis)
+    utility_files = {".env", ".env.defaults", ".env.example", ".env.local.example",
+                     ".env.local", ".env.lab", ".env.test"}
+
+    files_found: list[dict] = []
+    all_vars: dict[str, dict[str, str]] = {}   # {filename: {key: value}}
+    hardcoded_secrets: list[dict] = []
+    non_canonical: list[str] = []
+
+    env_files = sorted(base.glob(include_pattern))
+    if not env_files:
+        return {"error": "NoEnvFilesFound", "directory": str(base), "pattern": include_pattern}
+
+    for f in env_files:
+        if f.is_dir():
+            continue
+        fname = f.name
+        try:
+            lines = _parse_env_file(f)
+            variables = _lines_to_dict(lines)
+        except Exception as exc:  # noqa: BLE001
+            files_found.append({"file": fname, "error": str(exc)})
+            continue
+
+        all_vars[fname] = variables
+
+        # Determina o perfil
+        profile = fname.replace(".env.", "").replace(".env", "")
+        is_utility = fname in utility_files or fname.endswith(".example")
+        if not is_utility and profile not in canonical_profiles:
+            non_canonical.append(fname)
+
+        # Detecta secrets hardcoded
+        for key, val in variables.items():
+            if _is_secret_key(key) and val and not _is_safe_value(val):
+                hardcoded_secrets.append({
+                    "file": fname,
+                    "key": key,
+                    "value_preview": val[:8] + "..." if len(val) > 8 else val,
+                    "suggested_ref": f"${{{key}}}",
+                })
+
+        files_found.append({
+            "file": fname,
+            "profile": profile if not is_utility else "utility",
+            "var_count": len(variables),
+            "has_hardcoded_secrets": any(
+                s["file"] == fname for s in hardcoded_secrets
+            ),
+        })
+
+    # Análise cross-profile: vars presentes em algum arquivo mas ausentes em outros
+    # (considera apenas arquivos de perfil, não utilitários)
+    profile_files = {
+        fname: vars_
+        for fname, vars_ in all_vars.items()
+        if fname not in utility_files and not fname.endswith(".example")
+    }
+
+    all_keys: set[str] = set()
+    for vars_ in profile_files.values():
+        all_keys.update(vars_.keys())
+
+    coverage_issues: list[dict] = []
+    for key in sorted(all_keys):
+        present_in = [f for f, v in profile_files.items() if key in v]
+        absent_in = [f for f in profile_files if key not in f or key not in profile_files[f]]
+        if absent_in and len(present_in) < len(profile_files):
+            coverage_issues.append({
+                "key": key,
+                "present_in": present_in,
+                "absent_in": absent_in,
+            })
+
+    # Verifica URLs contra registry
+    url_issues: list[dict] = []
+    if check_registry_urls:
+        all_services = store.list_all()
+        svc_by_name = {s["name"].lower(): s for s in all_services}
+
+        for fname, variables in all_vars.items():
+            for key, val in variables.items():
+                if not key.startswith("URL_") or not val or _is_ref_value(val):
+                    continue
+                svc_suffix = key[4:].lower()
+                svc = svc_by_name.get(svc_suffix) or svc_by_name.get(f"platform-{svc_suffix}")
+                if svc:
+                    base_url = (
+                        svc.get("external_url") or svc.get("url")
+                        or (f"http://{svc['host']}:{svc['port']}" if svc.get("host") and svc.get("port") else None)
+                    )
+                    if base_url:
+                        existing_path = _extract_url_path(val)
+                        expected = base_url.rstrip("/") + (existing_path if existing_path != "/" else "")
+                        if val != expected:
+                            url_issues.append({
+                                "file": fname,
+                                "key": key,
+                                "current": val,
+                                "expected": expected,
+                                "service": svc["name"],
+                            })
+
+    _log.info(
+        "audit_env_files dir=%s files=%d secrets=%d url_issues=%d",
+        base, len(files_found), len(hardcoded_secrets), len(url_issues),
+    )
+
+    return {
+        "directory": str(base),
+        "files": files_found,
+        "total_files": len(files_found),
+        "non_canonical_files": non_canonical,
+        "hardcoded_secrets": hardcoded_secrets,
+        "hardcoded_secrets_count": len(hardcoded_secrets),
+        "url_issues": url_issues,
+        "url_issues_count": len(url_issues),
+        "coverage_issues_count": len(coverage_issues),
+        "coverage_issues": coverage_issues[:20],  # limita para não sobrecarregar
+        "summary": {
+            "ok": len(hardcoded_secrets) == 0 and len(url_issues) == 0,
+            "action_required": (
+                (["fix hardcoded secrets"] if hardcoded_secrets else [])
+                + (["fix URL mismatches"] if url_issues else [])
+                + (["review non-canonical files"] if non_canonical else [])
+            ),
+        },
+    }
+
+
+# ── redact_env_secrets ────────────────────────────────────────────────────────
+
+def redact_env_secrets(
+    _store: ServiceStore,
+    *,
+    paths: list[str],
+    keys: list[str] | None = None,
+    auto_detect: bool = True,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Substitui valores hardcoded de secrets por ${VAR_NAME} em arquivos .env.
+
+    Para cada variável identificada como secret com valor hardcoded, substitui
+    por `${VAR_NAME}` — o valor real passa a vir do shell/CI/k8s como env var.
+
+    Exemplo:
+        JWT_SECRET_KEY=XrDsC...  ->  JWT_SECRET_KEY=${JWT_SECRET_KEY}
+        DB_PASSWORD=toor         ->  DB_PASSWORD=${DB_PASSWORD}
+
+    Args:
+        paths: Lista de caminhos dos arquivos .env a processar.
+        keys: Lista explícita de chaves a redact. Se None e auto_detect=True, detecta automaticamente.
+        auto_detect: Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: True.
+        dry_run: Se True, apenas simula sem alterar arquivos. Default: False.
+    """
+    all_changes: list[dict] = []
+    errors: list[dict] = []
+    files_modified: list[str] = []
+
+    explicit_keys = {k.upper() for k in keys} if keys else set()
+
+    for raw_path in paths:
+        p = Path(raw_path).expanduser()
+        if not p.exists():
+            errors.append({"file": raw_path, "error": "FileNotFound"})
+            continue
+
+        try:
+            lines = _parse_env_file(p)
+        except Exception as exc:  # noqa: BLE001
+            errors.append({"file": raw_path, "error": str(exc)})
+            continue
+
+        file_changes: list[dict] = []
+        new_lines: list[tuple[str, str]] = []
+
+        for kind, raw in lines:
+            if not kind.startswith("var:"):
+                new_lines.append((kind, raw))
+                continue
+
+            key, _, val = raw.strip().partition("=")
+            key = key.strip()
+            val = val.strip()
+
+            should_redact = (
+                (auto_detect and _is_secret_key(key) and val and not _is_safe_value(val))
+                or key.upper() in explicit_keys
+            )
+
+            if should_redact and not _is_ref_value(val) and val:
+                ref_value = f"${{{key}}}"
+                file_changes.append({
+                    "file": p.name,
+                    "key": key,
+                    "old_value_preview": val[:8] + "..." if len(val) > 8 else val,
+                    "new_value": ref_value,
+                })
+                new_lines.append((kind, f"{key}={ref_value}"))
+            else:
+                new_lines.append((kind, raw))
+
+        if file_changes:
+            all_changes.extend(file_changes)
+            files_modified.append(str(p))
+            if not dry_run:
+                _write_env_lines(p, new_lines)
+                _log.info("redact_env_secrets: %s — %d vars redacted", p.name, len(file_changes))
+
+    return {
+        "dry_run": dry_run,
+        "files_processed": len(paths),
+        "files_modified": files_modified,
+        "total_changes": len(all_changes),
+        "changes": all_changes,
+        "errors": errors,
+        "note": (
+            "Valores substituidos por ${VAR_NAME}. "
+            "Defina as vars no shell (export JWT_SECRET_KEY=...) ou no CI/CD secrets antes de rodar."
+        ) if all_changes and not dry_run else (
+            "dry_run=True: nenhum arquivo foi alterado." if dry_run else "Nenhuma mudanca necessaria."
+        ),
+    }

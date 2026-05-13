@@ -1,6 +1,6 @@
 from .composite_tool import list_environments, reload_service, service_status
 from .discovery_tool import check_all_health, check_health, scan_docker, scan_processes
-from .env_tool import read_env_file, set_env_var, sync_service_urls
+from .env_tool import audit_env_files, read_env_file, redact_env_secrets, set_env_var, sync_service_urls
 from .gateway_tool import get_gateway_map, sync_registry, update_service_gateway
 from .launch_tool import launch_service, stop_service
 from .portmap_tool import find_by_port, get_port_map
@@ -35,4 +35,6 @@ __all__ = [
     "read_env_file",
     "set_env_var",
     "sync_service_urls",
+    "audit_env_files",
+    "redact_env_secrets",
 ]
