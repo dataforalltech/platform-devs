@@ -300,7 +300,7 @@ def end_session(
             "error": "ValidationError",
             "details": "rationale é obrigatório em end_session (decisão crítica)",
         }
-    result = store.end_session(session_id=session_id, final_summary=final_summary)
+    result = store.end_session(session_id=session_id, summary=final_summary or "")
     if result is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if isinstance(result, list):

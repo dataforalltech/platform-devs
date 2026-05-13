@@ -43,13 +43,9 @@ def create_session_http_server(session_store):
 
     # ========== Health ==========
 
-    @app.get("/health")
+    @app.get("/v1/health")
     async def health():
-        return {
-            "status": "ok",
-            "service": "session-mcp",
-            "port": 7100
-        }
+        return {"status": "ok", "service": "session-mcp"}
 
     # ========== Sessions ==========
 

@@ -60,6 +60,31 @@ class DeploySettings(BaseSettings):
         description="Nome do repo de template canônico (scaffold_pipeline usa como referência).",
     )
 
+    # ── Local workspace ─────────────────────────────────────────────────────── #
+    repos_root: str = Field(
+        default="",
+        description=(
+            "Pasta raiz onde os repositorios ficam clonados localmente. "
+            "Se vazio, tenta ler do config-mcp (workspace.REPOS_ROOT) em runtime. "
+            "Env var: DEPLOY_REPOS_ROOT"
+        ),
+    )
+
+    def get_repos_root_path(self) -> "Path | None":
+        """Retorna o Path resolvido do repos_root, ou None se nao configurado."""
+        from pathlib import Path
+
+        if self.repos_root:
+            return Path(self.repos_root).expanduser().resolve()
+
+        # Fallback: variaveis de ambiente comuns
+        for env_key in ("REPOS_ROOT", "WORKSPACE_REPOS_ROOT"):
+            val = __import__("os").environ.get(env_key)
+            if val:
+                return Path(val).expanduser().resolve()
+
+        return None
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> DeploySettings:

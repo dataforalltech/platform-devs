@@ -75,10 +75,13 @@ class HybridMCPServer:
         """Build HTTP REST API (for gateway and cross-MCP calls)."""
         app = FastAPI(title=self.server_name, version="1.0.0")
 
+        # ── Health (/health e /v1/health para compatibilidade com registry) ── #
         @app.get("/health")
+        @app.get("/v1/health")
         async def health():
             return {"status": "ok", "server": self.server_name}
 
+        # ── Legacy routes (/tools, /tools/call) ─────────────────────────── #
         @app.get("/tools")
         async def list_tools_http():
             tools = [
@@ -89,7 +92,7 @@ class HybridMCPServer:
 
         @app.post("/tools/call")
         async def call_tool_http(request: dict):
-            """Call a tool via HTTP REST."""
+            """Call a tool via HTTP REST (legacy format)."""
             name = request.get("name")
             arguments = request.get("arguments", {})
 
@@ -106,11 +109,43 @@ class HybridMCPServer:
             except Exception as e:
                 raise HTTPException(500, f"Error calling {name}: {str(e)}")
 
+        # ── MCP wrapper routes (/mcp/tools/list, /mcp/tools/call) ─────────── #
+        @app.get("/mcp/tools/list")
+        async def mcp_list_tools():
+            """MCP wrapper-compatible tool discovery endpoint."""
+            tools = []
+            for name, meta in self.tools_dict.items():
+                tools.append({
+                    "name": name,
+                    "description": meta.get("description", ""),
+                    "inputSchema": meta.get("schema", {"type": "object", "properties": {}}),
+                })
+            return {"result": {"tools": tools}}
+
+        @app.post("/mcp/tools/call")
+        async def mcp_call_tool(body: dict):
+            """MCP wrapper-compatible tool call endpoint."""
+            params = body.get("params", body)
+            name = params.get("name", "")
+            arguments = params.get("arguments", {})
+
+            fn = self.dispatch_dict.get(name)
+            if not fn:
+                payload = {"error": "unknown_tool", "tool": name}
+            else:
+                try:
+                    payload = fn(arguments)
+                except Exception as e:
+                    payload = {"error": "internal_error", "detail": str(e), "tool": name}
+
+            text = json.dumps(payload, ensure_ascii=False, indent=2)
+            return {"result": {"content": [{"type": "text", "text": text}]}}
+
         @app.get("/")
         async def root():
             return {
                 "server": self.server_name,
-                "endpoints": ["/health", "/tools", "/tools/call"],
+                "endpoints": ["/v1/health", "/mcp/tools/list", "/mcp/tools/call", "/tools", "/tools/call"],
             }
 
         return app

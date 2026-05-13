@@ -21,36 +21,31 @@ app = FastAPI(
 )
 
 # MCP Service Definitions
+# All Python MCPs run on port 7100 internally; config-mcp uses 7099.
 MCP_SERVICES = {
-    # System MCPs
-    "config-mcp": {"host": "config-mcp", "port": 7100, "type": "system"},
-    "agent-twin-mcp": {"host": "agent-twin-mcp", "port": 7101, "type": "system"},
-    "session-mcp": {"host": "session-mcp", "port": 7102, "type": "system"},
-    "auth-mcp": {"host": "auth-mcp", "port": 7103, "type": "system"},
-    "admin-mcp": {"host": "admin-mcp", "port": 7104, "type": "system"},
-    "audit-mcp": {"host": "audit-mcp", "port": 7105, "type": "system"},
-    "infra-mcp": {"host": "infra-mcp", "port": 7106, "type": "system"},
-    "services-mcp": {"host": "services-mcp", "port": 7107, "type": "system"},
-    "pipeline-mcp": {"host": "pipeline-mcp", "port": 7108, "type": "system"},
-    "qa-mcp": {"host": "qa-mcp", "port": 7109, "type": "system"},
-    "deploy-mcp": {"host": "deploy-mcp", "port": 7110, "type": "system"},
-    "docs-mcp": {"host": "docs-mcp", "port": 7111, "type": "system"},
-    "ai-governance-mcp": {"host": "ai-governance-mcp", "port": 7112, "type": "system"},
-    "governance-mcp": {"host": "governance-mcp", "port": 7113, "type": "system"},
-    "scheduler-mcp": {"host": "scheduler-mcp", "port": 7114, "type": "system"},
-    "connectors-mcp": {"host": "connectors-mcp", "port": 7115, "type": "system"},
-    "cache-mcp": {"host": "cache-mcp", "port": 7116, "type": "system"},
-    "test-mcp": {"host": "test-mcp", "port": 7117, "type": "system"},
+    # System MCPs (Python)
+    "agent-twin-mcp":   {"host": "agent-twin-mcp",   "port": 7100, "type": "system"},
+    "config-mcp":       {"host": "config-mcp",        "port": 7099, "type": "system"},
+    "session-mcp":      {"host": "session-mcp",       "port": 7100, "type": "system"},
+    "audit-mcp":        {"host": "audit-mcp",         "port": 7100, "type": "system"},
+    "deploy-mcp":       {"host": "deploy-mcp",        "port": 7100, "type": "system"},
+    "docs-mcp":         {"host": "docs-mcp",          "port": 7100, "type": "system"},
+    "infra-mcp":        {"host": "infra-mcp",         "port": 7100, "type": "system"},
+    "pipeline-mcp":     {"host": "pipeline-mcp",      "port": 7100, "type": "system"},
+    "qa-mcp":           {"host": "qa-mcp",            "port": 7100, "type": "system"},
+    "services-mcp":     {"host": "services-mcp",      "port": 7100, "type": "system"},
+    "test-mcp":         {"host": "test-mcp",          "port": 7100, "type": "system"},
+    "ai-governance-mcp":{"host": "ai-governance-mcp", "port": 7100, "type": "system"},
 
-    # Zilla MCPs
-    "archzilla-mcp": {"host": "archzilla-mcp", "port": 7100, "type": "zilla"},
-    "backzilla-mcp": {"host": "backzilla-mcp", "port": 7100, "type": "zilla"},
-    "frontzilla-mcp": {"host": "frontzilla-mcp", "port": 7100, "type": "zilla"},
-    "opszilla-mcp": {"host": "opszilla-mcp", "port": 7100, "type": "zilla"},
-    "pozilla-mcp": {"host": "pozilla-mcp", "port": 7100, "type": "zilla"},
+    # Zilla MCPs (Node.js)
+    "archzilla-mcp":    {"host": "archzilla-mcp",    "port": 7100, "type": "zilla"},
+    "backzilla-mcp":    {"host": "backzilla-mcp",    "port": 7100, "type": "zilla"},
+    "frontzilla-mcp":   {"host": "frontzilla-mcp",   "port": 7100, "type": "zilla"},
+    "opszilla-mcp":     {"host": "opszilla-mcp",     "port": 7100, "type": "zilla"},
+    "pozilla-mcp":      {"host": "pozilla-mcp",      "port": 7100, "type": "zilla"},
     "productzilla-mcp": {"host": "productzilla-mcp", "port": 7100, "type": "zilla"},
-    "qazilla-mcp": {"host": "qazilla-mcp", "port": 7100, "type": "zilla"},
-    "seczilla-mcp": {"host": "seczilla-mcp", "port": 7100, "type": "zilla"},
+    "qazilla-mcp":      {"host": "qazilla-mcp",      "port": 7100, "type": "zilla"},
+    "seczilla-mcp":     {"host": "seczilla-mcp",     "port": 7100, "type": "zilla"},
 }
 
 
@@ -61,23 +56,22 @@ class MCPRegistry:
         self.cache_ttl = 30  # seconds
 
     async def discover_mcp(self, name: str, config: Dict[str, str]) -> Dict[str, Any]:
-        """Discover a single MCP by calling its /info endpoint"""
-        url = f"http://{config['host']}:{config['port']}/info"
+        """Discover a single MCP by calling its /v1/health endpoint"""
+        base_url = f"http://{config['host']}:{config['port']}"
+        url = f"{base_url}/v1/health"
 
         try:
             async with aiohttp.ClientSession() as session:
-                async with session.get(url, timeout=5) as resp:
+                async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                     if resp.status == 200:
                         info = await resp.json()
-                        tools_count = info.get("tools", 0)
-
                         return {
                             "name": name,
                             "status": "online",
-                            "url": f"http://{config['host']}:{config['port']}",
+                            "url": base_url,
                             "type": config.get("type", "unknown"),
-                            "tools": tools_count,
-                            "version": info.get("version", "unknown"),
+                            "tools": info.get("tools", 0),
+                            "version": info.get("version", "1.0"),
                             "description": info.get("description", "")
                         }
         except asyncio.TimeoutError:
@@ -88,7 +82,7 @@ class MCPRegistry:
         return {
             "name": name,
             "status": "offline",
-            "url": f"http://{config['host']}:{config['port']}",
+            "url": base_url,
             "type": config.get("type", "unknown"),
             "tools": 0,
             "error": "Connection failed"

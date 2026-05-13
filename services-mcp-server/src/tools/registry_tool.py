@@ -7,7 +7,10 @@ from typing import Any
 from ..db.store import ServiceStore
 from ..models.service import service_record
 
-VALID_TYPES = {"docker", "process", "remote", "unknown"}
+VALID_TYPES = {
+    "docker", "process", "remote", "unknown",
+    "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+}
 VALID_ENVS = {"local", "dev", "hml", "prod"}
 VALID_STATUSES = {"running", "stopped", "unknown"}
 
@@ -60,6 +63,10 @@ def register_service(
         "metadata": metadata or {},
         "status": kwargs.get("status", "unknown"),
     }
+    # Runtime environment fields (optional)
+    for field in ("runtime", "deploy_mode", "os_name", "os_release", "hostname"):
+        if kwargs.get(field) is not None:
+            fields[field] = kwargs[field]
 
     result = store.upsert(name, fields)
     return {
@@ -82,12 +89,21 @@ def list_services(
     *,
     environment: str | None = None,
     tag: str | None = None,
+    runtime: str | None = None,
+    deploy_mode: str | None = None,
     **kwargs: Any,
 ) -> dict[str, Any]:
-    """Lista serviços com filtros opcionais."""
+    """Lista servicos com filtros opcionais."""
     type_ = kwargs.get("type")
     status = kwargs.get("status")
-    rows = store.list_all(environment=environment, type_=type_, status=status, tag=tag)
+    rows = store.list_all(
+        environment=environment,
+        type_=type_,
+        status=status,
+        tag=tag,
+        runtime=runtime,
+        deploy_mode=deploy_mode,
+    )
     return {"total": len(rows), "services": [service_record(r) for r in rows]}
 
 

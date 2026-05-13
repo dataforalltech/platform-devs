@@ -409,22 +409,45 @@ class SessionStore:
 
     def list_suggestions(
         self,
-        target_repo_id: int,
+        target_repo_id: int | None = None,
         status: str | None = None,
+        target_repo: str | None = None,
+        source_repo: str | None = None,
+        limit: int = 100,
     ) -> list[dict[str, Any]]:
         """Lista sugestões para um repositório."""
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                query = "SELECT id, source_repository_id, target_repository_id, title, description, kind, priority, status, created_at FROM suggestions WHERE target_repository_id = %s"
-                params = [target_repo_id]
+                query = "SELECT id, source_repository_id, target_repository_id, title, description, kind, priority, status, created_at FROM suggestions WHERE 1=1"
+                params: list = []
 
+                if target_repo_id is not None:
+                    query += " AND target_repository_id = %s"
+                    params.append(target_repo_id)
+                if target_repo is not None:
+                    query += " AND target_repository_id = %s"
+                    params.append(target_repo)
+                if source_repo is not None:
+                    query += " AND source_repository_id = %s"
+                    params.append(source_repo)
                 if status:
                     query += " AND status = %s"
                     params.append(status)
 
-                query += " ORDER BY created_at DESC"
+                query += f" ORDER BY created_at DESC LIMIT {int(limit)}"
                 cur.execute(query, params)
-                return cur.fetchall() or []
+                return [dict(r) for r in (cur.fetchall() or [])]
+
+    def count_pending_suggestions(self, target_repo: str) -> int:
+        """Conta sugestões pendentes para um repositório."""
+        with self._get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM suggestions WHERE target_repository_id = %s AND status = 'pending'",
+                    (target_repo,),
+                )
+                row = cur.fetchone()
+                return row[0] if row else 0
 
     def update_suggestion_status(self, suggestion_id: int, status: str) -> None:
         """Atualiza status de uma sugestão."""

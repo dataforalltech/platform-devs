@@ -1,4 +1,4 @@
-"""Servidor MCP config — 14 tools para credenciais, ambientes, tenants e hardware.
+"""Servidor MCP config — 21 tools para credenciais, ambientes, tenants, hardware e workspace.
 
 Tools:
   Credentials (5): get_credential, set_credential, set_credential_secure,
@@ -23,6 +23,7 @@ import logging
 from typing import Any
 
 from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..api.router import make_router
@@ -30,19 +31,26 @@ from ..config.settings import ConfigMcpSettings, get_settings
 from ..knowledge.encryptor import Encryptor
 from ..knowledge.store import ConfigStore
 from ..tools import (
+    audit_env_files,
     delete_credential,
     get_credential,
     get_env_config,
     get_physical_info,
     get_session_tenant_config,
     get_tenant_config,
+    get_workspace_config,
     list_credentials,
     list_environments,
     list_tenants,
+    list_workspace_config,
+    push_env_to_store,
+    read_env_file,
+    redact_env_secrets,
     set_credential,
     set_credential_secure,
     set_env_var,
     set_tenant_config,
+    set_workspace_config,
     sync_env_file,
 )
 
@@ -224,6 +232,133 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    # ── Env (file-based) ─────────────────────────────────────────────────────── #
+    "read_env_file": {
+        "description": (
+            "Le um arquivo .env do disco e retorna as variaveis como dict. "
+            "Complemento ao get_env_config que le do store encriptado."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env."},
+                "key_filter": {"type": "string", "description": "Filtro substring nas chaves (case-insensitive). Ex: 'URL'."},
+            },
+        },
+    },
+    "audit_env_files": {
+        "description": (
+            "Escaneia todos os arquivos .env.* de um diretorio e reporta problemas. "
+            "Detecta secrets hardcoded (JWT_SECRET_KEY, DB_PASSWORD, TOKEN...), "
+            "arquivos fora do padrao canonico, e verifica cobertura no ConfigStore."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["directory"],
+            "additionalProperties": False,
+            "properties": {
+                "directory": {"type": "string", "description": "Caminho do diretorio a escanear (ex: /path/to/platform-auth)."},
+                "include_pattern": {"type": "string", "default": ".env*", "description": "Glob para os arquivos. Default: .env*."},
+                "check_store": {"type": "boolean", "default": True, "description": "Verificar se os secrets ja estao no ConfigStore. Default: true."},
+            },
+        },
+    },
+    "redact_env_secrets": {
+        "description": (
+            "Substitui valores hardcoded de secrets por ${VAR_NAME} em arquivos .env. "
+            "Ex: JWT_SECRET_KEY=XrDsC... vira JWT_SECRET_KEY=${JWT_SECRET_KEY}. "
+            "Use dry_run=true para simular antes de aplicar."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["paths"],
+            "additionalProperties": False,
+            "properties": {
+                "paths": {"type": "array", "items": {"type": "string"}, "description": "Lista de caminhos dos arquivos .env."},
+                "keys": {"type": "array", "items": {"type": "string"}, "description": "Chaves explicitas a redact. Se omitido, usa auto_detect."},
+                "auto_detect": {"type": "boolean", "default": True, "description": "Detectar automaticamente via padrao de nomes. Default: true."},
+                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar arquivos. Default: false."},
+            },
+        },
+    },
+    "push_env_to_store": {
+        "description": (
+            "Le um arquivo .env do disco e importa as variaveis para o ConfigStore encriptado "
+            "no namespace env.<environment>. Ideal para inicializar o store a partir de um arquivo existente. "
+            "Apos o push, use sync_env_file para gerar arquivos .env a partir do store."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path", "environment"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho do arquivo .env a importar."},
+                "environment": {"type": "string", "description": "Perfil de ambiente destino (ex: 'dev', 'local')."},
+                "overwrite": {"type": "boolean", "default": False, "description": "Sobrescrever vars ja existentes no store. Default: false."},
+                "secrets_only": {"type": "boolean", "default": False, "description": "Importar apenas vars identificadas como secrets. Default: false."},
+            },
+        },
+    },
+    # ── Workspace ─────────────────────────────────────────────────────────── #
+    "get_workspace_config": {
+        "description": (
+            "Le configuracao do workspace do namespace 'workspace' no ConfigStore. "
+            "Chaves canonicas: REPOS_ROOT (pasta dos repos), PYTHON_BIN, EDITOR, DEFAULT_ENV. "
+            "Se key for passado, retorna apenas aquela chave com fallback para variaveis de ambiente."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Chave especifica a ler (ex: REPOS_ROOT). Se omitido, retorna todas.",
+                },
+            },
+        },
+    },
+    "set_workspace_config": {
+        "description": (
+            "Define ou atualiza uma chave no namespace 'workspace' do ConfigStore. "
+            "Para REPOS_ROOT: valida que o caminho existe (use create_dir=true para criar). "
+            "Outras chaves sao armazenadas livremente. "
+            "Exemplo: set_workspace_config(key='REPOS_ROOT', value='/home/user/repos')."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["key", "value"],
+            "additionalProperties": False,
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Nome da chave (ex: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV).",
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Valor a armazenar.",
+                },
+                "create_dir": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Para REPOS_ROOT: cria o diretorio se nao existir. Default: false.",
+                },
+            },
+        },
+    },
+    "list_workspace_config": {
+        "description": (
+            "Lista todas as chaves do namespace 'workspace' com valores e descricoes. "
+            "Mostra quais chaves canonicas estao ausentes para facilitar o setup inicial. "
+            "Chaves canonicas: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {},
+        },
+    },
     # ── Sysinfo ───────────────────────────────────────────────────────────── #
     "get_physical_info": {
         "description": (
@@ -358,6 +493,17 @@ def build_server() -> tuple[Any, ConfigStore, ConfigMcpSettings, FastAPI]:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
+
     return server, store, settings, http_app
 
 
@@ -398,7 +544,43 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
             environment=args["environment"],
             merge=args.get("merge", True),
         )
-    # ── Sysinfo ───────────────────────────────────────────────────────────── #
+    if name == "read_env_file":
+        return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
+    if name == "audit_env_files":
+        return audit_env_files(
+            store,
+            directory=args["directory"],
+            include_pattern=args.get("include_pattern", ".env*"),
+            check_store=args.get("check_store", True),
+        )
+    if name == "redact_env_secrets":
+        return redact_env_secrets(
+            store,
+            paths=args["paths"],
+            keys=args.get("keys"),
+            auto_detect=args.get("auto_detect", True),
+            dry_run=args.get("dry_run", False),
+        )
+    if name == "push_env_to_store":
+        return push_env_to_store(
+            store,
+            path=args["path"],
+            environment=args["environment"],
+            overwrite=args.get("overwrite", False),
+            secrets_only=args.get("secrets_only", False),
+        )
+    # ── Workspace ─────────────────────────────────────────────────────────── #
+    if name == "get_workspace_config":
+        return get_workspace_config(store, key=args.get("key"))
+    if name == "set_workspace_config":
+        return set_workspace_config(
+            store,
+            key=args["key"],
+            value=args["value"],
+            create_dir=args.get("create_dir", False),
+        )
+    if name == "list_workspace_config":
+        return list_workspace_config(store)
     if name == "get_physical_info":
         return get_physical_info()
     # ── Tenants ───────────────────────────────────────────────────────────── #
