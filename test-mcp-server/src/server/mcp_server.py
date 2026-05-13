@@ -1,4 +1,4 @@
-"""Test MCP Server — entry point e definição das tools MCP."""
+"""Test MCP Server â€” entry point e definiÃ§Ã£o das tools MCP."""
 
 from __future__ import annotations
 
@@ -7,6 +7,9 @@ import os
 import asyncio
 import json
 import logging
+from datetime import date, datetime
+from decimal import Decimal
+from typing import Any
 
 from fastapi import FastAPI
 from mcp.server import Server
@@ -17,6 +20,16 @@ from ..db.store import TestStore
 from ..tools import checklist_tool, plan_tool, scenario_tool, validation_tool
 
 logger = logging.getLogger(__name__)
+
+
+class _JSONEncoder(json.JSONEncoder):
+    """Serializa tipos extras do psycopg2 (datetime, Decimal)."""
+    def default(self, o: Any) -> Any:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
 
 
 def _build_http_app() -> FastAPI:
@@ -35,32 +48,32 @@ def build_server() -> tuple[Any, ...]:
     store = TestStore(settings=settings)
     server = Server("test-mcp-server")
 
-    # ── Tool definitions ───────────────────────────────────────────────────── #
+    # â”€â”€ Tool definitions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         return [
-            # ── Plans ──────────────────────────────────────────────────────── #
+            # â”€â”€ Plans â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
             Tool(
                 name="create_test_plan",
                 description=(
                     "Cria um plano de testes para uma feature ou endpoint. "
-                    "Retorna plan_id usado em todas as operações subsequentes."
+                    "Retorna plan_id usado em todas as operaÃ§Ãµes subsequentes."
                 ),
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["title", "scope"],
                     "properties": {
-                        "title": {"type": "string", "description": "Título do plano (ex: 'GET /api/users')"},
-                        "scope": {"type": "string", "description": "O que será testado e quais limites"},
+                        "title": {"type": "string", "description": "TÃ­tulo do plano (ex: 'GET /api/users')"},
+                        "scope": {"type": "string", "description": "O que serÃ¡ testado e quais limites"},
                         "feature": {"type": "string", "description": "Nome da feature ou ticket relacionado"},
                     },
                 },
             ),
             Tool(
                 name="get_test_plan",
-                description="Retorna um plano de teste com métricas de cobertura, resultados e findings.",
+                description="Retorna um plano de teste com mÃ©tricas de cobertura, resultados e findings.",
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
@@ -70,7 +83,7 @@ def build_server() -> tuple[Any, ...]:
                         "include_scenarios": {
                             "type": "boolean",
                             "default": False,
-                            "description": "Incluir lista completa de cenários no retorno",
+                            "description": "Incluir lista completa de cenÃ¡rios no retorno",
                         },
                     },
                 },
@@ -91,12 +104,12 @@ def build_server() -> tuple[Any, ...]:
                     },
                 },
             ),
-            # ── Scenarios ──────────────────────────────────────────────────── #
+            # â”€â”€ Scenarios â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
             Tool(
                 name="generate_scenarios",
                 description=(
-                    "Gera e salva automaticamente cenários de teste baseados em templates para a categoria informada. "
-                    "Categorias disponíveis: rest_api, react_component, auth_flow, db_migration, websocket, form_validation."
+                    "Gera e salva automaticamente cenÃ¡rios de teste baseados em templates para a categoria informada. "
+                    "Categorias disponÃ­veis: rest_api, react_component, auth_flow, db_migration, websocket, form_validation."
                 ),
                 inputSchema={
                     "type": "object",
@@ -110,21 +123,21 @@ def build_server() -> tuple[Any, ...]:
                         },
                         "context": {
                             "type": "string",
-                            "description": "Contexto específico (ex: '/api/users') para personalizar os cenários gerados",
+                            "description": "Contexto especÃ­fico (ex: '/api/users') para personalizar os cenÃ¡rios gerados",
                         },
                     },
                 },
             ),
             Tool(
                 name="add_scenario",
-                description="Adiciona um cenário de teste específico e customizado ao plano.",
+                description="Adiciona um cenÃ¡rio de teste especÃ­fico e customizado ao plano.",
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["plan_id", "name", "category", "steps", "expected_result"],
                     "properties": {
                         "plan_id": {"type": "string"},
-                        "name": {"type": "string", "description": "Nome descritivo do cenário"},
+                        "name": {"type": "string", "description": "Nome descritivo do cenÃ¡rio"},
                         "category": {
                             "type": "string",
                             "enum": [
@@ -133,43 +146,43 @@ def build_server() -> tuple[Any, ...]:
                                 "concurrency",
                             ],
                         },
-                        "steps": {"type": "string", "description": "Passos para executar o cenário"},
+                        "steps": {"type": "string", "description": "Passos para executar o cenÃ¡rio"},
                         "expected_result": {"type": "string", "description": "Resultado esperado"},
                         "priority": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
                             "default": "medium",
                         },
-                        "preconditions": {"type": "string", "description": "Pré-condições necessárias"},
+                        "preconditions": {"type": "string", "description": "PrÃ©-condiÃ§Ãµes necessÃ¡rias"},
                     },
                 },
             ),
             Tool(
                 name="record_result",
-                description="Registra o resultado da execução de um cenário de teste.",
+                description="Registra o resultado da execuÃ§Ã£o de um cenÃ¡rio de teste.",
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["plan_id", "scenario_id", "status"],
                     "properties": {
                         "plan_id": {"type": "string"},
-                        "scenario_id": {"type": "integer", "description": "ID numérico do cenário"},
+                        "scenario_id": {"type": "integer", "description": "ID numÃ©rico do cenÃ¡rio"},
                         "status": {
                             "type": "string",
                             "enum": ["passed", "failed", "blocked", "skipped"],
                         },
                         "actual_result": {"type": "string", "description": "O que realmente aconteceu"},
-                        "notes": {"type": "string", "description": "Observações adicionais"},
-                        "evidence": {"type": "string", "description": "Link ou referência para evidência (screenshot, log, etc.)"},
+                        "notes": {"type": "string", "description": "ObservaÃ§Ãµes adicionais"},
+                        "evidence": {"type": "string", "description": "Link ou referÃªncia para evidÃªncia (screenshot, log, etc.)"},
                     },
                 },
             ),
-            # ── Checklists ─────────────────────────────────────────────────── #
+            # â”€â”€ Checklists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
             Tool(
                 name="create_checklist",
                 description=(
-                    "Cria um checklist de verificação a partir de template ou com itens customizados. "
-                    "Templates disponíveis: pre_deploy, post_deploy, code_review, security, accessibility."
+                    "Cria um checklist de verificaÃ§Ã£o a partir de template ou com itens customizados. "
+                    "Templates disponÃ­veis: pre_deploy, post_deploy, code_review, security, accessibility."
                 ),
                 inputSchema={
                     "type": "object",
@@ -185,11 +198,11 @@ def build_server() -> tuple[Any, ...]:
                         "use_template": {
                             "type": "boolean",
                             "default": True,
-                            "description": "Usar template padrão para o tipo informado",
+                            "description": "Usar template padrÃ£o para o tipo informado",
                         },
                         "items": {
                             "type": "array",
-                            "description": "Itens customizados (obrigatório quando use_template=false ou type='custom')",
+                            "description": "Itens customizados (obrigatÃ³rio quando use_template=false ou type='custom')",
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -205,20 +218,20 @@ def build_server() -> tuple[Any, ...]:
             ),
             Tool(
                 name="run_checklist",
-                description="Inicia uma execução (run) de um checklist. Retorna todos os itens a verificar com seus IDs.",
+                description="Inicia uma execuÃ§Ã£o (run) de um checklist. Retorna todos os itens a verificar com seus IDs.",
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["checklist_id"],
                     "properties": {
                         "checklist_id": {"type": "string"},
-                        "executor": {"type": "string", "description": "Nome ou identificador de quem está executando"},
+                        "executor": {"type": "string", "description": "Nome ou identificador de quem estÃ¡ executando"},
                     },
                 },
             ),
             Tool(
                 name="check_item",
-                description="Marca um item do checklist como passed, failed, na (não aplicável) ou blocked.",
+                description="Marca um item do checklist como passed, failed, na (nÃ£o aplicÃ¡vel) ou blocked.",
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
@@ -230,20 +243,20 @@ def build_server() -> tuple[Any, ...]:
                             "type": "string",
                             "enum": ["passed", "failed", "na", "blocked"],
                         },
-                        "notes": {"type": "string", "description": "Observação sobre o item"},
+                        "notes": {"type": "string", "description": "ObservaÃ§Ã£o sobre o item"},
                     },
                 },
             ),
-            # ── Bugs ───────────────────────────────────────────────────────── #
+            # â”€â”€ Bugs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
             Tool(
                 name="add_bug",
                 description=(
                     "Registra um BUG no banco de dados vinculado a um plano de teste. "
-                    "USE ESTA TOOL sempre que encontrar um bug, erro, falha ou comportamento inesperado — "
-                    "NÃO use add_artifact para bugs. "
-                    "Bugs críticos bloqueiam a aprovação do plano (double_check retorna BLOQUEADO). "
+                    "USE ESTA TOOL sempre que encontrar um bug, erro, falha ou comportamento inesperado â€” "
+                    "NÃƒO use add_artifact para bugs. "
+                    "Bugs crÃ­ticos bloqueiam a aprovaÃ§Ã£o do plano (double_check retorna BLOQUEADO). "
                     "Severidades: critical (sistema inoperante) | high (funcionalidade quebrada) | "
-                    "medium (degradação parcial) | low (cosmético/menor)."
+                    "medium (degradaÃ§Ã£o parcial) | low (cosmÃ©tico/menor)."
                 ),
                 inputSchema={
                     "type": "object",
@@ -254,19 +267,19 @@ def build_server() -> tuple[Any, ...]:
                         "severity": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
-                            "description": "critical=sistema parado | high=funcionalidade quebrada | medium=degradação | low=cosmético",
+                            "description": "critical=sistema parado | high=funcionalidade quebrada | medium=degradaÃ§Ã£o | low=cosmÃ©tico",
                         },
-                        "title": {"type": "string", "description": "Título curto e descritivo do bug (ex: 'Login falha com email maiúsculo')"},
-                        "description": {"type": "string", "description": "Descrição detalhada: passos para reproduzir, comportamento esperado vs atual."},
-                        "evidence": {"type": "string", "description": "Log, screenshot, stack trace ou link para evidência."},
+                        "title": {"type": "string", "description": "TÃ­tulo curto e descritivo do bug (ex: 'Login falha com email maiÃºsculo')"},
+                        "description": {"type": "string", "description": "DescriÃ§Ã£o detalhada: passos para reproduzir, comportamento esperado vs atual."},
+                        "evidence": {"type": "string", "description": "Log, screenshot, stack trace ou link para evidÃªncia."},
                     },
                 },
             ),
             Tool(
                 name="double_check",
                 description=(
-                    "Executa verificação completa do plano: lista cenários não executados, "
-                    "falhas abertas e findings críticos. Retorna veredicto APROVADO ou BLOQUEADO."
+                    "Executa verificaÃ§Ã£o completa do plano: lista cenÃ¡rios nÃ£o executados, "
+                    "falhas abertas e findings crÃ­ticos. Retorna veredicto APROVADO ou BLOQUEADO."
                 ),
                 inputSchema={
                     "type": "object",
@@ -280,8 +293,8 @@ def build_server() -> tuple[Any, ...]:
             Tool(
                 name="get_validation_status",
                 description=(
-                    "Retorna status completo de validação: cobertura %, pass rate %, "
-                    "findings por severidade, grade (A-F) e se está pronto para ship."
+                    "Retorna status completo de validaÃ§Ã£o: cobertura %, pass rate %, "
+                    "findings por severidade, grade (A-F) e se estÃ¡ pronto para ship."
                 ),
                 inputSchema={
                     "type": "object",
@@ -294,7 +307,7 @@ def build_server() -> tuple[Any, ...]:
             ),
         ]
 
-    # ── Tool handlers ──────────────────────────────────────────────────────── #
+    # â”€â”€ Tool handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
@@ -329,13 +342,13 @@ def build_server() -> tuple[Any, ...]:
                 case "get_validation_status":
                     result = validation_tool.get_validation_status(store, **arguments)
                 case _:
-                    result = {"error": "UnknownTool", "details": f"Tool '{name}' não existe"}
+                    result = {"error": "UnknownTool", "details": f"Tool '{name}' nÃ£o existe"}
 
         except Exception as exc:
             logger.exception("Erro na tool %s", name)
             result = {"error": type(exc).__name__, "details": str(exc)}
 
-        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2))]
+        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2, cls=_JSONEncoder))]
 
     @http_app.get("/mcp/tools/list")
     async def http_list_tools() -> dict:
