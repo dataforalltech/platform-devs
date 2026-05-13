@@ -340,6 +340,84 @@ services:
       - "language=python"
       - "service=platform-analytics"
 
+  auth-mcp:
+    build:
+      context: ../platform-auth
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "27114:7100"
+    environment:
+      PYTHONPATH: /app
+      AUTH_MCP_AUTH_URL: "http://host.docker.internal:8001"
+      AUTH_MCP_INTERNAL_API_TOKEN: ${AUTH_INTERNAL_TOKEN:-dev-internal-token-replace-me}
+      MCP_PORT: "7100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=auth-mcp"
+      - "type=domain"
+      - "language=python"
+      - "service=platform-auth"
+
+  gateway-mcp:
+    build:
+      context: ../platform-api-gateway
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "27115:7100"
+    environment:
+      PYTHONPATH: /app
+      GATEWAY_MCP_GATEWAY_URL: "http://host.docker.internal:9999"
+      GATEWAY_MCP_INTERNAL_API_TOKEN: ${GATEWAY_INTERNAL_TOKEN:-dev-internal-token-replace-me}
+      MCP_PORT: "7100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=gateway-mcp"
+      - "type=domain"
+      - "language=python"
+      - "service=platform-api-gateway"
+
+  admin-mcp:
+    build:
+      context: ../platform-admin
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "27116:7100"
+    environment:
+      PYTHONPATH: /app
+      ADMIN_MCP_ADMIN_URL: "http://host.docker.internal:23730"
+      ADMIN_MCP_INTERNAL_API_TOKEN: ${ADMIN_INTERNAL_TOKEN:-dev-internal-token-replace-me}
+      MCP_PORT: "7100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=admin-mcp"
+      - "type=domain"
+      - "language=python"
+      - "service=platform-admin"
+
   # ============================================================================
   # Zilla MCPs (Node.js - já vêm em Docker)
   # ============================================================================
