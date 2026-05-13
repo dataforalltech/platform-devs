@@ -48,11 +48,15 @@ class ServiceStore:
         with self._get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
+                    ALTER TABLE services ADD COLUMN IF NOT EXISTS internal_url TEXT;
+                """)
+                cur.execute("""
                     CREATE TABLE IF NOT EXISTS services (
                         name           TEXT PRIMARY KEY,
                         host           TEXT NOT NULL DEFAULT 'localhost',
                         port           INTEGER,
                         url            TEXT,
+                        internal_url   TEXT,
                         type           TEXT NOT NULL DEFAULT 'unknown',
                         container_name TEXT,
                         pid            INTEGER,
@@ -166,4 +170,4 @@ class ServiceStore:
     def close(self) -> None:
         if self._pool:
             self._pool.closeall()
-        _log.info("✅ ServiceStore closed: PostgreSQL pool")
+        _log.info("âœ… ServiceStore closed: PostgreSQL pool")
