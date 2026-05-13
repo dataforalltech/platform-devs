@@ -9,6 +9,7 @@ import json
 from typing import Any
 
 from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import Settings, get_settings
@@ -311,8 +312,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # Server                                                                  #
 # ---------------------------------------------------------------------- #
 def _build_http_app() -> FastAPI:
-    """Build FastAPI app for Infra HTTP on port 7100."""
     app = FastAPI(title="Infra API", version="0.1.0", docs_url="/docs")
+
+    @app.get("/v1/health")
+    def health() -> dict:
+        return {"status": "ok", "service": "infra-mcp"}
+
     return app
 
 
@@ -401,14 +406,25 @@ def build_server() -> tuple[Any, ...]:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, settings, allocator
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
+
+    return server, settings, allocator, http_app
 
 
 def _dispatch(
     name: str,
     args: dict[str, Any],
     settings: Settings,
-    allocator: AllocatorStore,, http_app
+    allocator: AllocatorStore,
 ) -> dict:
     if name == "terraform_validate":
         return terraform_validate(settings, path=args.get("path"))

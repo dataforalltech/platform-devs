@@ -52,7 +52,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         name=record["name"],
         email=record["email"],
         role=record["role"],
-        scopes=json.loads(record["scopes"]),
+        scopes=record["scopes"] if isinstance(record["scopes"], list) else json.loads(record["scopes"]),
         environment=record["environment"],
         tenant_id=record.get("tenant_id"),
         authenticated_at=datetime.now(timezone.utc).isoformat(),

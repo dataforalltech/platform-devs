@@ -20,13 +20,10 @@ import os
 import asyncio
 import json
 import logging
-import threading
-from pathlib import Path
 from typing import Any
 
-import uvicorn
 from fastapi import FastAPI
-from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import PipelineSettings, get_settings
@@ -390,24 +387,18 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
-# HTTP API sidecar                                                              #
+# HTTP App                                                                      #
 # ─────────────────────────────────────────────────────────────────────────── #
-def _start_http_api(store: PipelineStore, settings: PipelineSettings) -> None:
-    """Inicia HTTP API mínima em thread daemon para consulta por outros MCPs."""
+def _build_http_app(store: PipelineStore) -> FastAPI:
     app = FastAPI(title="pipeline-mcp API", version="0.1.0", docs_url="/docs")
 
-    @app.get("/api/health")
+    @app.get("/v1/health")
     def health() -> dict[str, Any]:
         try:
-            pipelines = store.list_pipelines()
-            count = len(pipelines)
+            count = len(store.list_pipelines())
         except Exception as exc:  # noqa: BLE001
             return {"status": "degraded", "error": str(exc)}
-        return {
-            "status": "ok",
-            "service": "pipeline-mcp",
-            "registered_pipelines": count,
-        }
+        return {"status": "ok", "service": "pipeline-mcp", "registered_pipelines": count}
 
     @app.get("/v1/pipeline/{service}")
     def get_service_pipeline(service: str) -> dict[str, Any]:
@@ -419,28 +410,22 @@ def _start_http_api(store: PipelineStore, settings: PipelineSettings) -> None:
 
     @app.get("/")
     def root() -> dict[str, str]:
-        return {"service": "pipeline-mcp", "docs": "/docs", "health": "/api/health"}
+        return {"service": "pipeline-mcp", "docs": "/docs", "health": "/health"}
 
-    cfg = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=settings.api_port,
-        log_level="warning",
-        access_log=False,
-    )
-    server = uvicorn.Server(cfg)
-    thread = threading.Thread(target=server.run, daemon=True, name="pipeline-mcp-http")
-    thread.start()
-    _log.info("pipeline_mcp_http_started port=%d", settings.api_port)
+    return app
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
 # Server                                                                       #
 # ─────────────────────────────────────────────────────────────────────────── #
-def build_server(settings: PipelineSettings, store: PipelineStore) -> Server:
+def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
+    settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    if settings.api_enabled:
-        _start_http_api(store, settings)
+    store = PipelineStore(settings)
+    http_app = _build_http_app(store)
+
+    _log.info("pipeline_mcp_ready")
+
     server: Server = Server("pipeline-mcp-server")
 
     @server.list_tools()
@@ -465,7 +450,18 @@ def build_server(settings: PipelineSettings, store: PipelineStore) -> Server:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
+
+    return server, store, settings, http_app
 
 
 def _dispatch(
@@ -570,8 +566,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    server, _store, _settings, http_app = build_server()
 
     cfg = uvicorn.Config(
         http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),

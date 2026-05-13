@@ -9,18 +9,16 @@ Tools:
 
 from __future__ import annotations
 
+
 import os
 
 import asyncio
 import json
 import logging
-import threading
-from pathlib import Path
 from typing import Any
 
-import uvicorn
 from fastapi import FastAPI
-from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import ServicesSettings, get_settings
@@ -370,12 +368,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ─────────────────────────────────────────────────────────────────────────── #
 # HTTP API (sidecar para discovery por outros MCPs, ex: agent-twin)            #
 # ─────────────────────────────────────────────────────────────────────────── #
-def _start_http_api(store: ServiceStore, settings: ServicesSettings) -> None:
-    """Inicia uma HTTP API mínima (health + count) numa thread daemon.
-    Permite que outros MCPs (agent-twin) detectem o services-mcp via probe TCP."""
+def _build_http_app(store: ServiceStore) -> FastAPI:
     app = FastAPI(title="services-mcp API", version="0.1.0", docs_url="/docs")
 
-    @app.get("/api/health")
+    @app.get("/v1/health")
     def health() -> dict[str, Any]:
         try:
             count = len(store.list_all())
@@ -385,28 +381,22 @@ def _start_http_api(store: ServiceStore, settings: ServicesSettings) -> None:
 
     @app.get("/")
     def root() -> dict[str, str]:
-        return {"service": "services-mcp", "docs": "/docs", "health": "/api/health"}
+        return {"service": "services-mcp", "docs": "/docs", "health": "/v1/health"}
 
-    cfg = uvicorn.Config(
-        app,
-        host="127.0.0.1",
-        port=settings.api_port,
-        log_level="warning",
-        access_log=False,
-    )
-    server = uvicorn.Server(cfg)
-    thread = threading.Thread(target=server.run, daemon=True, name="services-mcp-http")
-    thread.start()
-    _log.info("services_mcp_http_started port=%d", settings.api_port)
+    return app
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
 # Server                                                                       #
 # ─────────────────────────────────────────────────────────────────────────── #
-def build_server(settings: ServicesSettings, store: ServiceStore) -> Server:
+def build_server() -> tuple[Any, ServiceStore, ServicesSettings, FastAPI]:
+    settings = get_settings()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    if settings.api_enabled:
-        _start_http_api(store, settings)
+    store = ServiceStore(settings)
+    http_app = _build_http_app(store)
+
+    _log.info("services_mcp_ready")
+
     server: Server = Server("services-mcp-server")
 
     @server.list_tools()
@@ -431,7 +421,18 @@ def build_server(settings: ServicesSettings, store: ServiceStore) -> Server:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
+
+    return server, store, settings, http_app
 
 
 def _dispatch(
@@ -507,8 +508,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    server, _store, _settings, http_app = build_server()
 
     cfg = uvicorn.Config(
         http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),

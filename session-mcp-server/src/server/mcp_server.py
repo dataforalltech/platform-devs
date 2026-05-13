@@ -8,9 +8,22 @@ import os
 
 import asyncio
 import json
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any
 
+
+class _JSONEncoder(json.JSONEncoder):
+    """Serializa tipos extras: datetime, date, Decimal."""
+    def default(self, o: Any) -> Any:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
+
 from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import SessionSettings, get_settings
@@ -664,6 +677,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 def _build_http_app() -> FastAPI:
     """Build FastAPI app for session-mcp HTTP on port 7100."""
     app = FastAPI(title="session-mcp API", version="0.1.0", docs_url="/docs")
+
+    @app.get("/v1/health")
+    def health() -> dict:
+        return {"status": "ok", "service": "session-mcp"}
+
     return app
 
 
@@ -702,7 +720,22 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
         except Exception as exc:  # noqa: BLE001
             payload = {"error": "internal_error", "details": str(exc), "tool": name}
 
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder))]
+
+    # ── HTTP MCP endpoints (for wrapper compatibility) ─────────────────── #
+
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = params.get("arguments", {})
+        result = await call_tool(name, arguments)
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
 
     return server, settings, store, http_app
 

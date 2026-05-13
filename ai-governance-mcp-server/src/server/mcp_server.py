@@ -22,6 +22,7 @@ import json
 from typing import Any
 
 from fastapi import FastAPI
+from mcp.server import Server
 from mcp.types import TextContent, Tool
 
 from ..config.settings import get_settings
@@ -614,8 +615,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 def _build_http_app() -> FastAPI:
-    """Build FastAPI app for Ai Governance HTTP on port 7100."""
     app = FastAPI(title="Ai Governance API", version="0.1.0", docs_url="/docs")
+
+    @app.get("/v1/health")
+    def health() -> dict:
+        return {"status": "ok", "service": "ai-governance-mcp"}
+
     return app
 
 
@@ -688,9 +693,19 @@ def build_server() -> tuple[Any, ...]:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, repo
+    @http_app.get("/mcp/tools/list")
+    async def http_list_tools() -> dict:
+        tools = await list_tools()
+        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
 
-, http_app
+    @http_app.post("/mcp/tools/call")
+    async def http_call_tool(body: dict) -> dict:
+        params = body.get("params", body)
+        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
+        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
+
+    return server, repo, http_app
+
 def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore) -> dict:
     """Roteia a chamada para a função pura correspondente."""
     if name == "get_agent_guidelines":

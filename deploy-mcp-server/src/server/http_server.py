@@ -42,13 +42,9 @@ def create_deploy_http_server(deploy_manager):
 
     # ========== Health ==========
 
-    @app.get("/health")
+    @app.get("/v1/health")
     async def health():
-        return {
-            "status": "ok",
-            "service": "deploy-mcp",
-            "port": 8002
-        }
+        return {"status": "ok", "service": "deploy-mcp"}
 
     # ========== Repositories ==========
 

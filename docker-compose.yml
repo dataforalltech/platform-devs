@@ -10,11 +10,17 @@ services:
       context: .
       dockerfile: agent-twin-mcp-server/Dockerfile
     ports:
-      - "7101:7100"
+      - "27101:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      TWIN_PG_HOST: postgres
+      TWIN_PG_PORT: 5432
+      TWIN_PG_DB: platform_dev
+      TWIN_PG_USER: postgres
+      TWIN_PG_PASSWORD: postgres
+      TWIN_ADMIN_TOKEN: ${TWIN_ADMIN_TOKEN:-sgqBj52MF2CH3-IBOvflNoyeH-1XN6BmBF7oZzIT9Hs}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -32,11 +38,13 @@ services:
       context: .
       dockerfile: config-mcp-server/Dockerfile
     ports:
-      - "7102:7100"
+      - "27102:7099"
     environment:
       PYTHONPATH: /app:/app/shared
+      CONFIG_MCP_MASTER_KEY: ${CONFIG_MCP_MASTER_KEY}
+      MCP_PORT: "7099"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7099/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -54,11 +62,16 @@ services:
       context: .
       dockerfile: session-mcp-server/Dockerfile
     ports:
-      - "7103:7100"
+      - "27103:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      SESSION_PG_HOST: postgres
+      SESSION_PG_PORT: 5432
+      SESSION_PG_DB: platform_dev
+      SESSION_PG_USER: postgres
+      SESSION_PG_PASSWORD: postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -76,11 +89,16 @@ services:
       context: .
       dockerfile: audit-mcp-server/Dockerfile
     ports:
-      - "7104:7100"
+      - "27104:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      AUDIT_PG_HOST: postgres
+      AUDIT_PG_PORT: 5432
+      AUDIT_PG_DB: platform_dev
+      AUDIT_PG_USER: postgres
+      AUDIT_PG_PASSWORD: postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -98,11 +116,12 @@ services:
       context: .
       dockerfile: deploy-mcp-server/Dockerfile
     ports:
-      - "7105:7100"
+      - "27105:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      DEPLOY_GITHUB_TOKEN: ${DEPLOY_GITHUB_TOKEN}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -120,11 +139,16 @@ services:
       context: .
       dockerfile: docs-mcp-server/Dockerfile
     ports:
-      - "7106:7100"
+      - "27106:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      DOCS_PG_HOST: postgres
+      DOCS_PG_PORT: 5432
+      DOCS_PG_DB: platform_dev
+      DOCS_PG_USER: postgres
+      DOCS_PG_PASSWORD: postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -142,11 +166,16 @@ services:
       context: .
       dockerfile: infra-mcp-server/Dockerfile
     ports:
-      - "7107:7100"
+      - "27107:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      INFRA_PG_HOST: postgres
+      INFRA_PG_PORT: 5432
+      INFRA_PG_DB: platform_dev
+      INFRA_PG_USER: postgres
+      INFRA_PG_PASSWORD: postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -164,11 +193,12 @@ services:
       context: .
       dockerfile: pipeline-mcp-server/Dockerfile
     ports:
-      - "7108:7100"
+      - "27108:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      PG_DSN: "postgresql://postgres:postgres@postgres/platform_dev"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -186,11 +216,12 @@ services:
       context: .
       dockerfile: qa-mcp-server/Dockerfile
     ports:
-      - "7109:7100"
+      - "27109:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      PG_DSN: "postgresql://postgres:postgres@postgres/platform_dev"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -208,11 +239,12 @@ services:
       context: .
       dockerfile: services-mcp-server/Dockerfile
     ports:
-      - "7110:7100"
+      - "27110:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      PG_DSN: "postgresql://postgres:postgres@postgres/platform_dev"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -230,11 +262,16 @@ services:
       context: .
       dockerfile: test-mcp-server/Dockerfile
     ports:
-      - "7111:7100"
+      - "27111:7100"
     environment:
       PYTHONPATH: /app:/app/shared
+      TEST_PG_HOST: postgres
+      TEST_PG_PORT: 5432
+      TEST_PG_DB: platform_dev
+      TEST_PG_USER: postgres
+      TEST_PG_PASSWORD: postgres
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -252,11 +289,14 @@ services:
       context: .
       dockerfile: ai-governance-mcp-server/Dockerfile
     ports:
-      - "7112:7100"
+      - "27112:7100"
+    volumes:
+      - ./ai-governance-mcp-server/knowledge-base:/app/knowledge-base
     environment:
       PYTHONPATH: /app:/app/shared
+      GOVERNANCE_KB_PATH: /app/knowledge-base
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:7100/health"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -278,7 +318,7 @@ services:
       context: .
       dockerfile: ./archzilla-mcp-server/Dockerfile
     ports:
-      - "7118:7100"
+      - "27118:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -295,7 +335,7 @@ services:
       context: .
       dockerfile: ./backzilla-mcp-server/Dockerfile
     ports:
-      - "7119:7100"
+      - "27119:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -311,7 +351,7 @@ services:
       context: .
       dockerfile: ./frontzilla-mcp-server/Dockerfile
     ports:
-      - "7120:7100"
+      - "27120:7100"
     environment:
       PORT: 7100
     networks:
@@ -326,7 +366,7 @@ services:
       context: .
       dockerfile: ./opszilla-mcp-server/Dockerfile
     ports:
-      - "7121:7100"
+      - "27121:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -342,7 +382,7 @@ services:
       context: .
       dockerfile: ./pozilla-mcp-server/Dockerfile
     ports:
-      - "7122:7100"
+      - "27122:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -358,7 +398,7 @@ services:
       context: .
       dockerfile: ./productzilla-mcp-server/Dockerfile
     ports:
-      - "7123:7100"
+      - "27123:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -374,7 +414,7 @@ services:
       context: .
       dockerfile: ./qazilla-mcp-server/Dockerfile
     ports:
-      - "7124:7100"
+      - "27124:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -390,7 +430,7 @@ services:
       context: .
       dockerfile: ./seczilla-mcp-server/Dockerfile
     ports:
-      - "7125:7100"
+      - "27125:7100"
     environment:
       NODE_ENV: production
       PORT: 7100
@@ -407,10 +447,10 @@ services:
 
   mcp-gateway:
     build:
-      context: .
-      dockerfile: ./mcp-gateway/Dockerfile
+      context: ./mcp-gateway
+      dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "28080:8080"
     environment:
       PORT: 8080
     depends_on:
@@ -448,9 +488,9 @@ services:
     working_dir: /app
     volumes:
       - ./mcp-registry.py:/app/mcp-registry.py
-    command: bash -c "pip install fastapi uvicorn && python mcp-registry.py"
+    command: bash -c "pip install fastapi uvicorn aiohttp && python mcp-registry.py"
     ports:
-      - "8000:8000"
+      - "28000:8000"
     environment:
       PORT: 8000
     depends_on:
@@ -479,6 +519,8 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
