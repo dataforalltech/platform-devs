@@ -1,4 +1,4 @@
-"""Servidor MCP services â€” 17 tools para registro e monitoramento de serviÃ§os.
+“””Servidor MCP services â€” 19 tools para registro e monitoramento de serviÃ§os.
 
 Tools:
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -6,7 +6,8 @@ Tools:
   Discovery (4):  scan_docker, scan_processes, check_health, check_all_health
   Composite (3):  service_status, list_environments, reload_service
   Gateway (3):    get_gateway_map, update_service_gateway, sync_registry
-"""
+  Launch (2):     launch_service, stop_service
+“””
 
 from __future__ import annotations
 
@@ -38,6 +39,8 @@ from ..tools import (
     scan_docker,
     scan_processes,
     service_status,
+    launch_service,
+    stop_service,
     sync_registry,
     unregister_service,
     update_service,
@@ -447,7 +450,71 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "description": "Timeout em segundos para docker ps.",
                 },
             },
-            "additionalProperties": False,
+            “additionalProperties”: False,
+        },
+    },
+    # â”€â”€ Launch â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    “launch_service”: {
+        “description”: (
+            “Sobe um serviÃ§o via uvicorn, docker run ou docker-compose e registra no registry. “
+            “ApÃ³s o start faz polling no health_path atÃ© wait_timeout segundos. “
+            “Modos: 'uvicorn' (requer app), 'docker' (requer image), 'docker-compose' (usa compose_file/compose_service). “
+            “Retorna: started, healthy, ready_in_ms, attempts, external_url, pid/container_id.”
+        ),
+        “schema”: {
+            “type”: “object”,
+            “required”: [“name”, “mode”, “port”],
+            “additionalProperties”: False,
+            “properties”: {
+                “name”: {“type”: “string”, “description”: “Nome do serviÃ§o (usado no registry e como container name).”},
+                “mode”: {
+                    “type”: “string”,
+                    “enum”: [“uvicorn”, “docker”, “docker-compose”],
+                    “description”: “Modo de start.”,
+                },
+                “port”: {“type”: “integer”, “minimum”: 1, “maximum”: 65535, “description”: “Porta do host.”},
+                “app”: {“type”: “string”, “description”: “uvicorn: caminho ASGI (ex: 'mypackage.main:app').”},
+                “host”: {“type”: “string”, “default”: “localhost”, “description”: “Host para uvicorn. Default: localhost.”},
+                “cwd”: {“type”: “string”, “description”: “DiretÃ³rio de trabalho (uvicorn / docker-compose).”},
+                “extra_args”: {“type”: “array”, “items”: {“type”: “string”}, “description”: “Args extras passados ao comando.”},
+                “env_vars”: {“type”: “object”, “additionalProperties”: {“type”: “string”}, “description”: “VariÃ¡veis de ambiente.”},
+                “image”: {“type”: “string”, “description”: “docker: imagem Docker (ex: 'nginx:latest').”},
+                “container_port”: {“type”: “integer”, “description”: “docker: porta interna do container. Default: igual ao port.”},
+                “container_name”: {“type”: “string”, “description”: “docker: nome do container. Default: igual ao name.”},
+                “compose_file”: {“type”: “string”, “description”: “docker-compose: path para o compose file. Default: docker-compose.yml.”},
+                “compose_service”: {“type”: “string”, “description”: “docker-compose: nome do serviÃ§o no compose. Default: igual ao name.”},
+                “health_path”: {“type”: “string”, “default”: “/v1/health”, “description”: “Path do health check. Default: /v1/health.”},
+                “environment”: {
+                    “type”: “string”,
+                    “enum”: [“local”, “dev”, “hml”, “prod”],
+                    “default”: “local”,
+                    “description”: “Ambiente para registro.”,
+                },
+                “tags”: {“type”: “array”, “items”: {“type”: “string”}, “description”: “Tags para o serviÃ§o.”},
+                “wait_timeout”: {“type”: “integer”, “minimum”: 1, “maximum”: 300, “default”: 30, “description”: “Segundos aguardando o serviÃ§o responder. Default: 30.”},
+                “detach”: {“type”: “boolean”, “default”: True, “description”: “Rodar em background. Default: true.”},
+            },
+        },
+    },
+    “stop_service”: {
+        “description”: (
+            “Para um serviÃ§o registrado. “
+            “Detecta automaticamente o tipo: docker/docker-compose â†' docker stop; process/uvicorn â†' SIGTERM no PID. “
+            “Atualiza status=stopped no registry apÃ³s parar.”
+        ),
+        “schema”: {
+            “type”: “object”,
+            “required”: [“name”],
+            “additionalProperties”: False,
+            “properties”: {
+                “name”: {“type”: “string”, “description”: “Nome do serviÃ§o a parar.”},
+                “mode”: {
+                    “type”: “string”,
+                    “enum”: [“docker”, “docker-compose”, “process”],
+                    “description”: “ForÃ§ar tipo de stop. Se omitido, detecta pelo registro.”,
+                },
+                “timeout”: {“type”: “integer”, “minimum”: 1, “maximum”: 120, “default”: 10, “description”: “Timeout em segundos para docker stop. Default: 10.”},
+            },
         },
     },
 }
@@ -617,6 +684,36 @@ def _dispatch(
             include_docker=args.get("include_docker", True),
             probe_health=args.get("probe_health", True),
             docker_timeout=args.get("docker_timeout", 10),
+        )
+    # â"€â"€ Launch â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    if name == "launch_service":
+        return launch_service(
+            store,
+            name=args["name"],
+            mode=args["mode"],
+            port=args["port"],
+            app=args.get("app"),
+            host=args.get("host", "localhost"),
+            cwd=args.get("cwd"),
+            extra_args=args.get("extra_args"),
+            env_vars=args.get("env_vars"),
+            image=args.get("image"),
+            container_port=args.get("container_port"),
+            container_name=args.get("container_name"),
+            compose_file=args.get("compose_file"),
+            compose_service=args.get("compose_service"),
+            health_path=args.get("health_path", "/v1/health"),
+            environment=args.get("environment", "local"),
+            tags=args.get("tags"),
+            wait_timeout=args.get("wait_timeout", 30),
+            detach=args.get("detach", True),
+        )
+    if name == "stop_service":
+        return stop_service(
+            store,
+            name=args["name"],
+            mode=args.get("mode"),
+            timeout=args.get("timeout", 10),
         )
 
     raise KeyError(name)
