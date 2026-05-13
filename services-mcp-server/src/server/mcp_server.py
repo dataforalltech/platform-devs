@@ -1,4 +1,4 @@
-"""Servidor MCP services  -  22 tools pararegistro e monitoramento de servicos.
+"""Servidor MCP services  -  27 tools para registro e monitoramento de servicos.
 
 Tools:
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -8,6 +8,7 @@ Tools:
   Gateway (3):    get_gateway_map, update_service_gateway, sync_registry
   Launch (2):     launch_service, stop_service
   Env (5):        read_env_file, set_env_var, sync_service_urls, audit_env_files, redact_env_secrets
+  Brokers (3):    kafka_status, redis_status, sync_broker_urls
 """
 
 from __future__ import annotations
@@ -27,23 +28,28 @@ from mcp.types import TextContent, Tool
 from ..config.settings import ServicesSettings, get_settings
 from ..db.store import ServiceStore
 from ..tools import (
+    audit_env_files,
     check_all_health,
     check_health,
     find_by_port,
     get_gateway_map,
     get_port_map,
     get_service,
+    kafka_status,
     list_environments,
     list_services,
+    launch_service,
+    read_env_file,
+    redact_env_secrets,
+    redis_status,
     register_service,
     reload_service,
     scan_docker,
     scan_processes,
     service_status,
-    launch_service,
-    read_env_file,
     set_env_var,
     stop_service,
+    sync_broker_urls,
     sync_registry,
     sync_service_urls,
     unregister_service,
@@ -629,6 +635,58 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    # -- Brokers (Kafka / Redis) ---------------------------------------------- #
+    "kafka_status": {
+        "description": (
+            "Verifica conectividade TCP com o broker Kafka. "
+            "Se bootstrap_servers nao for passado, busca no registry (type='kafka' ou nome 'kafka'/'platform-kafka'). "
+            "Retorna lista de brokers com reachable=true/false e latencia em ms."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "bootstrap_servers": {
+                    "type": "string",
+                    "description": "Broker(s) Kafka: 'host:port' ou 'h1:p1,h2:p2'. Se omitido, usa registry.",
+                },
+            },
+        },
+    },
+    "redis_status": {
+        "description": (
+            "Verifica conectividade com o Redis via TCP + RESP PING. "
+            "Se url nao for passado, busca no registry (type='redis'/'cache'). "
+            "Retorna reachable, latencia_ms e resposta do PING."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "url": {
+                    "type": "string",
+                    "description": "URL Redis: redis://host:port/db ou host:port. Se omitido, usa registry.",
+                },
+            },
+        },
+    },
+    "sync_broker_urls": {
+        "description": (
+            "Atualiza vars de conexao de Kafka e Redis num arquivo .env a partir do registry. "
+            "Vars tratadas: KAFKA_BOOTSTRAP_SERVERS, REDIS_URL, REDIS_HOST, REDIS_URI, "
+            "RATE_LIMIT_STORAGE_URI, CACHE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND. "
+            "Preserva o /db da URL Redis existente. Use dry_run=true para simular."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env a atualizar."},
+                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar o arquivo. Default: false."},
+            },
+        },
+    },
 }
 
 
@@ -847,6 +905,28 @@ def _dispatch(
             url_suffix=args.get("url_suffix", ""),
             dry_run=args.get("dry_run", False),
         )
+    if name == "audit_env_files":
+        return audit_env_files(
+            store,
+            directory=args["directory"],
+            include_pattern=args.get("include_pattern", ".env*"),
+            check_registry_urls=args.get("check_registry_urls", True),
+        )
+    if name == "redact_env_secrets":
+        return redact_env_secrets(
+            store,
+            paths=args["paths"],
+            keys=args.get("keys"),
+            auto_detect=args.get("auto_detect", True),
+            dry_run=args.get("dry_run", False),
+        )
+    # -- Brokers ----------------------------------------------------------------
+    if name == "kafka_status":
+        return kafka_status(store, bootstrap_servers=args.get("bootstrap_servers"))
+    if name == "redis_status":
+        return redis_status(store, url=args.get("url"))
+    if name == "sync_broker_urls":
+        return sync_broker_urls(store, path=args["path"], dry_run=args.get("dry_run", False))
 
     raise KeyError(name)
 
