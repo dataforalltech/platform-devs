@@ -1,12 +1,14 @@
-"""Servidor MCP deploy — 20 tools para Git, PR, GitHub Actions, pipeline CI/CD e ACR.
+"""Servidor MCP deploy — 24 tools para Git, PR, GitHub Actions, pipeline CI/CD, ACR e workspace local.
 
 Tools:
-  Git (4):      list_repos, create_branch, list_branches, commit_files
-  PR (4):       create_pr, get_pr, merge_pr, list_prs
-  Workflow (4): trigger_workflow, list_workflow_runs, get_workflow_run, cancel_workflow_run
-  Deploy (2):   deploy, get_deploy_status
-  Pipeline (2): scaffold_pipeline, get_pipeline_templates
-  ACR (3):      setup_repo, acr_build, list_acr_images
+  Git (4):            list_repos, create_branch, list_branches, commit_files
+  PR (4):             create_pr, get_pr, merge_pr, list_prs
+  Workflow (4):       trigger_workflow, list_workflow_runs, get_workflow_run, cancel_workflow_run
+  Deploy (2):         deploy, get_deploy_status
+  Pipeline (2):       scaffold_pipeline, get_pipeline_templates
+  ACR (3):            setup_repo, acr_build, list_acr_images
+  Healthcheck (1):    ensure_all_repos_healthy
+  Local Workspace (4): get_repos_root, set_repos_root, list_local_repos, clone_repo
 """
 
 from __future__ import annotations
@@ -27,6 +29,7 @@ from ..knowledge.github_client import GitHubClient
 from ..tools import (
     acr_build,
     cancel_workflow_run,
+    clone_repo,
     commit_files,
     create_branch,
     create_pr,
@@ -35,14 +38,17 @@ from ..tools import (
     get_deploy_status,
     get_pipeline_templates,
     get_pr,
+    get_repos_root,
     get_workflow_run,
     list_acr_images,
     list_branches,
+    list_local_repos,
     list_prs,
     list_repos,
     list_workflow_runs,
     merge_pr,
     scaffold_pipeline,
+    set_repos_root,
     setup_repo,
     trigger_workflow,
 )
@@ -633,6 +639,116 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    # ── Local Workspace ──────────────────────────────────────────────────── #
+    "get_repos_root": {
+        "description": (
+            "Retorna o caminho resolvido de REPOS_ROOT e quantos repos existem la. "
+            "Resolucao: argumento > DEPLOY_REPOS_ROOT > REPOS_ROOT > config-mcp workspace > auto-detect. "
+            "Use para descobrir onde os repos estao antes de clonar ou listar."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "explicit": {
+                    "type": "string",
+                    "description": "Caminho explicito a usar (sobrepoe todas as outras fontes).",
+                },
+            },
+        },
+    },
+    "set_repos_root": {
+        "description": (
+            "Define a pasta raiz dos repositorios locais. "
+            "Persiste REPOS_ROOT no config-mcp (namespace workspace) para uso em todas as sessoes. "
+            "create_dir=true cria o diretorio se nao existir. "
+            "persist=false (default true) apenas valida sem salvar no config-mcp."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Caminho absoluto (ou ~ expandido) da pasta de repos.",
+                },
+                "create_dir": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Cria o diretorio se nao existir. Default: false.",
+                },
+                "persist": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Salva no config-mcp para persistir entre sessoes. Default: true.",
+                },
+            },
+        },
+    },
+    "list_local_repos": {
+        "description": (
+            "Lista repositorios clonados em REPOS_ROOT. "
+            "Para cada repo com .git retorna: branch atual, remote origin, ultimo commit, dirty flag, latest tag. "
+            "filter_name: filtra por substring no nome. "
+            "include_git_info=false retorna apenas nomes (muito mais rapido para muitos repos)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "repos_root": {
+                    "type": "string",
+                    "description": "Caminho da pasta de repos (sobrepoe REPOS_ROOT configurado).",
+                },
+                "filter_name": {
+                    "type": "string",
+                    "description": "Filtro substring case-insensitive no nome do repo.",
+                },
+                "include_git_info": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Coleta branch, remote, commits de cada repo. Default: true.",
+                },
+            },
+        },
+    },
+    "clone_repo": {
+        "description": (
+            "Clona um repositorio do GitHub para REPOS_ROOT/<repo>. "
+            "repo: nome simples ('platform-auth') ou 'owner/repo'. "
+            "Usa o GITHUB_TOKEN configurado (sem expor o token no remote URL retornado). "
+            "depth: shallow clone para repos grandes."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["repo"],
+            "additionalProperties": False,
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repo ('platform-auth') ou 'owner/repo'.",
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "Branch/tag/SHA a clonar. Default: branch padrao do repo.",
+                },
+                "repos_root": {
+                    "type": "string",
+                    "description": "Pasta destino (sobrepoe REPOS_ROOT configurado).",
+                },
+                "target_dir": {
+                    "type": "string",
+                    "description": "Nome do diretorio destino. Default: nome do repo.",
+                },
+                "depth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Shallow clone --depth N. Default: clone completo.",
+                },
+            },
+        },
+    },
 }
 
 
@@ -864,6 +980,33 @@ def _dispatch(
             ref=args.get("ref", "develop"),
             wait_minutes=args.get("wait_minutes", 10),
             dry_run=args.get("dry_run", False),
+        )
+    # ── Local Workspace ──────────────────────────────────────────────────────── #
+    if name == "get_repos_root":
+        return get_repos_root(settings, explicit=args.get("explicit"))
+    if name == "set_repos_root":
+        return set_repos_root(
+            settings,
+            path=args["path"],
+            create_dir=args.get("create_dir", False),
+            persist=args.get("persist", True),
+        )
+    if name == "list_local_repos":
+        return list_local_repos(
+            settings,
+            repos_root=args.get("repos_root"),
+            filter_name=args.get("filter_name"),
+            include_git_info=args.get("include_git_info", True),
+        )
+    if name == "clone_repo":
+        return clone_repo(
+            client,
+            settings,
+            repo=args["repo"],
+            branch=args.get("branch"),
+            repos_root=args.get("repos_root"),
+            target_dir=args.get("target_dir"),
+            depth=args.get("depth"),
         )
 
     raise KeyError(name)
