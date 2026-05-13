@@ -123,6 +123,27 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "additionalProperties": True,
                     "description": "Metadados extras (chave-valor livre).",
                 },
+                "runtime": {
+                    "type": "string",
+                    "description": "Runtime do servico: uvicorn, gunicorn, node, java, docker, etc.",
+                },
+                "deploy_mode": {
+                    "type": "string",
+                    "enum": ["asgi", "wsgi", "node", "jvm", "proxy", "docker", "script", "unknown"],
+                    "description": "Modo de deploy derivado do runtime.",
+                },
+                "os_name": {
+                    "type": "string",
+                    "description": "Sistema operacional: linux, windows, darwin.",
+                },
+                "os_release": {
+                    "type": "string",
+                    "description": "Versao do OS/kernel (ex: 5.15.0-78-generic).",
+                },
+                "hostname": {
+                    "type": "string",
+                    "description": "Hostname do container ou da maquina.",
+                },
             },
             "required": ["name", "port"],
             "additionalProperties": False,
@@ -141,8 +162,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_services": {
         "description": (
-            "Listaservicos registrados. "
-            "Suportafiltros por environment, type, status e tag."
+            "Lista servicos registrados. "
+            "Suporta filtros por environment, type, status, tag, runtime e deploy_mode."
         ),
         "schema": {
             "type": "object",
@@ -154,7 +175,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "type": {
                     "type": "string",
-                    "enum": ["docker", "process", "remote", "unknown"],
+                    "enum": [
+                        "docker", "process", "remote", "unknown",
+                        "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+                    ],
                     "description": "Filtrar por tipo.",
                 },
                 "status": {
@@ -165,6 +189,15 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "tag": {
                     "type": "string",
                     "description": "Filtrar por tag.",
+                },
+                "runtime": {
+                    "type": "string",
+                    "description": "Filtrar por runtime (ex: uvicorn, gunicorn, node, docker).",
+                },
+                "deploy_mode": {
+                    "type": "string",
+                    "enum": ["asgi", "wsgi", "node", "jvm", "proxy", "docker", "script", "unknown"],
+                    "description": "Filtrar por modo de deploy.",
                 },
             },
             "additionalProperties": False,
@@ -871,6 +904,8 @@ def _dispatch(
             tag=args.get("tag"),
             type=args.get("type"),
             status=args.get("status"),
+            runtime=args.get("runtime"),
+            deploy_mode=args.get("deploy_mode"),
         )
     if name == "update_service":
         update_args = {k: v for k, v in args.items() if k != "name"}

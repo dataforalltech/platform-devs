@@ -48,9 +48,6 @@ class ServiceStore:
         with self._get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute("""
-                    ALTER TABLE services ADD COLUMN IF NOT EXISTS internal_url TEXT;
-                """)
-                cur.execute("""
                     CREATE TABLE IF NOT EXISTS services (
                         name           TEXT PRIMARY KEY,
                         host           TEXT NOT NULL DEFAULT 'localhost',
@@ -71,6 +68,16 @@ class ServiceStore:
                         last_check_ok  INTEGER
                     );
                 """)
+                # Runtime environment columns (idempotent ALTERs)
+                for col_ddl in [
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS internal_url TEXT",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime      TEXT NOT NULL DEFAULT 'unknown'",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS os_name      TEXT",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS os_release   TEXT",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS hostname     TEXT",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS deploy_mode  TEXT",
+                ]:
+                    cur.execute(col_ddl)
 
     def upsert(self, name: str, fields: dict[str, Any]) -> dict[str, Any]:
         with self._lock:
@@ -125,6 +132,8 @@ class ServiceStore:
         type_: str | None = None,
         status: str | None = None,
         tag: str | None = None,
+        runtime: str | None = None,
+        deploy_mode: str | None = None,
     ) -> list[dict]:
         with self._lock:
             with self._get_conn() as conn:
@@ -140,6 +149,12 @@ class ServiceStore:
                     if status:
                         query += " AND status=%s"
                         params.append(status)
+                    if runtime:
+                        query += " AND runtime=%s"
+                        params.append(runtime)
+                    if deploy_mode:
+                        query += " AND deploy_mode=%s"
+                        params.append(deploy_mode)
                     query += " ORDER BY name"
                     cur.execute(query, params)
                     rows = cur.fetchall()
