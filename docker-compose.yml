@@ -310,6 +310,37 @@ services:
       - "language=python"
 
   # ============================================================================
+  # Domain MCPs — Trinity pattern (REST API + Lib + MCP por servico)
+  # ============================================================================
+
+  analytics-mcp:
+    build:
+      context: ../platform-analytics
+      dockerfile: Dockerfile.mcp
+    ports:
+      - "27113:7100"
+    environment:
+      PYTHONPATH: /app
+      ANALYTICS_MCP_ANALYTICS_URL: "http://host.docker.internal:8000"
+      ANALYTICS_MCP_INTERNAL_API_TOKEN: ${ANALYTICS_INTERNAL_TOKEN:-dev-internal-token-replace-me}
+      ANALYTICS_MCP_DEFAULT_TENANT_ID: ${ANALYTICS_DEFAULT_TENANT_ID:-}
+      MCP_PORT: "7100"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mcp-network
+    restart: unless-stopped
+    labels:
+      - "mcp=analytics-mcp"
+      - "type=domain"
+      - "language=python"
+      - "service=platform-analytics"
+
+  # ============================================================================
   # Zilla MCPs (Node.js - já vêm em Docker)
   # ============================================================================
 
