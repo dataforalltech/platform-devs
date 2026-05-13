@@ -9,8 +9,20 @@ context_status   — retorna métricas de uso do contexto e recomendação de /c
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
+
+try:
+    from shared.config_client import ConfigClient
+    _has_config_client = True
+except ImportError:
+    _has_config_client = False
+
+_log = logging.getLogger(__name__)
+
+_CRITICAL_PREFIXES = ("JWT_", "URL_")
+_CRITICAL_EXACT = {"INTERNAL_API_TOKEN", "SERVICE_ID"}
 
 from ..knowledge.session import (
     SessionManager,
@@ -61,6 +73,26 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
     SessionManager.set(session)
     store.touch(record["user_id"])
 
+    # --- Load env config from config-mcp (non-blocking) ---
+    env_config_loaded = False
+    env_vars_count = 0
+    if _has_config_client:
+        try:
+            client = ConfigClient.from_env()
+            all_vars = client.get_env_config(session.environment)
+            if all_vars:
+                critical_vars = {
+                    k: v
+                    for k, v in all_vars.items()
+                    if any(k.startswith(p) for p in _CRITICAL_PREFIXES)
+                    or k in _CRITICAL_EXACT
+                }
+                SessionManager.update_context({"env_config": critical_vars})
+                env_config_loaded = True
+                env_vars_count = len(critical_vars)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("config_mcp_unavailable: %s", exc)
+
     return {
         "authenticated": True,
         "user_id": session.user_id,
@@ -68,6 +100,9 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         "role": session.role,
         "environment": session.environment,
         "tenant_id": session.tenant_id,
+        "env_config_loaded": env_config_loaded,
+        "env_vars_count": env_vars_count,
+        "active_env_namespace": f"env.{session.environment}",
         "message": (
             f"Bem-vindo, {session.name}! "
             "Use get_twin_context() para contexto completo (git, OS)."

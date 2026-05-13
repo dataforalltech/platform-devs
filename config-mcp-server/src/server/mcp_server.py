@@ -225,6 +225,75 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
+    # ── Env (file-based) ─────────────────────────────────────────────────────── #
+    "read_env_file": {
+        "description": (
+            "Le um arquivo .env do disco e retorna as variaveis como dict. "
+            "Complemento ao get_env_config que le do store encriptado."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env."},
+                "key_filter": {"type": "string", "description": "Filtro substring nas chaves (case-insensitive). Ex: 'URL'."},
+            },
+        },
+    },
+    "audit_env_files": {
+        "description": (
+            "Escaneia todos os arquivos .env.* de um diretorio e reporta problemas. "
+            "Detecta secrets hardcoded (JWT_SECRET_KEY, DB_PASSWORD, TOKEN...), "
+            "arquivos fora do padrao canonico, e verifica cobertura no ConfigStore."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["directory"],
+            "additionalProperties": False,
+            "properties": {
+                "directory": {"type": "string", "description": "Caminho do diretorio a escanear (ex: /path/to/platform-auth)."},
+                "include_pattern": {"type": "string", "default": ".env*", "description": "Glob para os arquivos. Default: .env*."},
+                "check_store": {"type": "boolean", "default": True, "description": "Verificar se os secrets ja estao no ConfigStore. Default: true."},
+            },
+        },
+    },
+    "redact_env_secrets": {
+        "description": (
+            "Substitui valores hardcoded de secrets por ${VAR_NAME} em arquivos .env. "
+            "Ex: JWT_SECRET_KEY=XrDsC... vira JWT_SECRET_KEY=${JWT_SECRET_KEY}. "
+            "Use dry_run=true para simular antes de aplicar."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["paths"],
+            "additionalProperties": False,
+            "properties": {
+                "paths": {"type": "array", "items": {"type": "string"}, "description": "Lista de caminhos dos arquivos .env."},
+                "keys": {"type": "array", "items": {"type": "string"}, "description": "Chaves explicitas a redact. Se omitido, usa auto_detect."},
+                "auto_detect": {"type": "boolean", "default": True, "description": "Detectar automaticamente via padrao de nomes. Default: true."},
+                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar arquivos. Default: false."},
+            },
+        },
+    },
+    "push_env_to_store": {
+        "description": (
+            "Le um arquivo .env do disco e importa as variaveis para o ConfigStore encriptado "
+            "no namespace env.<environment>. Ideal para inicializar o store a partir de um arquivo existente. "
+            "Apos o push, use sync_env_file para gerar arquivos .env a partir do store."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path", "environment"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho do arquivo .env a importar."},
+                "environment": {"type": "string", "description": "Perfil de ambiente destino (ex: 'dev', 'local')."},
+                "overwrite": {"type": "boolean", "default": False, "description": "Sobrescrever vars ja existentes no store. Default: false."},
+                "secrets_only": {"type": "boolean", "default": False, "description": "Importar apenas vars identificadas como secrets. Default: false."},
+            },
+        },
+    },
     # ── Sysinfo ───────────────────────────────────────────────────────────── #
     "get_physical_info": {
         "description": (
@@ -410,7 +479,31 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
             environment=args["environment"],
             merge=args.get("merge", True),
         )
-    # ── Sysinfo ───────────────────────────────────────────────────────────── #
+    if name == "read_env_file":
+        return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
+    if name == "audit_env_files":
+        return audit_env_files(
+            store,
+            directory=args["directory"],
+            include_pattern=args.get("include_pattern", ".env*"),
+            check_store=args.get("check_store", True),
+        )
+    if name == "redact_env_secrets":
+        return redact_env_secrets(
+            store,
+            paths=args["paths"],
+            keys=args.get("keys"),
+            auto_detect=args.get("auto_detect", True),
+            dry_run=args.get("dry_run", False),
+        )
+    if name == "push_env_to_store":
+        return push_env_to_store(
+            store,
+            path=args["path"],
+            environment=args["environment"],
+            overwrite=args.get("overwrite", False),
+            secrets_only=args.get("secrets_only", False),
+        )
     if name == "get_physical_info":
         return get_physical_info()
     # ── Tenants ───────────────────────────────────────────────────────────── #
