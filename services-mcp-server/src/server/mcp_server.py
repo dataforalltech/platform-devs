@@ -1,4 +1,4 @@
-"""Servidor MCP services  -  27 tools para registro e monitoramento de servicos.
+"""Servidor MCP services  -  30 tools para registro e monitoramento de servicos.
 
 Tools:
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -8,6 +8,7 @@ Tools:
   Gateway (3):    get_gateway_map, update_service_gateway, sync_registry
   Launch (2):     launch_service, stop_service
   Env (5):        read_env_file, set_env_var, sync_service_urls, audit_env_files, redact_env_secrets
+  Infra (3):      register_infra, scan_infra, sync_infra_env
   Brokers (3):    kafka_status, redis_status, sync_broker_urls
 """
 
@@ -42,14 +43,17 @@ from ..tools import (
     read_env_file,
     redact_env_secrets,
     redis_status,
+    register_infra,
     register_service,
     reload_service,
     scan_docker,
+    scan_infra,
     scan_processes,
     service_status,
     set_env_var,
     stop_service,
     sync_broker_urls,
+    sync_infra_env,
     sync_registry,
     sync_service_urls,
     unregister_service,
@@ -91,7 +95,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "type": {
                     "type": "string",
-                    "enum": ["docker", "process", "remote", "unknown"],
+                    "enum": [
+                        "docker", "process", "remote", "unknown",
+                        "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+                    ],
                     "description": "Tipo do servico. Default: unknown.",
                     "default": "unknown",
                 },
@@ -635,6 +642,73 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    # -- Infra (MySQL / Postgres / Redis / Kafka) -------------------------------- #
+    "register_infra": {
+        "description": (
+            "Registra um servico de infraestrutura no registry com defaults inteligentes por tipo. "
+            "Tipos suportados: mysql, mariadb, postgres, redis, kafka, mongodb. "
+            "Para Kafka, use host_port para a porta EXTERNAL (ex: 9094) acessivel do host."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["name", "kind"],
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string", "description": "Nome unico no registry (ex: mysql, redis, kafka)."},
+                "kind": {
+                    "type": "string",
+                    "enum": ["mysql", "mariadb", "postgres", "redis", "kafka", "mongodb"],
+                    "description": "Tipo de infraestrutura.",
+                },
+                "host": {"type": "string", "default": "localhost", "description": "Host. Default: localhost."},
+                "port": {"type": "integer", "description": "Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379, kafka:9092)."},
+                "host_port": {"type": "integer", "description": "Porta mapeada no host para acesso externo (Kafka EXTERNAL listener). Ex: 9094."},
+                "environment": {"type": "string", "default": "local", "description": "Ambiente. Default: local."},
+                "container_name": {"type": "string", "description": "Nome do container Docker, se aplicavel."},
+                "metadata": {"type": "object", "additionalProperties": True, "description": "Metadados extras livres."},
+            },
+        },
+    },
+    "scan_infra": {
+        "description": (
+            "Varre containers Docker em execucao e registra automaticamente os de infraestrutura "
+            "(mysql, mariadb, postgres, redis, kafka, mongodb) detectados pelo nome da imagem. "
+            "Para Kafka, usa a porta EXTERNAL (9094) se disponivel. "
+            "Nao afeta containers de aplicacao (plataform-*, mcp-*, etc)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "timeout": {"type": "integer", "default": 10, "description": "Timeout do docker ps em segundos. Default: 10."},
+                "environment": {"type": "string", "default": "local", "description": "Ambiente a marcar nos registros. Default: local."},
+            },
+        },
+    },
+    "sync_infra_env": {
+        "description": (
+            "Atualiza TODAS as vars de conexao de infraestrutura num arquivo .env a partir do registry. "
+            "DB: DB_HOST, DB_PORT, ADMIN_DB_HOST, ADMIN_DB_PORT (detecta DB_ENGINE automaticamente). "
+            "Redis: REDIS_URL, RATE_LIMIT_STORAGE_URI, CACHE_URL, CELERY_BROKER_URL, etc. "
+            "Kafka: KAFKA_BOOTSTRAP_SERVERS (usa porta EXTERNAL/host_port se registrada). "
+            "Postgres: DATABASE_URL (reconstroi DSN). "
+            "Use dry_run=true para simular antes de aplicar."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["path"],
+            "additionalProperties": False,
+            "properties": {
+                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env a atualizar."},
+                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar o arquivo. Default: false."},
+                "db_kind": {
+                    "type": "string",
+                    "enum": ["mysql", "mariadb", "postgres"],
+                    "description": "Forca o tipo de DB se DB_ENGINE nao estiver no arquivo. Default: mysql.",
+                },
+            },
+        },
+    },
     # -- Brokers (Kafka / Redis) ---------------------------------------------- #
     "kafka_status": {
         "description": (
@@ -919,6 +993,32 @@ def _dispatch(
             keys=args.get("keys"),
             auto_detect=args.get("auto_detect", True),
             dry_run=args.get("dry_run", False),
+        )
+    # -- Infra ------------------------------------------------------------------
+    if name == "register_infra":
+        return register_infra(
+            store,
+            name=args["name"],
+            kind=args["kind"],
+            host=args.get("host", "localhost"),
+            port=args.get("port"),
+            host_port=args.get("host_port"),
+            environment=args.get("environment", "local"),
+            container_name=args.get("container_name"),
+            metadata=args.get("metadata"),
+        )
+    if name == "scan_infra":
+        return scan_infra(
+            store,
+            timeout=args.get("timeout", 10),
+            environment=args.get("environment", "local"),
+        )
+    if name == "sync_infra_env":
+        return sync_infra_env(
+            store,
+            path=args["path"],
+            dry_run=args.get("dry_run", False),
+            db_kind=args.get("db_kind"),
         )
     # -- Brokers ----------------------------------------------------------------
     if name == "kafka_status":

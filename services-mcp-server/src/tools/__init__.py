@@ -1,4 +1,5 @@
 from .broker_tool import kafka_status, redis_status, sync_broker_urls
+from .infra_tool import register_infra, scan_infra, sync_infra_env
 from .composite_tool import list_environments, reload_service, service_status
 from .discovery_tool import check_all_health, check_health, scan_docker, scan_processes
 from .env_tool import audit_env_files, read_env_file, redact_env_secrets, set_env_var, sync_service_urls
@@ -41,4 +42,7 @@ __all__ = [
     "kafka_status",
     "redis_status",
     "sync_broker_urls",
+    "register_infra",
+    "scan_infra",
+    "sync_infra_env",
 ]
