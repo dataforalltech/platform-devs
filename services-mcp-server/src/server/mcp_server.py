@@ -1,4 +1,4 @@
-"""Servidor MCP services  -  30 tools para registro e monitoramento de servicos.
+"""Servidor MCP services  -  32 tools para registro e monitoramento de servicos.
 
 Tools:
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -10,6 +10,10 @@ Tools:
   Env (5):        read_env_file, set_env_var, sync_service_urls, audit_env_files, redact_env_secrets
   Infra (3):      register_infra, scan_infra, sync_infra_env
   Brokers (3):    kafka_status, redis_status, sync_broker_urls
+  Logs (2):       get_service_logs, search_logs
+
+Streaming (HTTP sidecar):
+  GET /v1/services/{name}/logs/stream?lines=50&grep=<pattern>&timestamps=false
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from ..tools import (
     get_gateway_map,
     get_port_map,
     get_service,
+    get_service_logs,
     kafka_status,
     list_environments,
     list_services,
@@ -49,6 +54,7 @@ from ..tools import (
     scan_docker,
     scan_infra,
     scan_processes,
+    search_logs,
     service_status,
     set_env_var,
     stop_service,
@@ -794,6 +800,47 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    # -- Logs ------------------------------------------------------------------- #
+    "get_service_logs": {
+        "description": (
+            "Retorna as ultimas N linhas de log de um servico registrado. "
+            "Suporta Docker (container_name), arquivo de log (metadata.log_path) e systemd/journald (Linux). "
+            "since: '30m', '1h', '2h30m', '5s' ou timestamp ISO 8601. "
+            "grep: filtro regex case-insensitive nas linhas retornadas. "
+            "timestamps: inclui timestamp Docker em cada linha."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string", "description": "Nome do servico no registry."},
+                "lines": {"type": "integer", "default": 100, "description": "Numero de linhas a retornar. Default: 100."},
+                "since": {"type": "string", "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional."},
+                "grep": {"type": "string", "description": "Filtro regex case-insensitive nas linhas. Opcional."},
+                "timestamps": {"type": "boolean", "default": False, "description": "Inclui timestamp Docker. Default: false."},
+            },
+        },
+    },
+    "search_logs": {
+        "description": (
+            "Busca por padrao regex nos logs recentes de um servico. "
+            "Varre as ultimas N linhas e retorna apenas as que batem com o padrao. "
+            "lines: quantas linhas vasculhar antes de filtrar (default 500). "
+            "since: restringe a janela temporal (opcional)."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["name", "pattern"],
+            "additionalProperties": False,
+            "properties": {
+                "name": {"type": "string", "description": "Nome do servico no registry."},
+                "pattern": {"type": "string", "description": "Padrao regex a buscar nos logs (case-insensitive)."},
+                "lines": {"type": "integer", "default": 500, "description": "Janela de linhas a vasculhar. Default: 500."},
+                "since": {"type": "string", "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional."},
+            },
+        },
+    },
 }
 
 
@@ -801,6 +848,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # HTTP API (sidecar paradiscovery por outros MCPs, ex: agent-twin)            #
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 def _build_http_app(store: ServiceStore) -> FastAPI:
+    from fastapi.responses import StreamingResponse
+
+    from ..tools.log_tool import _resolve_log_source, _stream_docker_logs, _stream_file_logs
+
     app = FastAPI(title="services-mcp API", version="0.1.0", docs_url="/docs")
 
     @app.get("/v1/health")
@@ -810,6 +861,34 @@ def _build_http_app(store: ServiceStore) -> FastAPI:
         except Exception as exc:  # noqa: BLE001
             return {"status": "degraded", "error": str(exc)}
         return {"status": "ok", "service": "services-mcp", "registered_services": count}
+
+    @app.get("/v1/services/{name}/logs/stream")
+    async def stream_logs(
+        name: str,
+        lines: int = 50,
+        grep: str | None = None,
+        timestamps: bool = False,
+    ):
+        """SSE endpoint — stream de logs em tempo real para um servico registrado."""
+        svc = store.get(name)
+        if svc is None:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=404, detail=f"Servico nao encontrado: {name}")
+
+        source_info = _resolve_log_source(svc)
+        source = source_info["source"]
+        target = source_info["target"]
+
+        if source == "docker":
+            gen = _stream_docker_logs(target, lines=lines, grep=grep, timestamps=timestamps)
+        elif source == "file":
+            gen = _stream_file_logs(target, lines=lines, grep=grep)
+        else:
+            async def _no_source():
+                yield 'data: {"error": "no_log_source", "detail": "Servico nao possui fonte de log configurada."}\n\n'
+            gen = _no_source()
+
+        return StreamingResponse(gen, media_type="text/event-stream")
 
     @app.get("/")
     def root() -> dict[str, str]:
@@ -1062,6 +1141,24 @@ def _dispatch(
         return redis_status(store, url=args.get("url"))
     if name == "sync_broker_urls":
         return sync_broker_urls(store, path=args["path"], dry_run=args.get("dry_run", False))
+    # -- Logs -------------------------------------------------------------------
+    if name == "get_service_logs":
+        return get_service_logs(
+            store,
+            name=args["name"],
+            lines=args.get("lines", 100),
+            since=args.get("since"),
+            grep=args.get("grep"),
+            timestamps=args.get("timestamps", False),
+        )
+    if name == "search_logs":
+        return search_logs(
+            store,
+            name=args["name"],
+            pattern=args["pattern"],
+            lines=args.get("lines", 500),
+            since=args.get("since"),
+        )
 
     raise KeyError(name)
 
