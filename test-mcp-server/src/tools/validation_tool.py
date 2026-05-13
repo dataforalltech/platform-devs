@@ -19,7 +19,11 @@ def add_finding(
     description: str,
     evidence: str | None = None,
 ) -> dict[str, Any]:
-    """Registra um bug, problema ou risco encontrado durante os testes."""
+    """Registra um bug no banco de dados (exposto como add_bug no MCP).
+
+    Persiste na tabela bug_reports vinculado ao plan_id.
+    Bugs críticos bloqueiam a aprovação via double_check().
+    """
     if not plan_id or not title or not description:
         return {"error": "ValidationError", "details": "plan_id, title e description são obrigatórios"}
     if severity not in _VALID_SEVERITIES:

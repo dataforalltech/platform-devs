@@ -234,26 +234,31 @@ def build_server() -> tuple[Any, ...]:
                     },
                 },
             ),
-            # ── Validation ─────────────────────────────────────────────────── #
+            # ── Bugs ───────────────────────────────────────────────────────── #
             Tool(
-                name="add_finding",
+                name="add_bug",
                 description=(
-                    "Registra um bug, problema ou risco encontrado durante os testes. "
-                    "Findings críticos bloqueiam a aprovação do plano."
+                    "Registra um BUG no banco de dados vinculado a um plano de teste. "
+                    "USE ESTA TOOL sempre que encontrar um bug, erro, falha ou comportamento inesperado — "
+                    "NÃO use add_artifact para bugs. "
+                    "Bugs críticos bloqueiam a aprovação do plano (double_check retorna BLOQUEADO). "
+                    "Severidades: critical (sistema inoperante) | high (funcionalidade quebrada) | "
+                    "medium (degradação parcial) | low (cosmético/menor)."
                 ),
                 inputSchema={
                     "type": "object",
                     "additionalProperties": False,
                     "required": ["plan_id", "severity", "title", "description"],
                     "properties": {
-                        "plan_id": {"type": "string"},
+                        "plan_id": {"type": "string", "description": "ID do plano de teste ao qual o bug pertence."},
                         "severity": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
+                            "description": "critical=sistema parado | high=funcionalidade quebrada | medium=degradação | low=cosmético",
                         },
-                        "title": {"type": "string", "description": "Título curto do finding"},
-                        "description": {"type": "string", "description": "Descrição detalhada do problema"},
-                        "evidence": {"type": "string", "description": "Link ou referência para evidência"},
+                        "title": {"type": "string", "description": "Título curto e descritivo do bug (ex: 'Login falha com email maiúsculo')"},
+                        "description": {"type": "string", "description": "Descrição detalhada: passos para reproduzir, comportamento esperado vs atual."},
+                        "evidence": {"type": "string", "description": "Log, screenshot, stack trace ou link para evidência."},
                     },
                 },
             ),
@@ -317,7 +322,7 @@ def build_server() -> tuple[Any, ...]:
                 case "check_item":
                     result = checklist_tool.check_item(store, **arguments)
                 # Validation
-                case "add_finding":
+                case "add_bug" | "add_finding":  # add_finding mantido por compatibilidade
                     result = validation_tool.add_finding(store, **arguments)
                 case "double_check":
                     result = validation_tool.double_check(store, **arguments)
