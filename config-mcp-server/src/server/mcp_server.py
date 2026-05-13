@@ -1,4 +1,4 @@
-"""Servidor MCP config — 14 tools para credenciais, ambientes, tenants e hardware.
+"""Servidor MCP config — 21 tools para credenciais, ambientes, tenants, hardware e workspace.
 
 Tools:
   Credentials (5): get_credential, set_credential, set_credential_secure,
@@ -31,19 +31,26 @@ from ..config.settings import ConfigMcpSettings, get_settings
 from ..knowledge.encryptor import Encryptor
 from ..knowledge.store import ConfigStore
 from ..tools import (
+    audit_env_files,
     delete_credential,
     get_credential,
     get_env_config,
     get_physical_info,
     get_session_tenant_config,
     get_tenant_config,
+    get_workspace_config,
     list_credentials,
     list_environments,
     list_tenants,
+    list_workspace_config,
+    push_env_to_store,
+    read_env_file,
+    redact_env_secrets,
     set_credential,
     set_credential_secure,
     set_env_var,
     set_tenant_config,
+    set_workspace_config,
     sync_env_file,
 )
 
@@ -294,6 +301,64 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    # ── Workspace ─────────────────────────────────────────────────────────── #
+    "get_workspace_config": {
+        "description": (
+            "Le configuracao do workspace do namespace 'workspace' no ConfigStore. "
+            "Chaves canonicas: REPOS_ROOT (pasta dos repos), PYTHON_BIN, EDITOR, DEFAULT_ENV. "
+            "Se key for passado, retorna apenas aquela chave com fallback para variaveis de ambiente."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Chave especifica a ler (ex: REPOS_ROOT). Se omitido, retorna todas.",
+                },
+            },
+        },
+    },
+    "set_workspace_config": {
+        "description": (
+            "Define ou atualiza uma chave no namespace 'workspace' do ConfigStore. "
+            "Para REPOS_ROOT: valida que o caminho existe (use create_dir=true para criar). "
+            "Outras chaves sao armazenadas livremente. "
+            "Exemplo: set_workspace_config(key='REPOS_ROOT', value='/home/user/repos')."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["key", "value"],
+            "additionalProperties": False,
+            "properties": {
+                "key": {
+                    "type": "string",
+                    "description": "Nome da chave (ex: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV).",
+                },
+                "value": {
+                    "type": "string",
+                    "description": "Valor a armazenar.",
+                },
+                "create_dir": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Para REPOS_ROOT: cria o diretorio se nao existir. Default: false.",
+                },
+            },
+        },
+    },
+    "list_workspace_config": {
+        "description": (
+            "Lista todas as chaves do namespace 'workspace' com valores e descricoes. "
+            "Mostra quais chaves canonicas estao ausentes para facilitar o setup inicial. "
+            "Chaves canonicas: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {},
+        },
+    },
     # ── Sysinfo ───────────────────────────────────────────────────────────── #
     "get_physical_info": {
         "description": (
@@ -504,6 +569,18 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
             overwrite=args.get("overwrite", False),
             secrets_only=args.get("secrets_only", False),
         )
+    # ── Workspace ─────────────────────────────────────────────────────────── #
+    if name == "get_workspace_config":
+        return get_workspace_config(store, key=args.get("key"))
+    if name == "set_workspace_config":
+        return set_workspace_config(
+            store,
+            key=args["key"],
+            value=args["value"],
+            create_dir=args.get("create_dir", False),
+        )
+    if name == "list_workspace_config":
+        return list_workspace_config(store)
     if name == "get_physical_info":
         return get_physical_info()
     # ── Tenants ───────────────────────────────────────────────────────────── #
