@@ -1,4 +1,4 @@
-"""TestStore — persistência PostgreSQL thread-safe para planos, cenários, checklists e findings."""
+"""TestStore â€” persistÃªncia PostgreSQL thread-safe para planos, cenÃ¡rios, checklists e findings."""
 
 from __future__ import annotations
 
@@ -28,11 +28,11 @@ class TestStore:
             maxconn=settings.pg_max_conn,
             dsn=settings.pg_dsn,
         )
-        logger.info(f"✅ TestStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)")
+        logger.info(f"âœ… TestStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)")
 
     @contextmanager
     def _get_conn(self):
-        """Context manager para obter conexão do pool."""
+        """Context manager para obter conexÃ£o do pool."""
         conn = self._pool.getconn()
         try:
             yield conn
@@ -49,35 +49,42 @@ class TestStore:
             self._pool.closeall()
             logger.info("TestStore connection pool closed")
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # UTILITY METHODS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def _now(self) -> str:
         """Retorna ISO timestamp com timezone."""
         return datetime.now(timezone.utc).isoformat()
 
     def _new_id(self, prefix: str = "plan") -> str:
-        """Gera ID único com prefixo."""
+        """Gera ID Ãºnico com prefixo (usado apenas para tabelas com PK TEXT)."""
         return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    @staticmethod
+    def _to_int_id(plan_id: str | int) -> int:
+        """Converte plan_id para int â€” o banco usa INTEGER como PK em test_plans."""
+        try:
+            return int(plan_id)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(f"plan_id invÃ¡lido: {plan_id!r} â€” deve ser numÃ©rico") from exc
+
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # TEST PLANS OPERATIONS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def create_plan(self, title: str, scope: str, feature: str | None = None) -> dict[str, Any]:
         """Cria novo plano de testes."""
-        plan_id = self._new_id("plan")
         now = self._now()
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    INSERT INTO test_plans (id, title, scope, feature, status, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO test_plans (title, scope, feature, status, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     RETURNING id, title, scope, feature, status, created_at, updated_at
                     """,
-                    (plan_id, title, scope, feature, "active", now, now),
+                    (title, scope, feature, "active", now, now),
                 )
                 row = cur.fetchone()
 
@@ -91,12 +98,13 @@ class TestStore:
         }
 
     def get_plan(self, plan_id: str) -> dict[str, Any] | None:
-        """Retorna plano completo com estatísticas."""
+        """Retorna plano completo com estatÃ­sticas."""
+        pid = self._to_int_id(plan_id)
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     "SELECT * FROM test_plans WHERE id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 row = cur.fetchone()
                 if not row:
@@ -105,40 +113,40 @@ class TestStore:
                 # Count scenarios
                 cur.execute(
                     "SELECT COUNT(*) as cnt FROM test_scenarios WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 scenarios_count = cur.fetchone()["cnt"]
 
                 # Count results
                 cur.execute(
                     "SELECT COUNT(*) as cnt FROM test_cases WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 results_count = cur.fetchone()["cnt"]
 
                 # Count findings
                 cur.execute(
                     "SELECT COUNT(*) as cnt FROM bug_reports WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 findings_count = cur.fetchone()["cnt"]
 
                 # Coverage stats
                 cur.execute(
                     "SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases WHERE plan_id = %s AND status = %s",
-                    (plan_id, "pending"),
+                    (pid, "pending"),
                 )
                 pending = cur.fetchone()["cnt"]
 
                 cur.execute(
                     "SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases WHERE plan_id = %s AND status = %s",
-                    (plan_id, "passed"),
+                    (pid, "passed"),
                 )
                 passed = cur.fetchone()["cnt"]
 
                 cur.execute(
                     "SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases WHERE plan_id = %s AND status = %s",
-                    (plan_id, "failed"),
+                    (pid, "failed"),
                 )
                 failed = cur.fetchone()["cnt"]
 
@@ -181,9 +189,9 @@ class TestStore:
 
                 return result
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # SCENARIOS OPERATIONS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def add_scenario(
         self,
@@ -195,7 +203,8 @@ class TestStore:
         priority: str = "medium",
         preconditions: str | None = None,
     ) -> dict[str, Any]:
-        """Adiciona cenário ao plano."""
+        """Adiciona cenÃ¡rio ao plano."""
+        pid = self._to_int_id(plan_id)
         now = self._now()
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -206,14 +215,14 @@ class TestStore:
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (plan_id, name, category, priority, preconditions, steps, expected_result, now),
+                    (pid, name, category, priority, preconditions, steps, expected_result, now),
                 )
                 scenario_id = cur.fetchone()["id"]
 
                 # Update plan timestamp
                 cur.execute(
                     "UPDATE test_plans SET updated_at = %s WHERE id = %s",
-                    (now, plan_id),
+                    (now, pid),
                 )
 
         return {
@@ -233,7 +242,8 @@ class TestStore:
         notes: str | None = None,
         evidence: str | None = None,
     ) -> dict[str, Any]:
-        """Registra resultado de execução de cenário."""
+        """Registra resultado de execuÃ§Ã£o de cenÃ¡rio."""
+        pid = self._to_int_id(plan_id)
         now = self._now()
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -243,20 +253,21 @@ class TestStore:
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (plan_id, scenario_id, status, actual_result, notes, evidence, now),
+                    (pid, scenario_id, status, actual_result, notes, evidence, now),
                 )
                 result_id = cur.fetchone()["id"]
 
                 # Update plan timestamp
                 cur.execute(
                     "UPDATE test_plans SET updated_at = %s WHERE id = %s",
-                    (now, plan_id),
+                    (now, pid),
                 )
 
         return {"result_id": result_id, "scenario_id": scenario_id, "status": status, "executed_at": now}
 
     def get_scenarios(self, plan_id: str) -> list[dict[str, Any]]:
-        """Lista cenários de um plano com status mais recente."""
+        """Lista cenÃ¡rios de um plano com status mais recente."""
+        pid = self._to_int_id(plan_id)
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
@@ -271,13 +282,13 @@ class TestStore:
                     WHERE s.plan_id = %s
                     ORDER BY s.category, s.priority
                     """,
-                    (plan_id, plan_id),
+                    (pid, pid),
                 )
                 return cur.fetchall() or []
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # CHECKLISTS OPERATIONS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def create_checklist(
         self,
@@ -287,17 +298,20 @@ class TestStore:
         plan_id: str | None = None,
     ) -> dict[str, Any]:
         """Cria nova checklist."""
-        checklist_id = self._new_id("chk")
         now = self._now()
+        # plan_id FK is INTEGER â€” convert if present
+        plan_id_int = int(plan_id) if plan_id is not None else None
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     """
-                    INSERT INTO quality_gates (id, title, type, plan_id, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO quality_gates (title, type, plan_id, created_at)
+                    VALUES (%s, %s, %s, %s)
+                    RETURNING id
                     """,
-                    (checklist_id, title, checklist_type, plan_id, now),
+                    (title, checklist_type, plan_id_int, now),
                 )
+                checklist_id = str(cur.fetchone()["id"])
 
                 for i, item in enumerate(items):
                     cur.execute(
@@ -305,13 +319,13 @@ class TestStore:
                         INSERT INTO checklist_items (checklist_id, order_num, description, required, category)
                         VALUES (%s, %s, %s, %s, %s)
                         """,
-                        (checklist_id, i + 1, item["description"], int(item.get("required", True)), item.get("category")),
+                        (checklist_id, i + 1, item["description"], bool(item.get("required", True)), item.get("category")),
                     )
 
         return {"checklist_id": checklist_id, "title": title, "type": checklist_type, "items_count": len(items)}
 
     def start_run(self, checklist_id: str, executor: str | None = None) -> dict[str, Any]:
-        """Inicia execução de checklist."""
+        """Inicia execuÃ§Ã£o de checklist."""
         run_id = self._new_id("run")
         now = self._now()
         with self._get_conn() as conn:
@@ -389,7 +403,7 @@ class TestStore:
         return {"run_id": run_id, "item_id": item_id, "status": status, "checked_at": now}
 
     def get_run_status(self, run_id: str) -> dict[str, Any]:
-        """Retorna status da execução da checklist."""
+        """Retorna status da execuÃ§Ã£o da checklist."""
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
@@ -422,9 +436,9 @@ class TestStore:
                     "summary": {"passed": passed, "failed": failed, "pending": pending},
                 }
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # FINDINGS/BUG REPORTS OPERATIONS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def add_finding(
         self,
@@ -435,6 +449,7 @@ class TestStore:
         evidence: str | None = None,
     ) -> dict[str, Any]:
         """Adiciona bug report/finding."""
+        pid = self._to_int_id(plan_id)
         now = self._now()
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -444,37 +459,38 @@ class TestStore:
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
                     RETURNING id
                     """,
-                    (plan_id, severity, title, description, evidence, "open", now),
+                    (pid, severity, title, description, evidence, "open", now),
                 )
                 finding_id = cur.fetchone()["id"]
 
                 # Update plan timestamp
                 cur.execute(
                     "UPDATE test_plans SET updated_at = %s WHERE id = %s",
-                    (now, plan_id),
+                    (now, pid),
                 )
 
         return {"finding_id": finding_id, "plan_id": plan_id, "severity": severity, "title": title}
 
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     # VALIDATION OPERATIONS
-    # ────────────────────────────────────────────────────────────────────────── #
+    # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
 
     def double_check(self, plan_id: str) -> dict[str, Any]:
-        """Validação completa do plano antes do ship."""
+        """ValidaÃ§Ã£o completa do plano antes do ship."""
+        pid = self._to_int_id(plan_id)
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 # All scenarios
                 cur.execute(
                     "SELECT * FROM test_scenarios WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 all_scenarios = cur.fetchall() or []
 
                 # Executed scenario IDs
                 cur.execute(
                     "SELECT DISTINCT scenario_id FROM test_cases WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 executed_ids = {r["scenario_id"] for r in cur.fetchall()}
 
@@ -489,7 +505,7 @@ class TestStore:
                     WHERE tc.plan_id = %s AND tc.status = %s
                     ORDER BY tc.id DESC
                     """,
-                    (plan_id, "failed"),
+                    (pid, "failed"),
                 )
                 failed = cur.fetchall() or []
 
@@ -505,7 +521,7 @@ class TestStore:
                         ELSE 4
                     END
                     """,
-                    (plan_id, "open"),
+                    (pid, "open"),
                 )
                 open_findings = cur.fetchall() or []
 
@@ -530,12 +546,13 @@ class TestStore:
                 }
 
     def get_validation_status(self, plan_id: str) -> dict[str, Any]:
-        """Status de validação/qualidade do plano."""
+        """Status de validaÃ§Ã£o/qualidade do plano."""
+        pid = self._to_int_id(plan_id)
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(
                     "SELECT * FROM test_plans WHERE id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 plan = cur.fetchone()
                 if not plan:
@@ -543,7 +560,7 @@ class TestStore:
 
                 cur.execute(
                     "SELECT COUNT(*) as cnt FROM test_scenarios WHERE plan_id = %s",
-                    (plan_id,),
+                    (pid,),
                 )
                 total = cur.fetchone()["cnt"]
 
@@ -552,7 +569,7 @@ class TestStore:
                     SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases
                     WHERE plan_id = %s AND status = %s
                     """,
-                    (plan_id, "passed"),
+                    (pid, "passed"),
                 )
                 passed = cur.fetchone()["cnt"]
 
@@ -561,7 +578,7 @@ class TestStore:
                     SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases
                     WHERE plan_id = %s AND status = %s
                     """,
-                    (plan_id, "failed"),
+                    (pid, "failed"),
                 )
                 failed = cur.fetchone()["cnt"]
 
@@ -570,7 +587,7 @@ class TestStore:
                     SELECT COUNT(DISTINCT scenario_id) as cnt FROM test_cases
                     WHERE plan_id = %s AND status = %s
                     """,
-                    (plan_id, "blocked"),
+                    (pid, "blocked"),
                 )
                 blocked = cur.fetchone()["cnt"]
 
@@ -584,7 +601,7 @@ class TestStore:
                     WHERE plan_id = %s AND status = %s
                     GROUP BY severity
                     """,
-                    (plan_id, "open"),
+                    (pid, "open"),
                 )
                 open_findings = cur.fetchall() or []
                 findings_by_severity = {r["severity"]: r["cnt"] for r in open_findings}
