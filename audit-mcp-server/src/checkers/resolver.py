@@ -26,9 +26,17 @@ class RepoResolver:
             return None
 
         if env == "dev":
-            local_path = f"/home/dev/repos/{repo}"
-            if Path(local_path).exists():
-                return local_path
+            candidates = [
+                os.environ.get("AUDIT_REPOS_ROOT", ""),
+                os.environ.get("REPOS_ROOT", ""),
+                "/repos",
+                "/home/dev/repos",
+            ]
+            for root in candidates:
+                if root:
+                    p = Path(root) / repo
+                    if p.exists():
+                        return str(p)
 
         return None
 

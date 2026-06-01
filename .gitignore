@@ -216,3 +216,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local Docker overrides (paths específicos da máquina — não versionar)
+docker-compose.override.yml
