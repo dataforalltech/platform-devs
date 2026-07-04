@@ -134,7 +134,7 @@ tudo abaixo existe e responde.*
 | **MySQL 8 / Postgres 16** | container em EC2 de dados, **TLS obrigatório**, réplica/standby em outra AZ | admin+tenants (MySQL) e serviços Postgres |
 | **Redis 7** | container, *in-transit TLS* + **AUTH token** | rate-limit + JTI blocklist |
 | **Kafka 3.7** (opcional) | container, SASL_SSL, RF≥3 | só se `KAFKA_ENABLED=true` |
-| **HashiCorp Vault** | EC2 dedicada, KV v2 mount `kv`, **AWS auth** habilitado | ver [vault-kv-setup](../../platform-auth/docs/runbooks/vault-kv-setup.md) |
+| **HashiCorp Vault** | EC2 dedicada, KV v2 mount `kv`, **AWS auth** habilitado | ver [vault-kv-setup](https://github.com/dataforalltech/platform-auth/blob/develop/docs/runbooks/vault-kv-setup.md) |
 | **ALB + ACM** | HTTPS 443, cert ACM, regras de path | HSTS, redirect 80→443 |
 | **Cloudflare** | zona DNS + proxy/WAF → CNAME do ALB | *authenticated origin pulls* p/ travar o ALB |
 | **S3** | bucket de logs (`LOG_UPLOAD_*`), backups e artefatos | versionado, bloqueio público |
@@ -241,7 +241,7 @@ flowchart LR
 
 ## 7. Entrega de segredos em produção (Vault + AWS IAM auth)
 
-Já implementado (ver ADR-0006 e [vault-kv-setup](../../platform-auth/docs/runbooks/vault-kv-setup.md)).
+Já implementado (ver ADR-0006 e [vault-kv-setup](https://github.com/dataforalltech/platform-auth/blob/develop/docs/runbooks/vault-kv-setup.md)).
 Nenhum segredo em imagem, env do stack ou `.env`. A EC2 se autentica no Vault
 pelo **IAM role do instance profile** — sem token estático.
 
@@ -477,9 +477,9 @@ Execução linear da primeira produção. Cada passo tem *gate*.
 | `VAULT_AUTH_METHOD` | aws/token | aws | aws |
 
 ### 15.3 Referências
-- ADR-0006 — [Entrega de segredos via Vault KV](../../platform-auth/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
-- Runbook Vault — [vault-kv-setup](../../platform-auth/docs/runbooks/vault-kv-setup.md)
-- Deploy do serviço de referência — [platform-auth/DEPLOY.md](../../platform-auth/DEPLOY.md)
+- ADR-0006 — [Entrega de segredos via Vault KV](https://github.com/dataforalltech/platform-auth/blob/develop/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
+- Runbook Vault — [vault-kv-setup](https://github.com/dataforalltech/platform-auth/blob/develop/docs/runbooks/vault-kv-setup.md)
+- Deploy do serviço de referência — [platform-auth/DEPLOY.md](https://github.com/dataforalltech/platform-auth/blob/develop/DEPLOY.md)
 - Remediação de segredos — `SECRETS-REMEDIATION-PLAN.md`
 - Congelamento de rollout — `ROLLOUT-FREEZE.md`
 - Governança/ISO — `governance/`

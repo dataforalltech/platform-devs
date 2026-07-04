@@ -218,7 +218,7 @@ escala é **estática**:
 (`portal.clientea.com.br`). O cabeçalho **`Host` É a identidade do tenant** — por
 isso o DNS não é acessório, é **parte estrutural** da arquitetura.
 
-**Fluxo de resolução** (autoritativo: [ADR-001 do gateway](../../platform-api-gateway/docs/ADR-001-domain-tenancy-jwt-flow.md)):
+**Fluxo de resolução** (autoritativo: [ADR-001 do gateway](https://github.com/dataforalltech/platform-api-gateway/blob/develop/docs/ADR-001-domain-tenancy-jwt-flow.md)):
 
 ```mermaid
 sequenceDiagram
@@ -282,8 +282,8 @@ impersonar outro tenant**. Mitigações **obrigatórias**:
 
 HashiCorp Vault KV v2, entrega no boot via `platform_crypto.VaultSecretsClient`,
 **AWS IAM auth** (instance profile da EC2 — sem token estático). Detalhes em
-[ADR-0006](../../platform-auth/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
-e no [runbook do Vault](../../platform-auth/docs/runbooks/vault-kv-setup.md).
+[ADR-0006](https://github.com/dataforalltech/platform-auth/blob/develop/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
+e no [runbook do Vault](https://github.com/dataforalltech/platform-auth/blob/develop/docs/runbooks/vault-kv-setup.md).
 Convenção de path: `dataforall/<serviço>/<nome>`. Fail-closed.
 
 ---
@@ -328,7 +328,7 @@ Convenção de path: `dataforall/<serviço>/<nome>`. Fail-closed.
 
 ## Referências
 - Playbook de deploy em produção — [aws-production-deployment-playbook.md](../runbooks/aws-production-deployment-playbook.md)
-- ADR-0006 (segredos via Vault) — [link](../../platform-auth/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
-- Runbook Vault — [link](../../platform-auth/docs/runbooks/vault-kv-setup.md)
-- Arquitetura atual auditada — [current-architecture.md](./current-architecture.md)
+- ADR-0006 (segredos via Vault) — [link](https://github.com/dataforalltech/platform-auth/blob/develop/docs/decisions/adr-0006-vault-kv-secret-delivery.md)
+- Runbook Vault — [link](https://github.com/dataforalltech/platform-auth/blob/develop/docs/runbooks/vault-kv-setup.md)
+- Arquitetura atual auditada — `current-architecture.md` (workspace local; ainda não versionado)
 - Auditoria / achados — `AUDITORIA_ACHADOS_COMPLETO.md`, `governance/`
