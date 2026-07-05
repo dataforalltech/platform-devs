@@ -1,0 +1,423 @@
+# =============================================================================
+# docker-compose.services.yml — MICROSERVIÇOS da plataforma DataForAll
+#
+# Reconciliado com a infra real (docker-compose.infra.yml): hosts admin-mysql /
+# tenant-mysql / tenant-postgres, rede `platform-local`.
+#
+# BUILD LOCAL a partir dos repos (não depende do ACR). O Dockerfile usa o secret
+# `github_token` para instalar as libs privadas (platform-*-lib):
+#
+#   export GITHUB_TOKEN=ghp_xxx            # PAT com escopo repo (dataforalltech)
+#   docker network create platform-local
+#   docker compose -f docker-compose.infra.yml    --env-file .env up -d
+#   docker compose -f docker-compose.services.yml --env-file .env build   # builda dos repos
+#   docker compose -f docker-compose.services.yml --env-file .env up -d
+#
+# (Alternativa: usar as imagens do ACR — cada serviço tem `image:` definido;
+#  `docker login d4all.azurecr.io` e `up -d` sem `build`.)
+#
+# Todas as variáveis preenchidas; só senhas/tokens/chave RSA vêm de .env.
+# =============================================================================
+
+name: dataforall-services
+
+networks:
+  platform-local:
+    external: true
+
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN          # usado no build das libs privadas
+
+x-env: &env
+  APP_ENV: hml
+  RUNTIME_ENV: local
+  ENV_PROFILE: cloud-hml
+  DEPLOY_TARGET: docker
+  NETWORK_TOPOLOGY: docker
+  TZ: UTC
+  DOCS_ENABLED: "false"
+  AUTH_DEV_BYPASS: "false"
+  LAB_MODE: "false"
+  # Registry admin (ADMIN_DATAFORALL — MySQL admin)
+  ADMIN_DB_HOST: admin-mysql
+  ADMIN_DB_PORT: "3306"
+  ADMIN_DB_USER: root
+  ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+  # JWT RS256 — verificação via JWKS do platform-auth (D7)
+  JWT_ALGORITHM: RS256
+  JWT_ISSUER: platform-auth
+  JWT_AUDIENCE: platform-services
+  JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+  # Redis
+  RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
+  # Serviços internos
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+  URL_AUTH: http://platform-auth:8000/internal
+  URL_ADMIN: http://platform-admin:8000/api/v1
+  URL_IAM: http://platform-admin:8000/api/v1/iam
+  # Kafka (interno)
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  KAFKA_SECURITY_PROTOCOL: PLAINTEXT
+  # Observabilidade
+  OTEL_TRACES_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  # Vault (infra local = dev, token auth)
+  VAULT_ADDR: http://vault:8200
+  VAULT_AUTH_METHOD: token
+  VAULT_TOKEN: ${VAULT_ROOT_TOKEN:?defina em .env}
+
+x-mysql: &mysql
+  DB_ENGINE: mysql
+  DB_HOST: tenant-mysql
+  DB_PORT: "3306"
+  DB_USER: root
+  DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+  DB_SSLMODE: disable
+
+x-postgres: &postgres
+  DB_ENGINE: postgresql
+  DB_HOST: tenant-postgres
+  DB_PORT: "5432"
+  DB_USER: platform
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?defina em .env}
+  DB_SSLMODE: disable
+
+x-svc: &svc
+  restart: unless-stopped
+  networks: [platform-local]
+  healthcheck:
+    test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health/ready"]
+    interval: 15s
+    timeout: 5s
+    retries: 3
+    start_period: 40s
+  logging:
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
+services:
+  # ── BORDA ──────────────────────────────────────────────────────────────────
+  platform-api-gateway:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-api-gateway:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-api-gateway, secrets: [github_token]}
+    container_name: platform-api-gateway
+    ports: ["8080:8000"]
+    environment:
+      <<: *env
+      APP_NAME: platform-api-gateway
+      SERVICE_ID: platform-api-gateway
+      TRUSTED_PROXIES: '["127.0.0.1/32","10.0.0.0/8","172.16.0.0/12"]'
+
+  platform-mcp:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-mcp:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-mcp, secrets: [github_token]}
+    container_name: platform-mcp
+    ports: ["8090:8000"]
+    environment:
+      <<: *env
+      APP_NAME: platform-mcp
+      SERVICE_ID: platform-mcp
+
+  # ── IDENTIDADE / CORE (MySQL) ───────────────────────────────────────────────
+  platform-auth:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-auth:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-auth, secrets: [github_token]}
+    container_name: platform-auth
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-auth
+      SERVICE_ID: platform-auth
+      DB_NAME: platform_auth
+      JWT_PRIVATE_KEY_CONTENT: ${JWT_PRIVATE_KEY_CONTENT:?chave RSA privada (PEM)}
+
+  platform-admin:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-admin:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-admin, secrets: [github_token]}
+    container_name: platform-admin
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-admin
+      SERVICE_ID: platform-admin
+      DB_NAME: platform_admin
+
+  # ── DOMÍNIO — MySQL ─────────────────────────────────────────────────────────
+  platform-notification:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-notification:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-notification, secrets: [github_token]}
+    container_name: platform-notification
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-notification
+      SERVICE_ID: platform-notification
+      DB_NAME: platform_notification
+
+  platform-cdc:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-cdc:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-cdc, secrets: [github_token]}
+    container_name: platform-cdc
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-cdc
+      SERVICE_ID: platform-cdc
+      DB_NAME: platform_cdc
+
+  platform-ml:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-ml:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-ml, secrets: [github_token]}
+    container_name: platform-ml
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-ml
+      SERVICE_ID: platform-ml
+      DB_NAME: platform_ml
+
+  platform-crm-agent:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-crm-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-crm-agent, secrets: [github_token]}
+    container_name: platform-crm-agent
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-crm-agent
+      SERVICE_ID: platform-crm-agent
+      DB_NAME: platform_crm_agent
+
+  platform-governance:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-governance:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-governance, secrets: [github_token]}
+    container_name: platform-governance
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-governance
+      SERVICE_ID: platform-governance
+      DB_NAME: platform_governance
+
+  platform-monitor:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-monitor:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-monitor, secrets: [github_token]}
+    container_name: platform-monitor
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-monitor
+      SERVICE_ID: platform-monitor
+      DB_NAME: platform_monitor
+
+  platform-datalake:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-datalake:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-datalake, secrets: [github_token]}
+    container_name: platform-datalake
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-datalake
+      SERVICE_ID: platform-datalake
+      DB_NAME: platform_datalake
+
+  platform-connectors:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-connectors:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-connectors, secrets: [github_token]}
+    container_name: platform-connectors
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-connectors
+      SERVICE_ID: platform-connectors
+      DB_NAME: platform_connectors
+
+  platform-analytics:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-analytics:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-analytics, secrets: [github_token]}
+    container_name: platform-analytics
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-analytics
+      SERVICE_ID: platform-analytics
+      DB_NAME: platform_analytics
+
+  platform-communication:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-communication:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-communication, secrets: [github_token]}
+    container_name: platform-communication
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-communication
+      SERVICE_ID: platform-communication
+      DB_NAME: platform_communication
+
+  platform-docextract:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-docextract:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-docextract, secrets: [github_token]}
+    container_name: platform-docextract
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-docextract
+      SERVICE_ID: platform-docextract
+      DB_NAME: platform_docextract
+
+  platform-dai:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-dai:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-dai, secrets: [github_token]}
+    container_name: platform-dai
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-dai
+      SERVICE_ID: platform-dai
+      DB_NAME: platform_dai
+
+  platform-flow:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-flow:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-flow, secrets: [github_token]}
+    container_name: platform-flow
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-flow
+      SERVICE_ID: platform-flow
+      DB_NAME: platform_flow
+
+  platform-iceberg:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-iceberg:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-iceberg, secrets: [github_token]}
+    container_name: platform-iceberg
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-iceberg
+      SERVICE_ID: platform-iceberg
+      DB_NAME: platform_iceberg
+
+  platform-pipeline:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-pipeline:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-pipeline, secrets: [github_token]}
+    container_name: platform-pipeline
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-pipeline
+      SERVICE_ID: platform-pipeline
+      DB_NAME: platform_pipeline
+
+  platform-db-vector:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-db-vector:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-db-vector, secrets: [github_token]}
+    container_name: platform-db-vector
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-db-vector
+      SERVICE_ID: platform-db-vector
+      DB_NAME: platform_db_vector
+
+  platform-security:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-security:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-security, secrets: [github_token]}
+    container_name: platform-security
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-security
+      SERVICE_ID: platform-security
+      DB_NAME: platform_security
+
+  platform-agents-factory:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-agents-factory:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-agents-factory, secrets: [github_token]}
+    container_name: platform-agents-factory
+    environment:
+      <<: [*env, *mysql]
+      APP_NAME: platform-agents-factory
+      SERVICE_ID: platform-agents-factory
+      DB_NAME: platform_agents_factory
+
+  # ── DOMÍNIO — PostgreSQL ────────────────────────────────────────────────────
+  platform-scheduler:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-scheduler:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-scheduler, secrets: [github_token]}
+    container_name: platform-scheduler
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-scheduler
+      SERVICE_ID: platform-scheduler
+      DB_NAME: platform_scheduler
+
+  platform-crm:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-crm:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-crm, secrets: [github_token]}
+    container_name: platform-crm
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-crm
+      SERVICE_ID: platform-crm
+      DB_NAME: platform_crm
+
+  platform-marketing:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-marketing:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-marketing, secrets: [github_token]}
+    container_name: platform-marketing
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-marketing
+      SERVICE_ID: platform-marketing
+      DB_NAME: platform_marketing
+
+  platform-marketing-agent:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-marketing-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-marketing-agent, secrets: [github_token]}
+    container_name: platform-marketing-agent
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-marketing-agent
+      SERVICE_ID: platform-marketing-agent
+      DB_NAME: platform_marketing_agent
+
+  platform-finance:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-finance:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-finance, secrets: [github_token]}
+    container_name: platform-finance
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-finance
+      SERVICE_ID: platform-finance
+      DB_NAME: platform_finance
+
+  platform-finance-agent:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-finance-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-finance-agent, secrets: [github_token]}
+    container_name: platform-finance-agent
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-finance-agent
+      SERVICE_ID: platform-finance-agent
+      DB_NAME: platform_finance_agent
+
+  platform-sales:
+    <<: *svc
+    image: d4all.azurecr.io/dataforall/3.0/platform-sales:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-sales, secrets: [github_token]}
+    container_name: platform-sales
+    environment:
+      <<: [*env, *postgres]
+      APP_NAME: platform-sales
+      SERVICE_ID: platform-sales
+      DB_NAME: platform_sales
