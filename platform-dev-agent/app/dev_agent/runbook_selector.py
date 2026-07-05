@@ -46,6 +46,10 @@ _ROUTES: dict[str, str] = {
     "deploy_service": "deploy_service",
     "release": "deploy_service",
     "ship": "deploy_service",
+    # platform health smoke test — tools JA registradas no gateway (verde hoje)
+    "platform_health": "platform_health",
+    "gateway_health": "platform_health",
+    "smoke": "platform_health",
 }
 
 

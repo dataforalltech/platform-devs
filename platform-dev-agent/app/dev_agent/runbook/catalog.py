@@ -157,9 +157,61 @@ _DEPLOY_SERVICE = RunbookSpec(
 )
 
 
+# --- A read-only runbook wired to tools that ALREADY EXIST in the live gateway ---
+# catalog (admin/auth health + list tenants), so approve_and_execute is genuinely
+# GREEN against the real gateway TODAY. Unlike health_to_report (which targets
+# services-mcp/qa-mcp — real services, but not yet registered on this gateway), every
+# tool here is in the catalog and takes no arguments, so it returns a real payload.
+# Proves the full chain PAT -> Twin -> PDP -> tool end-to-end with live data.
+_PLATFORM_HEALTH = RunbookSpec(
+    id="platform_health",
+    version="1.0.0",
+    name="Platform health smoke test (admin -> auth -> tenants)",
+    description=(
+        "Pipeline read-only contra tools JA registradas no gateway: saude do admin, "
+        "saude do auth e lista de tenants. Fecha verde de verdade (payload real) sem "
+        "depender de services-mcp/qa-mcp."
+    ),
+    responsible_profile="devops",
+    tasks={
+        "admin_health": RunbookTaskSpec(
+            title="Check admin service health",
+            description="Consulta a saude do platform-admin via o gateway.",
+            required=True,
+            responsible="devops",
+            tool="admin.admin_health_check",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            depends_on=[],
+            capability_override="read",
+        ),
+        "auth_health": RunbookTaskSpec(
+            title="Check auth service health",
+            description="Consulta a saude do platform-auth via o gateway.",
+            required=True,
+            responsible="devops",
+            tool="auth.auth_health_check",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            depends_on=["admin_health"],
+            capability_override="read",
+        ),
+        "list_tenants": RunbookTaskSpec(
+            title="List tenants",
+            description="Lista os tenants via o gateway (leitura).",
+            required=False,
+            responsible="qa-engineer",
+            tool="auth.auth_list_tenants",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            depends_on=["auth_health"],
+            capability_override="read",
+        ),
+    },
+)
+
+
 RUNBOOK_CATALOG: dict[str, RunbookSpec] = {
     _HEALTH_TO_REPORT.id: _HEALTH_TO_REPORT,
     _DEPLOY_SERVICE.id: _DEPLOY_SERVICE,
+    _PLATFORM_HEALTH.id: _PLATFORM_HEALTH,
 }
 
 

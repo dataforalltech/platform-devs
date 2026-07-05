@@ -20,11 +20,15 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-# Canned results per read tool of the health_to_report runbook.
+# Canned results per read tool of the health_to_report + platform_health runbooks.
 _CANNED: dict[str, dict[str, Any]] = {
     "services-mcp.check_health": {"status": "healthy", "service": "api"},
     "qa-mcp.run_tests": {"passed": 42, "failed": 0, "suite": "unit"},
     "qa-mcp.generate_report": {"report_url": "memory://qa-report", "format": "md"},
+    # platform_health runbook — real gateway tool ids (admin/auth).
+    "admin.admin_health_check": {"status": "healthy", "database": "healthy"},
+    "auth.auth_health_check": {"status": "ok", "tenants_count": 6},
+    "auth.auth_list_tenants": {"tenants": ["PLATFORM_DEV_30"], "count": 1},
 }
 
 
