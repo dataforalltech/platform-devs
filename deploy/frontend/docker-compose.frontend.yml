@@ -1,0 +1,35 @@
+# docker-compose.frontend.yml — frontend (SPA nginx) do ambiente enxuto.
+# É a BORDA: o Cloudflare Tunnel (cloudflared no host) roteia *.dataforall.tech
+# para http://localhost:8080 -> este container. A SPA chama /api same-origin e o
+# nginx faz proxy para o gateway (host.docker.internal:9999), preservando o Host
+# do tenant (multi-tenancy por domínio, D7).
+#
+#   docker login d4all.azurecr.io
+#   docker compose -f docker-compose.frontend.yml pull
+#   docker compose -f docker-compose.frontend.yml up -d
+services:
+  frontend:
+    image: d4all.azurecr.io/dataforall/3.0/platform-dataforall-frontend:${FRONTEND_TAG:-latest}
+    container_name: dataforall-frontend
+    ports:
+      - "127.0.0.1:8080:8080" # alvo do Cloudflare Tunnel (cloudflared roda no host)
+    volumes:
+      # nginx.conf intacto do app (proxy /api,/ws -> gateway:9999; Host preservado).
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    extra_hosts:
+      # host.docker.internal resolve p/ o host (onde o gateway publica :9999).
+      # Sempre presente em /etc/hosts => nginx sobe mesmo com o gateway ainda no ar.
+      - "host.docker.internal:host-gateway"
+    environment:
+      VITE_APP_ENV: cloud
+      # tenant vem do dominio (gateway resolve pelo Host) — sem seletor.
+      VITE_ENABLE_TENANT_SELECTOR: "false"
+      VITE_ENABLE_PLATFORM_WS: "true"
+      VITE_ENABLE_USER_PROFILE_WS: "true"
+      # VITE_API_BASE_URL / VITE_WS_BASE_URL intencionalmente NAO setados:
+      # o env.ts cai no fallback window.location.origin + "/api/v1" (same-origin),
+      # garantindo que o Host chegue correto ao gateway (multi-tenant por dominio).
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

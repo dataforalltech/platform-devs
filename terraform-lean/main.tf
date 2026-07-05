@@ -113,6 +113,11 @@ data "aws_iam_policy_document" "host" {
     resources = [aws_ssm_parameter.tunnel_token.arn]
   }
   statement {
+    sid       = "PlatformParams"
+    actions   = ["ssm:GetParameter", "ssm:GetParameters", "ssm:GetParametersByPath"]
+    resources = ["arn:aws:ssm:${var.region}:${data.aws_caller_identity.current.account_id}:parameter/${local.name}/*"]
+  }
+  statement {
     sid = "KmsForBackupsBucket"
     actions = [
       "kms:Decrypt",
