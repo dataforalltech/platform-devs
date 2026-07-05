@@ -10,7 +10,8 @@ NAME=dataforall-hml
 ACR=d4all.azurecr.io
 
 # 1) sync dos manifests (deploy/ inteiro; inclui frontend/)
-aws s3 sync "s3://${BUCKET}/deploy" /opt/dataforall/deploy --region "$REGION" --delete
+# --exclude ".env": preservar o .env local (senhas on-box, fora do S3).
+aws s3 sync "s3://${BUCKET}/deploy" /opt/dataforall/deploy --region "$REGION" --delete --exclude ".env"
 cd /opt/dataforall/deploy/frontend
 
 # 2) docker login no ACR (senha via SSM SecureString -> stdin; nunca em argv/log)

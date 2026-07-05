@@ -1,0 +1,92 @@
+# platform-api-gateway (API + MCP) — ambiente enxuto.
+# API: borda interna que o nginx do frontend chama em host.docker.internal:9999.
+#      Resolve tenant pelo Host (PLATFORMS.domain -> tenant_id), injeta X-Tenant-Id.
+# MCP: sidecar (porta 7100) que expoe health/metrics/routes do gateway ao platform-mcp.
+#
+#   docker compose -f docker-compose.yml --env-file /opt/dataforall/deploy/.env pull
+#   docker compose -f docker-compose.yml --env-file /opt/dataforall/deploy/.env up -d --no-build
+name: dataforall-gateway
+
+networks:
+  platform-local:
+    external: true
+
+services:
+  platform-api-gateway:
+    image: d4all.azurecr.io/dataforall/3.0/platform-api-gateway:${IMAGE_TAG:-latest}
+    container_name: platform-api-gateway
+    restart: unless-stopped
+    networks: [platform-local]
+    ports:
+      # 0.0.0.0:9999 (nao loopback): o container do frontend chega via
+      # host.docker.internal:9999 (IP do host na bridge). SG fechado => inacessivel de fora.
+      - "9999:8000"
+    environment:
+      APP_NAME: platform-api-gateway
+      SERVICE_ID: platform-api-gateway
+      APP_ENV: hml
+      RUNTIME_ENV: local # evita exigencias cloud (Redis SSL/sentinel, Sentry, twin)
+      ENVIRONMENT: staging
+      ENV_PROFILE: local-hml # deve casar RUNTIME_ENV(local)+APP_ENV(hml)
+      DEPLOY_TARGET: docker
+      NETWORK_TOPOLOGY: docker
+      TZ: UTC
+      DOCS_ENABLED: "false"
+      # Registry admin (ADMIN_DATAFORALL)
+      ADMIN_DB_ENGINE: mysql
+      ADMIN_DB_HOST: admin-mysql
+      ADMIN_DB_PORT: "3306"
+      ADMIN_DB_NAME: ADMIN_DATAFORALL
+      ADMIN_DB_USER: root
+      ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      # JWT RS256 — verificacao via JWKS do platform-auth (sobe em #3)
+      JWT_ALGORITHM: RS256
+      JWT_ISSUER: platform-auth
+      JWT_AUDIENCE: platform-services
+      JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+      # Redis (single node, sem TLS — permitido com RUNTIME_ENV=local)
+      REDIS_URL: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
+      REDIS_SSL: "false"
+      # Tokens de servico
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      HEALTH_MONITORING_TOKEN: ${HEALTH_MONITORING_TOKEN:?defina em .env}
+      # Proxies confiaveis (frontend nginx chega via host/bridge docker)
+      TRUSTED_PROXIES: '["127.0.0.1/32","10.0.0.0/8","172.16.0.0/12"]'
+      # CORS — a SPA chama same-origin; libere o dominio de teste
+      CORS_ALLOWED_ORIGINS: '["https://app.dataforall.tech"]'
+      # Downstream
+      URL_AUTH: http://platform-auth:8000/internal
+      URL_ADMIN: http://platform-admin:8000/api/v1
+      URL_IAM: http://platform-admin:8000/api/v1/iam
+      # Observabilidade
+      OTEL_TRACES_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    healthcheck:
+      # health server interno (:9090/health) — NAO passa pelo DomainTenantMiddleware
+      # (a :8000 exige Host de tenant conhecido e daria 403 no probe).
+      test: ["CMD", "curl", "-fsS", "http://localhost:9090/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  platform-api-gateway-mcp:
+    image: d4all.azurecr.io/dataforall/3.0/platform-api-gateway-mcp:${IMAGE_TAG:-latest}
+    container_name: platform-api-gateway-mcp
+    restart: unless-stopped
+    networks: [platform-local]
+    ports:
+      - "127.0.0.1:7100:7100"
+    environment:
+      RUNTIME_ENV: local # local dispensa twin JWKS obrigatorio
+      MCP_SERVICE_HEALTH_URL: http://platform-api-gateway:9090
+      MCP_SERVICE_PORT: "7100"
+      MCP_SERVICE_TWIN_ENFORCE: "false"
+      MCP_SERVICE_LOG_LEVEL: INFO
+    depends_on: [platform-api-gateway]
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

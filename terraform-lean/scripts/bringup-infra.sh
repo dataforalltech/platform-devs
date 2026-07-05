@@ -37,7 +37,9 @@ fi
 
 # 3) sync deploy/ do S3
 mkdir -p /opt/dataforall
-aws s3 sync "s3://${BUCKET}/deploy" /opt/dataforall/deploy --region "$REGION" --delete
+# --exclude ".env": NUNCA remover o .env local (senhas geradas on-box, nao vao pro S3).
+# Sem isso, --delete apaga o .env porque ele nao existe no bucket.
+aws s3 sync "s3://${BUCKET}/deploy" /opt/dataforall/deploy --region "$REGION" --delete --exclude ".env"
 cd /opt/dataforall/deploy
 
 # 4) .env com senhas fortes geradas ON-BOX (nunca transitam pela rede/logs)
