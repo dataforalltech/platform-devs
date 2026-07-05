@@ -2,16 +2,20 @@
   "_comment": "Working MCP ecosystem - 18 system MCPs",
   "mcpServers": {
     "architecture-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./architecture-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./architecture-mcp-server"
     },
     "backend-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./backend-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./backend-mcp-server"
     },
     "frontend-mcp": {
       "command": "node",
@@ -20,34 +24,44 @@
       ]
     },
     "devops-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./devops-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./devops-mcp-server"
     },
     "product-owner-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./product-owner-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./product-owner-mcp-server"
     },
     "product-manager-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./product-manager-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./product-manager-mcp-server"
     },
     "qa-engineer-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./qa-engineer-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./qa-engineer-mcp-server"
     },
     "security-mcp": {
-      "command": "node",
+      "command": "python3",
       "args": [
-        "./security-mcp-server/dist/server.js"
-      ]
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./security-mcp-server"
     },
     "datalake-mcp-server": {
       "command": "python3",

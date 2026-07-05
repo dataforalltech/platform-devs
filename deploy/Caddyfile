@@ -5,7 +5,7 @@
 # por PATH, sob um único host, para os serviços MCP que vivem na rede PRIVADA
 # (docker-compose.pilot.yml). Nenhum serviço de app expõe porta no host.
 #
-#   Claude Code ──HTTPS──▶ Caddy ──HTTP (rede privada)──▶ seczilla-mcp:7100
+#   Claude Code ──HTTPS──▶ Caddy ──HTTP (rede privada)──▶ security-mcp:7100
 #                                 ├─────────────────────▶ auth-mcp:7103  (Authorization Server)
 #                                 └─────────────────────▶ mcp-gateway:8080
 #
@@ -14,7 +14,7 @@
 #   1. Substitua "mcp.suaempresa.com" pelo seu domínio real (aqui e no .env).
 #   2. Aponte o DNS A/AAAA do domínio para o IP público do host.
 #   3. Ajuste `email` no bloco global para o contato ACME/Let's Encrypt.
-#   4. Garanta que AS_ISSUER, SECZILLA_RESOURCE, AS_JWKS_URL e SECZILLA_PRM_URL
+#   4. Garanta que AS_ISSUER, SECURITY_RESOURCE, AS_JWKS_URL e SECURITY_PRM_URL
 #      (no .env) usem EXATAMENTE este mesmo host/paths — os apps constroem as
 #      URLs de discovery a partir dessas variáveis, então elas precisam bater
 #      com o que o Caddy expõe publicamente.
@@ -32,7 +32,7 @@
 }
 
 # ----------------------------------------------------------------------------
-# Trecho reutilizável: security headers (espírito do harden_headers do SecZilla,
+# Trecho reutilizável: security headers (espírito do harden_headers do Security,
 # OWASP Secure Headers). Aplicado a todos os sites abaixo via `import`.
 # ----------------------------------------------------------------------------
 (security_headers) {
@@ -60,51 +60,51 @@ mcp.suaempresa.com {
 	import security_headers
 
 	# ------------------------------------------------------------------------
-	# ROTA /seczilla/* → SecZilla (Streamable HTTP, escuta na 7100).
+	# ROTA /security/* → Security (Streamable HTTP, escuta na 7100).
 	#
-	# Decisão de roteamento: usamos `handle_path`, que REMOVE o prefixo `/seczilla`
+	# Decisão de roteamento: usamos `handle_path`, que REMOVE o prefixo `/security`
 	# antes de encaminhar. Assim:
-	#   público  https://mcp.suaempresa.com/seczilla/mcp
-	#     → upstream  seczilla-mcp:7100/mcp                (endpoint MCP nativo)
-	#   público  https://mcp.suaempresa.com/seczilla/.well-known/oauth-protected-resource
-	#     → upstream  seczilla-mcp:7100/.well-known/oauth-protected-resource
-	#   público  https://mcp.suaempresa.com/seczilla/v1/health
-	#     → upstream  seczilla-mcp:7100/v1/health
+	#   público  https://mcp.suaempresa.com/security/mcp
+	#     → upstream  security-mcp:7100/mcp                (endpoint MCP nativo)
+	#   público  https://mcp.suaempresa.com/security/.well-known/oauth-protected-resource
+	#     → upstream  security-mcp:7100/.well-known/oauth-protected-resource
+	#   público  https://mcp.suaempresa.com/security/v1/health
+	#     → upstream  security-mcp:7100/v1/health
 	#
 	# IMPORTANTE (.well-known): o cliente OAuth do Claude Code, ao tomar 401,
 	# lê o header WWW-Authenticate e busca o `.well-known/oauth-protected-resource`
-	# do RESOURCE. Como o SecZilla anuncia RESOURCE = SECZILLA_RESOURCE
-	# (= https://mcp.suaempresa.com/seczilla/mcp) e o PRM em SECZILLA_PRM_URL
-	# (= https://mcp.suaempresa.com/seczilla/.well-known/oauth-protected-resource),
+	# do RESOURCE. Como o Security anuncia RESOURCE = SECURITY_RESOURCE
+	# (= https://mcp.suaempresa.com/security/mcp) e o PRM em SECURITY_PRM_URL
+	# (= https://mcp.suaempresa.com/security/.well-known/oauth-protected-resource),
 	# esse path PRECISA ser servido exatamente aqui. O `handle_path` acima já cobre,
-	# pois o SecZilla registra a rota interna em `/.well-known/oauth-protected-resource`.
-	handle_path /seczilla/* {
-		reverse_proxy seczilla-mcp:7100
+	# pois o Security registra a rota interna em `/.well-known/oauth-protected-resource`.
+	handle_path /security/* {
+		reverse_proxy security-mcp:7100
 	}
 
 	# ------------------------------------------------------------------------
-	# DEMAIS ZILLAS — mesmo padrão handle_path (strip do prefixo). Cada RESOURCE/PRM
-	# público (https://host/<zilla>/mcp) é servido aqui e resolve 1:1 no upstream.
-	handle_path /qazilla/* {
-		reverse_proxy qazilla-mcp:7124
+	# DEMAIS SERVIÇOS — mesmo padrão handle_path (strip do prefixo). Cada RESOURCE/PRM
+	# público (https://host/<serviço>/mcp) é servido aqui e resolve 1:1 no upstream.
+	handle_path /qa-engineer/* {
+		reverse_proxy qa-engineer-mcp:7124
 	}
-	handle_path /archzilla/* {
-		reverse_proxy archzilla-mcp:7118
+	handle_path /architecture/* {
+		reverse_proxy architecture-mcp:7118
 	}
-	handle_path /backzilla/* {
-		reverse_proxy backzilla-mcp:7119
+	handle_path /backend/* {
+		reverse_proxy backend-mcp:7119
 	}
-	handle_path /frontzilla/* {
-		reverse_proxy frontzilla-mcp:7120
+	handle_path /frontend/* {
+		reverse_proxy frontend-mcp:7120
 	}
-	handle_path /opszilla/* {
-		reverse_proxy opszilla-mcp:7121
+	handle_path /devops/* {
+		reverse_proxy devops-mcp:7121
 	}
-	handle_path /pozilla/* {
-		reverse_proxy pozilla-mcp:7122
+	handle_path /product-owner/* {
+		reverse_proxy product-owner-mcp:7122
 	}
-	handle_path /productzilla/* {
-		reverse_proxy productzilla-mcp:7123
+	handle_path /product-manager/* {
+		reverse_proxy product-manager-mcp:7123
 	}
 
 	# ------------------------------------------------------------------------
@@ -120,7 +120,7 @@ mcp.suaempresa.com {
 	#   público  .../auth/register                                → upstream /register
 	#
 	# IMPORTANTE (.well-known do AS): o Claude Code descobre o Authorization Server
-	# lendo `oauth-authorization-server` a partir do `issuer` que o PRM do SecZilla
+	# lendo `oauth-authorization-server` a partir do `issuer` que o PRM do Security
 	# aponta (AS_ISSUER). Por isso AS_ISSUER TEM de ser https://mcp.suaempresa.com/auth
 	# e este bloco TEM de servir o `.well-known` sem stripping adicional. O jwks_uri
 	# publicado no metadata (=$AS_ISSUER/.well-known/jwks.json) precisa resolver aqui.
@@ -152,29 +152,29 @@ https://localhost {
 	tls internal
 	import security_headers
 
-	handle_path /seczilla/* {
-		reverse_proxy seczilla-mcp:7100
+	handle_path /security/* {
+		reverse_proxy security-mcp:7100
 	}
-	handle_path /qazilla/* {
-		reverse_proxy qazilla-mcp:7124
+	handle_path /qa-engineer/* {
+		reverse_proxy qa-engineer-mcp:7124
 	}
-	handle_path /archzilla/* {
-		reverse_proxy archzilla-mcp:7118
+	handle_path /architecture/* {
+		reverse_proxy architecture-mcp:7118
 	}
-	handle_path /backzilla/* {
-		reverse_proxy backzilla-mcp:7119
+	handle_path /backend/* {
+		reverse_proxy backend-mcp:7119
 	}
-	handle_path /frontzilla/* {
-		reverse_proxy frontzilla-mcp:7120
+	handle_path /frontend/* {
+		reverse_proxy frontend-mcp:7120
 	}
-	handle_path /opszilla/* {
-		reverse_proxy opszilla-mcp:7121
+	handle_path /devops/* {
+		reverse_proxy devops-mcp:7121
 	}
-	handle_path /pozilla/* {
-		reverse_proxy pozilla-mcp:7122
+	handle_path /product-owner/* {
+		reverse_proxy product-owner-mcp:7122
 	}
-	handle_path /productzilla/* {
-		reverse_proxy productzilla-mcp:7123
+	handle_path /product-manager/* {
+		reverse_proxy product-manager-mcp:7123
 	}
 	handle_path /auth/* {
 		reverse_proxy auth-mcp:7103

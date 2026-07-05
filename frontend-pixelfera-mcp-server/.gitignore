@@ -6,8 +6,8 @@ dist/
 *.log
 npm-debug.log*
 .DS_Store
-.frontzilla-pixelfera.db
-.frontzilla-pixelfera.db-shm
-.frontzilla-pixelfera.db-wal
+.frontend-pixelfera.db
+.frontend-pixelfera.db-shm
+.frontend-pixelfera.db-wal
 coverage/
 .vitest/

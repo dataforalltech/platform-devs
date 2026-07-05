@@ -48,8 +48,10 @@ RESOURCE_METADATA_URL = os.getenv(
 
 # ── Registro de ferramentas: (fn, scope mínimo, sensitive) ─────────────────── #
 # Escopos:
-#   qa-engineer:read  → análise, classificação, validação e revisão (não gera artefatos)
-#   qa-engineer:write → geração de planos, casos, suítes e testes automatizados
+#   qa-engineer:read  → análise, classificação, validação, revisão e geração de
+#                       artefatos (todas as ferramentas apenas sintetizam texto/dict,
+#                       sem mutação de estado — logo, leitura por least-privilege)
+#   qa-engineer:write → reservado para futuras ferramentas que persistam estado
 # Nenhuma ferramenta é destrutiva/irreversível, então sensitive=False em todas.
 TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     # Leitura / análise
@@ -57,22 +59,22 @@ TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     "classify_bug_severity": (classify_bug_severity, "qa-engineer:read", False),
     "validate_story_testability": (validate_story_testability, "qa-engineer:read", False),
     "review_test_coverage": (review_test_coverage, "qa-engineer:read", False),
-    # Geração de artefatos / testes
-    "generate_test_plan": (generate_test_plan, "qa-engineer:write", False),
-    "generate_test_cases": (generate_test_cases, "qa-engineer:write", False),
-    "generate_gherkin_scenarios": (generate_gherkin_scenarios, "qa-engineer:write", False),
-    "generate_e2e_tests": (generate_e2e_tests, "qa-engineer:write", False),
-    "generate_api_tests": (generate_api_tests, "qa-engineer:write", False),
-    "generate_unit_tests": (generate_unit_tests, "qa-engineer:write", False),
-    "generate_playwright_tests": (generate_playwright_tests, "qa-engineer:write", False),
-    "generate_cypress_tests": (generate_cypress_tests, "qa-engineer:write", False),
-    "generate_postman_collection": (generate_postman_collection, "qa-engineer:write", False),
-    "generate_bug_report": (generate_bug_report, "qa-engineer:write", False),
-    "generate_quality_gate": (generate_quality_gate, "qa-engineer:write", False),
-    "generate_uat_checklist": (generate_uat_checklist, "qa-engineer:write", False),
-    "generate_k6_performance_test": (generate_k6_performance_test, "qa-engineer:write", False),
-    "generate_regression_suite": (generate_regression_suite, "qa-engineer:write", False),
-    "generate_smoke_test_suite": (generate_smoke_test_suite, "qa-engineer:write", False),
+    # Geração de artefatos / testes (read-only: só sintetizam texto/dict)
+    "generate_test_plan": (generate_test_plan, "qa-engineer:read", False),
+    "generate_test_cases": (generate_test_cases, "qa-engineer:read", False),
+    "generate_gherkin_scenarios": (generate_gherkin_scenarios, "qa-engineer:read", False),
+    "generate_e2e_tests": (generate_e2e_tests, "qa-engineer:read", False),
+    "generate_api_tests": (generate_api_tests, "qa-engineer:read", False),
+    "generate_unit_tests": (generate_unit_tests, "qa-engineer:read", False),
+    "generate_playwright_tests": (generate_playwright_tests, "qa-engineer:read", False),
+    "generate_cypress_tests": (generate_cypress_tests, "qa-engineer:read", False),
+    "generate_postman_collection": (generate_postman_collection, "qa-engineer:read", False),
+    "generate_bug_report": (generate_bug_report, "qa-engineer:read", False),
+    "generate_quality_gate": (generate_quality_gate, "qa-engineer:read", False),
+    "generate_uat_checklist": (generate_uat_checklist, "qa-engineer:read", False),
+    "generate_k6_performance_test": (generate_k6_performance_test, "qa-engineer:read", False),
+    "generate_regression_suite": (generate_regression_suite, "qa-engineer:read", False),
+    "generate_smoke_test_suite": (generate_smoke_test_suite, "qa-engineer:read", False),
 }
 
 SCOPES_SUPPORTED = ["qa-engineer:read", "qa-engineer:write"]

@@ -767,7 +767,7 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "get_deploy_status": "deploy:read",
     "get_pipeline_templates": "deploy:read",
     "list_acr_images": "deploy:read",
-    "ensure_all_repos_healthy": "deploy:read",  # healthcheck (dry_run seguro por default seria ideal)
+    "ensure_all_repos_healthy": "deploy:write",  # SENSÍVEL: dry_run=false por default MUTA (scaffold/trigger/setup_repo)
     "get_repos_root": "deploy:read",
     "list_local_repos": "deploy:read",
     # ── deploy:write — ações que MUTAM estado (SENSÍVEIS) ──────────────────── #

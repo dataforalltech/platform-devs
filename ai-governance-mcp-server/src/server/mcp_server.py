@@ -1,4 +1,4 @@
-"""Servidor MCP — registra as tools e expõe via stdio.
+"""Servidor MCP — registra as tools e expõe via Streamable HTTP.
 
 Esta é a única camada que conhece o SDK MCP. As tools são funções puras
 em `src/tools/` que recebem o `GovernanceRepository` e devolvem dicts.
@@ -9,8 +9,8 @@ Aqui apenas:
   3. Roteamos as chamadas do MCP para a função correspondente.
   4. Tratamos erros de validação devolvendo um payload `{"error": ...}` claro.
 
-Para rodar: `python -m src.server.mcp_server` ou `ai-governance-mcp-server`
-(ver pyproject.toml).
+O transporte é Streamable HTTP servido por uvicorn via `main()`
+(ver `build_app`/`main` no fim deste módulo e o `pyproject.toml`).
 """
 
 from __future__ import annotations

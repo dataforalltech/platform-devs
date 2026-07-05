@@ -7,8 +7,7 @@ Tools:
 authenticate é a PRIMEIRA tool chamada em toda sessão de agente.
 Valida o token do usuário, carrega perfil e captura contexto de ambiente.
 
-HTTP API :7100 — outros MCPs consultam /tools e /tools/call via HTTP.
-Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP).
+Transporte: Streamable HTTP em :7101 (gateway e cross-MCP consultam via HTTP).
 """
 from __future__ import annotations
 

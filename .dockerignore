@@ -11,7 +11,7 @@
 *.db
 *.db-shm
 *.db-wal
-.frontzilla-pixelfera.db*
+.frontend-pixelfera.db*
 **/*.log
 .venv
 venv

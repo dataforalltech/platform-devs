@@ -98,7 +98,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                         "include_scenarios": {
                             "type": "boolean",
                             "default": False,
@@ -135,7 +135,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id", "category"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                         "category": {
                             "type": "string",
                             "enum": ["rest_api", "react_component", "auth_flow", "db_migration", "websocket", "form_validation", "ui_data_validation"],
@@ -155,7 +155,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id", "name", "category", "steps", "expected_result"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                         "name": {"type": "string", "description": "Nome descritivo do cenÃ¡rio"},
                         "category": {
                             "type": "string",
@@ -184,7 +184,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id", "scenario_id", "status"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                         "scenario_id": {"type": "integer", "description": "ID numÃ©rico do cenÃ¡rio"},
                         "status": {
                             "type": "string",
@@ -213,7 +213,7 @@ def build_server() -> tuple[Any, ...]:
                             "type": "string",
                             "enum": ["pre_deploy", "post_deploy", "code_review", "security", "accessibility", "data_integrity", "custom"],
                         },
-                        "plan_id": {"type": "integer", "description": "Associar ao plano de teste (opcional)"},
+                        "plan_id": {"type": "string", "description": "Associar ao plano de teste (opcional)"},
                         "use_template": {
                             "type": "boolean",
                             "default": True,
@@ -282,7 +282,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id", "severity", "title", "description"],
                     "properties": {
-                        "plan_id": {"type": "integer", "description": "ID do plano de teste ao qual o bug pertence."},
+                        "plan_id": {"type": "string", "description": "ID do plano de teste ao qual o bug pertence."},
                         "severity": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
@@ -305,7 +305,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                     },
                 },
             ),
@@ -320,7 +320,7 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id"],
                     "properties": {
-                        "plan_id": {"type": "integer"},
+                        "plan_id": {"type": "string"},
                     },
                 },
             ),
