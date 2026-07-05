@@ -50,6 +50,22 @@ class GatewayError(RuntimeError):
     """A gateway HTTP or JSON-RPC error."""
 
 
+def _iserror_text(result: dict[str, Any]) -> str:
+    """Best-effort message from an MCP ``isError`` tools/call result.
+
+    The gateway shapes an error result as ``{"content": [{"type": "text",
+    "text": "<code>: <msg>"}], "isError": true}``; return that text so the
+    raised :class:`GatewayError` carries the gateway's reason (e.g.
+    ``tool_not_found: unknown tool 'qa-mcp.run_tests'``).
+    """
+    content = result.get("content")
+    if isinstance(content, list):
+        for block in content:
+            if isinstance(block, dict) and block.get("text"):
+                return str(block["text"])[:400]
+    return str(result)[:400]
+
+
 class GatewayToolClient:
     """Streamable HTTP client for the platform-mcp gateway.
 
@@ -135,7 +151,19 @@ class GatewayToolClient:
                 body = resp.json()
                 if "error" in body:
                     raise GatewayError(f"gateway RPC error on {tool}: {body['error']}")
-                return body.get("result", {})
+                result = body.get("result", {})
+                # MCP tools/call (spec 2025-03-26): the gateway signals a LOGICAL
+                # failure (unknown tool, bad args, policy/exchange error) with an
+                # HTTP-200 envelope whose ``result.isError`` is True — NOT a top-level
+                # JSON-RPC ``error`` and NOT a >=400 status. Without this check those
+                # slip through as a phantom success and the executor marks the item
+                # DONE though nothing ran (e.g. ``tool_not_found``). Raise so the
+                # per-item try turns it into ERROR instead.
+                if isinstance(result, dict) and result.get("isError"):
+                    raise GatewayError(
+                        f"gateway tool error on {tool}: {_iserror_text(result)}"
+                    )
+                return result
 
         if capability is Capability.READ:
             return await self._retrying_read(_once)
