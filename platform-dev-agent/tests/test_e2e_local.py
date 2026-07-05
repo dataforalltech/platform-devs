@@ -131,6 +131,9 @@ async def test_e2e_against_real_gateway() -> None:
     client = GatewayToolClient(
         base_url=os.environ["DEV_GATEWAY_URL"],  # real endpoint
         token_provider=StaticTokenProvider(os.getenv("DEV_GATEWAY_TOKEN", "")),
+        # The REAL gateway requires X-Tenant-Id on EVERY request (SEC-035); the
+        # client stamps it on all of them (incl. tools/list) when tenant_id is set.
+        tenant_id=os.getenv("DEV_TENANT_ID"),
         # NOTE: no transport= here -> httpx opens a real socket to the gateway.
     )
     enforcer = CapabilityEnforcer(

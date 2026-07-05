@@ -70,9 +70,14 @@ class GatewayToolClient:
         backoff_min: float = 1.0,
         backoff_max: float = 10.0,
         transport: httpx.AsyncBaseTransport | None = None,
+        tenant_id: str | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._token_provider = token_provider
+        # Default tenant. The REAL gateway REQUIRES X-Tenant-Id on EVERY request
+        # (SEC-035), including tools/list — which has no per-call correlation. When
+        # set, it is sent on all requests unless a per-call correlation overrides it.
+        self._tenant_id = tenant_id
         self._timeout = httpx.Timeout(
             connect=connect_timeout,
             read=read_timeout,
@@ -175,6 +180,10 @@ class GatewayToolClient:
             "Accept": "application/json, text/event-stream",  # Streamable HTTP
             "Idempotency-Key": idempotency_key,  # ALWAYS sent
         }
+        # Default tenant applies to every request (incl. tools/list, which has no
+        # correlation); a per-call correlation "Tenant-Id" still wins.
+        if self._tenant_id:
+            headers["X-Tenant-Id"] = self._tenant_id
         for key, value in (correlation or {}).items():
             headers[f"X-{key}"] = value
         return headers
