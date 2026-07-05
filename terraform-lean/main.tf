@@ -112,6 +112,16 @@ data "aws_iam_policy_document" "host" {
     actions   = ["ssm:GetParameter"]
     resources = [aws_ssm_parameter.tunnel_token.arn]
   }
+  statement {
+    sid = "KmsForBackupsBucket"
+    actions = [
+      "kms:Decrypt",
+      "kms:Encrypt",
+      "kms:GenerateDataKey",
+      "kms:DescribeKey",
+    ]
+    resources = [aws_kms_key.main.arn]
+  }
 }
 resource "aws_iam_role_policy" "host" {
   name   = "${local.name}-host"

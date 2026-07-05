@@ -1,6 +1,10 @@
 output "instance_id" {
   value = aws_instance.host.id
 }
+output "region" {
+  description = "Regiao AWS do ambiente enxuto."
+  value       = var.region
+}
 output "public_ip" {
   description = "IP público (só egress; sem ingress no SG)."
   value       = aws_instance.host.public_ip
