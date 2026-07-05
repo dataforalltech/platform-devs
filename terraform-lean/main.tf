@@ -2,11 +2,14 @@
 
 locals {
   name = "${var.project}-${var.environment}"
+  # Tags padrão aplicadas a TODOS os recursos (provider default_tags).
   common_tags = {
     Project     = var.project
     Environment = var.environment
-    ManagedBy   = "terraform"
     Stack       = "dataforall-lean"
+    ManagedBy   = "terraform"
+    Owner       = var.owner
+    CostCenter  = var.cost_center
   }
 }
 
@@ -23,6 +26,7 @@ resource "aws_kms_key" "main" {
   description             = "${local.name} — EBS/S3"
   enable_key_rotation     = true
   deletion_window_in_days = 7
+  tags                    = { Name = "${local.name}-kms", Component = "security" }
 }
 resource "aws_kms_alias" "main" {
   name          = "alias/${local.name}"
@@ -34,18 +38,18 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags                 = { Name = "${local.name}-vpc" }
+  tags                 = { Name = "${local.name}-vpc", Component = "network" }
 }
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
-  tags   = { Name = "${local.name}-igw" }
+  tags   = { Name = "${local.name}-igw", Component = "network" }
 }
 resource "aws_subnet" "public" {
   vpc_id                  = aws_vpc.main.id
   availability_zone       = var.az
   cidr_block              = cidrsubnet(var.vpc_cidr, 8, 1)
   map_public_ip_on_launch = true
-  tags                    = { Name = "${local.name}-public" }
+  tags                    = { Name = "${local.name}-subnet-public", Component = "network" }
 }
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
@@ -53,7 +57,7 @@ resource "aws_route_table" "public" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.igw.id
   }
-  tags = { Name = "${local.name}-rt" }
+  tags = { Name = "${local.name}-rt-public", Component = "network" }
 }
 resource "aws_route_table_association" "public" {
   subnet_id      = aws_subnet.public.id
@@ -71,7 +75,7 @@ resource "aws_security_group" "host" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  tags = { Name = "${local.name}-host" }
+  tags = { Name = "${local.name}-host-sg", Component = "security" }
   lifecycle { create_before_destroy = true }
 }
 
@@ -122,6 +126,7 @@ resource "aws_iam_instance_profile" "host" {
 # ── S3: backups (dumps + snapshots lógicos). Cifrado, versionado, privado ───
 resource "aws_s3_bucket" "backups" {
   bucket = "${local.name}-backups-${data.aws_caller_identity.current.account_id}"
+  tags   = { Name = "${local.name}-backups", Component = "storage" }
 }
 data "aws_caller_identity" "current" {}
 resource "aws_s3_bucket_versioning" "backups" {

@@ -58,7 +58,12 @@ resource "aws_instance" "host" {
     cloudflared service install "$TOKEN"
   EOT
 
-  tags       = { Name = "${local.name}-host", Role = "all-in-one", Tier = "app+data" }
+  tags = {
+    Name      = "${local.name}-host"
+    Component = "compute"
+    Role      = "all-in-one"
+    Tier      = "app+data"
+  }
   depends_on = [aws_ssm_parameter.tunnel_token]
 }
 
@@ -69,7 +74,12 @@ resource "aws_ebs_volume" "data" {
   type              = "gp3"
   encrypted         = true
   kms_key_id        = aws_kms_key.main.arn
-  tags              = { Name = "${local.name}-data-vol", Backup = "true" }
+  tags = {
+    Name      = "${local.name}-data-vol"
+    Component = "data"
+    Tier      = "data"
+    Backup    = "true"
+  }
 }
 resource "aws_volume_attachment" "data" {
   device_name = "/dev/sdf"
