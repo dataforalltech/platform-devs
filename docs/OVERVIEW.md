@@ -13,7 +13,7 @@ Fonte de verdade: [official-stack-and-architecture.md](architecture/official-sta
 | # | Decisão | Escolha |
 |---|---|---|
 | **D1** | Camada stateful | MySQL, Postgres, Redis, Kafka **em container na EC2** (não RDS/ElastiCache/MSK) + hardening (EBS, snapshots, réplica, TLS) |
-| **D2** | Persistência polyglot | **MySQL** (core multi-tenant) + **PostgreSQL** (novo/analítico), um engine por serviço |
+| **D2** | Persistência | **3 instâncias**: `admin-mysql` (registry, compartilhado) + `tenant-mysql` + `tenant-postgres` (dados por tenant, em runtime). Não é um banco por serviço |
 | **D3** | Registry | **ACR** hoje → **ECR** como alvo |
 | **D4** | Compute / HA | **Docker Swarm** (sem Portainer), múltiplas EC2, **escala estática** |
 | **D5** | Segredos | **HashiCorp Vault KV + AWS IAM auth** (ADR-0006) |

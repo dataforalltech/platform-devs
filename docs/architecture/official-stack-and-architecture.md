@@ -12,7 +12,7 @@ exigem ADR.
 | # | Decisão | Escolha oficial | Racional |
 |---|---|---|---|
 | D1 | Camada stateful (MySQL, Postgres, Redis, Kafka) | **Containers em EC2 dedicada + hardening** | Mantém o padrão de infra da casa (controle/custo); a resiliência é assumida via EBS dedicado, snapshots, réplica e backup testado (§5). |
-| D2 | Persistência polyglot | **MySQL e Postgres, ambos oficiais, com regra de uso** (§4) | Formaliza o que já existe e para a proliferação ad-hoc. |
+| D2 | Persistência | **3 instâncias: admin-mysql + tenant-mysql + tenant-postgres** (§4) | Não é um banco por serviço: admin compartilhado (registry) + stores de tenant (MySQL/Postgres) resolvidos por tenant em runtime. |
 | D3 | Registry de imagens | **ACR hoje → ECR como alvo definitivo** | Não bloqueia agora; converge para 100% AWS (colocation com EC2, IAM/OIDC, sem egress cross-cloud). |
 | D4 | Compute / HA | **Múltiplas EC2 + ALB, orquestradas por Docker Swarm; escala estática** | HA sem ponto único de falha e rolling deploy nativo, mantendo Docker (sem Portainer, sem Kubernetes). Réplicas fixas dimensionadas para o pico — **sem autoscaling** (§6). |
 | D5 | Segredos | **HashiCorp Vault KV + AWS IAM auth** (ADR-0006) | Fonte única, sem token estático (instance profile da EC2). |
@@ -97,21 +97,27 @@ flowchart TB
 
 ---
 
-## 4. Regra oficial de persistência polyglot (D2)
+## 4. Estrutura de persistência (D2)
 
-Ambos os engines são oficiais. **Um serviço usa exatamente um engine.** O critério:
+O banco **não é "um por serviço"**. São **3 instâncias**, com separação
+admin/tenant — 2 MySQL (admin + tenant) + 1 Postgres (tenant):
 
-| Use **MySQL** quando… | Use **PostgreSQL** quando… |
-|---|---|
-| O serviço participa do **plano multi-tenant** que compartilha o `ADMIN_DATAFORALL` (admin, auth, tenants, provisioning) — modelo schema-por-tenant. | É um **serviço novo** (default para greenfield). |
-| É um serviço **legado já em MySQL** e não há refactor previsto. | A carga é **analítica/documental/vetorial**: JSONB pesado, extensões, `pgvector`, full-text avançado. |
+| Instância | Papel | Quem usa |
+|---|---|---|
+| **admin-mysql** | Registry `ADMIN_DATAFORALL` (PLATFORMS, GATEWAY_MAPPING, tenants, internal tokens). **Compartilhado.** | **Todos** os serviços (resolução de tenant `Host → PLATFORMS`) |
+| **tenant-mysql** | Dados dos tenants em **MySQL** (banco/schema por tenant). | Serviços cujo `DB_ENGINE=mysql` |
+| **tenant-postgres** | Dados dos tenants em **PostgreSQL**. | Serviços cujo `DB_ENGINE=postgresql` |
 
-**Regras de ouro:**
-1. Serviço novo → **PostgreSQL por padrão**, exceto se entrar no plano multi-tenant MySQL.
-2. Nunca dois engines no mesmo serviço.
-3. Convergência é **oportunista** (num refactor), não um big-bang.
-4. **Revisão pendente:** `platform-db-vector` está em MySQL mas, sendo busca
-   vetorial, deveria migrar para **Postgres + pgvector** (registrar como dívida).
+**Como funciona:**
+- Cada serviço conecta em **admin-mysql** (`ADMIN_DB_*` — resolve o tenant) **+ um
+  store de tenant** (`DB_*` → tenant-mysql **ou** tenant-postgres), conforme seu engine.
+- Os bancos de tenant são **por tenant** (resolvidos em runtime a partir de
+  `PLATFORMS`), **não por serviço**. Os serviços **compartilham** as instâncias de tenant.
+- **Qual engine de tenant o serviço usa** (regra polyglot): MySQL para o core/legado;
+  **PostgreSQL** para serviços novos e cargas analíticas/vetoriais (JSONB, extensões,
+  `pgvector`). Um serviço = um engine de tenant (nunca os dois).
+- **Dívida:** `platform-db-vector` está em MySQL; sendo busca vetorial, migrar para
+  **Postgres + pgvector**.
 
 ---
 
