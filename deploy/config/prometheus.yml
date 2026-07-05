@@ -1,0 +1,47 @@
+# Prometheus — scrape dos serviços (via Swarm SD) e dos exporters do data tier.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  # ── Serviços do app tier: descoberta automática pela API do Swarm ──────────
+  # Raspa /metrics na porta 8000 de cada task em execução.
+  - job_name: swarm-services
+    dockerswarm_sd_configs:
+      - host: unix:///var/run/docker.sock
+        role: tasks
+    relabel_configs:
+      - source_labels: [__meta_dockerswarm_task_desired_state]
+        regex: running
+        action: keep
+      # só tasks na overlay `platform`
+      - source_labels: [__meta_dockerswarm_network_name]
+        regex: platform
+        action: keep
+      - source_labels: [__meta_dockerswarm_service_name]
+        target_label: service
+      # força a porta 8000 (/metrics) no endereço descoberto
+      - source_labels: [__address__]
+        regex: "(.+?)(?::\\d+)?"
+        replacement: "$1:8000"
+        target_label: __address__
+    metrics_path: /metrics
+
+  # ── Data tier: exporters (alvos estáticos por IP privado — ajuste os hosts) ─
+  - job_name: data-mysql
+    static_configs:
+      - targets: ["mysql.data.internal:9104"]
+  - job_name: data-postgres
+    static_configs:
+      - targets: ["postgres.data.internal:9187"]
+  - job_name: data-redis
+    static_configs:
+      - targets: ["redis.data.internal:9121"]
+  - job_name: data-kafka
+    static_configs:
+      - targets: ["kafka.data.internal:9308"]
+
+  # ── O próprio Prometheus ───────────────────────────────────────────────────
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
