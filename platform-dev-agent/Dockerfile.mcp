@@ -1,0 +1,22 @@
+# platform-dev-agent MCP server (Modo B) — Streamable HTTP for Claude Code Desktop.
+# Editable install keeps the package at /app so PROFILES_DIR (parents[3]/knowledge)
+# resolves to /app/knowledge — a normal site-packages install would break that.
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY pyproject.toml README.md ./
+COPY app/ ./app/
+COPY knowledge/ ./knowledge/
+
+RUN pip install --no-cache-dir -e .
+
+EXPOSE 7130
+ENV MCP_HOST=0.0.0.0 \
+    MCP_PORT=7130 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONUTF8=1
+# Optional: set DEV_GATEWAY_URL / DEV_TENANT_ID / DEV_GATEWAY_TOKEN to drive the
+# REAL platform-mcp gateway instead of the in-process demo gateway.
+
+CMD ["python", "-m", "app.dev_agent.mcp_app"]
