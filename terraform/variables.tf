@@ -15,13 +15,13 @@ variable "environment" {
 variable "owner" {
   description = "Time/pessoa responsável (tag Owner — governança)."
   type        = string
-  default     = "platform-team"
+  default     = "platform-dataforall-tests"
 }
 
 variable "cost_center" {
   description = "Centro de custo (tag CostCenter — cost allocation no Billing)."
   type        = string
-  default     = "platform"
+  default     = "dataforall-tests"
 }
 
 variable "region" {
