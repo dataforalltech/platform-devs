@@ -55,8 +55,10 @@ Multi-tenancy por domínio (D7): autoritativo em
 
 ### 4a. Enxuto — HML / prod inicial (uso quase zero)
 [`../terraform-lean/`](../terraform-lean/) — **1 EC2 rodando tudo + Cloudflare Tunnel**
-(sem ALB, sem NAT, origem sem entrada pública). **~29 recursos**, ~US$30–45/mês.
-Serve HML **e** a prod que está começando; escala-se depois. `terraform plan` = **29 to add, 0 erros**.
+(sem ALB, sem NAT, origem sem entrada pública). **~29 recursos**. Custo mensal
+sa-east-1: **~US$90 (t3.large 8GB + Savings Plan)** a **~US$227 (t3.xlarge on-demand)**;
+**~US$72** parando fora do horário (HML). Serve HML **e** a prod que está começando;
+escala-se depois. `terraform plan` = **29 to add, 0 erros**.
 
 ### 4b. Completo — produção com carga (alvo de escala)
 [`../terraform/`](../terraform/) — VPC multi-AZ, EC2 do Swarm (managers+workers) +

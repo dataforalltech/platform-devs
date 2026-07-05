@@ -18,9 +18,19 @@ sem entrada pública** (o `cloudflared` conecta de dentro para fora). Serve tant
 | S3 backups (KMS, versionado, privado) | dumps/snapshots lógicos |
 | KMS | cifra EBS/S3 |
 
-## Custo aproximado
-~US$30–45/mês: 1 EC2 t3.xlarge (on-demand; use Savings Plan p/ ~40% off), ~100GB
-EBS, S3 mínimo. **Sem** os custos de ALB (~US$18) e NAT (~US$32+) do desenho completo.
+## Custo aproximado (sa-east-1)
+A EC2 domina o custo. Estimativa mensal:
+
+| Cenário | Total |
+|---|---|
+| t3.xlarge (16GB, todos os ~29 serviços) on-demand | ~US$227 |
+| t3.xlarge com Savings Plan 1 ano | ~US$150 |
+| **t3.large (8GB, só o núcleo) com Savings Plan** | **~US$90** |
+| **t3.large ligando/desligando (HML ~8h/dia)** | **~US$72** |
+
+Inclui EBS 140GB (~US$21), IPv4 (~US$4), KMS/S3/snapshots (~US$4). **Sem** ALB
+(~US$18) nem NAT (~US$32+) do desenho completo — o Tunnel dispensa os dois.
+Para HML quase sem uso: **t3.large + parar fora do horário** é o mais econômico.
 
 ## Uso
 
