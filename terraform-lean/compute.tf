@@ -34,6 +34,16 @@ resource "aws_instance" "host" {
     apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
     systemctl enable --now docker
 
+    # Swap (folga contra OOM: 29 serviços + stores + observabilidade em 16GB)
+    if [ ! -f /swapfile ]; then
+      fallocate -l 4G /swapfile
+      chmod 600 /swapfile
+      mkswap /swapfile
+      swapon /swapfile
+      echo '/swapfile none swap sw 0 0' >> /etc/fstab
+      sysctl -w vm.swappiness=10
+    fi
+
     # Volume de dados (Nitro: 2º volume aparece como /dev/nvme1n1)
     DEV=/dev/nvme1n1
     if ! blkid $DEV; then mkfs -t ext4 $DEV; fi
