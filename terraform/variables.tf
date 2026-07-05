@@ -12,6 +12,18 @@ variable "environment" {
   default     = "prod"
 }
 
+variable "owner" {
+  description = "Time/pessoa responsável (tag Owner — governança)."
+  type        = string
+  default     = "platform-team"
+}
+
+variable "cost_center" {
+  description = "Centro de custo (tag CostCenter — cost allocation no Billing)."
+  type        = string
+  default     = "platform"
+}
+
 variable "region" {
   description = "Região AWS."
   type        = string

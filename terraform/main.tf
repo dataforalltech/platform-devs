@@ -3,11 +3,14 @@
 locals {
   name = "${var.project}-${var.environment}"
 
+  # Tags padrão aplicadas a TODOS os recursos (provider default_tags).
   common_tags = {
     Project     = var.project
     Environment = var.environment
-    ManagedBy   = "terraform"
     Stack       = "dataforall-platform"
+    ManagedBy   = "terraform"
+    Owner       = var.owner
+    CostCenter  = var.cost_center
   }
 }
 
