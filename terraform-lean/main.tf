@@ -67,7 +67,7 @@ resource "aws_route_table_association" "public" {
 # ── SG: SEM ingress (Tunnel é outbound; acesso via SSM). Egress liberado ────
 resource "aws_security_group" "host" {
   name_prefix = "${local.name}-host-"
-  description = "Host único — sem ingress (Cloudflare Tunnel outbound + SSM)"
+  description = "Host unico - sem ingress (Cloudflare Tunnel outbound + SSM)"
   vpc_id      = aws_vpc.main.id
   egress {
     from_port   = 0
