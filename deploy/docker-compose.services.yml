@@ -1,29 +1,34 @@
 # =============================================================================
 # docker-compose.services.yml — MICROSERVIÇOS da plataforma DataForAll
 #
-# Sobe os serviços contra a infra do docker-compose.infra.yml (mesma rede
-# `platform`). TODAS as variáveis estão preenchidas — SÓ senhas/tokens/chaves
-# vêm de ambiente (.env, ver deploy/.env.services.example).
+# Reconciliado com a infra real (docker-compose.infra.yml): hosts admin-mysql /
+# tenant-mysql / tenant-postgres, rede `platform-local`.
 #
-#   docker network create platform                       # se ainda não existe
-#   docker compose -f docker-compose.infra.yml up -d      # infra primeiro
-#   docker compose -f docker-compose.services.yml up -d   # depois os serviços
+# BUILD LOCAL a partir dos repos (não depende do ACR). O Dockerfile usa o secret
+# `github_token` para instalar as libs privadas (platform-*-lib):
 #
-# Perfil: LOCAL/STAGING contra a infra deste diretório (Vault dev = token auth,
-# DB sem TLS). Para PRODUÇÃO na AWS use o Swarm stack parametrizado
-# (platform-service-template/deploy/stack.yml): VAULT_AUTH_METHOD=aws, TLS, etc.
+#   export GITHUB_TOKEN=ghp_xxx            # PAT com escopo repo (dataforalltech)
+#   docker network create platform-local
+#   docker compose -f docker-compose.infra.yml    --env-file .env up -d
+#   docker compose -f docker-compose.services.yml --env-file .env build   # builda dos repos
+#   docker compose -f docker-compose.services.yml --env-file .env up -d
 #
-# DB engine por serviço segue a regra polyglot (D2): MySQL no plano multi-tenant
-# (admin/auth/core) e Postgres para scheduler/crm/marketing/finance/sales.
+# (Alternativa: usar as imagens do ACR — cada serviço tem `image:` definido;
+#  `docker login d4all.azurecr.io` e `up -d` sem `build`.)
+#
+# Todas as variáveis preenchidas; só senhas/tokens/chave RSA vêm de .env.
 # =============================================================================
 
 name: dataforall-services
 
 networks:
-  platform:
+  platform-local:
     external: true
 
-# ── Env compartilhado (tudo preenchido; só passwords/tokens via ${VAR}) ───────
+secrets:
+  github_token:
+    environment: GITHUB_TOKEN          # usado no build das libs privadas
+
 x-env: &env
   APP_ENV: hml
   RUNTIME_ENV: local
@@ -34,8 +39,8 @@ x-env: &env
   DOCS_ENABLED: "false"
   AUTH_DEV_BYPASS: "false"
   LAB_MODE: "false"
-  # Registry admin (ADMIN_DATAFORALL — MySQL) comum a todos os serviços
-  ADMIN_DB_HOST: mysql
+  # Registry admin (ADMIN_DATAFORALL — MySQL admin)
+  ADMIN_DB_HOST: admin-mysql
   ADMIN_DB_PORT: "3306"
   ADMIN_DB_USER: root
   ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
@@ -44,27 +49,27 @@ x-env: &env
   JWT_ISSUER: platform-auth
   JWT_AUDIENCE: platform-services
   JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
-  # Redis (rate-limit + JTI blocklist)
+  # Redis
   RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
   # Serviços internos
   INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
   URL_AUTH: http://platform-auth:8000/internal
   URL_ADMIN: http://platform-admin:8000/api/v1
   URL_IAM: http://platform-admin:8000/api/v1/iam
-  # Kafka (habilitado por serviço via KAFKA_ENABLED)
+  # Kafka (interno)
   KAFKA_BOOTSTRAP_SERVERS: kafka:9092
   KAFKA_SECURITY_PROTOCOL: PLAINTEXT
   # Observabilidade
   OTEL_TRACES_ENABLED: "true"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
-  # Segredos via Vault (infra local = Vault dev, token auth)
+  # Vault (infra local = dev, token auth)
   VAULT_ADDR: http://vault:8200
   VAULT_AUTH_METHOD: token
   VAULT_TOKEN: ${VAULT_ROOT_TOKEN:?defina em .env}
 
 x-mysql: &mysql
   DB_ENGINE: mysql
-  DB_HOST: mysql
+  DB_HOST: tenant-mysql
   DB_PORT: "3306"
   DB_USER: root
   DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
@@ -72,7 +77,7 @@ x-mysql: &mysql
 
 x-postgres: &postgres
   DB_ENGINE: postgresql
-  DB_HOST: postgres
+  DB_HOST: tenant-postgres
   DB_PORT: "5432"
   DB_USER: platform
   DB_PASSWORD: ${POSTGRES_PASSWORD:?defina em .env}
@@ -80,7 +85,7 @@ x-postgres: &postgres
 
 x-svc: &svc
   restart: unless-stopped
-  networks: [platform]
+  networks: [platform-local]
   healthcheck:
     test: ["CMD", "curl", "-fsS", "http://localhost:8000/api/health/ready"]
     interval: 15s
@@ -96,22 +101,21 @@ services:
   platform-api-gateway:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-api-gateway:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-api-gateway, secrets: [github_token]}
     container_name: platform-api-gateway
-    ports:
-      - "8080:8000"          # única porta pública (frente da ALB/Cloudflare)
+    ports: ["8080:8000"]
     environment:
       <<: *env
       APP_NAME: platform-api-gateway
       SERVICE_ID: platform-api-gateway
-      # gateway lê ADMIN_DATAFORALL (registry/PLATFORMS) — sem DB de tenant próprio
       TRUSTED_PROXIES: '["127.0.0.1/32","10.0.0.0/8","172.16.0.0/12"]'
 
   platform-mcp:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-mcp:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-mcp, secrets: [github_token]}
     container_name: platform-mcp
-    ports:
-      - "8090:8000"          # gateway MCP (ferramentas para agentes)
+    ports: ["8090:8000"]
     environment:
       <<: *env
       APP_NAME: platform-mcp
@@ -121,6 +125,7 @@ services:
   platform-auth:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-auth:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-auth, secrets: [github_token]}
     container_name: platform-auth
     environment:
       <<: [*env, *mysql]
@@ -132,6 +137,7 @@ services:
   platform-admin:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-admin:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-admin, secrets: [github_token]}
     container_name: platform-admin
     environment:
       <<: [*env, *mysql]
@@ -143,6 +149,7 @@ services:
   platform-notification:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-notification:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-notification, secrets: [github_token]}
     container_name: platform-notification
     environment:
       <<: [*env, *mysql]
@@ -153,6 +160,7 @@ services:
   platform-cdc:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-cdc:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-cdc, secrets: [github_token]}
     container_name: platform-cdc
     environment:
       <<: [*env, *mysql]
@@ -163,6 +171,7 @@ services:
   platform-ml:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-ml:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-ml, secrets: [github_token]}
     container_name: platform-ml
     environment:
       <<: [*env, *mysql]
@@ -173,6 +182,7 @@ services:
   platform-crm-agent:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-crm-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-crm-agent, secrets: [github_token]}
     container_name: platform-crm-agent
     environment:
       <<: [*env, *mysql]
@@ -183,6 +193,7 @@ services:
   platform-governance:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-governance:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-governance, secrets: [github_token]}
     container_name: platform-governance
     environment:
       <<: [*env, *mysql]
@@ -193,6 +204,7 @@ services:
   platform-monitor:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-monitor:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-monitor, secrets: [github_token]}
     container_name: platform-monitor
     environment:
       <<: [*env, *mysql]
@@ -203,6 +215,7 @@ services:
   platform-datalake:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-datalake:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-datalake, secrets: [github_token]}
     container_name: platform-datalake
     environment:
       <<: [*env, *mysql]
@@ -213,6 +226,7 @@ services:
   platform-connectors:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-connectors:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-connectors, secrets: [github_token]}
     container_name: platform-connectors
     environment:
       <<: [*env, *mysql]
@@ -223,6 +237,7 @@ services:
   platform-analytics:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-analytics:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-analytics, secrets: [github_token]}
     container_name: platform-analytics
     environment:
       <<: [*env, *mysql]
@@ -233,6 +248,7 @@ services:
   platform-communication:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-communication:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-communication, secrets: [github_token]}
     container_name: platform-communication
     environment:
       <<: [*env, *mysql]
@@ -243,6 +259,7 @@ services:
   platform-docextract:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-docextract:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-docextract, secrets: [github_token]}
     container_name: platform-docextract
     environment:
       <<: [*env, *mysql]
@@ -253,6 +270,7 @@ services:
   platform-dai:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-dai:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-dai, secrets: [github_token]}
     container_name: platform-dai
     environment:
       <<: [*env, *mysql]
@@ -263,6 +281,7 @@ services:
   platform-flow:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-flow:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-flow, secrets: [github_token]}
     container_name: platform-flow
     environment:
       <<: [*env, *mysql]
@@ -273,6 +292,7 @@ services:
   platform-iceberg:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-iceberg:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-iceberg, secrets: [github_token]}
     container_name: platform-iceberg
     environment:
       <<: [*env, *mysql]
@@ -283,6 +303,7 @@ services:
   platform-pipeline:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-pipeline:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-pipeline, secrets: [github_token]}
     container_name: platform-pipeline
     environment:
       <<: [*env, *mysql]
@@ -293,6 +314,7 @@ services:
   platform-db-vector:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-db-vector:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-db-vector, secrets: [github_token]}
     container_name: platform-db-vector
     environment:
       <<: [*env, *mysql]
@@ -303,6 +325,7 @@ services:
   platform-security:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-security:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-security, secrets: [github_token]}
     container_name: platform-security
     environment:
       <<: [*env, *mysql]
@@ -313,6 +336,7 @@ services:
   platform-agents-factory:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-agents-factory:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-agents-factory, secrets: [github_token]}
     container_name: platform-agents-factory
     environment:
       <<: [*env, *mysql]
@@ -324,6 +348,7 @@ services:
   platform-scheduler:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-scheduler:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-scheduler, secrets: [github_token]}
     container_name: platform-scheduler
     environment:
       <<: [*env, *postgres]
@@ -334,6 +359,7 @@ services:
   platform-crm:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-crm:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-crm, secrets: [github_token]}
     container_name: platform-crm
     environment:
       <<: [*env, *postgres]
@@ -344,6 +370,7 @@ services:
   platform-marketing:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-marketing:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-marketing, secrets: [github_token]}
     container_name: platform-marketing
     environment:
       <<: [*env, *postgres]
@@ -354,6 +381,7 @@ services:
   platform-marketing-agent:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-marketing-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-marketing-agent, secrets: [github_token]}
     container_name: platform-marketing-agent
     environment:
       <<: [*env, *postgres]
@@ -364,6 +392,7 @@ services:
   platform-finance:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-finance:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-finance, secrets: [github_token]}
     container_name: platform-finance
     environment:
       <<: [*env, *postgres]
@@ -374,6 +403,7 @@ services:
   platform-finance-agent:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-finance-agent:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-finance-agent, secrets: [github_token]}
     container_name: platform-finance-agent
     environment:
       <<: [*env, *postgres]
@@ -384,6 +414,7 @@ services:
   platform-sales:
     <<: *svc
     image: d4all.azurecr.io/dataforall/3.0/platform-sales:${IMAGE_TAG:-latest}
+    build: {context: ../../platform-sales, secrets: [github_token]}
     container_name: platform-sales
     environment:
       <<: [*env, *postgres]

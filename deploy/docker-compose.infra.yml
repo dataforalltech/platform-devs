@@ -1,27 +1,28 @@
 # =============================================================================
-# docker-compose.infra.yml — INFRAESTRUTURA da plataforma DataForAll
+# docker-compose.infra.yml — INFRAESTRUTURA local da plataforma DataForAll
 #
-# Sobe tudo que os serviços dependem: bancos (MySQL + Postgres), Redis, Kafka,
-# Vault e o stack de observabilidade (Prometheus, Grafana, OTel, Tempo).
+# Reconciliado com a infra canônica que já roda (projeto dataforall-infra):
+#   admin-mysql (:53306) + tenant-mysql (:3306) + tenant-postgres (:5432)
+#   + kafka (apache/kafka, :9095) + redis (:6379) + grafana (:3000)
+# e ACRESCENTA o que faltava para a arquitetura: Vault + Prometheus + OTel + Tempo.
 #
-# Todas as variáveis estão preenchidas — SÓ as SENHAS/TOKENS vêm de ambiente
-# (defina em .env ao lado, ver deploy/.env.infra.example). Uso:
+# Todas as variáveis preenchidas — SÓ senhas/tokens vêm de .env (.env.infra.example).
+# Rede compartilhada `platform-local` (convenção da plataforma):
 #
-#   docker network create platform            # uma vez (rede compartilhada)
-#   docker compose -f docker-compose.infra.yml up -d
-#
-# Depois suba os serviços: docker compose -f docker-compose.services.yml up -d
+#   docker network create platform-local        # uma vez
+#   docker compose -f docker-compose.infra.yml --env-file .env up -d
 # =============================================================================
 
 name: dataforall-infra
 
 networks:
-  platform:
-    external: true          # criada uma vez: docker network create platform
+  platform-local:
+    external: true          # docker network create platform-local
 
 volumes:
-  mysql-data:
-  postgres-data:
+  admin-mysql-data:
+  tenant-mysql-data:
+  tenant-postgres-data:
   redis-data:
   kafka-data:
   vault-data:
@@ -30,36 +31,53 @@ volumes:
   tempo-data:
 
 services:
-  # ── MySQL 8 — plano multi-tenant (ADMIN_DATAFORALL + bancos de tenant) ──────
-  mysql:
-    image: mysql:8.0
-    container_name: mysql
+  # ── MySQL admin — ADMIN_DATAFORALL (registry de tenants / gateway) ──────────
+  admin-mysql:
+    image: mysql:8.4
+    container_name: dataforall-admin-mysql
     restart: unless-stopped
-    command:
-      - "--default-authentication-plugin=caching_sha2_password"
-      - "--max-connections=500"
-      - "--character-set-server=utf8mb4"
-      - "--collation-server=utf8mb4_unicode_ci"
+    command: ["--default-authentication-plugin=caching_sha2_password", "--max-connections=500"]
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
       MYSQL_DATABASE: ADMIN_DATAFORALL
       TZ: UTC
     ports:
-      - "3306:3306"
+      - "53306:3306"
     volumes:
-      - mysql-data:/var/lib/mysql
+      - admin-mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 40s
-    networks: [platform]
+    networks: [platform-local]
 
-  # ── PostgreSQL 16 — serviços novos / analíticos ────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: postgres
+  # ── MySQL tenant — bancos por tenant (plano multi-tenant) ──────────────────
+  tenant-mysql:
+    image: mysql:8.4
+    container_name: dataforall-tenant-mysql
+    restart: unless-stopped
+    command: ["--default-authentication-plugin=caching_sha2_password", "--max-connections=500"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      TZ: UTC
+    ports:
+      - "3306:3306"
+    volumes:
+      - tenant-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "--password=${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks: [platform-local]
+
+  # ── PostgreSQL tenant — serviços novos/analíticos (regra polyglot D2) ──────
+  tenant-postgres:
+    image: postgres:16
+    container_name: dataforall-tenant-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: platform
@@ -69,30 +87,23 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - tenant-postgres-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U platform"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 15s
-    networks: [platform]
+    networks: [platform-local]
 
-  # ── Redis 7 — rate-limit + JTI blocklist ───────────────────────────────────
+  # ── Redis — rate-limit + JTI blocklist ─────────────────────────────────────
   redis:
-    image: redis:7-alpine
-    container_name: redis
+    image: redis:7.4-alpine
+    container_name: dataforall-redis
     restart: unless-stopped
     command:
-      - "redis-server"
-      - "--requirepass"
-      - "${REDIS_PASSWORD:?defina em .env}"
-      - "--maxmemory"
-      - "512mb"
-      - "--maxmemory-policy"
-      - "allkeys-lru"
-      - "--appendonly"
-      - "yes"
+      ["redis-server", "--requirepass", "${REDIS_PASSWORD:?defina em .env}",
+       "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru", "--appendonly", "yes"]
     ports:
       - "6379:6379"
     volumes:
@@ -102,50 +113,40 @@ services:
       interval: 10s
       timeout: 3s
       retries: 5
-    networks: [platform]
+    networks: [platform-local]
 
-  # ── Kafka 3.7 (KRaft, sem Zookeeper) — mensageria ──────────────────────────
-  # Listener interno PLAINTEXT (rede platform) + externo no host (9094).
-  # PROD: trocar para SASL_SSL e RF>=3 (ver docker-compose.data.yml).
+  # ── Kafka (apache/kafka, KRaft) — igual ao que já roda ─────────────────────
   kafka:
-    image: bitnami/kafka:3.7
-    container_name: kafka
+    image: apache/kafka:3.7.0
+    container_name: dataforall-kafka
     restart: unless-stopped
     environment:
-      KAFKA_CFG_NODE_ID: "1"
-      KAFKA_CFG_PROCESS_ROLES: controller,broker
-      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,EXTERNAL://:9094,CONTROLLER://:9093
-      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_CFG_DEFAULT_REPLICATION_FACTOR: "1"
-      KAFKA_CFG_LOG_RETENTION_HOURS: "168"
-      ALLOW_PLAINTEXT_LISTENER: "yes"
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9095
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
       TZ: UTC
     ports:
-      - "9094:9094"
+      - "9095:9095"
     volumes:
-      - kafka-data:/bitnami/kafka
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
-      interval: 15s
-      timeout: 20s
-      retries: 5
-      start_period: 45s
-    networks: [platform]
+      - kafka-data:/var/lib/kafka/data
+    networks: [platform-local]
 
   # ── HashiCorp Vault — entrega de segredos (D5) ─────────────────────────────
-  # Modo server single-node com storage em arquivo. O token de bootstrap vem de
-  # env (VAULT_ROOT_TOKEN). PROD: HA + auto-unseal (KMS) + auth AWS/IAM.
   vault:
     image: hashicorp/vault:1.17
-    container_name: vault
+    container_name: dataforall-vault
     restart: unless-stopped
-    cap_add:
-      - IPC_LOCK
+    cap_add: [IPC_LOCK]
     environment:
       VAULT_DEV_ROOT_TOKEN_ID: ${VAULT_ROOT_TOKEN:?defina em .env}
       VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
@@ -156,32 +157,24 @@ services:
       - "8200:8200"
     volumes:
       - vault-data:/vault/file
-    healthcheck:
-      test: ["CMD", "vault", "status", "-address=http://127.0.0.1:8200"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-    networks: [platform]
+    networks: [platform-local]
 
   # ── Observabilidade ────────────────────────────────────────────────────────
   prometheus:
     image: prom/prometheus:v2.54.1
-    container_name: prometheus
+    container_name: dataforall-prometheus
     restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.retention.time=15d"
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.retention.time=15d"]
     volumes:
       - ./config/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
-    networks: [platform]
+    networks: [platform-local]
 
   tempo:
     image: grafana/tempo:2.5.0
-    container_name: tempo
+    container_name: dataforall-tempo
     restart: unless-stopped
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
@@ -189,11 +182,11 @@ services:
       - tempo-data:/var/tempo
     ports:
       - "3200:3200"
-    networks: [platform]
+    networks: [platform-local]
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.111.0
-    container_name: otel-collector
+    container_name: dataforall-otel-collector
     restart: unless-stopped
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
@@ -202,11 +195,11 @@ services:
       - "4317:4317"
       - "4318:4318"
     depends_on: [tempo]
-    networks: [platform]
+    networks: [platform-local]
 
   grafana:
-    image: grafana/grafana:11.1.0
-    container_name: grafana
+    image: grafana/grafana:11.2.0
+    container_name: dataforall-grafana
     restart: unless-stopped
     environment:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?defina em .env}
@@ -216,6 +209,6 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
     ports:
-      - "3001:3000"
+      - "3000:3000"
     depends_on: [prometheus, tempo]
-    networks: [platform]
+    networks: [platform-local]
