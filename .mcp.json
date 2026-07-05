@@ -1,37 +1,101 @@
 {
   "_comment": "Working MCP ecosystem - 18 system MCPs",
   "mcpServers": {
-    "test-mcp": {"command": "python3", "args": ["./test-mcp.py"]},
-    "dev-twin-mcp": {"command": "python3", "args": ["./dev-twin-mcp.py"]},
-    "config-mcp": {"command": "python3", "args": ["./config-mcp.py"]},
-    "session-mcp": {"command": "python3", "args": ["./session-mcp.py"]},
-    "audit-mcp": {"command": "python3", "args": ["./audit-mcp.py"]},
-    "infra-mcp": {"command": "python3", "args": ["./infra-mcp.py"]},
-    "services-mcp": {"command": "python3", "args": ["./services-mcp.py"]},
-    "pipeline-mcp": {"command": "python3", "args": ["./pipeline-mcp.py"]},
-    "qa-mcp": {"command": "python3", "args": ["./qa-mcp.py"]},
-    "deploy-mcp": {"command": "python3", "args": ["./deploy-mcp.py"]},
-    "docs-mcp": {"command": "python3", "args": ["./docs-mcp.py"]},
-    "ai-governance-mcp": {"command": "python3", "args": ["./ai-governance-mcp.py"]},
-    "auth-mcp": {"command": "python3", "args": ["./auth-mcp.py"]},
-    "admin-mcp": {"command": "python3", "args": ["./admin-mcp.py"]},
-    "governance-mcp": {"command": "python3", "args": ["./governance-mcp.py"]},
-    "scheduler-mcp": {"command": "python3", "args": ["./scheduler-mcp.py"]},
-    "connectors-mcp": {"command": "python3", "args": ["./connectors-mcp.py"]},
-    "cache-mcp": {"command": "python3", "args": ["./cache-mcp.py"]},
-    "architecture-mcp": {"command": "node", "args": ["./architecture-mcp-server/dist/server.js"]},
-    "backend-mcp": {"command": "node", "args": ["./backend-mcp-server/dist/server.js"]},
-    "frontend-mcp": {"command": "node", "args": ["./frontend-pixelfera-mcp-server/dist/server.js"]},
-    "devops-mcp": {"command": "node", "args": ["./devops-mcp-server/dist/server.js"]},
-    "product-owner-mcp": {"command": "node", "args": ["./product-owner-mcp-server/dist/server.js"]},
-    "product-manager-mcp": {"command": "node", "args": ["./product-manager-mcp-server/dist/server.js"]},
-    "qa-engineer-mcp": {"command": "node", "args": ["./qa-engineer-mcp-server/dist/server.js"]},
-    "security-mcp": {"command": "node", "args": ["./security-mcp-server/dist/server.js"]},
-    "datalake-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/datalake-mcp-server"},
-    "ml-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/ml-mcp-server"},
-    "analytics-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/analytics-mcp-server"},
-    "monitor-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/monitor-mcp-server"},
-    "dataquality-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/dataquality-mcp-server"},
-    "dai-mcp-server": {"command": "python3", "args": ["-m", "src.server.mcp_server"], "cwd": "./services/dai-mcp-server"}
+    "architecture-mcp": {
+      "command": "node",
+      "args": [
+        "./architecture-mcp-server/dist/server.js"
+      ]
+    },
+    "backend-mcp": {
+      "command": "node",
+      "args": [
+        "./backend-mcp-server/dist/server.js"
+      ]
+    },
+    "frontend-mcp": {
+      "command": "node",
+      "args": [
+        "./frontend-pixelfera-mcp-server/dist/server.js"
+      ]
+    },
+    "devops-mcp": {
+      "command": "node",
+      "args": [
+        "./devops-mcp-server/dist/server.js"
+      ]
+    },
+    "product-owner-mcp": {
+      "command": "node",
+      "args": [
+        "./product-owner-mcp-server/dist/server.js"
+      ]
+    },
+    "product-manager-mcp": {
+      "command": "node",
+      "args": [
+        "./product-manager-mcp-server/dist/server.js"
+      ]
+    },
+    "qa-engineer-mcp": {
+      "command": "node",
+      "args": [
+        "./qa-engineer-mcp-server/dist/server.js"
+      ]
+    },
+    "security-mcp": {
+      "command": "node",
+      "args": [
+        "./security-mcp-server/dist/server.js"
+      ]
+    },
+    "datalake-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/datalake-mcp-server"
+    },
+    "ml-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/ml-mcp-server"
+    },
+    "analytics-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/analytics-mcp-server"
+    },
+    "monitor-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/monitor-mcp-server"
+    },
+    "dataquality-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/dataquality-mcp-server"
+    },
+    "dai-mcp-server": {
+      "command": "python3",
+      "args": [
+        "-m",
+        "src.server.mcp_server"
+      ],
+      "cwd": "./services/dai-mcp-server"
+    }
   }
 }

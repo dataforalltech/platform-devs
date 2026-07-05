@@ -43,9 +43,13 @@ _CAPS = CapabilityResolver()
 
 
 def _build_gateway():
-    """Real gateway when DEV_GATEWAY_URL is set; otherwise the in-process demo one."""
+    """Real gateway when DEV_GATEWAY_URL *and* a token are set; else the demo one.
+
+    Requiring the token too avoids silently going "real" with an empty Bearer
+    (which would just 401 on every call) — no token => stay on the demo gateway.
+    """
     url = os.getenv("DEV_GATEWAY_URL")
-    if not url:
+    if not url or not os.getenv("DEV_GATEWAY_TOKEN"):
         return DemoGatewayClient()
     from app.dev_agent.gateway.client import GatewayToolClient
 

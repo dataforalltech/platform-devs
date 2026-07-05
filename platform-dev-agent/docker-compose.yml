@@ -16,10 +16,11 @@ services:
     environment:
       MCP_HOST: "0.0.0.0"
       MCP_PORT: "7130"
-      # --- gateway REAL (descomente e preencha o token) ---
-      # DEV_GATEWAY_URL: "http://host.docker.internal:8085/mcp"
-      # DEV_TENANT_ID: "PLATFORM_DEV_30"
-      # DEV_GATEWAY_TOKEN: "<twin token aud=mcp:gateway>"
+      # Gateway REAL: `cp .env.example .env`, ponha o PAT (d4all_pat_...) e `docker compose up -d`.
+      # Sem .env (valores vazios), o agente cai no gateway-demo in-process.
+      DEV_GATEWAY_URL: "${DEV_GATEWAY_URL:-}"
+      DEV_TENANT_ID: "${DEV_TENANT_ID:-PLATFORM_DEV_30}"
+      DEV_GATEWAY_TOKEN: "${DEV_GATEWAY_TOKEN:-}"
     extra_hosts:
       # permite DEV_GATEWAY_URL apontar para o platform-mcp rodando no host
       - "host.docker.internal:host-gateway"
