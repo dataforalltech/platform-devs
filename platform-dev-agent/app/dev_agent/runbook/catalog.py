@@ -107,8 +107,59 @@ _HEALTH_TO_REPORT = RunbookSpec(
 )
 
 
+# --- A runbook WITH a write/high-risk step, to exercise the N2 approval gate ---
+# deploy (deploy-mcp.* => write + owner "deploy" => HIGH) requires per-item
+# confirmation (N2); "approve all" alone never runs it.
+_DEPLOY_SERVICE = RunbookSpec(
+    id="deploy_service",
+    version="1.0.0",
+    name="Deploy a service (pre-check -> tests -> deploy -> verify)",
+    description=(
+        "Pipeline com etapa de ALTO RISCO: valida saude, roda testes, faz o deploy "
+        "(write/high-risk -> exige confirmacao individual N2) e verifica pos-deploy."
+    ),
+    responsible_profile="devops",
+    tasks={
+        "check_health": RunbookTaskSpec(
+            title="Pre-deploy health check",
+            description="Confirma que o servico-alvo esta saudavel antes do deploy.",
+            required=True, responsible="devops", tool="services-mcp.check_health",
+            input_schema={"type": "object", "properties": {"service": {"type": "string"}},
+                          "required": ["service"]},
+            depends_on=[],
+        ),
+        "run_tests": RunbookTaskSpec(
+            title="Run test suite",
+            description="Roda a suite de testes antes de promover.",
+            required=True, responsible="qa-engineer", tool="qa-mcp.run_tests",
+            input_schema={"type": "object", "properties": {"suite": {"type": "string"}},
+                          "required": ["suite"]},
+            depends_on=["check_health"],
+        ),
+        "deploy": RunbookTaskSpec(
+            title="Deploy the service (HIGH RISK)",
+            description="Cria o deployment via deploy-mcp. Passo destrutivo -> N2.",
+            required=True, responsible="devops", tool="deploy-mcp.create_deployment",
+            input_schema={"type": "object",
+                          "properties": {"service": {"type": "string"},
+                                         "version": {"type": "string"}},
+                          "required": []},
+            depends_on=["run_tests"],
+        ),
+        "verify": RunbookTaskSpec(
+            title="Post-deploy verification",
+            description="Verifica a saude do servico apos o deploy.",
+            required=False, responsible="devops", tool="services-mcp.check_health",
+            input_schema={"type": "object", "properties": {}, "required": []},
+            depends_on=["deploy"],
+        ),
+    },
+)
+
+
 RUNBOOK_CATALOG: dict[str, RunbookSpec] = {
     _HEALTH_TO_REPORT.id: _HEALTH_TO_REPORT,
+    _DEPLOY_SERVICE.id: _DEPLOY_SERVICE,
 }
 
 

@@ -40,6 +40,12 @@ _ROUTES: dict[str, str] = {
     "check_health": "health_to_report",
     "run_tests": "health_to_report",
     "health_check": "health_to_report",
+    # deploy pipeline (has a write/high-risk step -> N2)
+    "deployment": "deploy_service",
+    "deploy": "deploy_service",
+    "deploy_service": "deploy_service",
+    "release": "deploy_service",
+    "ship": "deploy_service",
 }
 
 

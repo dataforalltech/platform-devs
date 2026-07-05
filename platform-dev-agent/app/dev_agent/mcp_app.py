@@ -24,6 +24,7 @@ from mcp.server.fastmcp import FastMCP
 
 from app.dev_agent.capability import Capability, CapabilityResolver
 from app.dev_agent.gateway.demo import DemoGatewayClient
+from app.dev_agent.models.plan import RiskLevel
 from app.dev_agent.pipeline import AutonomousPipeline, NoRunbookError
 from app.dev_agent.profiles.registry import PROFILES
 from app.dev_agent.runbook.catalog import RUNBOOK_CATALOG
@@ -122,12 +123,20 @@ async def plan(objective: str, entity_type: str = "service_health",
     try:
         proposal = await _PIPELINE.plan(
             message=objective, session_id="desktop", entity_type=entity_type,
-            inputs_by_task={"check_health": {"service": service}, "run_tests": {"suite": suite}},
+            inputs_by_task={
+                "check_health": {"service": service},
+                "run_tests": {"suite": suite},
+                "deploy": {"service": service, "version": "v1"},
+            },
         )
     except NoRunbookError as e:
         return {"error": "no_runbook", "detail": str(e),
-                "hint": "tente entity_type=service_health"}
+                "hint": "tente entity_type=service_health (read-only) ou deployment (com passo high-risk)"}
     p = proposal.plan
+    high = [
+        {"item_id": i.item_id, "tool": i.tool, "label": i.label}
+        for i in p.items if i.risk is RiskLevel.HIGH
+    ]
     return {
         "plan_id": p.plan_id,
         "question_id": p.question_id,
@@ -139,15 +148,37 @@ async def plan(objective: str, entity_type: str = "service_health",
              "responsible": i.responsible, "required": i.required}
             for i in p.items
         ],
-        "next": f"approve_and_execute(question_id='{p.question_id}')",
+        "high_risk_steps": high,  # exigem confirmacao individual (N2)
+        "next": (
+            f"approve_and_execute(question_id='{p.question_id}')"
+            + (" -> os passos HIGH serao PULADOS ate voce chamar com confirm_high_risk=True" if high else "")
+        ),
     }
 
 
 @mcp.tool()
-async def approve_and_execute(question_id: str, approval: str = "__approve_all__") -> dict:
-    """Aprova e executa um plano pendente via o gateway. approval='__approve_all__' aprova tudo."""
+async def approve_and_execute(
+    question_id: str, approve_all: bool = True, confirm_high_risk: bool = False
+) -> dict:
+    """Aprova (N1) e executa um plano pendente via o gateway.
+
+    approve_all=True aprova todos os passos no N1. Passos de ALTO RISCO NUNCA rodam
+    so com approve_all — exigem confirm_high_risk=True (o gate N2). Com approve_all=False
+    e confirm_high_risk=False, nada e aprovado e o plano espera nova resposta.
+    """
+    if not approve_all and not confirm_high_risk:
+        response_value: object = None  # nada aprovado -> re-prompt
+    else:
+        rv: dict[str, object] = {"__approve_all__": bool(approve_all)}
+        if confirm_high_risk:
+            plan_obj = await _REPO.get_by_question_id(question_id)
+            if plan_obj is not None:
+                rv["__confirm_high__"] = [
+                    i.item_id for i in plan_obj.items if i.risk is RiskLevel.HIGH
+                ]
+        response_value = rv
     outcome = await _PIPELINE.execute(
-        question_id=question_id, response_value=approval, run_id="desktop-run",
+        question_id=question_id, response_value=response_value, run_id="desktop-run",
     )
     return {
         "status": outcome.status.value,
