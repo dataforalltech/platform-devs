@@ -2,7 +2,7 @@
 
 **Data**: 2026-05-11  
 **Repositório**: platform-devs  
-**Total de MCPs**: 32 (17 Python + 8 Zillas + 6 Service MCPs + 1 Test)
+**Total de MCPs**: 32 (17 Python + 8 DevTeam + 6 Service MCPs + 1 Test)
 
 ---
 
@@ -21,7 +21,7 @@ Gerenciamento de usuários, roles, tenants e domínios
 - `manage_permissions` — Gerenciar permissões
 - `manage_quotas` — Gerenciar quotas
 
-### 2. AGENT-TWIN-MCP
+### 2. DEV-TWIN-MCP
 Autenticação e contexto de sessão
 - `authenticate` — Validar token e inicializar sessão
 - `whoami` — Retornar info do usuário autenticado
@@ -225,11 +225,11 @@ Gerenciamento de sessões
 
 ---
 
-## 🔧 Node MCPs - Zillas (8)
+## 🔧 Node MCPs - DevTeam (8)
 
-Zillas são MCPs especializados compilados em Node.js para domínios específicos:
+DevTeam são MCPs especializados compilados em Node.js para domínios específicos:
 
-### 1. ARCHZILLA-MCP
+### 1. ARCHITECTURE-MCP
 Arquitetura de sistemas
 - Análise de requisitos arquiteturais
 - Recomendações de estilos e padrões
@@ -237,7 +237,7 @@ Arquitetura de sistemas
 - Definição de bounded contexts
 - Avaliação de trade-offs arquiteturais
 
-### 2. BACKZILLA-MCP
+### 2. BACKEND-MCP
 Backend e APIs
 - Geração de APIs (FastAPI, NestJS)
 - Design de schemas de banco de dados
@@ -245,7 +245,7 @@ Backend e APIs
 - Testes backend (unit, integration)
 - Review de segurança
 
-### 3. FRONTZILLA-PIXELFERA-MCP
+### 3. FRONTEND-PIXELFERA-MCP
 Frontend e UI
 - Geração de componentes React
 - Design tokens e temas
@@ -253,7 +253,7 @@ Frontend e UI
 - Testes frontend (unit, E2E)
 - Review de consistência UI
 
-### 4. OPSZILLA-MCP
+### 4. DEVOPS-MCP
 Operações e DevOps
 - Geração de Dockerfiles
 - Configuração de Kubernetes
@@ -261,7 +261,7 @@ Operações e DevOps
 - Monitoramento (Grafana, Prometheus)
 - Gerenciamento de secrets
 
-### 5. POZILLA-MCP
+### 5. PRODUCT_OWNER-MCP
 Gestão de Produto
 - Análise de requisitos de negócio
 - Geração de user stories
@@ -269,7 +269,7 @@ Gestão de Produto
 - Prioritização de backlog
 - Definição de critérios de aceitação
 
-### 6. PRODUCTZILLA-MCP
+### 6. PRODUCT_MANAGER-MCP
 Estratégia de Produto
 - Pesquisa de mercado
 - Análise de personas
@@ -277,7 +277,7 @@ Estratégia de Produto
 - Go-to-market strategy
 - Métricas e KPIs
 
-### 7. QAZILLA-MCP
+### 7. QA_ENGINEER-MCP
 QA e Testes
 - Geração de casos de testes
 - Testes E2E (Playwright, Cypress)
@@ -285,7 +285,7 @@ QA e Testes
 - UAT checklists
 - Performance testing (k6)
 
-### 8. SECZILLA-MCP
+### 8. SECURITY-MCP
 Segurança
 - Modelo de ameaças (STRIDE)
 - Mapeamento de superfície de ataque
@@ -304,7 +304,7 @@ Segurança
 | Quality & Deploy | 3 | ~30 |
 | Documentation | 2 | ~20 |
 | Services | 6 | ~60 |
-| **Zillas** | 8 | ~200+ |
+| **DevTeam** | 8 | ~200+ |
 | **TOTAL** | 32 | **~400+ tools** |
 
 ---
@@ -312,17 +312,17 @@ Segurança
 ## 🎯 Uso Recomendado
 
 ### Para Desenvolvimento
-- **Backend**: BackZilla, ArchZilla, QAZilla, SecZilla
-- **Frontend**: FrontZilla, ArchZilla, QAZilla
-- **DevOps**: OpsZilla, ArchZilla, Pipeline-MCP
+- **Backend**: Backend, Architecture, QA-Engineer, Security
+- **Frontend**: Frontend, Architecture, QA-Engineer
+- **DevOps**: DevOps, Architecture, Pipeline-MCP
 
 ### Para Operações
-- **Deploy**: Deploy-MCP, Pipeline-MCP, OpsZilla
-- **Monitoramento**: Services-MCP, OpsZilla
-- **Segurança**: SecZilla, Governance-MCP, Audit-MCP
+- **Deploy**: Deploy-MCP, Pipeline-MCP, DevOps
+- **Monitoramento**: Services-MCP, DevOps
+- **Segurança**: Security, Governance-MCP, Audit-MCP
 
 ### Para Gestão
-- **Roadmap**: POZilla, ProductZilla, Session-MCP
+- **Roadmap**: Product-Owner, Product-Manager, Session-MCP
 - **Governança**: Governance-MCP, AI-Governance-MCP, Admin-MCP
 - **Configuração**: Config-MCP, Connectors-MCP
 

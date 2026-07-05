@@ -1,9 +1,9 @@
--- PostgreSQL migration for agent-twin-mcp and infra-mcp stores
+-- PostgreSQL migration for dev-twin-mcp and infra-mcp stores
 -- Created: 2026-05-11
 -- Schema: public (app database)
 
 -- ============================================================================
--- agent-twin-mcp: agent_tokens table
+-- dev-twin-mcp: agent_tokens table
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS agent_tokens (
     id SERIAL PRIMARY KEY,

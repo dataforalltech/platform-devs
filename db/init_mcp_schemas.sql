@@ -2,7 +2,7 @@
 -- Run once against platform_dev database
 
 -- ============================================================================
--- agent-twin-mcp
+-- dev-twin-mcp
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS agent_tokens (
     id SERIAL PRIMARY KEY,

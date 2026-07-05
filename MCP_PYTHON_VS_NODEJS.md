@@ -1,6 +1,6 @@
 # Por que não usamos 100% Python? (Decisão Arquitetural)
 
-**Conclusão:** Podemos usar Python 100%, mas Node.js é melhor para os zilla MCPs. Ambos são válidos.
+**Conclusão:** Podemos usar Python 100%, mas Node.js é melhor para os devteam MCPs. Ambos são válidos.
 
 ---
 
@@ -9,9 +9,9 @@
 | Pergunta | Resposta |
 |----------|----------|
 | Podemos usar 100% Python? | ✅ Sim, totalmente viável |
-| Por que usar Node.js nos zillas? | Schemas com Zod, prompts como Resources, customization |
+| Por que usar Node.js nos devteam? | Schemas com Zod, prompts como Resources, customization |
 | Qual é melhor? | Depende do caso: Python para simples, Node.js para complexo |
-| Precisamos de Node.js? | Não é obrigatório, mas é mais natural para os zillas |
+| Precisamos de Node.js? | Não é obrigatório, mas é mais natural para os devteam |
 
 ---
 
@@ -19,11 +19,11 @@
 
 ### Como seria
 
-Converter archzilla de TypeScript para Python:
+Converter architecture de TypeScript para Python:
 
 ```python
 #!/usr/bin/env python3
-"""ArchZilla MCP - 100% Python"""
+"""Architecture MCP - 100% Python"""
 import json
 import sys
 from dataclasses import dataclass
@@ -36,9 +36,9 @@ class ToolSchema:
     input_properties: dict  # {"param": {"type": "string"}, ...}
     required: list         # ["param1", ...]
 
-class ArchZillaMCP:
+class ArchitectureMCP:
     def __init__(self):
-        self.name = "archzilla-mcp"
+        self.name = "architecture-mcp"
         self.tools = [
             ToolSchema(
                 name="analyze_architecture_requirement",
@@ -137,7 +137,7 @@ class ArchZillaMCP:
         return "Done"
 
 if __name__ == "__main__":
-    ArchZillaMCP().run()
+    ArchitectureMCP().run()
 ```
 
 ### Vantagens de Python 100%
@@ -153,7 +153,7 @@ if __name__ == "__main__":
 
 ---
 
-## Por que Node.js para os Zillas?
+## Por que Node.js para os DevTeam?
 
 ### Razão 1: Schemas com Zod
 
@@ -192,13 +192,13 @@ def validate_analysis_result(obj):
 
 ### Razão 2: Resources (além de Tools)
 
-Os zilla MCPs expõem **system prompts como Resources**, não apenas Tools.
+Os devteam MCPs expõem **system prompts como Resources**, não apenas Tools.
 
-**Arquitetura de archzilla:**
+**Arquitetura de architecture:**
 ```typescript
 // Clientes podem pedir o system prompt dinamicamente
 async function handleReadResource(request) {
-  if (uri.startsWith('archzilla_system_prompt')) {
+  if (uri.startsWith('architecture_system_prompt')) {
     const profile = extractProfile(uri); // Dev, Architect, Lead?
     const prompt = generatePromptForProfile(profile);
     return { contents: [{ uri, mimeType: 'text/plain', text: prompt }] };
@@ -215,10 +215,10 @@ async function handleReadResource(request) {
 
 ### Razão 3: Profile-based Customization
 
-Cada zilla adapta seu comportamento baseado em **perfil do usuário**:
+Cada devteam adapta seu comportamento baseado em **perfil do usuário**:
 
 ```typescript
-// archzilla pode ser customizado por profile
+// architecture pode ser customizado por profile
 // Dev profile → exemplos práticos
 // Architect profile → decisões de design
 // Lead profile → roadmap e risks
@@ -237,10 +237,10 @@ const examples = getProfileExamples(profile);
 
 ### Razão 4: Stateful Database
 
-Archzilla e outros zillas compartilham estado via SQLite com WAL:
+Architecture e outros devteam compartilham estado via SQLite com WAL:
 
 ```typescript
-const store = new ArchZillaStore(settings.dbPath);
+const store = new ArchitectureStore(settings.dbPath);
 // Armazena decisions, diagrams, reviews
 // WAL enable concurrent access
 ```
@@ -256,7 +256,7 @@ const store = new ArchZillaStore(settings.dbPath);
 
 ## Comparação Detalhada
 
-### Zilla MCP Requirements vs Language Fit
+### DevTeam MCP Requirements vs Language Fit
 
 | Requirement | Python Score | Node.js Score | Verdict |
 |-------------|--------------|---------------|---------|
@@ -270,7 +270,7 @@ const store = new ArchZillaStore(settings.dbPath);
 | Code simplicity | 8/10 | 7/10 | Python (slightly) |
 | **Total** | **59/80** | **71/80** | **Node.js** |
 
-Node.js vence para zillas porque os **requirements avançados** (Resources, Zod validation, profiles) são mais nativos.
+Node.js vence para devteam porque os **requirements avançados** (Resources, Zod validation, profiles) são mais nativos.
 
 ---
 
@@ -293,8 +293,8 @@ Node.js vence para zillas porque os **requirements avançados** (Resources, Zod 
   - `config-mcp`, `auth-mcp`, `admin-mcp`, etc
   - Simples, stateless, rápido
 
-- **8 Zilla MCPs:** Node.js
-  - `archzilla-mcp`, `backzilla-mcp`, etc
+- **8 DevTeam MCPs:** Node.js
+  - `architecture-mcp`, `backend-mcp`, etc
   - Complexos, com prompts, com state
 
 **Resultado:**
@@ -309,13 +309,13 @@ Node.js vence para zillas porque os **requirements avançados** (Resources, Zod 
 Se no futuro quisermos converter todos para Python, seria possível:
 
 1. **Manter sistema MCP em Python** (não mudar)
-2. **Converter zillas para Python:**
+2. **Converter devteam para Python:**
    - Trocar Zod por pydantic (mais simples que manual validation)
    - Implementar Resources manualmente (20 linhas de código)
    - Manter SQLite store (Python tem ótimo suporte)
    - Profiles como dicts Python
 
-**Esforço:** ~2 horas por zilla MCP (~16 horas total)
+**Esforço:** ~2 horas por devteam MCP (~16 horas total)
 **Ganho:** Uniforme, sem node_modules
 **Trade-off:** Perder Type Safety do Zod (mitigado com pydantic)
 
@@ -327,7 +327,7 @@ Se no futuro quisermos converter todos para Python, seria possível:
 
 **Resposta:**
 - ✅ Sim, 100% Python é totalmente viável
-- ✅ Node.js é melhor para zillas por razões técnicas (Zod, Resources, native async)
+- ✅ Node.js é melhor para devteam por razões técnicas (Zod, Resources, native async)
 - ✅ Python é melhor para system MCPs (simplicidade, startup)
 - ✅ Decisão atual (mixed) é ótima
 

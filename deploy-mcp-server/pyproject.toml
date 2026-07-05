@@ -8,7 +8,7 @@ authors = [
     { name = "dataforalltech platform team" },
 ]
 dependencies = [
-    "mcp>=1.2.0,<2.0",
+    "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
     "PyGithub>=2.3.0,<3.0",
@@ -16,6 +16,9 @@ dependencies = [
     "httpx>=0.27.0,<1.0",
     "fastapi>=0.104.0,<1.0",
     "uvicorn[standard]>=0.24.0,<1.0",
+    "pyjwt>=2.8.0",
+    "cryptography>=42.0.0",
+    "bcrypt>=4.1.0",
 ]
 
 [project.optional-dependencies]

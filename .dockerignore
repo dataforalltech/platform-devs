@@ -1,0 +1,17 @@
+# Reduz drasticamente o contexto de build (a raiz tem ~30 node_modules + .db grandes).
+**/node_modules
+**/dist
+**/build
+**/__pycache__
+**/*.pyc
+.git
+**/.pytest_cache
+**/.vite
+**/.mypy_cache
+*.db
+*.db-shm
+*.db-wal
+.frontzilla-pixelfera.db*
+**/*.log
+.venv
+venv

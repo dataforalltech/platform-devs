@@ -145,7 +145,7 @@ class TestTenantTools:
 
 class TestSessionTenantTool:
     def test_no_twin_returns_error(self, store, monkeypatch):
-        """Sem agent-twin disponível, retorna erro descritivo."""
+        """Sem dev-twin disponível, retorna erro descritivo."""
         import src.tools.tenant_tool as tt
         monkeypatch.setattr(tt, "_get_twin_tenant_id", lambda: None)
         result = get_session_tenant_config(store)

@@ -83,11 +83,11 @@ services:
   # MCP Servers (Infrastructure)
   # ============================================================
 
-  agent-twin-mcp:
+  dev-twin-mcp:
     build:
-      context: /home/dev/repos/platform-devs/agent-twin-mcp-server
+      context: /home/dev/repos/platform-devs/dev-twin-mcp-server
       dockerfile: Dockerfile
-    container_name: staging-agent-twin-mcp
+    container_name: staging-dev-twin-mcp
     environment:
       MCP_PORT: 7098
       CONFIG_MCP_URL: http://config-mcp:7099
@@ -404,7 +404,7 @@ services:
       PORT: 8001
       DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
       REDIS_URL: redis://:staging_redis_pass_123@redis:6379/2
-      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      DEV_TWIN_MCP_URL: http://dev-twin-mcp:7098
       ENVIRONMENT: staging
     ports:
       - "8001:8001"
@@ -413,7 +413,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      agent-twin-mcp:
+      dev-twin-mcp:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
@@ -432,7 +432,7 @@ services:
       PORT: 8002
       DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
       AUTH_API_URL: http://auth-api:8001
-      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      DEV_TWIN_MCP_URL: http://dev-twin-mcp:7098
       ENVIRONMENT: staging
     ports:
       - "8002:8002"
@@ -459,7 +459,7 @@ services:
       DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
       AUTH_API_URL: http://auth-api:8001
       ADMIN_API_URL: http://admin-api:8002
-      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      DEV_TWIN_MCP_URL: http://dev-twin-mcp:7098
       ENVIRONMENT: staging
     ports:
       - "8003:8003"
@@ -488,7 +488,7 @@ services:
       DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
       KAFKA_BROKER: kafka:29092
       AUTH_API_URL: http://auth-api:8001
-      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      DEV_TWIN_MCP_URL: http://dev-twin-mcp:7098
       ENVIRONMENT: staging
     ports:
       - "8005:8005"
@@ -517,7 +517,7 @@ services:
       DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
       AUTH_API_URL: http://auth-api:8001
       ADMIN_API_URL: http://admin-api:8002
-      AGENT_TWIN_MCP_URL: http://agent-twin-mcp:7098
+      DEV_TWIN_MCP_URL: http://dev-twin-mcp:7098
       ENVIRONMENT: staging
     ports:
       - "8006:8006"

@@ -24,7 +24,7 @@ Located in repository root, accessible via central `.mcp.json`:
 3. **config-mcp-server** — Centralized configuration, environment variables, credentials
 4. **services-mcp-server** — Service registry, health checks, service monitoring
 5. **deploy-mcp-server** — GitHub operations (commits, PRs, workflows, ACR, deployments)
-6. **agent-twin-mcp-server** — User/tenant context management and authentication
+6. **dev-twin-mcp-server** — User/tenant context management and authentication
 7. **docs-mcp-server** — Documentation validation, audit, and generation
 8. **pipeline-mcp-server** — CI/CD pipeline orchestration and promotion gates
 9. **qa-mcp-server** — Testing, linting, type checking, security, accessibility

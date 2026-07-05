@@ -40,14 +40,8 @@ resource "cloudflare_record" "wildcard" {
   ttl     = 1
   comment = "Wildcard multi-tenant -> Cloudflare Tunnel (terraform-lean)"
 }
-resource "cloudflare_record" "apex" {
-  zone_id = var.cloudflare_zone_id
-  name    = "@"
-  type    = "CNAME"
-  value   = "${cloudflare_zero_trust_tunnel_cloudflared.main.id}.cfargotunnel.com"
-  proxied = true
-  ttl     = 1
-}
+# NOTA: a raiz (apex) dataforall.tech NAO e gerenciada aqui — ja existe na Cloudflare
+# e nao e um tenant (tenants sao subdominios, cobertos pelo wildcard acima).
 
 # Token do tunnel guardado no SSM (SecureString) — o cloudflared lê no boot.
 resource "aws_ssm_parameter" "tunnel_token" {

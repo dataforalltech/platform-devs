@@ -26,7 +26,7 @@
 ```
 ┌─ INFRASTRUCTURE MCPS ─────────────────────────┐
 │                                                │
-│ 🔴 agent-twin-mcp      (7098)   ⚠️ unknown  │
+│ 🔴 dev-twin-mcp      (7098)   ⚠️ unknown  │
 │ 🔴 config-mcp          (7099)   ⚠️ unknown  │
 │ 🔴 docs-mcp            (7100)   ⚠️ unknown  │
 │ 🔴 session-mcp         (7101)   ⚠️ unknown  │
@@ -93,7 +93,7 @@
 #### Infrastructure MCPs (12 services)
 | # | Service | Port | Environment | Type | Status |
 |---|---------|------|-------------|------|--------|
-| 1 | agent-twin-mcp | 7098 | local | docker | ⚠️ unknown |
+| 1 | dev-twin-mcp | 7098 | local | docker | ⚠️ unknown |
 | 2 | config-mcp | 7099 | local | docker | ⚠️ unknown |
 | 3 | docs-mcp | 7100 | local | docker | ⚠️ unknown |
 | 4 | session-mcp | 7101 | local | docker | ⚠️ unknown |
@@ -133,7 +133,7 @@
 ┌────────────────────────────────────┐
 │  INFRASTRUCTURE MCPs                │
 │  ────────────────────────────────   │
-│  7098 → agent-twin-mcp              │
+│  7098 → dev-twin-mcp              │
 │  7099 → config-mcp                  │
 │  7100 → docs-mcp                    │
 │  7101 → session-mcp                 │
@@ -242,10 +242,10 @@ mcp__services-mcp__list_services --environment local --tag rest-api
 mcp__services-mcp__check_all_health --timeout 10
 
 # Specific service
-mcp__services-mcp__check_health --name agent-twin-mcp
+mcp__services-mcp__check_health --name dev-twin-mcp
 
 # Get full status
-mcp__services-mcp__service_status --name agent-twin-mcp
+mcp__services-mcp__service_status --name dev-twin-mcp
 ```
 
 ### Port Management

@@ -1,4 +1,4 @@
-# Pipeline Registration Script — 8 Zillas
+# Pipeline Registration Script — 8 DevTeam
 
 **Timestamp**: 2026-05-10  
 **Status**: Ready for execution  
@@ -9,59 +9,59 @@
 ## Step 1: Register All 8 Services
 
 ```bash
-# 1. ArchZilla
+# 1. Architecture
 pipeline-mcp.register_pipeline(
-  service="archzilla",
-  repo="platform-devs/archzilla-mcp-server",
+  service="architecture",
+  repo="platform-devs/architecture-mcp-server",
   base_branch="develop"
 )
 
-# 2. BackZilla
+# 2. Backend
 pipeline-mcp.register_pipeline(
-  service="backzilla",
-  repo="platform-devs/backzilla-mcp-server",
+  service="backend",
+  repo="platform-devs/backend-mcp-server",
   base_branch="develop"
 )
 
-# 3. FrontZilla-PixelFera
+# 3. Frontend-PixelFera
 pipeline-mcp.register_pipeline(
-  service="frontzilla-pixelfera",
-  repo="platform-devs/frontzilla-pixelfera-mcp-server",
+  service="frontend-pixelfera",
+  repo="platform-devs/frontend-pixelfera-mcp-server",
   base_branch="develop"
 )
 
-# 4. OpsZilla
+# 4. DevOps
 pipeline-mcp.register_pipeline(
-  service="opszilla",
-  repo="platform-devs/opszilla-mcp-server",
+  service="devops",
+  repo="platform-devs/devops-mcp-server",
   base_branch="develop"
 )
 
-# 5. POZilla
+# 5. Product-Owner
 pipeline-mcp.register_pipeline(
-  service="pozilla",
-  repo="platform-devs/pozilla-mcp-server",
+  service="product-owner",
+  repo="platform-devs/product-owner-mcp-server",
   base_branch="develop"
 )
 
-# 6. ProductZilla
+# 6. Product-Manager
 pipeline-mcp.register_pipeline(
-  service="productzilla",
-  repo="platform-devs/productzilla-mcp-server",
+  service="product-manager",
+  repo="platform-devs/product-manager-mcp-server",
   base_branch="develop"
 )
 
-# 7. QAZilla
+# 7. QA-Engineer
 pipeline-mcp.register_pipeline(
-  service="qazilla",
-  repo="platform-devs/qazilla-mcp-server",
+  service="qa-engineer",
+  repo="platform-devs/qa-engineer-mcp-server",
   base_branch="develop"
 )
 
-# 8. SecZilla
+# 8. Security
 pipeline-mcp.register_pipeline(
-  service="seczilla",
-  repo="platform-devs/seczilla-mcp-server",
+  service="security",
+  repo="platform-devs/security-mcp-server",
   base_branch="develop"
 )
 ```
@@ -70,8 +70,8 @@ pipeline-mcp.register_pipeline(
 ```json
 {
   "action": "created",
-  "service": "archzilla",
-  "repo": "platform-devs/archzilla-mcp-server",
+  "service": "architecture",
+  "repo": "platform-devs/architecture-mcp-server",
   "base_branch": "develop",
   "current_env": "dev"
 }
@@ -81,10 +81,10 @@ pipeline-mcp.register_pipeline(
 
 ## Step 2: Configure Quality Gates per Service
 
-### ArchZilla
+### Architecture
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="archzilla",
+  service="architecture",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -92,10 +92,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### BackZilla
+### Backend
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="backzilla",
+  service="backend",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -103,10 +103,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### FrontZilla-PixelFera
+### Frontend-PixelFera
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="frontzilla-pixelfera",
+  service="frontend-pixelfera",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -114,10 +114,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### OpsZilla
+### DevOps
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="opszilla",
+  service="devops",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -125,10 +125,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### POZilla
+### Product-Owner
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="pozilla",
+  service="product-owner",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -136,10 +136,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### ProductZilla
+### Product-Manager
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="productzilla",
+  service="product-manager",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -147,10 +147,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### QAZilla
+### QA-Engineer
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="qazilla",
+  service="qa-engineer",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -158,10 +158,10 @@ pipeline-mcp.set_pipeline_config(
 )
 ```
 
-### SecZilla
+### Security
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="seczilla",
+  service="security",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -172,7 +172,7 @@ pipeline-mcp.set_pipeline_config(
 **Expected Response**:
 ```json
 {
-  "service": "archzilla",
+  "service": "architecture",
   "gates_configured": {
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -200,7 +200,7 @@ pipeline-mcp.get_pipeline_overview()
   "blocked": 0,
   "services_overview": [
     {
-      "service": "archzilla",
+      "service": "architecture",
       "current_env": "dev",
       "status": "active"
     },
@@ -213,12 +213,12 @@ pipeline-mcp.get_pipeline_overview()
 
 ## Step 4: Add Initial Gate Results (Dev → Success)
 
-For each Zilla, mark qa_tests and pr_approved as passing in DEV:
+For each DevTeam, mark qa_tests and pr_approved as passing in DEV:
 
 ```bash
-# ArchZilla - qa_tests passed
+# Architecture - qa_tests passed
 pipeline-mcp.add_gate_result(
-  service="archzilla",
+  service="architecture",
   env="dev",
   gate_type="qa_tests",
   passed=true,
@@ -226,9 +226,9 @@ pipeline-mcp.add_gate_result(
   details="Unit tests: 34/34 passed | Integration: 12/12 passed | Coverage: 85%"
 )
 
-# ArchZilla - pr_approved passed
+# Architecture - pr_approved passed
 pipeline-mcp.add_gate_result(
-  service="archzilla",
+  service="architecture",
   env="dev",
   gate_type="pr_approved",
   passed=true,
@@ -236,13 +236,13 @@ pipeline-mcp.add_gate_result(
   details="Approved by @architect-lead"
 )
 
-# Repeat for all 8 Zillas...
+# Repeat for all 8 DevTeam...
 ```
 
 **Expected Response**:
 ```json
 {
-  "service": "archzilla",
+  "service": "architecture",
   "env": "dev",
   "gate_type": "qa_tests",
   "passed": true,
@@ -255,21 +255,21 @@ pipeline-mcp.add_gate_result(
 ## Step 5: Check Individual Service Status
 
 ```bash
-# Check each Zilla's pipeline status
-pipeline-mcp.get_pipeline(service="archzilla")
-pipeline-mcp.get_pipeline(service="backzilla")
-pipeline-mcp.get_pipeline(service="frontzilla-pixelfera")
-pipeline-mcp.get_pipeline(service="opszilla")
-pipeline-mcp.get_pipeline(service="pozilla")
-pipeline-mcp.get_pipeline(service="productzilla")
-pipeline-mcp.get_pipeline(service="qazilla")
-pipeline-mcp.get_pipeline(service="seczilla")
+# Check each DevTeam's pipeline status
+pipeline-mcp.get_pipeline(service="architecture")
+pipeline-mcp.get_pipeline(service="backend")
+pipeline-mcp.get_pipeline(service="frontend-pixelfera")
+pipeline-mcp.get_pipeline(service="devops")
+pipeline-mcp.get_pipeline(service="product-owner")
+pipeline-mcp.get_pipeline(service="product-manager")
+pipeline-mcp.get_pipeline(service="qa-engineer")
+pipeline-mcp.get_pipeline(service="security")
 ```
 
-**Expected Response** (per Zilla):
+**Expected Response** (per DevTeam):
 ```json
 {
-  "service": "archzilla",
+  "service": "architecture",
   "current_env": "dev",
   "blocked": false,
   "gates_status": [
@@ -293,11 +293,11 @@ pipeline-mcp.get_pipeline(service="seczilla")
 
 ---
 
-## Step 6: Promote First Zilla (ArchZilla) to HML
+## Step 6: Promote First DevTeam (Architecture) to HML
 
 ```bash
 pipeline-mcp.promote_service(
-  service="archzilla",
+  service="architecture",
   from_env="dev",
   to_env="homol",
   promoted_by="releasemgr@platform-devs.tech",
@@ -309,12 +309,12 @@ pipeline-mcp.promote_service(
 ```json
 {
   "promotion_id": 1,
-  "service": "archzilla",
+  "service": "architecture",
   "from_env": "dev",
   "to_env": "homol",
   "status": "waiting_approval",
   "pr_number": 42,
-  "pr_url": "https://github.com/platform-devs/archzilla-mcp-server/pull/42",
+  "pr_url": "https://github.com/platform-devs/architecture-mcp-server/pull/42",
   "gates_required": ["qa_tests", "pr_approved"]
 }
 ```
@@ -341,7 +341,7 @@ pipeline-mcp.get_promotion_history(limit=20)
   "promotions": [
     {
       "promotion_id": 1,
-      "service": "archzilla",
+      "service": "architecture",
       "from_env": "dev",
       "to_env": "homol",
       "status": "approved",
@@ -356,19 +356,19 @@ pipeline-mcp.get_promotion_history(limit=20)
 
 ---
 
-## Step 8: Promote All Zillas (Parallel)
+## Step 8: Promote All DevTeam (Parallel)
 
-Once ArchZilla is validated in HML, promote all 8 to HML:
+Once Architecture is validated in HML, promote all 8 to HML:
 
 ```bash
 # Parallel promotions
-pipeline-mcp.promote_service(service="backzilla", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="frontzilla-pixelfera", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="opszilla", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="pozilla", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="productzilla", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="qazilla", from_env="dev", to_env="homol", ...)
-pipeline-mcp.promote_service(service="seczilla", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="backend", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="frontend-pixelfera", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="devops", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="product-owner", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="product-manager", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="qa-engineer", from_env="dev", to_env="homol", ...)
+pipeline-mcp.promote_service(service="security", from_env="dev", to_env="homol", ...)
 ```
 
 ---
@@ -378,13 +378,13 @@ pipeline-mcp.promote_service(service="seczilla", from_env="dev", to_env="homol",
 For PROD, security_scan gate is required. Add results:
 
 ```bash
-# Example: ArchZilla security scan
+# Example: Architecture security scan
 pipeline-mcp.add_gate_result(
-  service="archzilla",
+  service="architecture",
   env="homol",
   gate_type="security_scan",
   passed=true,
-  evaluated_by="seczilla",
+  evaluated_by="security",
   details="SAST: 0 critical | SCA: 0 critical CVEs | Secrets: clean | License: compliant"
 )
 ```
@@ -397,11 +397,11 @@ After HML validation, promote to PROD:
 
 ```bash
 pipeline-mcp.promote_service(
-  service="archzilla",
+  service="architecture",
   from_env="homol",
   to_env="prod",
   promoted_by="releasemgr@platform-devs.tech",
-  reason="ArchZilla v1.3.0 validated in HML. All security scans passed. Ready for production."
+  reason="Architecture v1.3.0 validated in HML. All security scans passed. Ready for production."
 )
 ```
 
@@ -452,10 +452,10 @@ pipeline-mcp.approve_promotion(
 
 ## Success Criteria
 
-- [x] All 8 Zillas registered in pipeline
+- [x] All 8 DevTeam registered in pipeline
 - [x] Quality gates configured (2 for HML, 4 for PROD)
 - [x] Initial gate results recorded (DEV level)
-- [x] Promotion flow tested (at least 1 Zilla dev → hml → prod)
+- [x] Promotion flow tested (at least 1 DevTeam dev → hml → prod)
 - [x] Observatory monitoring active
 - [x] Promotion history accessible
 
@@ -466,7 +466,7 @@ pipeline-mcp.approve_promotion(
 Once promotions complete, run:
 
 ```bash
-zilla-observatory.get_pipeline_health()
+devteam-observatory.get_pipeline_health()
 → {
   "total_services": 8,
   "deployed_prod": 8,
@@ -484,7 +484,7 @@ If issue found in PROD:
 
 ```bash
 pipeline-mcp.rollback(
-  service="archzilla",
+  service="architecture",
   env="prod",
   to_version="v1.2.3",
   reason="Critical bug in profile extraction logic",

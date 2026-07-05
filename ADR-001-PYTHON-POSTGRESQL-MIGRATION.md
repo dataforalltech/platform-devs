@@ -3,13 +3,13 @@
 **Status**: ACCEPTED  
 **Date**: 2026-05-11  
 **Deciders**: Engineering Team (caiog)  
-**Affects**: All 10 Zilla MCPs
+**Affects**: All 10 DevTeam MCPs
 
 ---
 
 ## Context
 
-The 10 Zilla MCPs were originally implemented in TypeScript with SQLite as the primary database. This architecture had several limitations:
+The 10 DevTeam MCPs were originally implemented in TypeScript with SQLite as the primary database. This architecture had several limitations:
 
 1. **Database**: SQLite is a file-based DB, not suitable for distributed/multi-process scenarios
 2. **Stack Complexity**: Separate Node.js and Python runtimes required dual dependency management
@@ -17,7 +17,7 @@ The 10 Zilla MCPs were originally implemented in TypeScript with SQLite as the p
 4. **Scalability**: No connection pooling, no clustering, single-file storage
 
 ### Why Python?
-- Consistent with existing MCP server ecosystem (agent-twin-mcp, config-mcp, etc. are Python)
+- Consistent with existing MCP server ecosystem (dev-twin-mcp, config-mcp, etc. are Python)
 - Better async/await story with FastAPI
 - Simpler deployment (single `python` binary vs Node.js runtime)
 
@@ -32,7 +32,7 @@ The 10 Zilla MCPs were originally implemented in TypeScript with SQLite as the p
 
 ## Decision
 
-Migrate all 10 Zilla MCPs from:
+Migrate all 10 DevTeam MCPs from:
 - **Old**: TypeScript + Node.js + SQLite (local file-based)
 - **New**: Python 3.10+ + FastAPI + PostgreSQL (remote server)
 
@@ -40,7 +40,7 @@ Migrate all 10 Zilla MCPs from:
 
 #### Before
 ```
-qazilla-mcp-server/
+qa-engineer-mcp-server/
 ├── src/server.ts (TypeScript)
 ├── src/db/store.ts (SQLite via better-sqlite3)
 ├── package.json (Node.js dependencies)
@@ -49,8 +49,8 @@ qazilla-mcp-server/
 
 #### After
 ```
-qazilla-mcp-server/
-├── qazilla_mcp.py (Python 3.10+, FastAPI, psycopg2)
+qa-engineer-mcp-server/
+├── qa-engineer_mcp.py (Python 3.10+, FastAPI, psycopg2)
 └── (no TypeScript, no SQLite, no Node.js)
 ```
 
@@ -67,23 +67,23 @@ qazilla-mcp-server/
 
 ### Implementation Details
 
-1. **DDL Creation**: Generated 56 PostgreSQL tables (8 per Zilla module) via `db/create_zilla_tables.sql`
+1. **DDL Creation**: Generated 56 PostgreSQL tables (8 per DevTeam module) via `db/create_devteam_tables.sql`
 2. **Python Rewrites**: All 10 MCPs rewritten (~1,400 lines total Python)
 3. **Connection Pooling**: psycopg2 connection management built-in
-4. **Data Migration**: Script `db/migrate_zillas_to_postgres.py` ready for production data
+4. **Data Migration**: Script `db/migrate_devteam_to_postgres.py` ready for production data
 
 ### Ports (Unchanged)
 ```
-qazilla          : 7201
-seczilla         : 7202
-archzilla        : 7203
-backzilla        : 7204
-frontzilla       : 7205
-opszilla         : 7206
-pozilla          : 7207
-productzilla     : 7208
-cross-zilla-validators : 7209
-zilla-observatory   : 7210
+qa-engineer          : 7201
+security         : 7202
+architecture        : 7203
+backend        : 7204
+frontend       : 7205
+devops         : 7206
+product-owner          : 7207
+product-manager     : 7208
+cross-devteam-validators : 7209
+devteam-observatory   : 7210
 ```
 
 ---
@@ -149,7 +149,7 @@ zilla-observatory   : 7210
 - [x] Schema created (56 tables)
 - [x] Python code written (1,400 lines)
 - [x] Dependencies finalized (6 packages)
-- [x] Local testing (qazilla E2E verified)
+- [x] Local testing (qa-engineer E2E verified)
 - [ ] Unit tests (80%+ coverage) — IN PROGRESS
 - [ ] Integration tests (PostgreSQL verified)
 - [ ] E2E tests (full workflow)
@@ -174,7 +174,7 @@ A: No. Dual-DB increases complexity. PostgreSQL is the source of truth.
 A: All MCP interfaces remain unchanged (same JSON RPC protocol). Clients don't care about backend database.
 
 **Q: How long is the migration window?**  
-A: ~1-2 hours (DB copy + validation). Zillas can run in parallel (old + new) during transition.
+A: ~1-2 hours (DB copy + validation). DevTeam can run in parallel (old + new) during transition.
 
 ---
 
@@ -184,7 +184,7 @@ A: ~1-2 hours (DB copy + validation). Zillas can run in parallel (old + new) dur
 - **Deployment**: `DEPLOYMENT_GUIDE.md`
 - **Testing**: `TEST_PLAN.md`
 - **Security**: `SECURITY_REVIEW.md`
-- **Files Changed**: See git history (commit: feat: Zillas Python + PostgreSQL)
+- **Files Changed**: See git history (commit: feat: DevTeam Python + PostgreSQL)
 
 ---
 

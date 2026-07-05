@@ -1,4 +1,4 @@
-# 🧪 Test Plan — Python Zilla MCPs (v2.1.0)
+# 🧪 Test Plan — Python DevTeam MCPs (v2.1.0)
 
 **Date**: 2026-05-11 | **Duration**: 2 weeks | **Status**: Ready to Execute
 
@@ -7,7 +7,7 @@
 ## 📋 Test Scope
 
 ### In Scope
-- ✅ All 10 Python Zilla MCPs (qazilla, seczilla, archzilla, backzilla, frontzilla, opszilla, pozilla, productzilla, cross-zilla-validators, zilla-observatory)
+- ✅ All 10 Python DevTeam MCPs (qa-engineer, security, architecture, backend, frontend, devops, product-owner, product-manager, cross-devteam-validators, devteam-observatory)
 - ✅ PostgreSQL integration (schema, data persistence, migrations)
 - ✅ FastAPI HTTP endpoints
 - ✅ Docker containerization
@@ -40,26 +40,26 @@
 ### Test Files
 ```
 tests/
-├── test_qazilla.py           # TestPlan CRUD operations
-├── test_seczilla.py          # Security validation flows
-├── test_archzilla.py         # Architecture DSL tests
-├── test_backzilla.py         # Backend schema tests
-├── test_frontzilla.py        # UI component tests
-├── test_opszilla.py          # Infrastructure tests
-├── test_pozilla.py           # Product workflows
-├── test_productzilla.py      # Product management
-├── test_cross_validators.py  # Cross-Zilla validator logic
+├── test_qa-engineer.py           # TestPlan CRUD operations
+├── test_security.py          # Security validation flows
+├── test_architecture.py         # Architecture DSL tests
+├── test_backend.py         # Backend schema tests
+├── test_frontend.py        # UI component tests
+├── test_devops.py          # Infrastructure tests
+├── test_product-owner.py           # Product workflows
+├── test_product-manager.py      # Product management
+├── test_cross_validators.py  # Cross-DevTeam validator logic
 ├── test_observatory.py       # Observability/monitoring
 └── conftest.py              # Shared fixtures
 ```
 
 ### Sample Test Cases
 
-#### qazilla_mcp.py
+#### qa-engineer_mcp.py
 ```python
-# tests/test_qazilla.py
+# tests/test_qa-engineer.py
 import pytest
-from qazilla_mcp import create_test_plan, get_test_plan, list_test_plans
+from qa-engineer_mcp import create_test_plan, get_test_plan, list_test_plans
 
 @pytest.fixture
 def db():
@@ -109,7 +109,7 @@ def test_list_test_plans_pagination(db):
 
 ### Coverage Target
 - **Target**: 80%+
-- **Tool**: `pytest --cov=qazilla_mcp --cov-report=html`
+- **Tool**: `pytest --cov=qa-engineer_mcp --cov-report=html`
 - **Success**: All branches covered, no orphaned code
 
 ---
@@ -141,7 +141,7 @@ def setup_database(postgres_connection):
     cursor = postgres_connection.cursor()
     
     # Load DDL
-    with open("db/create_zilla_tables.sql") as f:
+    with open("db/create_devteam_tables.sql") as f:
         cursor.execute(f.read())
     
     postgres_connection.commit()
@@ -205,7 +205,7 @@ def test_concurrent_inserts_no_corruption(setup_database):
 ### Tool: Playwright (Web) + httpx (HTTP)
 
 ```python
-# tests/test_e2e_qazilla.py
+# tests/test_e2e_qa-engineer.py
 import httpx
 import pytest
 
@@ -229,7 +229,7 @@ def test_create_and_retrieve_test_plan(client):
                 "arguments": {
                     "title": "E2E Test Plan",
                     "feature": "API",
-                    "scope": "qazilla",
+                    "scope": "qa-engineer",
                     "objectives": "Validate create + retrieve"
                 }
             }
@@ -268,7 +268,7 @@ def test_health_endpoint():
 ### Tool: k6
 
 ```javascript
-// tests/load-test-qazilla.js
+// tests/load-test-qa-engineer.js
 import http from 'k6/http';
 import { check, group } from 'k6';
 
@@ -328,7 +328,7 @@ export default function () {
 ### Run Test
 ```bash
 # Light test (10 concurrent users)
-k6 run --vus 10 --duration 5m tests/load-test-qazilla.js
+k6 run --vus 10 --duration 5m tests/load-test-qa-engineer.js
 
 # Expected output:
 # ✅ create succeeded 100%
@@ -386,14 +386,14 @@ echo "📌 Health checks..."
 for port in 7201 7202 7203 7204 7205 7206 7207 7208 7209 7210; do
   response=$(curl -s http://localhost:$port/health)
   if [[ $response == *"ok"* ]]; then
-    echo "✅ Zilla on port $port: OK"
+    echo "✅ DevTeam on port $port: OK"
   else
-    echo "❌ Zilla on port $port: FAILED"
+    echo "❌ DevTeam on port $port: FAILED"
     exit 1
   fi
 done
 
-# 2. Create test plan (qazilla)
+# 2. Create test plan (qa-engineer)
 echo "📌 Create test plan..."
 response=$(curl -s -X POST http://localhost:7201/mcp/tools/call \
   -H "Content-Type: application/json" \
@@ -419,7 +419,7 @@ echo "✅ All smoke tests passed!"
 
 Product Owner sign-off:
 
-- [ ] All 10 Zillas running and healthy
+- [ ] All 10 DevTeam running and healthy
 - [ ] Test plans can be created and retrieved
 - [ ] Security rules are properly validated
 - [ ] Architecture decisions persist
@@ -458,7 +458,7 @@ Product Owner sign-off:
 
 ### E2E Tests
 - ✅ Full workflows end-to-end
-- ✅ Cross-Zilla interactions work
+- ✅ Cross-DevTeam interactions work
 - ✅ Error handling graceful
 
 ### Performance
@@ -481,7 +481,7 @@ Post-deployment, run weekly:
 ```bash
 # regression-suite.sh
 pytest tests/ -k "critical" --tb=short
-k6 run tests/load-test-qazilla.js --vus 50
+k6 run tests/load-test-qa-engineer.js --vus 50
 bandit -r . --quiet
 ```
 
@@ -491,9 +491,9 @@ bandit -r . --quiet
 
 | Role | Name | Status |
 |------|------|--------|
-| QA Lead | QAZilla | Ready to execute |
-| Security | SecZilla | Pending SAST/DAST |
-| DevOps | OpZilla | Ready for load tests |
+| QA Lead | QA-Engineer | Ready to execute |
+| Security | Security | Pending SAST/DAST |
+| DevOps | OpDevTeam | Ready for load tests |
 
 **Overall**: ✅ **Test plan is complete and executable**
 

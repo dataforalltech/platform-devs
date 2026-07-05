@@ -161,7 +161,7 @@ Ação: Considerar arquivo/limpeza (⚠️ Requer aprovação)
 - [x] Reorganize MCPs into 3 contexts
 
 ### Phase 2 🔄 IN PROGRESS (Apr-May 2026)
-- [x] Cross-Zilla Validators (18 tools)
+- [x] Cross-DevTeam Validators (18 tools)
 - [ ] PR ready for review
 - [ ] Tests passing (80%+ coverage)
 
@@ -176,7 +176,7 @@ Ação: Considerar arquivo/limpeza (⚠️ Requer aprovação)
 - [ ] End-to-end testing
 
 ### Phase 5 📋 PLANNED (Jun 2026)
-- [ ] Zilla Observatory (observability)
+- [ ] DevTeam Observatory (observability)
 - [ ] PostgreSQL sync
 - [ ] Dashboard integration
 

@@ -1,8 +1,8 @@
-# Zilla Multi-Server Orchestration
+# DevTeam Multi-Server Orchestration
 
 ## Overview
 
-This document explains how to start, manage, and monitor all 10 Zilla MCPs simultaneously.
+This document explains how to start, manage, and monitor all 10 DevTeam MCPs simultaneously.
 
 **Status**: ✅ Ready for parallel execution
 
@@ -13,48 +13,48 @@ This document explains how to start, manage, and monitor all 10 Zilla MCPs simul
 ### 1. Ensure Dependencies Are Installed
 
 ```bash
-pip install -r requirements-zillas.txt
+pip install -r requirements-devteam.txt
 ```
 
 ### 2. Start All 10 Servers
 
 ```bash
-./scripts/start_all_zillas.sh
+./scripts/start_all_devteam.sh
 ```
 
 **Output:**
 ```
-🚀 Starting all 10 Zilla MCPs...
+🚀 Starting all 10 DevTeam MCPs...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-▶️  Starting qazilla (port 7201)...
-   PID: 12345 | Log: ~/.platform/logs/qazilla.log
-▶️  Starting seczilla (port 7202)...
+▶️  Starting qa-engineer (port 7201)...
+   PID: 12345 | Log: ~/.platform/logs/qa-engineer.log
+▶️  Starting security (port 7202)...
    ...
 ⏳ Waiting for servers to start...
 
 ✅ Validating servers...
-✅ qazilla (port 7201) is healthy
-✅ seczilla (port 7202) is healthy
+✅ qa-engineer (port 7201) is healthy
+✅ security (port 7202) is healthy
 ...
-🎉 All 10 Zillas started successfully!
+🎉 All 10 DevTeam started successfully!
 ```
 
 ---
 
-## Zilla Port Map
+## DevTeam Port Map
 
 | # | Name | Port | Service | Status |
 |---|------|------|---------|--------|
-| 1 | qazilla | 7201 | Quality Assurance | ✅ Python/FastAPI |
-| 2 | seczilla | 7202 | Security & Threat Modeling | ✅ Python/FastAPI |
-| 3 | archzilla | 7203 | Architecture & ADRs | ✅ Python/FastAPI |
-| 4 | backzilla | 7204 | Backend APIs | ✅ Python/FastAPI |
-| 5 | frontzilla | 7205 | Frontend Components | ✅ Python/FastAPI |
-| 6 | opszilla | 7206 | Operations & DevOps | ✅ Python/FastAPI |
-| 7 | pozilla | 7207 | Product Ownership | ✅ Python/FastAPI |
-| 8 | productzilla | 7208 | Product Management | ✅ Python/FastAPI |
-| 9 | cross-zilla-validators | 7209 | Cross-Zilla Validators | ✅ Python/FastAPI |
-| 10 | zilla-observatory | 7210 | Monitoring & Dashboards | ✅ Python/FastAPI |
+| 1 | qa-engineer | 7201 | Quality Assurance | ✅ Python/FastAPI |
+| 2 | security | 7202 | Security & Threat Modeling | ✅ Python/FastAPI |
+| 3 | architecture | 7203 | Architecture & ADRs | ✅ Python/FastAPI |
+| 4 | backend | 7204 | Backend APIs | ✅ Python/FastAPI |
+| 5 | frontend | 7205 | Frontend Components | ✅ Python/FastAPI |
+| 6 | devops | 7206 | Operations & DevOps | ✅ Python/FastAPI |
+| 7 | product-owner | 7207 | Product Ownership | ✅ Python/FastAPI |
+| 8 | product-manager | 7208 | Product Management | ✅ Python/FastAPI |
+| 9 | cross-devteam-validators | 7209 | Cross-DevTeam Validators | ✅ Python/FastAPI |
+| 10 | devteam-observatory | 7210 | Monitoring & Dashboards | ✅ Python/FastAPI |
 
 ---
 
@@ -63,28 +63,28 @@ pip install -r requirements-zillas.txt
 ### Start All Servers
 
 ```bash
-./scripts/start_all_zillas.sh
+./scripts/start_all_devteam.sh
 ```
 
 - Starts all 10 servers in parallel (background processes)
-- Saves PIDs to `~/.platform/logs/{zilla}.pid`
-- Logs output to `~/.platform/logs/{zilla}.log`
+- Saves PIDs to `~/.platform/logs/{devteam}.pid`
+- Logs output to `~/.platform/logs/{devteam}.log`
 - Validates all servers respond to health checks
 
 ### Stop All Servers
 
 ```bash
-./scripts/stop_all_zillas.sh
+./scripts/stop_all_devteam.sh
 ```
 
-- Gracefully terminates all running Zillas
+- Gracefully terminates all running DevTeam
 - Cleans up PID files
 - Fallback: kills by process name if PID file missing
 
 ### Health Check
 
 ```bash
-./scripts/health_check_zillas.sh
+./scripts/health_check_devteam.sh
 ```
 
 - Checks all 10 ports for connectivity
@@ -93,13 +93,13 @@ pip install -r requirements-zillas.txt
 
 **Output:**
 ```
-🏥 Zilla Health Check
+🏥 DevTeam Health Check
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ qazilla:7201 — Healthy
-✅ seczilla:7202 — Healthy
+✅ qa-engineer:7201 — Healthy
+✅ security:7202 — Healthy
 ...
 Status: 10 / 10 healthy
-🎉 All Zillas are healthy!
+🎉 All DevTeam are healthy!
 ```
 
 ---
@@ -114,7 +114,7 @@ curl -X POST http://localhost:7201/mcp/tools/list \
   -d '{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}'
 ```
 
-### Call a Tool (Example: qazilla create_test_plan)
+### Call a Tool (Example: qa-engineer create_test_plan)
 
 ```bash
 curl -X POST http://localhost:7201/mcp/tools/call \
@@ -139,10 +139,10 @@ curl -X POST http://localhost:7201/mcp/tools/call \
 
 ## Logs
 
-Each Zilla writes to `~/.platform/logs/{zilla}.log`:
+Each DevTeam writes to `~/.platform/logs/{devteam}.log`:
 
 ```bash
-tail -f ~/.platform/logs/qazilla.log
+tail -f ~/.platform/logs/qa-engineer.log
 ```
 
 **Log format:**
@@ -156,7 +156,7 @@ tail -f ~/.platform/logs/qazilla.log
 
 ## Environment Variables
 
-All Zillas use the same PostgreSQL connection:
+All DevTeam use the same PostgreSQL connection:
 
 ```bash
 export POSTGRES_HOST=claude-dev
@@ -210,14 +210,14 @@ psql -h claude-dev -U postgres -d app -c \
 ### Server won't start
 
 1. Check port is not in use: `lsof -i :7201`
-2. Check Python file exists: `ls -la qazilla-mcp-server/qazilla_mcp.py`
-3. Check log: `tail -50 ~/.platform/logs/qazilla.log`
+2. Check Python file exists: `ls -la qa-engineer-mcp-server/qa-engineer_mcp.py`
+3. Check log: `tail -50 ~/.platform/logs/qa-engineer.log`
 
 ### Health check fails
 
-1. Verify server is running: `ps aux | grep qazilla_mcp.py`
+1. Verify server is running: `ps aux | grep qa-engineer_mcp.py`
 2. Check if port is listening: `curl http://localhost:7201/health`
-3. Inspect PostgreSQL connection: `tail -20 ~/.platform/logs/qazilla.log | grep -i postgres`
+3. Inspect PostgreSQL connection: `tail -20 ~/.platform/logs/qa-engineer.log | grep -i postgres`
 
 ### Database connection refused
 
@@ -230,7 +230,7 @@ psql -h claude-dev -U postgres -d app -c \
 Kill any previous instance:
 ```bash
 pkill -f "_mcp.py"
-./scripts/stop_all_zillas.sh
+./scripts/stop_all_devteam.sh
 ```
 
 ---

@@ -47,7 +47,7 @@ Infrastructure Services (4):
   zookeeper:7.5.0 (Confluent)                                     [Port 2181]
 
 MCP Server Services (12):
-  agent-twin-mcp ..........................................  [Port 7098] ✅
+  dev-twin-mcp ..........................................  [Port 7098] ✅
   config-mcp .............................................  [Port 7099] ✅
   docs-mcp ................................................  [Port 7090] ✅
   session-mcp ............................................  [Port 7100] ✅
@@ -83,7 +83,7 @@ DEPENDENCY ORDERING
 Services properly configured to start in correct order:
   1. Infrastructure (postgres, redis, zookeeper)
   2. Kafka (depends on zookeeper)
-  3. Core MCPs (config, agent-twin)
+  3. Core MCPs (config, dev-twin)
   4. Supporting MCPs (all depend on config-mcp)
   5. REST APIs (depend on MCPs and databases)
 
@@ -143,7 +143,7 @@ MISSING BUILD ARTIFACTS
 Dockerfiles Required (Critical Path):
 
 Missing from MCP servers (11 of 12):
-  ❌ agent-twin-mcp-server/Dockerfile
+  ❌ dev-twin-mcp-server/Dockerfile
   ❌ config-mcp-server/Dockerfile
   ❌ docs-mcp-server/Dockerfile
   ❌ session-mcp-server/Dockerfile

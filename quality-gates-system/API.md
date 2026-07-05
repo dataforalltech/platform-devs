@@ -168,7 +168,7 @@ List all registered gates, optionally filtered by type.
 
 ## Integration Points
 
-- **Input**: Cross-Zilla Validators, QA tools
+- **Input**: Cross-DevTeam Validators, QA tools
 - **Output**: Pipeline MCP (promotion decisions), Observatory (dashboards)
 - **Consumed by**: CI/CD pipeline, Release workflows
 

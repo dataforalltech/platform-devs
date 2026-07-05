@@ -1,0 +1,133 @@
+# ============================================================================
+# docker-compose.dev.yml — Stack de DEV para testar os DevTeam localmente
+# ----------------------------------------------------------------------------
+# Diferente do docker-compose.pilot.yml (produção): aqui NÃO há Caddy/TLS nem
+# Postgres. Cada serviço publica sua porta em localhost, stores são in-memory,
+# e o auth-mcp usa o client de DEMO (security-dev) com escopo de TODOS os DevTeam.
+# É o modo mais simples para conectar o Claude Code de OUTRA sessão.
+#
+# Uso:
+#   docker compose -f deploy/dev/docker-compose.dev.yml up -d --build
+#   python scripts/dev_connect.py        # emite tokens e imprime os `claude mcp add`
+#
+# NUNCA use este arquivo em produção (sem TLS, sem auth de borda, segredo fraco).
+# ============================================================================
+services:
+  auth-mcp:
+    build: { context: ../.., dockerfile: auth-mcp-server/Dockerfile.as }
+    container_name: dev-auth-mcp
+    environment:
+      AS_ISSUER: http://localhost:7103
+      AS_DEMO_SECRET: ${AS_DEMO_SECRET:-dev-secret-change-me}
+      AS_TOKEN_TTL: ${AS_TOKEN_TTL:-86400}   # 1 dia — conveniência p/ testes
+      # OAUTH_STORE/USER_STORE vazios → in-memory (sem Postgres neste modo).
+    ports: ["7103:7103"]
+    networks: [mcp-dev-net]
+
+  security-mcp:
+    build: { context: ../.., dockerfile: security-mcp-server/Dockerfile }
+    container_name: dev-security-mcp
+    environment:
+      MCP_PORT: "7125"
+      SECURITY_RESOURCE: http://localhost:7125/mcp
+      SECURITY_PRM_URL: http://localhost:7125/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7125:7125"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  qa-engineer-mcp:
+    build: { context: ../.., dockerfile: qa-engineer-mcp-server/Dockerfile }
+    container_name: dev-qa-engineer-mcp
+    environment:
+      MCP_PORT: "7124"
+      QA_ENGINEER_RESOURCE: http://localhost:7124/mcp
+      QA_ENGINEER_PRM_URL: http://localhost:7124/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7124:7124"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  architecture-mcp:
+    build: { context: ../.., dockerfile: architecture-mcp-server/Dockerfile }
+    container_name: dev-architecture-mcp
+    environment:
+      MCP_PORT: "7118"
+      ARCHITECTURE_RESOURCE: http://localhost:7118/mcp
+      ARCHITECTURE_PRM_URL: http://localhost:7118/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7118:7118"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  backend-mcp:
+    build: { context: ../.., dockerfile: backend-mcp-server/Dockerfile }
+    container_name: dev-backend-mcp
+    environment:
+      MCP_PORT: "7119"
+      BACKEND_RESOURCE: http://localhost:7119/mcp
+      BACKEND_PRM_URL: http://localhost:7119/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7119:7119"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  frontend-mcp:
+    build: { context: ../.., dockerfile: frontend-mcp-server/Dockerfile }
+    container_name: dev-frontend-mcp
+    environment:
+      MCP_PORT: "7120"
+      FRONTEND_RESOURCE: http://localhost:7120/mcp
+      FRONTEND_PRM_URL: http://localhost:7120/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7120:7120"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  devops-mcp:
+    build: { context: ../.., dockerfile: devops-mcp-server/Dockerfile }
+    container_name: dev-devops-mcp
+    environment:
+      MCP_PORT: "7121"
+      DEVOPS_RESOURCE: http://localhost:7121/mcp
+      DEVOPS_PRM_URL: http://localhost:7121/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7121:7121"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  product-owner-mcp:
+    build: { context: ../.., dockerfile: product-owner-mcp-server/Dockerfile }
+    container_name: dev-product-owner-mcp
+    environment:
+      MCP_PORT: "7122"
+      PRODUCT_OWNER_RESOURCE: http://localhost:7122/mcp
+      PRODUCT_OWNER_PRM_URL: http://localhost:7122/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7122:7122"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+  product-manager-mcp:
+    build: { context: ../.., dockerfile: product-manager-mcp-server/Dockerfile }
+    container_name: dev-product-manager-mcp
+    environment:
+      MCP_PORT: "7123"
+      PRODUCT_MANAGER_RESOURCE: http://localhost:7123/mcp
+      PRODUCT_MANAGER_PRM_URL: http://localhost:7123/.well-known/oauth-protected-resource
+      AS_ISSUER: http://localhost:7103
+      AS_JWKS_URL: http://auth-mcp:7103/.well-known/jwks.json
+    ports: ["7123:7123"]
+    depends_on: [auth-mcp]
+    networks: [mcp-dev-net]
+
+networks:
+  mcp-dev-net:
+    driver: bridge

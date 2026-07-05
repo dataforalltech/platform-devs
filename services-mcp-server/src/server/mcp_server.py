@@ -18,12 +18,9 @@ Streaming (HTTP sidecar):
 
 from __future__ import annotations
 
-
-import os
-
-import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -42,9 +39,9 @@ from ..tools import (
     get_service,
     get_service_logs,
     kafka_status,
+    launch_service,
     list_environments,
     list_services,
-    launch_service,
     read_env_file,
     redact_env_secrets,
     redis_status,
@@ -68,6 +65,56 @@ from ..tools import (
 )
 
 _log = logging.getLogger(__name__)
+
+# ── Escopo mínimo por ferramenta (least privilege) ─────────────────────────── #
+# read  = consulta/descoberta (não muta estado do registry nem do host)
+# write = mutação (registro, launch/stop, edição de .env, sync, reload)
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # Registry
+    "register_service": "services:write",
+    "get_service": "services:read",
+    "list_services": "services:read",
+    "update_service": "services:write",
+    "unregister_service": "services:write",   # deregister
+    # PortMap
+    "get_port_map": "services:read",
+    "find_by_port": "services:read",
+    # Discovery
+    "scan_docker": "services:read",
+    "scan_processes": "services:read",
+    "check_health": "services:read",
+    "check_all_health": "services:read",
+    # Composite
+    "service_status": "services:read",
+    "list_environments": "services:read",
+    # reload_service é SENSÍVEL: reinicia/mata o serviço (restart) → exige services:write.
+    "reload_service": "services:write",
+    # Gateway
+    "get_gateway_map": "services:read",
+    "update_service_gateway": "services:write",   # configure
+    "sync_registry": "services:write",
+    # Launch
+    "launch_service": "services:write",
+    "stop_service": "services:write",
+    # Env (edições de arquivo .env são mutações)
+    "read_env_file": "services:read",
+    "set_env_var": "services:write",              # configure
+    "sync_service_urls": "services:write",
+    "audit_env_files": "services:read",
+    "redact_env_secrets": "services:write",
+    # Infra
+    "register_infra": "services:write",
+    "scan_infra": "services:read",
+    "sync_infra_env": "services:write",
+    # Brokers
+    "kafka_status": "services:read",
+    "redis_status": "services:read",
+    "sync_broker_urls": "services:write",
+    # Logs
+    "get_service_logs": "services:read",
+    "search_logs": "services:read",
+}
+SCOPES_SUPPORTED = ["services:read", "services:write"]
 
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 # Schemas                                                                      #
@@ -844,8 +891,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
+# Garante que todo tool declarado tem um escopo mínimo mapeado (least privilege).
+assert set(_TOOL_SCHEMAS.keys()) == set(SCOPE_FOR_TOOL.keys()), (
+    "SCOPE_FOR_TOOL deve cobrir exatamente as tools de _TOOL_SCHEMAS: "
+    f"faltam={set(_TOOL_SCHEMAS) - set(SCOPE_FOR_TOOL)} "
+    f"sobram={set(SCOPE_FOR_TOOL) - set(_TOOL_SCHEMAS)}"
+)
+
+
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
-# HTTP API (sidecar paradiscovery por outros MCPs, ex: agent-twin)            #
+# HTTP API (sidecar paradiscovery por outros MCPs, ex: dev-twin)            #
 # â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
 def _build_http_app(store: ServiceStore) -> FastAPI:
     from fastapi.responses import StreamingResponse
@@ -1163,30 +1218,36 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, _store, _settings, http_app = build_server()
+    Preserva build_server() (Server de baixo nível + _dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware,
+    com escopo mínimo por ferramenta (SCOPE_FOR_TOOL).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _store, _settings, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("SERVICES_RESOURCE", "http://localhost:7107/mcp"),
+        prm_url=os.getenv(
+            "SERVICES_PRM_URL",
+            "http://localhost:7107/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7107")))
 
 
 if __name__ == "__main__":

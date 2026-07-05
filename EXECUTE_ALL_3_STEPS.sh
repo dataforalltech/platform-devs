@@ -4,7 +4,7 @@
 # EXECUTE_ALL_3_STEPS.sh
 #
 # Executa os 3 passos finais de implementação:
-# PASSO 2: Integrar 8 Zillas com MCPs (30 min)
+# PASSO 2: Integrar 8 DevTeam com MCPs (30 min)
 # PASSO 3: Teste E2E OAuth2 (1-2 horas)
 # PASSO 4: Deploy para Produção (1 hora)
 #
@@ -22,7 +22,7 @@ echo "║                                                            ║"
 echo "║         EXECUTAR TODOS OS 3 PASSOS FINAIS                  ║"
 echo "║         (Em Paralelo para Máxima Eficiência)               ║"
 echo "║                                                            ║"
-echo "║         PASSO 2: Integrar 8 Zillas (30 min)                ║"
+echo "║         PASSO 2: Integrar 8 DevTeam (30 min)                ║"
 echo "║         PASSO 3: E2E OAuth2 (1-2 horas)                    ║"
 echo "║         PASSO 4: Deploy Produção (1 hora)                  ║"
 echo "║                                                            ║"
@@ -34,34 +34,34 @@ echo ""
 START_TIME=$(date +%s)
 
 # =============================================================================
-# PASSO 2: INTEGRAR 8 ZILLAS COM MCPs
+# PASSO 2: INTEGRAR 8 DEVTEAM COM MCPs
 # =============================================================================
 
 echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
-echo "║ PASSO 2: INTEGRAR 8 ZILLAS COM MCPs                       ║"
+echo "║ PASSO 2: INTEGRAR 8 DEVTEAM COM MCPs                       ║"
 echo "║ Duração: 30 minutos                                        ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-ZILLAS=(
-  "ProductZilla"
-  "ArchZilla"
-  "BackZilla"
-  "FrontZilla-PixelFera"
-  "OpsZilla"
-  "QAZilla"
-  "SecZilla"
-  "POZilla"
+DEVTEAM=(
+  "Product-Manager"
+  "Architecture"
+  "Backend"
+  "Frontend-PixelFera"
+  "DevOps"
+  "QA-Engineer"
+  "Security"
+  "Product-Owner"
 )
 
-for ZILLA in "${ZILLAS[@]}"; do
-  echo "[${ZILLA}] Adicionando imports + MCP calls..."
-  echo "  ✅ ${ZILLA} integrado com sucesso"
+for DEVTEAM in "${DEVTEAM[@]}"; do
+  echo "[${DEVTEAM}] Adicionando imports + MCP calls..."
+  echo "  ✅ ${DEVTEAM} integrado com sucesso"
 done
 
 echo ""
-echo "✅ PASSO 2 COMPLETO: 8 Zillas integradas com MCPs"
+echo "✅ PASSO 2 COMPLETO: 8 DevTeam integradas com MCPs"
 echo ""
 
 # =============================================================================
@@ -72,39 +72,39 @@ echo ""
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║ PASSO 3: TESTE E2E OAuth2                                 ║"
 echo "║ Feature: OAuth2 Integration (Google, GitHub, Microsoft)    ║"
-echo "║ Timeline: T0-T8 com paralelo T2-T5 (4 Zillas em paralelo)  ║"
+echo "║ Timeline: T0-T8 com paralelo T2-T5 (4 DevTeam em paralelo)  ║"
 echo "║ Duração: 1-2 horas (simulated in minutes)                  ║"
 echo "╚════════════════════════════════════════════════════════════╝"
 echo ""
 
-echo "[T0] ProductZilla: Gerando feature spec..."
+echo "[T0] Product-Manager: Gerando feature spec..."
 echo "  ✅ Feature spec gerada (8 acceptance criteria)"
 echo ""
 
-echo "[T1] POZilla: Quebrando epic em stories..."
+echo "[T1] Product-Owner: Quebrando epic em stories..."
 echo "  ✅ 8 stories criadas (34 story points, 11 dias de timeline)"
 echo ""
 
 echo "[T2-T5] PARALELO: Arch + Back + Front + Ops executando..."
-echo "  [ArchZilla] Gerando blueprint..."
-echo "  ✅ ArchZilla: API contract (3 endpoints)"
+echo "  [Architecture] Gerando blueprint..."
+echo "  ✅ Architecture: API contract (3 endpoints)"
 echo ""
-echo "  [BackZilla] Gerando router FastAPI..."
-echo "  ✅ BackZilla: FastAPI router (3 endpoints)"
+echo "  [Backend] Gerando router FastAPI..."
+echo "  ✅ Backend: FastAPI router (3 endpoints)"
 echo ""
-echo "  [FrontZilla] Gerando componentes React..."
-echo "  ✅ FrontZilla: OAuthLoginButton component"
+echo "  [Frontend] Gerando componentes React..."
+echo "  ✅ Frontend: OAuthLoginButton component"
 echo ""
-echo "  [OpsZilla] Gerando infrastructure..."
-echo "  ✅ OpsZilla: Terraform + Grafana dashboard"
-echo ""
-
-echo "[T6] SecZilla: Gerando threat model..."
-echo "  ✅ SecZilla: 12 ameaças identificadas, 12 controles definidos"
+echo "  [DevOps] Gerando infrastructure..."
+echo "  ✅ DevOps: Terraform + Grafana dashboard"
 echo ""
 
-echo "[T7] QAZilla: Executando testes E2E..."
-echo "  ✅ QAZilla: 45 testes executados, 45 passou"
+echo "[T6] Security: Gerando threat model..."
+echo "  ✅ Security: 12 ameaças identificadas, 12 controles definidos"
+echo ""
+
+echo "[T7] QA-Engineer: Executando testes E2E..."
+echo "  ✅ QA-Engineer: 45 testes executados, 45 passou"
 echo ""
 
 echo "[T8] Observatory: Validando todos os gates..."
@@ -146,11 +146,11 @@ echo ""
 echo "[4.1] Fazendo merge das 4 PRs para main..."
 echo "  → PR #3: feat: Phase 1 — Knowledge Base MCP"
 echo "    ✅ Merged e branch deletada"
-echo "  → PR #4: feat: Phase 2 — Cross-Zilla Validators"
+echo "  → PR #4: feat: Phase 2 — Cross-DevTeam Validators"
 echo "    ✅ Merged e branch deletada"
 echo "  → PR #5: feat: Phase 3 — Quality Gates System"
 echo "    ✅ Merged e branch deletada"
-echo "  → PR #6: feat: Phase 4 — Zilla Observatory"
+echo "  → PR #6: feat: Phase 4 — DevTeam Observatory"
 echo "    ✅ Merged e branch deletada"
 echo ""
 
@@ -160,7 +160,7 @@ echo "  ✅ Tag criada"
 echo ""
 
 echo "[4.3] Building Docker images..."
-MCPS=("knowledge-base-mcp:7110" "cross-zilla-validators:7111" "quality-gates-system:7112" "zilla-observatory:7113")
+MCPS=("knowledge-base-mcp:7110" "cross-devteam-validators:7111" "quality-gates-system:7112" "devteam-observatory:7113")
 for MCP in "${MCPS[@]}"; do
   NAME="${MCP%:*}"
   echo "  → docker build -t platform-${NAME}:v1.0.0-ecosystem ./${NAME}"
@@ -196,7 +196,7 @@ echo ""
 echo "[4.7] Validando ecossistema..."
 echo "  ✅ 44 tools disponíveis (6+18+10+10)"
 echo "  ✅ 12 databases SQLite prontos"
-echo "  ✅ 8 Zillas integradas"
+echo "  ✅ 8 DevTeam integradas"
 echo "  ✅ 10 quality gates operacionais"
 echo ""
 

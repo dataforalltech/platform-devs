@@ -13,7 +13,7 @@
   },
   "system-mcps": {
     "config-mcp": "http://localhost:7100",
-    "agent-twin-mcp": "http://localhost:7101",
+    "dev-twin-mcp": "http://localhost:7101",
     "session-mcp": "http://localhost:7102",
     "auth-mcp": "http://localhost:7103",
     "admin-mcp": "http://localhost:7104",
@@ -30,15 +30,15 @@
     "connectors-mcp": "http://localhost:7115",
     "cache-mcp": "http://localhost:7116"
   },
-  "zilla-mcps": {
-    "archzilla-mcp": "http://localhost:7118",
-    "backzilla-mcp": "http://localhost:7119",
-    "frontzilla-mcp": "http://localhost:7120",
-    "opszilla-mcp": "http://localhost:7121",
-    "pozilla-mcp": "http://localhost:7122",
-    "productzilla-mcp": "http://localhost:7123",
-    "qazilla-mcp": "http://localhost:7124",
-    "seczilla-mcp": "http://localhost:7125"
+  "devteam-mcps": {
+    "architecture-mcp": "http://localhost:7118",
+    "backend-mcp": "http://localhost:7119",
+    "frontend-mcp": "http://localhost:7120",
+    "devops-mcp": "http://localhost:7121",
+    "product-owner-mcp": "http://localhost:7122",
+    "product-manager-mcp": "http://localhost:7123",
+    "qa-engineer-mcp": "http://localhost:7124",
+    "security-mcp": "http://localhost:7125"
   },
   "registry": {
     "discovery": "http://localhost:8000",

@@ -1,11 +1,9 @@
-"""Servidor MCP infra — registra as 15 tools (Phase 1 read-only + Phase 2 allocator SQLite+terraform+SSH+queue) e expõe via stdio."""
+"""Servidor MCP infra — registra as 15 tools (Phase 1 read-only + Phase 2 allocator SQLite+terraform+SSH+queue) e expõe via Streamable HTTP + auth (padrão da plataforma)."""
 
 from __future__ import annotations
 
-import os
-
-import asyncio
 import json
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -309,6 +307,40 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------- #
+# Escopo mínimo por ferramenta (least privilege).                         #
+#   infra:read  -> plan/scan/validação/custo + leituras do allocator      #
+#   infra:write -> apply/mutação de infra + operações que mudam estado    #
+# ---------------------------------------------------------------------- #
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # --- infra:read — plan/scan/validação/custo (não modificam state) --- #
+    "terraform_validate": "infra:read",       # terraform validate (read-only)
+    "terraform_fmt_check": "infra:read",       # terraform fmt -check (não escreve)
+    "terraform_plan": "infra:read",            # terraform plan (não aplica; só planeja)
+    "terraform_show_plan": "infra:read",       # terraform show -json (read-only)
+    "policy_scan_checkov": "infra:read",       # checkov (scan estático)
+    "cost_estimate_infracost": "infra:read",   # infracost (estimativa de custo)
+    # leituras do allocator (consultas, sem mutação de estado)
+    "get_lease": "infra:read",
+    "list_my_leases": "infra:read",
+    "list_pool": "infra:read",
+    "query_capacity": "infra:read",            # planejamento sem efeito
+
+    # --- infra:write — APPLY/mutação de infra + allocator que muda estado --- #
+    "request_vm": "infra:write",               # SENSÍVEL: provisiona VM real (terraform apply) / cria lease
+    "release_lease": "infra:write",            # SENSÍVEL: libera lease e pode terminar VM (terraform destroy)
+    "extend_lease": "infra:write",             # muda estado do lease (prorroga validade)
+    "cancel_queued_request": "infra:write",    # muda estado da fila de provisão
+    "get_lease_ssh_key": "infra:write",        # SENSÍVEL: expõe chave privada Ed25519 da VM
+}
+SCOPES_SUPPORTED = ["infra:read", "infra:write"]
+
+# Garante cobertura: todo tool declarado tem escopo mínimo mapeado.
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL não cobre exatamente as tools de _TOOL_SCHEMAS"
+)
+
+
+# ---------------------------------------------------------------------- #
 # Server                                                                  #
 # ---------------------------------------------------------------------- #
 def _build_http_app() -> FastAPI:
@@ -503,31 +535,36 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    Preserva build_server() (Server de baixo nível + dispatch com allocator/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware com
+    escopo por ferramenta (least privilege).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _settings, _allocator, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("INFRA_RESOURCE", "http://localhost:7106/mcp"),
+        prm_url=os.getenv(
+            "INFRA_PRM_URL",
+            "http://localhost:7106/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7106")))
 
 
 if __name__ == "__main__":

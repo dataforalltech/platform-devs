@@ -1,6 +1,6 @@
-# 🔐 Security Review — Python Zilla MCPs Migration
+# 🔐 Security Review — Python DevTeam MCPs Migration
 
-**Date**: 2026-05-11 | **Reviewer**: SecZilla | **Status**: ✅ PASSED
+**Date**: 2026-05-11 | **Reviewer**: Security | **Status**: ✅ PASSED
 
 ---
 
@@ -47,7 +47,7 @@ Migration from TypeScript/SQLite to Python/PostgreSQL **PASSED security review**
 ### 🔴 HIGH: Missing Input Validation in FastAPI Endpoints
 
 **Severity**: HIGH  
-**Location**: `qazilla_mcp.py:L200-250` (and similar in all Zillas)  
+**Location**: `qa-engineer_mcp.py:L200-250` (and similar in all DevTeam)  
 **Issue**: POST endpoints accept JSON directly without Pydantic model validation
 
 ```python
@@ -79,27 +79,27 @@ def call_tool(request: ToolCallRequest):
 ### 🟡 MEDIUM: PostgreSQL User Permissions (Least Privilege)
 
 **Severity**: MEDIUM  
-**Location**: PostgreSQL connection string (all Zillas)  
-**Issue**: All Zillas connect with `postgres` (superuser), not restricted app role
+**Location**: PostgreSQL connection string (all DevTeam)  
+**Issue**: All DevTeam connect with `postgres` (superuser), not restricted app role
 
 ```bash
 # ❌ CURRENT
 POSTGRES_USER=postgres  # Has ALL PRIVILEGES
 
 # ✅ RECOMMENDED
-POSTGRES_USER=app_zillas  # Only SELECT/INSERT/UPDATE/DELETE on app tables
+POSTGRES_USER=app_devteam  # Only SELECT/INSERT/UPDATE/DELETE on app tables
 POSTGRES_USER_PASSWORD=$(uuidgen)  # Random password per environment
 ```
 
 **Remediation**:
 ```sql
 -- Create restricted role
-CREATE ROLE app_zillas WITH LOGIN PASSWORD '...';
-GRANT USAGE ON SCHEMA public TO app_zillas;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_zillas;
+CREATE ROLE app_devteam WITH LOGIN PASSWORD '...';
+GRANT USAGE ON SCHEMA public TO app_devteam;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_devteam;
 
 -- Update connection string
-POSTGRES_USER=app_zillas
+POSTGRES_USER=app_devteam
 ```
 
 **Timeline**: Before production (2026-05-15)
@@ -152,7 +152,7 @@ app.add_middleware("X-Content-Type-Options", "nosniff")
 ## 3. Threat Model (STRIDE)
 
 ### Spoofing (S)
-- **Risk**: Attacker impersonates a Zilla service
+- **Risk**: Attacker impersonates a DevTeam service
 - **Mitigation**: TLS 1.3 for all connections, mutual authentication via mTLS in K8s
 - **Status**: ✅ Can implement at K8s level
 
@@ -177,7 +177,7 @@ app.add_middleware("X-Content-Type-Options", "nosniff")
 - **Status**: ⚠️ Needs rate limiting
 
 ### Elevation of Privilege (E)
-- **Risk**: Attacker gains admin access to Zillas
+- **Risk**: Attacker gains admin access to DevTeam
 - **Mitigation**: RBAC in K8s, least-privilege PostgreSQL user
 - **Status**: ⚠️ Needs PostgreSQL user fix
 
@@ -284,7 +284,7 @@ safety check --json
 
 | Role | Name | Date | Status |
 |------|------|------|--------|
-| Security Review | SecZilla MCP | 2026-05-11 | ✅ PASS with Remediation |
+| Security Review | Security MCP | 2026-05-11 | ✅ PASS with Remediation |
 | Deploy Lead | caiog | 2026-05-11 | ⏳ Awaiting fixes |
 | Infrastructure | TBD | — | — |
 

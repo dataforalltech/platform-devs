@@ -13,7 +13,7 @@ authors = [
 # em CHANGELOG.md por release. Revisar bounds quando major bump for
 # aprovado (ex.: pydantic 3.x).
 dependencies = [
-    "mcp>=1.2.0,<2.0",
+    "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
     # networkx: grafo in-memory (Python puro, sem servidor externo).
@@ -22,6 +22,10 @@ dependencies = [
     "pyyaml>=6.0,<7.0",
     "fastapi>=0.104.0,<1.0",
     "uvicorn[standard]>=0.24.0,<1.0",
+    # Streamable HTTP + auth (shared/mcp_auth.py): emissão/validação de JWT e token estático.
+    "pyjwt>=2.8.0",
+    "cryptography>=42.0.0",
+    "bcrypt>=4.1.0",
 ]
 
 [project.optional-dependencies]

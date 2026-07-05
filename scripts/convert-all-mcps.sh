@@ -8,7 +8,7 @@ echo "Converting all system MCPs to FastAPI..."
 # Port mapping for all 18 system MCPs
 declare -A MCP_PORTS=(
     ["config-mcp"]=7100
-    ["agent-twin-mcp"]=7101
+    ["dev-twin-mcp"]=7101
     ["session-mcp"]=7102
     ["auth-mcp"]=7103
     ["admin-mcp"]=7104

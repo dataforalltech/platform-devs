@@ -1,4 +1,4 @@
-# 🚀 Deployment Guide — 10 Python Zilla MCPs
+# 🚀 Deployment Guide — 10 Python DevTeam MCPs
 
 **Version**: 2.1.0 | **Date**: 2026-05-11 | **Status**: Ready for Production
 
@@ -6,21 +6,21 @@
 
 ## 📋 Overview
 
-This guide covers deployment of the 10 Zilla MCPs after their complete migration from TypeScript/SQLite to Python/PostgreSQL.
+This guide covers deployment of the 10 DevTeam MCPs after their complete migration from TypeScript/SQLite to Python/PostgreSQL.
 
-### Zillas (10 services)
+### DevTeam (10 services)
 | # | Name | Port | Status |
 |---|------|------|--------|
-| 1 | qazilla | 7201 | ✅ Production Ready |
-| 2 | seczilla | 7202 | ✅ Production Ready |
-| 3 | archzilla | 7203 | ✅ Production Ready |
-| 4 | backzilla | 7204 | ✅ Production Ready |
-| 5 | frontzilla | 7205 | ✅ Production Ready |
-| 6 | opszilla | 7206 | ✅ Production Ready |
-| 7 | pozilla | 7207 | ✅ Production Ready |
-| 8 | productzilla | 7208 | ✅ Production Ready |
-| 9 | cross-zilla-validators | 7209 | ✅ Production Ready |
-| 10 | zilla-observatory | 7210 | ✅ Production Ready |
+| 1 | qa-engineer | 7201 | ✅ Production Ready |
+| 2 | security | 7202 | ✅ Production Ready |
+| 3 | architecture | 7203 | ✅ Production Ready |
+| 4 | backend | 7204 | ✅ Production Ready |
+| 5 | frontend | 7205 | ✅ Production Ready |
+| 6 | devops | 7206 | ✅ Production Ready |
+| 7 | product-owner | 7207 | ✅ Production Ready |
+| 8 | product-manager | 7208 | ✅ Production Ready |
+| 9 | cross-devteam-validators | 7209 | ✅ Production Ready |
+| 10 | devteam-observatory | 7210 | ✅ Production Ready |
 
 ---
 
@@ -28,8 +28,8 @@ This guide covers deployment of the 10 Zilla MCPs after their complete migration
 
 ### Build Multi-Service Image
 ```bash
-# Build base image for all Zillas
-docker build -t platform-zillas:2.1.0 -f Dockerfile .
+# Build base image for all DevTeam
+docker build -t platform-devteam:2.1.0 -f Dockerfile .
 ```
 
 ### docker-compose (Local Dev)
@@ -38,9 +38,9 @@ docker-compose up -d
 
 # Verify all services
 docker-compose ps
-# qazilla       7201:7201
-# seczilla      7202:7202
-# archzilla     7203:7203
+# qa-engineer       7201:7201
+# security      7202:7202
+# architecture     7203:7203
 # ...
 
 # Health check
@@ -51,8 +51,8 @@ curl http://localhost:7202/health
 ### Production Registry Push
 ```bash
 # Azure Container Registry (example)
-docker tag platform-zillas:2.1.0 myregistry.azurecr.io/platform-zillas:2.1.0
-docker push myregistry.azurecr.io/platform-zillas:2.1.0
+docker tag platform-devteam:2.1.0 myregistry.azurecr.io/platform-devteam:2.1.0
+docker push myregistry.azurecr.io/platform-devteam:2.1.0
 ```
 
 ---
@@ -66,7 +66,7 @@ helm repo add platform https://charts.platform.local
 helm repo update
 
 # Configure PostgreSQL connection in K8s secret
-kubectl create secret generic zilla-db \
+kubectl create secret generic devteam-db \
   --from-literal=host=postgres.default \
   --from-literal=port=5432 \
   --from-literal=user=postgres \
@@ -75,24 +75,24 @@ kubectl create secret generic zilla-db \
 
 ### Deploy via Helm Chart
 ```bash
-# Install all 10 Zillas
-helm install platform-zillas ./helm/zillas \
+# Install all 10 DevTeam
+helm install platform-devteam ./helm/devteam \
   --namespace production \
   --values helm/values-prod.yaml
 
 # Verify deployment
 kubectl get deployments -n production
-kubectl get svc -n production | grep zilla
+kubectl get svc -n production | grep devteam
 ```
 
 ### Kubernetes Manifest (Manual)
 ```bash
 # Deploy Deployment + Service
-kubectl apply -f k8s/qazilla-deployment.yaml
-kubectl apply -f k8s/qazilla-service.yaml
+kubectl apply -f k8s/qa-engineer-deployment.yaml
+kubectl apply -f k8s/qa-engineer-service.yaml
 
 # Scale to 3 replicas
-kubectl scale deployment qazilla --replicas=3 -n production
+kubectl scale deployment qa-engineer --replicas=3 -n production
 ```
 
 ---
@@ -101,7 +101,7 @@ kubectl scale deployment qazilla --replicas=3 -n production
 
 ### Health Checks
 ```bash
-# All Zillas expose /health endpoint
+# All DevTeam expose /health endpoint
 curl -X GET http://localhost:7201/health
 
 # Response:
@@ -116,25 +116,25 @@ curl -X GET http://localhost:7201/health
 ```bash
 # Prometheus scrape configuration
 scrape_configs:
-  - job_name: 'zillas'
+  - job_name: 'devteam'
     static_configs:
       - targets: ['localhost:7201', 'localhost:7202', ..., 'localhost:7210']
     metrics_path: '/metrics'
 ```
 
 ### Grafana Dashboards
-- Import: `dashboards/zillas-overview.json`
+- Import: `dashboards/devteam-overview.json`
 - Key metrics:
   - Request latency (p50/p95/p99)
   - Database connection pool
-  - Error rates by Zilla
+  - Error rates by DevTeam
   - Tool invocation counts
 
 ### Logging
 ```bash
-# All Zillas log to ~/.platform/logs/{zilla}.log
-tail -f ~/.platform/logs/qazilla.log
-tail -f ~/.platform/logs/seczilla.log
+# All DevTeam log to ~/.platform/logs/{devteam}.log
+tail -f ~/.platform/logs/qa-engineer.log
+tail -f ~/.platform/logs/security.log
 ```
 
 ---
@@ -161,11 +161,11 @@ export METRICS_ENABLED=true
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: zillas-network
+  name: devteam-network
 spec:
   podSelector:
     matchLabels:
-      app: zilla
+      app: devteam
   policyTypes:
   - Ingress
   ingress:
@@ -181,21 +181,21 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: zillas-ingress
+  name: devteam-ingress
 spec:
   tls:
   - hosts:
-    - api.zillas.internal
-    secretName: zillas-tls
+    - api.devteam.internal
+    secretName: devteam-tls
   rules:
-  - host: api.zillas.internal
+  - host: api.devteam.internal
     http:
       paths:
       - path: /
         pathType: Prefix
         backend:
           service:
-            name: zilla-gateway
+            name: devteam-gateway
             port:
               number: 7200
 ```
@@ -206,8 +206,8 @@ spec:
 
 ### GitHub Actions Workflow
 ```yaml
-# .github/workflows/deploy-zillas.yml
-name: Deploy Zillas
+# .github/workflows/deploy-devteam.yml
+name: Deploy DevTeam
 
 on:
   push:
@@ -231,7 +231,7 @@ jobs:
       - uses: docker/build-push-action@v5
         with:
           push: ${{ github.ref == 'refs/heads/main' }}
-          tags: registry.azurecr.io/platform-zillas:${{ github.sha }}
+          tags: registry.azurecr.io/platform-devteam:${{ github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -239,7 +239,7 @@ jobs:
     if: github.ref == 'refs/heads/main'
     steps:
       - run: |
-          helm upgrade --install platform-zillas ./helm/zillas \
+          helm upgrade --install platform-devteam ./helm/devteam \
             --set image.tag=${{ github.sha }}
 ```
 
@@ -285,12 +285,12 @@ If deployment fails:
 
 ```bash
 # Kubernetes rollback
-kubectl rollout undo deployment/qazilla -n production
-kubectl rollout undo deployment/seczilla -n production
-# ... repeat for all 10 Zillas
+kubectl rollout undo deployment/qa-engineer -n production
+kubectl rollout undo deployment/security -n production
+# ... repeat for all 10 DevTeam
 
 # Or revert to previous Helm release
-helm rollback platform-zillas 1
+helm rollback platform-devteam 1
 ```
 
 ---
@@ -298,8 +298,8 @@ helm rollback platform-zillas 1
 ## 📞 Support
 
 - **On-Call**: Check PagerDuty alerts at `dashboard.pagerduty.com`
-- **Logs**: `kubectl logs -f deployment/qazilla -n production`
-- **Health**: `curl http://zilla-api.internal:7201/health`
+- **Logs**: `kubectl logs -f deployment/qa-engineer -n production`
+- **Health**: `curl http://devteam-api.internal:7201/health`
 - **Runbook**: See `INCIDENT_RESPONSE_RUNBOOK.md`
 
 ---

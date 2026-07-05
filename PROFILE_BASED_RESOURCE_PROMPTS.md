@@ -10,10 +10,10 @@
 
 When an MCP is invoked, it should detect the **caller's profile** and return **custom prompts** optimizing for that profile's workflow.
 
-### Example: QAZilla's Context-Aware Behavior
+### Example: QA-Engineer's Context-Aware Behavior
 
 ```typescript
-// When qazilla.get_resource_prompt() is called:
+// When qa-engineer.get_resource_prompt() is called:
 
 IF caller_profile == "Development Engineer":
   RETURN: "Quick unit test generation tool. Use: generate_unit_tests(component). Add to CI."
@@ -66,13 +66,13 @@ function detectProfile(context: ProfileContext): Profile {
 Each MCP returns:
 ```json
 {
-  "mcp_name": "qazilla-mcp",
+  "mcp_name": "qa-engineer-mcp",
   "calling_profile": "QA/Release Manager",
   "resource_prompt": "...",
   "quick_start": ["create_test_plan(feature)", "generate_scenarios()"],
   "common_workflows": ["Full QA → Prod Release", "Smoke Test Suite"],
   "learning_resources": ["QA_WORKFLOWS.md", "QUALITY_GATES.md"],
-  "related_tools": ["SecZilla (security tests)", "OpsZilla (performance tests)"]
+  "related_tools": ["Security (security tests)", "DevOps (performance tests)"]
 }
 ```
 
@@ -82,18 +82,18 @@ Each MCP returns:
 
 ### Profile 1: Development Engineer (Backend/Frontend)
 
-**Typical Tools Used**: ArchZilla, BackZilla, FrontZilla, qa-mcp, deploy-mcp
+**Typical Tools Used**: Architecture, Backend, Frontend, qa-mcp, deploy-mcp
 
-#### When calling QAZilla:
+#### When calling QA-Engineer:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ QAZilla: Quick Test Generation Tool                           ║
+║ QA-Engineer: Quick Test Generation Tool                           ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Generate tests for your code as you write               ║
 ║                                                                 ║
 ║ QUICK START:                                                   ║
-║   1. Write code in BackZilla or FrontZilla                    ║
-║   2. qazilla.generate_unit_tests(component="UserService")     ║
+║   1. Write code in Backend or Frontend                    ║
+║   2. qa-engineer.generate_unit_tests(component="UserService")     ║
 ║   3. Copy tests to your test file                             ║
 ║   4. qa-mcp.run_unit_tests(repo_path) to verify             ║
 ║                                                                 ║
@@ -105,44 +105,44 @@ Each MCP returns:
 ║ TIP: Generate tests BEFORE implementing. TDD pattern works!    ║
 ║                                                                 ║
 ║ ALSO USEFUL:                                                   ║
-║   • SecZilla for security testing                            ║
+║   • Security for security testing                            ║
 ║   • deploy-mcp for CI/CD integration                         ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-#### When calling SecZilla:
+#### When calling Security:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ SecZilla: Add Security to Your Code                           ║
+║ Security: Add Security to Your Code                           ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Security best practices BEFORE code review              ║
 ║                                                                 ║
 ║ DO THIS:                                                       ║
 ║   1. Before pushing to develop:                               ║
-║   2. seczilla.scan_dependency_risks(repo_path)               ║
+║   2. security.scan_dependency_risks(repo_path)               ║
 ║   3. Fix any HIGH/CRITICAL issues                             ║
 ║   4. Commit + push                                            ║
 ║                                                                 ║
 ║ REVIEW AFTER PR:                                              ║
-║   • SecZilla reviews OWASP Top 10                             ║
+║   • Security reviews OWASP Top 10                             ║
 ║   • Feedback integrated into your next commit                 ║
 ║                                                                 ║
 ║ COMMON ISSUES:                                                 ║
 ║   • Hardcoded credentials → Use config-mcp                   ║
-║   • SQL injection risk → Use ORMs (BackZilla pattern)        ║
+║   • SQL injection risk → Use ORMs (Backend pattern)        ║
 ║   • Unvalidated input → Add Zod validation                   ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-#### When calling OpsZilla:
+#### When calling DevOps:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ OpsZilla: Local Dev Environment Setup                         ║
+║ DevOps: Local Dev Environment Setup                         ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Docker + local infrastructure for development           ║
 ║                                                                 ║
 ║ START HERE:                                                    ║
-║   opszilla.generate_docker_compose(services=["postgres", "redis"])
+║   devops.generate_docker_compose(services=["postgres", "redis"])
 ║   docker-compose up                                            ║
 ║                                                                 ║
 ║ ADD TO YOUR SETUP:                                             ║
@@ -151,7 +151,7 @@ Each MCP returns:
 ║   • kafka for events (if needed)                             ║
 ║                                                                 ║
 ║ FOR DEPLOYMENT (later):                                       ║
-║   • Talk to DevOps team (OpsZilla + infra-mcp)             ║
+║   • Talk to DevOps team (DevOps + infra-mcp)             ║
 ║   • You provide: Dockerfile, health checks                    ║
 ║   • They handle: K8s, terraform, scaling                     ║
 ╚════════════════════════════════════════════════════════════════╝
@@ -161,36 +161,36 @@ Each MCP returns:
 
 ### Profile 2: QA/Release Manager
 
-**Typical Tools Used**: QAZilla, test-mcp, pipeline-mcp, quality-gates-system
+**Typical Tools Used**: QA-Engineer, test-mcp, pipeline-mcp, quality-gates-system
 
-#### When calling QAZilla:
+#### When calling QA-Engineer:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ QAZilla: Complete QA Workflow                                 ║
+║ QA-Engineer: Complete QA Workflow                                 ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Orchestrate full testing + release quality gates        ║
 ║                                                                 ║
 ║ FULL WORKFLOW (2-3 weeks):                                    ║
 ║   WEEK 1: Planning                                            ║
-║     • qazilla.create_test_plan(feature="User Auth", ...)    ║
-║     • qazilla.generate_test_scenarios(category="auth_flow")  ║
+║     • qa-engineer.create_test_plan(feature="User Auth", ...)    ║
+║     • qa-engineer.generate_test_scenarios(category="auth_flow")  ║
 ║                                                                 ║
 ║   WEEK 2: Execution                                           ║
-║     • qazilla.run_e2e_tests(base_url="dev.internal")        ║
-║     • qazilla.generate_uat_checklist(feature="User Auth")    ║
-║     • qazilla.run_checklist() to validate                    ║
+║     • qa-engineer.run_e2e_tests(base_url="dev.internal")        ║
+║     • qa-engineer.generate_uat_checklist(feature="User Auth")    ║
+║     • qa-engineer.run_checklist() to validate                    ║
 ║                                                                 ║
 ║   WEEK 3: Release                                             ║
-║     • qazilla.generate_quality_gate(gate_name="UAT Pass")    ║
+║     • qa-engineer.generate_quality_gate(gate_name="UAT Pass")    ║
 ║     • pipeline.promote_service() when all gates pass         ║
-║     • qazilla.generate_regression_suite() for next release   ║
+║     • qa-engineer.generate_regression_suite() for next release   ║
 ║                                                                 ║
 ║ KEY METRICS:                                                   ║
 ║   • Test Coverage: Target >85% (backend), >70% (frontend)    ║
 ║   • Pass Rate: 100% before promotion                          ║
 ║   • Test Execution Time: <30 min for full suite              ║
 ║                                                                 ║
-║ SHORTCUT: qazilla.generate_k6_performance_test() for load    ║
+║ SHORTCUT: qa-engineer.generate_k6_performance_test() for load    ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
@@ -228,23 +228,23 @@ Each MCP returns:
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-#### When calling SecZilla:
+#### When calling Security:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ SecZilla: Security Testing Before Release                     ║
+║ Security: Security Testing Before Release                     ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Validate security controls before production            ║
 ║                                                                 ║
 ║ BEFORE HOMOL PROMOTION:                                       ║
-║   seczilla.run_security_scan(repo_path="./platform-x")      ║
+║   security.run_security_scan(repo_path="./platform-x")      ║
 ║   → Detects: SQL injection, hardcoded secrets, vulns         ║
 ║                                                                 ║
 ║ REQUIRED GATE:                                                ║
-║   BEFORE homol: seczilla results must be CLEARED             ║
+║   BEFORE homol: security results must be CLEARED             ║
 ║   → pipeline won't promote until security OK                  ║
 ║                                                                 ║
 ║ DEPENDENCY RISKS:                                             ║
-║   seczilla.check_dependencies() before production             ║
+║   security.check_dependencies() before production             ║
 ║   → Blocks if CRITICAL vulnerabilities found                 ║
 ║                                                                 ║
 ║ SLA: Security gate must pass before Prod                      ║
@@ -255,35 +255,35 @@ Each MCP returns:
 
 ### Profile 3: Security/Compliance Officer
 
-**Typical Tools Used**: SecZilla, ai-governance-mcp, audit-mcp, docs-mcp
+**Typical Tools Used**: Security, ai-governance-mcp, audit-mcp, docs-mcp
 
-#### When calling SecZilla:
+#### When calling Security:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ SecZilla: Complete Threat & Control Management               ║
+║ Security: Complete Threat & Control Management               ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Architecture + threat modeling + evidence collection    ║
 ║                                                                 ║
 ║ THREAT MODELING WORKFLOW:                                     ║
-║   1. New feature → seczilla.generate_threat_model(app, arch) ║
+║   1. New feature → security.generate_threat_model(app, arch) ║
 ║   2. Review threats + map to OWASP Top 10                    ║
-║   3. seczilla.generate_security_controls(threats)            ║
-║   4. Document in ADR: seczilla.generate_security_architecture║
+║   3. security.generate_security_controls(threats)            ║
+║   4. Document in ADR: security.generate_security_architecture║
 ║   5. Notify teams: Controls required for implementation      ║
 ║                                                                 ║
 ║ DURING DEVELOPMENT:                                           ║
 ║   Teams implement controls →                                  ║
-║   seczilla.validate_security_controls(threats, evidence)     ║
+║   security.validate_security_controls(threats, evidence)     ║
 ║   → Confirm all threats mitigated                             ║
 ║                                                                 ║
 ║ BEFORE RELEASE:                                               ║
-║   seczilla.run_security_scan(repo_path)                      ║
-║   seczilla.validate_threat_model(threats, scan_evidence)     ║
+║   security.run_security_scan(repo_path)                      ║
+║   security.validate_threat_model(threats, scan_evidence)     ║
 ║   → All threats verified by evidence                          ║
 ║                                                                 ║
 ║ COMPLIANCE REPORTING:                                         ║
 ║   Audit trail maintained in audit-mcp                         ║
-║   Evidence stored in seczilla.db                              ║
+║   Evidence stored in security.db                              ║
 ║   Ready for: SOC 2, GDPR, NIST audits                        ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
@@ -332,22 +332,22 @@ Each MCP returns:
 
 ### Profile 4: DevOps/SRE Engineer
 
-**Typical Tools Used**: OpsZilla, infra-mcp, pipeline-mcp, services-mcp, zilla-observatory
+**Typical Tools Used**: DevOps, infra-mcp, pipeline-mcp, services-mcp, devteam-observatory
 
-#### When calling OpsZilla:
+#### When calling DevOps:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ OpsZilla: Infrastructure Design & Deployment                  ║
+║ DevOps: Infrastructure Design & Deployment                  ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Design deployment architecture, templates, K8s manifests║
 ║                                                                 ║
 ║ DESIGN PHASE:                                                  ║
-║   opszilla.generate_terraform_module(                         ║
+║   devops.generate_terraform_module(                         ║
 ║     cloud_provider="gcp",                                     ║
 ║     resources=["compute", "database", "networking"]           ║
 ║   )                                                             ║
 ║                                                                 ║
-║   opszilla.generate_kubernetes_manifest(                      ║
+║   devops.generate_kubernetes_manifest(                      ║
 ║     application="platform-gateway",                           ║
 ║     replicas=3,                                               ║
 ║     resources={cpu: "500m", memory: "512Mi"}                 ║
@@ -362,10 +362,10 @@ Each MCP returns:
 ║ DEPLOYMENT PHASE (→ deploy-mcp):                             ║
 ║   deploy-mcp.deploy(service="platform-gateway", env="prod")  ║
 ║   services-mcp.check_health(service)                          ║
-║   zilla-observatory.get_service_metrics(service)             ║
+║   devteam-observatory.get_service_metrics(service)             ║
 ║                                                                 ║
 ║ MONITORING & AUTO-REMEDIATION:                                ║
-║   zilla-observatory.configure_alert(metric, threshold)       ║
+║   devteam-observatory.configure_alert(metric, threshold)       ║
 ║   If metric breaches → auto-scaling or paging                ║
 ╚════════════════════════════════════════════════════════════════╝
 ```
@@ -400,33 +400,33 @@ Each MCP returns:
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-#### When calling zilla-observatory:
+#### When calling devteam-observatory:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ Zilla-Observatory: Real-Time Monitoring & Dashboards          ║
+║ DevTeam-Observatory: Real-Time Monitoring & Dashboards          ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Monitor ecosystem health, dashboards, alerts, SLA       ║
 ║                                                                 ║
 ║ QUICK HEALTH CHECK:                                           ║
-║   zilla-observatory.get_ecosystem_health()                    ║
+║   devteam-observatory.get_ecosystem_health()                    ║
 ║   → Returns: {services: 40, healthy: 38, unhealthy: 2}       ║
 ║                                                                 ║
 ║ SERVICE METRICS:                                              ║
-║   zilla-observatory.get_service_metrics(                      ║
+║   devteam-observatory.get_service_metrics(                      ║
 ║     service="platform-gateway",                               ║
 ║     metrics=["error_rate", "p95_latency", "throughput"]      ║
 ║   )                                                             ║
 ║   → Last 1h, 24h, 7d, 30d windows                             ║
 ║                                                                 ║
 ║ ALERTS:                                                        ║
-║   zilla-observatory.configure_alert(                          ║
+║   devteam-observatory.configure_alert(                          ║
 ║     metric="error_rate",                                      ║
 ║     threshold=0.01,  // 1%                                    ║
 ║     action="page_on_call"                                     ║
 ║   )                                                             ║
 ║                                                                 ║
 ║ DASHBOARDS:                                                    ║
-║   zilla-observatory.generate_grafana_dashboard(...)           ║
+║   devteam-observatory.generate_grafana_dashboard(...)           ║
 ║   → Real-time view of ecosystem + services                    ║
 ║                                                                 ║
 ║ ON-CALL INCIDENT:                                             ║
@@ -441,39 +441,39 @@ Each MCP returns:
 
 ### Profile 5: Product Manager
 
-**Typical Tools Used**: ProductZilla, POZilla, analytics-mcp, scheduler-mcp
+**Typical Tools Used**: Product-Manager, Product-Owner, analytics-mcp, scheduler-mcp
 
-#### When calling ProductZilla:
+#### When calling Product-Manager:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ ProductZilla: Product Strategy & Roadmap                      ║
+║ Product-Manager: Product Strategy & Roadmap                      ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Define product direction, features, success metrics     ║
 ║                                                                 ║
 ║ QUARTERLY PLANNING:                                           ║
-║   1. productzilla.analyze_product_problem(problem_statement) ║
-║   2. productzilla.define_product_vision()                    ║
+║   1. product-manager.analyze_product_problem(problem_statement) ║
+║   2. product-manager.define_product_vision()                    ║
 ║      → Target users, market, 5-year vision                   ║
-║   3. productzilla.define_product_metrics()                   ║
+║   3. product-manager.define_product_metrics()                   ║
 ║      → KPIs: user adoption, NPS, revenue impact             ║
-║   4. productzilla.map_user_journey()                         ║
+║   4. product-manager.map_user_journey()                         ║
 ║      → Understanding user touchpoints                         ║
-║   5. productzilla.map_user_personas()                        ║
+║   5. product-manager.map_user_personas()                        ║
 ║      → Market segments + personas                             ║
 ║                                                                 ║
 ║ FEATURE DEFINITION:                                           ║
-║   productzilla.generate_feature_spec(                        ║
+║   product-manager.generate_feature_spec(                        ║
 ║     feature="User Onboarding",                               ║
 ║     target_user="New users < 1 week"                         ║
 ║   )                                                             ║
 ║   → Acceptance criteria, user value, scope                    ║
 ║                                                                 ║
 ║ HANDOFF TO ENGINEERING:                                       ║
-║   productzilla.generate_handoff_to_engineering()             ║
+║   product-manager.generate_handoff_to_engineering()             ║
 ║   → Requirements for dev + ops + QA                          ║
 ║                                                                 ║
 ║ LAUNCH PLANNING:                                              ║
-║   productzilla.generate_go_to_market_brief()                 ║
+║   product-manager.generate_go_to_market_brief()                 ║
 ║   → Target segment, messaging, channels, timing              ║
 ║                                                                 ║
 ║ MEASUREMENT:                                                   ║
@@ -485,28 +485,28 @@ Each MCP returns:
 ╚════════════════════════════════════════════════════════════════╝
 ```
 
-#### When calling POZilla:
+#### When calling Product-Owner:
 ```
 ╔════════════════════════════════════════════════════════════════╗
-║ POZilla: Sprint Planning & Backlog Management                 ║
+║ Product-Owner: Sprint Planning & Backlog Management                 ║
 ╠════════════════════════════════════════════════════════════════╣
 ║ Role: Translate features into prioritized user stories        ║
 ║                                                                 ║
 ║ FEATURE BREAKDOWN:                                            ║
-║   pozilla.generate_feature_breakdown(                        ║
+║   product-owner.generate_feature_breakdown(                        ║
 ║     feature="User Onboarding"                                 ║
 ║   )                                                             ║
 ║   → Breaks into 8-12 stories                                  ║
 ║                                                                 ║
 ║ BACKLOG PRIORITIZATION:                                       ║
-║   pozilla.prioritize_backlog_items(                          ║
+║   product-owner.prioritize_backlog_items(                          ║
 ║     framework="RICE",  // Reach × Impact × Confidence / Effort║
 ║     items=[story1, story2, ...]                              ║
 ║   )                                                             ║
 ║   → Ordered by value                                          ║
 ║                                                                 ║
 ║ SPRINT PREPARATION:                                           ║
-║   pozilla.prepare_sprint_backlog(                            ║
+║   product-owner.prepare_sprint_backlog(                            ║
 ║     stories=[...],                                            ║
 ║     sprint_days=10,                                           ║
 ║     team_velocity=40  // story points per sprint              ║
@@ -514,13 +514,13 @@ Each MCP returns:
 ║   → Stories fit in sprint, ordered                             ║
 ║                                                                 ║
 ║ ACCEPTANCE CRITERIA:                                          ║
-║   pozilla.generate_acceptance_criteria(                      ║
+║   product-owner.generate_acceptance_criteria(                      ║
 ║     story="As a user, I want to reset password"             ║
 ║   )                                                             ║
 ║   → GIVEN/WHEN/THEN format (testable)                       ║
 ║                                                                 ║
 ║ RELEASE NOTES:                                                 ║
-║   pozilla.generate_release_notes(                            ║
+║   product-owner.generate_release_notes(                            ║
 ║     version="v2.1.0",                                         ║
 ║     features=[...],  // New features                          ║
 ║     fixes=[...]      // Bug fixes                             ║
@@ -571,7 +571,7 @@ export async function get_resource_prompt(req: ResourcePromptRequest): Promise<R
   };
   
   return {
-    mcp_name: "qazilla-mcp",
+    mcp_name: "qa-engineer-mcp",
     calling_profile: profile,
     primary_resource_prompt: prompts[profile],
     quick_start: [...],
@@ -603,12 +603,12 @@ When a developer calls an MCP in Claude Code, the harness can:
 ├─ Detects: user_role = "developer"
 ├─ Session objective: "Implement user authentication"
 │
-├─ Dev calls: backzilla.analyze_backend_requirement()
+├─ Dev calls: backend.analyze_backend_requirement()
 │  └─ Gets prompt:
 │     "Quick backend design. Focus on API contracts + data models.
 │      Common: generate_fastapi_router() → generate_database_schema() → tests"
 │
-├─ Dev calls: qazilla.generate_unit_tests()
+├─ Dev calls: qa-engineer.generate_unit_tests()
 │  └─ Gets prompt:
 │     "Quick test generation. Generate BEFORE implementation (TDD).
 │      Then: qa-mcp.run_unit_tests() to verify.
@@ -629,7 +629,7 @@ When a developer calls an MCP in Claude Code, the harness can:
 ├─ Detects: user_role = "qa_manager"
 ├─ Session objective: "QA & Release auth feature"
 │
-├─ QA calls: qazilla.create_test_plan()
+├─ QA calls: qa-engineer.create_test_plan()
 │  └─ Gets prompt:
 │     "Full QA toolkit. Complete workflow:
 │      1. create_test_plan()
@@ -645,7 +645,7 @@ When a developer calls an MCP in Claude Code, the harness can:
 │      dev → homol (auto-deploy + smoke tests)
 │      homol → prod (manual approval + blue-green)"
 │
-└─ QA calls: zilla-observatory (if ops team)
+└─ QA calls: devteam-observatory (if ops team)
    └─ Gets prompt: "Monitor prod health post-release"
 ```
 

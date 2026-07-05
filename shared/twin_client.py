@@ -1,4 +1,4 @@
-"""TwinClient — cliente HTTP para o agent-twin-mcp-server.
+"""TwinClient — cliente HTTP para o dev-twin-mcp-server.
 
 Importado por outros MCPs para saber quem está operando na sessão atual
 sem depender de Claude como intermediário. Fornece acesso a contexto
@@ -39,7 +39,7 @@ class TwinClient(BaseHTTPClient):
         return cls(base_url=f"http://127.0.0.1:{port}", token=token)
 
     def is_authenticated(self) -> bool:
-        """Verifica se há sessão ativa no agent-twin."""
+        """Verifica se há sessão ativa no dev-twin."""
         result = self._get("/session/user")
         return result is not None
 

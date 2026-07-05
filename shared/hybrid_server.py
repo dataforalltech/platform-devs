@@ -15,7 +15,7 @@ class HybridMCPServer:
     """
     Runs MCP protocol on stdio (for Claude, mcp-registry) + HTTP REST API (for gateway, cross-MCP).
     Usage:
-        server = HybridMCPServer("qazilla-mcp-server", _TOOLS, _DISPATCH)
+        server = HybridMCPServer("qa-engineer-mcp-server", _TOOLS, _DISPATCH)
         await server.run()
     """
 

@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-import os
-
-import asyncio
 import json
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -345,6 +343,38 @@ assert set(_TOOL_SCHEMAS.keys()) == _EXPECTED, (
 
 
 # ---------------------------------------------------------------------- #
+# Escopo mínimo por ferramenta (least privilege)                          #
+# análise/scan/validação -> docs:read ; geração/publicação -> docs:write  #
+# ---------------------------------------------------------------------- #
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # scan / análise
+    "scan_docs": "docs:read",
+    "search_docs": "docs:read",
+    "get_doc_tree": "docs:read",
+    # validação
+    "validate_doc": "docs:read",
+    "check_links": "docs:read",
+    "check_required_docs": "docs:read",
+    "lint_markdown": "docs:read",
+    # padrões / auditoria (análise)
+    "check_doc_standards": "docs:read",
+    "audit_repo": "docs:read",
+    "find_stale_docs": "docs:read",
+    "get_audit_history": "docs:read",
+    "generate_doc_report": "docs:read",
+    # templates (consulta de catálogo)
+    "list_templates": "docs:read",
+    # geração / publicação de docs
+    "generate_doc": "docs:write",
+}
+SCOPES_SUPPORTED = ["docs:read", "docs:write"]
+
+assert set(SCOPE_FOR_TOOL.keys()) == _EXPECTED, (
+    f"SCOPE_FOR_TOOL mismatch: {set(SCOPE_FOR_TOOL.keys()) ^ _EXPECTED}"
+)
+
+
+# ---------------------------------------------------------------------- #
 # Server                                                                  #
 # ---------------------------------------------------------------------- #
 def _build_http_app() -> FastAPI:
@@ -510,31 +540,34 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware.
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _settings, _store, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("DOCS_RESOURCE", "http://localhost:7111/mcp"),
+        prm_url=os.getenv(
+            "DOCS_PRM_URL",
+            "http://localhost:7111/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7111")))
 
 
 if __name__ == "__main__":

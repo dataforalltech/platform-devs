@@ -24,7 +24,7 @@ app = FastAPI(
 # All Python MCPs run on port 7100 internally; config-mcp uses 7099.
 MCP_SERVICES = {
     # System MCPs (Python)
-    "agent-twin-mcp":   {"host": "agent-twin-mcp",   "port": 7100, "type": "system"},
+    "dev-twin-mcp":   {"host": "dev-twin-mcp",   "port": 7100, "type": "system"},
     "config-mcp":       {"host": "config-mcp",        "port": 7099, "type": "system"},
     "session-mcp":      {"host": "session-mcp",       "port": 7100, "type": "system"},
     "audit-mcp":        {"host": "audit-mcp",         "port": 7100, "type": "system"},
@@ -37,15 +37,15 @@ MCP_SERVICES = {
     "test-mcp":         {"host": "test-mcp",          "port": 7100, "type": "system"},
     "ai-governance-mcp":{"host": "ai-governance-mcp", "port": 7100, "type": "system"},
 
-    # Zilla MCPs (Node.js)
-    "archzilla-mcp":    {"host": "archzilla-mcp",    "port": 7100, "type": "zilla"},
-    "backzilla-mcp":    {"host": "backzilla-mcp",    "port": 7100, "type": "zilla"},
-    "frontzilla-mcp":   {"host": "frontzilla-mcp",   "port": 7100, "type": "zilla"},
-    "opszilla-mcp":     {"host": "opszilla-mcp",     "port": 7100, "type": "zilla"},
-    "pozilla-mcp":      {"host": "pozilla-mcp",      "port": 7100, "type": "zilla"},
-    "productzilla-mcp": {"host": "productzilla-mcp", "port": 7100, "type": "zilla"},
-    "qazilla-mcp":      {"host": "qazilla-mcp",      "port": 7100, "type": "zilla"},
-    "seczilla-mcp":     {"host": "seczilla-mcp",     "port": 7100, "type": "zilla"},
+    # DevTeam MCPs (Node.js)
+    "architecture-mcp":    {"host": "architecture-mcp",    "port": 7100, "type": "devteam"},
+    "backend-mcp":    {"host": "backend-mcp",    "port": 7100, "type": "devteam"},
+    "frontend-mcp":   {"host": "frontend-mcp",   "port": 7100, "type": "devteam"},
+    "devops-mcp":     {"host": "devops-mcp",     "port": 7100, "type": "devteam"},
+    "product-owner-mcp":      {"host": "product-owner-mcp",      "port": 7100, "type": "devteam"},
+    "product-manager-mcp": {"host": "product-manager-mcp", "port": 7100, "type": "devteam"},
+    "qa-engineer-mcp":      {"host": "qa-engineer-mcp",      "port": 7100, "type": "devteam"},
+    "security-mcp":     {"host": "security-mcp",     "port": 7100, "type": "devteam"},
 }
 
 
@@ -159,7 +159,7 @@ async def get_service(name: str):
 
 @app.get("/services/type/{mcp_type}")
 async def list_by_type(mcp_type: str):
-    """List MCPs by type (system or zilla)"""
+    """List MCPs by type (system or devteam)"""
     await registry.ensure_discovered()
 
     services = [
@@ -188,7 +188,7 @@ async def stats():
         "offline_services": len(registry.services) - len(online_services),
         "total_tools": total_tools,
         "system_mcps": sum(1 for s in online_services if s["type"] == "system"),
-        "zilla_mcps": sum(1 for s in online_services if s["type"] == "zilla")
+        "devteam_mcps": sum(1 for s in online_services if s["type"] == "devteam")
     }
 
 

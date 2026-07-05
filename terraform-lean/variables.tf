@@ -25,13 +25,13 @@ variable "cost_center" {
 
 variable "region" {
   type    = string
-  default = "sa-east-1"
+  default = "us-east-1"
 }
 
 variable "az" {
   description = "AZ única (ambiente enxuto, sem HA)."
   type        = string
-  default     = "sa-east-1a"
+  default     = "us-east-1a"
 }
 
 variable "vpc_cidr" {

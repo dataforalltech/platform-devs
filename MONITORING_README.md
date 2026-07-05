@@ -1,8 +1,8 @@
-# Monitoring & Log Aggregation for Zilla MCPs
+# Monitoring & Log Aggregation for DevTeam MCPs
 
 ## Overview
 
-Production-ready monitoring infrastructure for all 10 Zilla MCPs with:
+Production-ready monitoring infrastructure for all 10 DevTeam MCPs with:
 - ✅ Log rotation and archival
 - ✅ Continuous health monitoring
 - ✅ Performance metrics collection
@@ -20,14 +20,14 @@ Production-ready monitoring infrastructure for all 10 Zilla MCPs with:
 
 **Output**:
 ```
-📊 Zilla MCPs Status Dashboard
+📊 DevTeam MCPs Status Dashboard
 ==============================
 
 🔍 Running Servers:
   Active: 10 / 10
 
 📝 Recent Log Activity (last 5 entries):
-  qazilla: [2026-05-11T12:10:34.234567] ✅ PostgreSQL connected
+  qa-engineer: [2026-05-11T12:10:34.234567] ✅ PostgreSQL connected
   ...
 
 💾 Log Storage Usage:
@@ -48,7 +48,7 @@ python3 ~/.platform/monitoring/monitor_health.py
 
 **Output**:
 ```
-🔍 Monitoring 10 Zillas every 30s
+🔍 Monitoring 10 DevTeam every 30s
 Press Ctrl+C to stop
 
 [12:10:34] Healthy: 10/10
@@ -75,7 +75,7 @@ Press Ctrl+C to stop
 
 **Purpose**: Prevent logs from consuming unlimited disk space
 
-**Configuration**: `/tmp/zillas-logrotate`
+**Configuration**: `/tmp/devteam-logrotate`
 ```
 ~/.platform/logs/*.log {
     daily              # Rotate daily
@@ -88,8 +88,8 @@ Press Ctrl+C to stop
 
 **Installation** (requires sudo):
 ```bash
-sudo cp /tmp/zillas-logrotate /etc/logrotate.d/zillas
-logrotate -f /etc/logrotate.d/zillas  # Test
+sudo cp /tmp/devteam-logrotate /etc/logrotate.d/devteam
+logrotate -f /etc/logrotate.d/devteam  # Test
 ```
 
 **Manual rotation**:
@@ -137,8 +137,8 @@ tail -f ~/.platform/logs/alerts.log
 **Metrics collected**:
 ```
 Server Status:
-  qazilla (PID 12345): 45MB memory, 2.3% CPU
-  seczilla (PID 12346): 42MB memory, 1.8% CPU
+  qa-engineer (PID 12345): 45MB memory, 2.3% CPU
+  security (PID 12346): 42MB memory, 1.8% CPU
   ...
 
 File Descriptors:
@@ -179,7 +179,7 @@ Database Connections:
 
 **Alert example**:
 ```
-[2026-05-11T12:11:34.234567] ALERT: Unhealthy servers: qazilla, seczilla
+[2026-05-11T12:11:34.234567] ALERT: Unhealthy servers: qa-engineer, security
 ```
 
 ---
@@ -208,19 +208,19 @@ All logs stored in `~/.platform/logs/`:
 
 | File | Purpose | Rotation |
 |------|---------|----------|
-| `qazilla.log` | qazilla server output | Daily (keep 7) |
-| `seczilla.log` | seczilla server output | Daily (keep 7) |
-| ... (8 more Zilla logs) | | |
+| `qa-engineer.log` | qa-engineer server output | Daily (keep 7) |
+| `security.log` | security server output | Daily (keep 7) |
+| ... (8 more DevTeam logs) | | |
 | `monitoring.log` | Health check history | Manual |
 | `alerts.log` | Alert events | Manual |
 | `metrics.log` | Performance metrics | Manual |
 
 **View logs**:
 ```bash
-# Single Zilla
-tail -f ~/.platform/logs/qazilla.log
+# Single DevTeam
+tail -f ~/.platform/logs/qa-engineer.log
 
-# All Zillas (with filtering)
+# All DevTeam (with filtering)
 tail -f ~/.platform/logs/*.log | grep "ERROR\|ALERT"
 
 # Specific time period
@@ -305,7 +305,7 @@ watch -n 3600 ~/.platform/monitoring/show_status.sh
 #   4. New Relic
 
 # Ship logs to central system:
-# rsync -a ~/.platform/logs/ central-server:/logs/zillas/
+# rsync -a ~/.platform/logs/ central-server:/logs/devteam/
 ```
 
 ---
@@ -338,7 +338,7 @@ Total needed: 100MB (safety margin)
 
 ### Issue: No logs being generated
 ```bash
-# Verify Zillas are running
+# Verify DevTeam are running
 ps aux | grep "_mcp.py" | grep -v grep
 
 # Check log directory
@@ -351,10 +351,10 @@ touch ~/.platform/logs/test.log && rm ~/.platform/logs/test.log
 ### Issue: Monitoring script says all servers are down
 ```bash
 # Check if servers are actually running
-~/.platform/scripts/health_check_zillas.sh
+~/.platform/scripts/health_check_devteam.sh
 
 # Start servers if needed
-~/.platform/scripts/start_all_zillas.sh
+~/.platform/scripts/start_all_devteam.sh
 
 # Re-run monitoring
 python3 ~/.platform/monitoring/monitor_health.py 60
@@ -369,7 +369,7 @@ du -sh ~/.platform/logs/
 ~/.platform/monitoring/archive_logs.sh
 
 # Check if logrotate is working
-sudo logrotate -f /etc/logrotate.d/zillas
+sudo logrotate -f /etc/logrotate.d/devteam
 
 # List archived logs
 ls -lh ~/.platform/logs/archive/
@@ -414,7 +414,7 @@ healthy_servers = Gauge(...)
 ```bash
 # Add to collect_metrics.sh:
 aws logs put-log-events \
-  --log-group-name /aws/zillas \
+  --log-group-name /aws/devteam \
   --log-stream-name metrics \
   --log-events file=~/.platform/logs/metrics.log
 ```
@@ -476,7 +476,7 @@ python3 ~/.platform/monitoring/monitor_health.py 60       # Monitor for 60s
 ~/.platform/monitoring/collect_metrics.sh                 # Collect metrics
 
 # Log Management
-tail -f ~/.platform/logs/qazilla.log                      # Follow log
+tail -f ~/.platform/logs/qa-engineer.log                      # Follow log
 grep "ERROR" ~/.platform/logs/*.log                       # Search errors
 ~/.platform/monitoring/archive_logs.sh                    # Archive old logs
 du -sh ~/.platform/logs/                                  # Check size

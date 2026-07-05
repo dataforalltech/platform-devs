@@ -1,0 +1,48 @@
+# Gate de CI do "Definition of Done" (DoD) dos MCPs — MCP_SERVICE_STANDARD.md §11.
+#
+# Tres passos:
+#   1. Gate ESTATICO (scripts/check_mcp_dod.py): impoe os criterios do §11 em cada MCP migrado.
+#   2. E2E do piloto (tests/e2e/test_oauth_security_pilot.py): auth-mcp emite token -> Security valida.
+#   3. Testes do gateway (pytest em mcp-gateway/tests).
+#
+# Gotcha de shadow: a raiz do repo tem pastas `mcp/` e `src/` que SOMBREIAM o SDK `mcp`
+# instalado via pip e o pacote `src` do gateway. Por isso:
+#   - o E2E NAO usa working-directory (ele resolve paths a partir de __file__ e cuida do shadow);
+#   - o pytest do gateway roda A PARTIR de mcp-gateway/ (working-directory), onde `src` = o do gateway.
+
+name: MCP Definition of Done
+
+on:
+  pull_request:
+  push:
+    branches: [develop, main]
+
+env:
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  mcp-dod:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instala dependencias minimas
+        run: |
+          python -m pip install --upgrade pip
+          pip install "mcp>=1.10" fastapi "uvicorn[standard]" python-multipart pyjwt cryptography bcrypt pytest pyyaml
+
+      - name: Passo 1 - Gate estatico do DoD (§11)
+        run: python scripts/check_mcp_dod.py
+
+      - name: Passo 2 - E2E do piloto OAuth (Security)
+        run: python tests/e2e/test_oauth_security_pilot.py
+
+      - name: Passo 3 - Testes do gateway
+        working-directory: mcp-gateway
+        run: python -m pytest tests -q

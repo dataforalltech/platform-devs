@@ -14,7 +14,7 @@ from src.persistence.tool_interceptor import ToolInterceptor
 
 MCP_REGISTRY = {
     # System MCPs
-    "agent-twin-mcp": "http://agent-twin-mcp:7100",
+    "dev-twin-mcp": "http://dev-twin-mcp:7100",
     "config-mcp": "http://config-mcp:7100",
     "session-mcp": "http://session-mcp:7100",
     "audit-mcp": "http://audit-mcp:7100",
@@ -26,15 +26,15 @@ MCP_REGISTRY = {
     "services-mcp": "http://services-mcp:7100",
     "test-mcp": "http://test-mcp:7100",
     "ai-governance-mcp": "http://ai-governance-mcp:7100",
-    # Zilla MCPs
-    "archzilla-mcp": "http://archzilla-mcp:7100",
-    "backzilla-mcp": "http://backzilla-mcp:7100",
-    "frontzilla-mcp": "http://frontzilla-mcp:7100",
-    "opszilla-mcp": "http://opszilla-mcp:7100",
-    "pozilla-mcp": "http://pozilla-mcp:7100",
-    "productzilla-mcp": "http://productzilla-mcp:7100",
-    "qazilla-mcp": "http://qazilla-mcp:7100",
-    "seczilla-mcp": "http://seczilla-mcp:7100",
+    # DevTeam MCPs
+    "architecture-mcp": "http://architecture-mcp:7100",
+    "backend-mcp": "http://backend-mcp:7100",
+    "frontend-mcp": "http://frontend-mcp:7100",
+    "devops-mcp": "http://devops-mcp:7100",
+    "product-owner-mcp": "http://product-owner-mcp:7100",
+    "product-manager-mcp": "http://product-manager-mcp:7100",
+    "qa-engineer-mcp": "http://qa-engineer-mcp:7100",
+    "security-mcp": "http://security-mcp:7100",
 }
 
 async def _get_user_or_fail(authorization: str | None):

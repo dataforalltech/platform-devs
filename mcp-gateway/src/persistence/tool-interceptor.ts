@@ -9,7 +9,7 @@ interface PersistenceRule {
 }
 
 const PERSISTENCE_RULES: PersistenceRule[] = [
-  // QAZilla - Test Planning
+  // QA-Engineer - Test Planning
   {
     pattern: /generate_test_plan/,
     table: 'test_plans',
@@ -61,7 +61,7 @@ const PERSISTENCE_RULES: PersistenceRule[] = [
     }),
   },
 
-  // SecZilla - Threat Modeling
+  // Security - Threat Modeling
   {
     pattern: /generate_threat_model/,
     table: 'threat_models',
@@ -84,7 +84,7 @@ const PERSISTENCE_RULES: PersistenceRule[] = [
     }),
   },
 
-  // ArchZilla - Architecture
+  // Architecture - Architecture
   {
     pattern: /generate_solution_blueprint|generate_c4_diagram|generate_architecture/,
     table: 'architectures',

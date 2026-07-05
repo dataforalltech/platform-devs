@@ -2,11 +2,11 @@
 
 ## Overview
 
-Model Context Protocol (MCP) é um padrão aberto para comunicação entre clients e servidores especializados via JSON-RPC 2.0. Este guia documenta como construir MCPs que funcionam corretamente em Claude Code, baseado em 18 system MCPs (Python) e 8 zilla MCPs (Node.js/TypeScript).
+Model Context Protocol (MCP) é um padrão aberto para comunicação entre clients e servidores especializados via JSON-RPC 2.0. Este guia documenta como construir MCPs que funcionam corretamente em Claude Code, baseado em 18 system MCPs (Python) e 8 devteam MCPs (Node.js/TypeScript).
 
 **Especificação:** Model Context Protocol 2024-11-05
 **Repo:** /home/dev/repos/platform-devs
-**Total de MCPs:** 26 (18 system + 8 zilla, 270+ tools)
+**Total de MCPs:** 26 (18 system + 8 devteam, 270+ tools)
 
 ---
 
@@ -157,12 +157,12 @@ if __name__ == "__main__":
 **Quando preferir Node.js:**
 - Quando você precisa de **Resources** além de Tools
 - Quando você quer **Zod schemas** para validação forte
-- Quando você precisa de **profile-based customization** (como archzilla)
+- Quando você precisa de **profile-based customization** (como architecture)
 - Quando você tem **database queries complexas** (sqlite com WAL)
 
-**Estrutura típica (archzilla-mcp-server):**
+**Estrutura típica (architecture-mcp-server):**
 ```
-archzilla-mcp-server/
+architecture-mcp-server/
 ├── src/
 │   ├── server.ts           # Main MCP server (stdio transport)
 │   ├── tools/
@@ -170,7 +170,7 @@ archzilla-mcp-server/
 │   ├── db/
 │   │   └── store.ts        # SQLite store
 │   ├── prompts/
-│   │   └── archzillaPrompt.ts
+│   │   └── architecturePrompt.ts
 │   └── config/
 │       └── settings.ts
 ├── dist/
@@ -180,14 +180,14 @@ archzilla-mcp-server/
 ```
 
 **Casos de uso no projeto:**
-- `archzilla-mcp` (18 tools + system prompt + resources)
-- `backzilla-mcp` (14 tools)
-- `frontzilla-mcp` (26 tools)
-- `opszilla-mcp` (19 tools)
-- `pozilla-mcp` (17 tools)
-- `productzilla-mcp` (18 tools)
-- `qazilla-mcp` (33 tools)
-- `seczilla-mcp` (25 tools)
+- `architecture-mcp` (18 tools + system prompt + resources)
+- `backend-mcp` (14 tools)
+- `frontend-mcp` (26 tools)
+- `devops-mcp` (19 tools)
+- `product-owner-mcp` (17 tools)
+- `product-manager-mcp` (18 tools)
+- `qa-engineer-mcp` (33 tools)
+- `security-mcp` (25 tools)
 
 ### Comparação Técnica
 
@@ -315,9 +315,9 @@ archzilla-mcp-server/
       "command": "python3",
       "args": ["./config-mcp.py"]
     },
-    "archzilla-mcp": {
+    "architecture-mcp": {
       "command": "node",
-      "args": ["./archzilla-mcp-server/dist/server.js"]
+      "args": ["./architecture-mcp-server/dist/server.js"]
     }
   }
 }
@@ -383,7 +383,7 @@ Antes de commitar um novo MCP:
 
 ### Por que 100% Python não é viável
 
-**Razão:** Os zilla MCPs precisam de:
+**Razão:** Os devteam MCPs precisam de:
 1. **Strong typing** para tool schemas → Zod é melhor
 2. **System prompts como Resources** → recurso MCP avançado
 3. **Profile-based customization** → arquitetura complexa em TypeScript
@@ -394,7 +394,7 @@ Python pode fazer isso, mas Node.js/TypeScript é mais natural.
 ### Por que manter ambos
 
 - **Python:** 18 system MCPs são simples, stateless, rápido
-- **Node.js:** 8 zilla MCPs são domain-specific, stateful, com prompts
+- **Node.js:** 8 devteam MCPs são domain-specific, stateful, com prompts
 
 **Resultado:** 26 MCPs, 270+ tools, melhor para cada caso.
 
@@ -412,7 +412,7 @@ Python pode fazer isso, mas Node.js/TypeScript é mais natural.
 
 - MCP Spec: https://modelcontextprotocol.io/
 - System MCPs: `/home/dev/repos/platform-devs/*-mcp.py` (18 files)
-- Zilla MCPs: `/home/dev/repos/platform-devs/*zilla-mcp-server/src/server.ts` (8 folders)
+- DevTeam MCPs: `/home/dev/repos/platform-devs/*devteam-mcp-server/src/server.ts` (8 folders)
 - Config: `/home/dev/repos/platform-devs/.mcp.json`
 - Claude Code docs: https://claude.com/claude-code
 

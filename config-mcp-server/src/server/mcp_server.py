@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import os
 
-import asyncio
 import json
 import logging
 from typing import Any
@@ -423,7 +422,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "get_session_tenant_config": {
         "description": (
             "Retorna config do tenant da sessão autenticada atual. "
-            "Resolve tenant_id automaticamente via agent-twin-mcp (:7098) — "
+            "Resolve tenant_id automaticamente via dev-twin-mcp (:7098) — "
             "o agente não precisa conhecer o tenant_id."
         ),
         "schema": {
@@ -433,6 +432,51 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
 }
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
+# Escopo mínimo por ferramenta (least privilege). write = mutação; read = consulta. #
+#                                                                              #
+# ATENÇÃO — tools de credenciais lidam com SEGREDOS (credential_tool):         #
+#   Leitura de segredos (get_credential, list_credentials) fica em config:read #
+#   mas é SENSÍVEL — devolve/expõe metadados de credenciais.                   #
+#   Escrita/mutação de segredos (set_credential, set_credential_secure,        #
+#   delete_credential) e a importação de .env (push_env_to_store, que grava    #
+#   segredos no store) exigem config:write — marcadas como SENSÍVEL abaixo.    #
+# ─────────────────────────────────────────────────────────────────────────── #
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # ── Credentials — SENSÍVEL (segredos) ─────────────────────────────────── #
+    "get_credential": "config:read",          # SENSÍVEL: lê valor de segredo
+    "list_credentials": "config:read",        # SENSÍVEL: lista chaves de segredos
+    "set_credential": "config:write",         # SENSÍVEL: grava segredo
+    "set_credential_secure": "config:write",  # SENSÍVEL: grava segredo via getpass
+    "delete_credential": "config:write",      # SENSÍVEL: remove segredo
+    # ── Env ───────────────────────────────────────────────────────────────── #
+    "get_env_config": "config:read",
+    "list_environments": "config:read",
+    "read_env_file": "config:read",
+    "audit_env_files": "config:read",
+    "set_env_var": "config:write",
+    "sync_env_file": "config:write",
+    "redact_env_secrets": "config:write",
+    "push_env_to_store": "config:write",      # SENSÍVEL: importa segredos p/ o store
+    # ── Workspace ─────────────────────────────────────────────────────────── #
+    "get_workspace_config": "config:read",
+    "list_workspace_config": "config:read",
+    "set_workspace_config": "config:write",
+    # ── Sysinfo ───────────────────────────────────────────────────────────── #
+    "get_physical_info": "config:read",
+    # ── Tenants ───────────────────────────────────────────────────────────── #
+    "get_tenant_config": "config:read",
+    "list_tenants": "config:read",
+    "get_session_tenant_config": "config:read",
+    "set_tenant_config": "config:write",
+}
+SCOPES_SUPPORTED = ["config:read", "config:write"]
+
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL não cobre exatamente as tools de _TOOL_SCHEMAS"
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -603,30 +647,36 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, _store, _settings, http_app = build_server()
+    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware
+    com escopo por ferramenta (config:read / config:write).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _store, _settings, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("CONFIG_RESOURCE", "http://localhost:7100/mcp"),
+        prm_url=os.getenv(
+            "CONFIG_PRM_URL",
+            "http://localhost:7100/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")))
 
 
 if __name__ == "__main__":

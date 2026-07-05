@@ -10,7 +10,7 @@ from pathlib import Path
 # MCP Configuration: name -> port
 MCP_CONFIG = {
     "config-mcp": 7100,
-    "agent-twin-mcp": 7101,
+    "dev-twin-mcp": 7101,
     "session-mcp": 7102,
     "auth-mcp": 7103,
     "admin-mcp": 7104,

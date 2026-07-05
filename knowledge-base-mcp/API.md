@@ -118,6 +118,6 @@ Subscribe to webhooks for documentation changes.
 
 ## Integration Points
 
-- **Used by**: cross-zilla-validators, quality-gates-system, zilla-observatory
+- **Used by**: cross-devteam-validators, quality-gates-system, devteam-observatory
 - **Consumes**: File system (docs), Configuration (standards)
 - **API Format**: stdio (MCP standard)

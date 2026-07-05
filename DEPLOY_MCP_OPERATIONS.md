@@ -50,23 +50,23 @@ deploy-mcp::merge_branch(
 
 ### 1.2 — Criar PRs para Features em Desenvolvimento
 
-#### PR #1 — Phase 2 Cross-Zilla Validators
+#### PR #1 — Phase 2 Cross-DevTeam Validators
 ```bash
 deploy-mcp::create_pr(
   repo="platform-devs",
-  title="feat: Phase 2 — Cross-Zilla Validators (18 tools)",
+  title="feat: Phase 2 — Cross-DevTeam Validators (18 tools)",
   body="""
 ## Summary
-Implementação completa de 18 validadores cross-Zilla para:
-- FrontZilla (UI/UX validation)
-- BackZilla (API/Service validation)
-- QAZilla (Quality validation)
-- SecZilla (Security validation)
-- OpZilla (Infrastructure validation)
+Implementação completa de 18 validadores cross-DevTeam para:
+- Frontend (UI/UX validation)
+- Backend (API/Service validation)
+- QA-Engineer (Quality validation)
+- Security (Security validation)
+- OpDevTeam (Infrastructure validation)
 - And more...
 
 ## Linked Issues
-- Closes: #phase-2-cross-zilla
+- Closes: #phase-2-cross-devteam
 
 ## Test Plan
 - [ ] Unit tests (80%+ coverage)
@@ -81,7 +81,7 @@ Implementação completa de 18 validadores cross-Zilla para:
 - [ ] Changelog added
   """,
   base="main",
-  head="feature/cross-zilla-validators",
+  head="feature/cross-devteam-validators",
   draft=false,
   reviewers=["caiog"]
 )

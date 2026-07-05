@@ -14,8 +14,8 @@ Two working MCPs are now configured and verified functional in Claude Code.
 - **Implementation**: Minimal JSON-RPC 2.0 stdio server
 - **Use**: Baseline pattern for new MCPs
 
-### 2. agent-twin-mcp (Authentication & Session)
-- **File**: `agent-twin-mcp.py` 
+### 2. dev-twin-mcp (Authentication & Session)
+- **File**: `dev-twin-mcp.py` 
 - **Status**: ✅ Online with tools
 - **Tools**:
   - `authenticate` - Validate token and initialize session
@@ -40,9 +40,9 @@ Both MCPs are configured in:
       "args": ["test-mcp.py"],
       "cwd": "/home/dev/repos/platform-devs"
     },
-    "agent-twin-mcp": {
+    "dev-twin-mcp": {
       "command": "python3",
-      "args": ["agent-twin-mcp.py"],
+      "args": ["dev-twin-mcp.py"],
       "cwd": "/home/dev/repos/platform-devs"
     }
   }
@@ -82,16 +82,16 @@ Both MCPs verified working:
 # Test test-mcp
 echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | python3 test-mcp.py
 
-# Test agent-twin-mcp
-echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | python3 agent-twin-mcp.py
+# Test dev-twin-mcp
+echo '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' | python3 dev-twin-mcp.py
 ```
 
 ## Next Steps
 
-### To use agent-twin-mcp authentication:
+### To use dev-twin-mcp authentication:
 
 1. In Claude Code, select the `/mcp` menu
-2. Both `test-mcp` and `agent-twin-mcp` should appear as online
+2. Both `test-mcp` and `dev-twin-mcp` should appear as online
 3. Call `authenticate` with the demo token:
    ```
    token: "demo-token-001"
@@ -109,7 +109,7 @@ Follow the test-mcp pattern:
 
 ### Known Limitations (for future consideration):
 
-The Node.js-based "zilla" MCPs (archzilla, backzilla, etc.) in the repo still cannot connect because they have dependencies on external packages not available in this environment (`platform-service-template/lib/postgres_sync`). These would need to be either:
+The Node.js-based "devteam" MCPs (architecture, backend, etc.) in the repo still cannot connect because they have dependencies on external packages not available in this environment (`platform-service-template/lib/postgres_sync`). These would need to be either:
 
 1. Refactored to remove external dependencies
 2. Made available in the repo structure
@@ -120,7 +120,7 @@ Current focus is on Python-based MCPs which are simpler to manage in this enviro
 ## Files Changed
 
 - **Created**: `.mcp.json` - Root MCP configuration
-- **Created**: `agent-twin-mcp.py` - Working agent-twin MCP implementation  
+- **Created**: `dev-twin-mcp.py` - Working dev-twin MCP implementation  
 - **Updated**: `.claude/.mcp.json` - Synced with root configuration
 - **Existing**: `test-mcp.py` - Minimal baseline (unchanged)
 
@@ -128,7 +128,7 @@ Current focus is on Python-based MCPs which are simpler to manage in this enviro
 
 Resolved the "MCPs offline" issue by:
 1. Simplifying MCP architecture to follow JSON-RPC 2.0 pattern
-2. Creating working agent-twin-mcp with authentication tools
+2. Creating working dev-twin-mcp with authentication tools
 3. Removing broken dependency chains from complex implementations
 4. Verifying both MCPs communicate properly with Claude Code
 

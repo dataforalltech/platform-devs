@@ -12,7 +12,7 @@ Os MCPs estão **centralizados em HTTP** na VM `claude-dev`:
 │   ─────────────────────────────     │
 │   Docker Network                    │
 │   ├─ 18 System MCPs (7100-7116)     │
-│   ├─ 8 Zilla MCPs (7118-7125)       │
+│   ├─ 8 DevTeam MCPs (7118-7125)       │
 │   └─ Registry (8000)                │
 └─────────────────────────────────────┘
          ↑ (HTTP)

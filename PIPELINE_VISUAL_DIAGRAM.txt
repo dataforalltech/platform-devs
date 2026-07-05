@@ -1,17 +1,17 @@
 ================================================================================
-                    ZILLAS CI/CD PIPELINE ARCHITECTURE
+                    DEVTEAM CI/CD PIPELINE ARCHITECTURE
 ================================================================================
 
-                        COMPLETE 8-ZILLA ECOSYSTEM
+                        COMPLETE 8-DEVTEAM ECOSYSTEM
 
    ┌─────────────────────────────────────────────────────────────────────┐
    │                                                                       │
-   │  ArchZilla      BackZilla      FrontZilla      OpsZilla             │
+   │  Architecture      Backend      Frontend      DevOps             │
    │  (Architecture) (Backend)      (Frontend/UI)   (DevOps)             │
    │       │              │              │              │                │
    │       ├──────────────┼──────────────┼──────────────┤                │
    │                      │                              │                │
-   │  ProductZilla   POZilla       QAZilla       SecZilla               │
+   │  Product-Manager   Product-Owner       QA-Engineer       Security               │
    │  (Product)      (Project)     (Quality)     (Security)              │
    │       │              │              │              │                │
    │       └──────────────┼──────────────┼──────────────┘                │
@@ -20,9 +20,9 @@
    │          │   SHARED SUPPORT SYSTEMS          │                      │
    │          ├───────────────────────────────────┤                      │
    │          │ • knowledge-base-mcp              │                      │
-   │          │ • cross-zilla-validators         │                      │
+   │          │ • cross-devteam-validators         │                      │
    │          │ • quality-gates-system           │                      │
-   │          │ • zilla-observatory              │                      │
+   │          │ • devteam-observatory              │                      │
    │          └───────────────────────────────────┘                      │
    │                                                                       │
    └─────────────────────────────────────────────────────────────────────┘
@@ -65,8 +65,8 @@
     ┌──────────────────────────────────────────────┐
     │       DEV ENVIRONMENT ✓                      │
     │  ┌────────────────────────────────────────┐ │
-    │  │ All 8 Zillas deployed & running        │ │
-    │  │ Current: ArchZilla + BackZilla + ...   │ │
+    │  │ All 8 DevTeam deployed & running        │ │
+    │  │ Current: Architecture + Backend + ...   │ │
     │  └────────────────────────────────────────┘ │
     └──────────────────────────────────────────────┘
 
@@ -130,7 +130,7 @@
     ┌──────────────────────────────────────────────┐
     │       HML ENVIRONMENT ✓                      │
     │  ┌────────────────────────────────────────┐  │
-    │  │ All Zillas deployed for validation     │  │
+    │  │ All DevTeam deployed for validation     │  │
     │  │ Duration: 1-5 days (testing)           │  │
     │  │ Status: READY FOR PRODUCTION RELEASE   │  │
     │  └────────────────────────────────────────┘  │
@@ -199,7 +199,7 @@
     ┌──────────────────────────────────────────────┐
     │       PRODUCTION ENVIRONMENT ✓               │
     │  ┌────────────────────────────────────────┐  │
-    │  │ All 8 Zillas in production             │  │
+    │  │ All 8 DevTeam in production             │  │
     │  │ Serving live traffic                   │  │
     │  │ Observable health metrics active       │  │
     │  │ Incident response ready                │  │
@@ -211,7 +211,7 @@
                         MONITORING & OBSERVABILITY
 ================================================================================
 
-    zilla-observatory actively monitors:
+    devteam-observatory actively monitors:
 
     ┌─────────────────────────────────────────────────────────────┐
     │ REAL-TIME DASHBOARDS                                        │
@@ -224,21 +224,21 @@
     │ ├─ Blocked Services & Duration                            │
     │ └─ At-Risk Features (low coverage, long delays)           │
     │                                                              │
-    │ Per-Zilla Metrics                                           │
-    │ ├─ ArchZilla: Architecture changes/approvals              │
-    │ ├─ BackZilla: Test coverage, API changes                 │
-    │ ├─ FrontZilla: Accessibility, performance                │
-    │ ├─ OpsZilla: Deployment health, SLA metrics              │
-    │ ├─ ProductZilla: Feature adoption, metrics               │
-    │ ├─ POZilla: Sprint velocity, scope creep                 │
-    │ ├─ QAZilla: Test pass rate, bug escape                   │
-    │ └─ SecZilla: Vulnerability trends, scan results          │
+    │ Per-DevTeam Metrics                                           │
+    │ ├─ Architecture: Architecture changes/approvals              │
+    │ ├─ Backend: Test coverage, API changes                 │
+    │ ├─ Frontend: Accessibility, performance                │
+    │ ├─ DevOps: Deployment health, SLA metrics              │
+    │ ├─ Product-Manager: Feature adoption, metrics               │
+    │ ├─ Product-Owner: Sprint velocity, scope creep                 │
+    │ ├─ QA-Engineer: Test pass rate, bug escape                   │
+    │ └─ Security: Vulnerability trends, scan results          │
     │                                                              │
     │ ALERTS & NOTIFICATIONS                                     │
     │ ├─ Gate Failure → Slack #releases + developer            │
     │ ├─ Manual Approval Ready → Slack @releasemgr              │
     │ ├─ Health Check Failure → Page on-call ops               │
-    │ ├─ Security Scan Critical → Escalate to SecZilla          │
+    │ ├─ Security Scan Critical → Escalate to Security          │
     │ ├─ Promotion Stuck >4h → Manager review alert             │
     │ └─ Release Delayed → PM notification                      │
     │                                                              │
@@ -269,7 +269,7 @@
     ┌─────────────────────────────────────┐
     │ 3. Execute Rollback                  │
     │    pipeline-mcp.rollback(            │
-    │      service="archzilla",            │
+    │      service="architecture",            │
     │      env="prod",                     │
     │      to_version="v1.2.3",            │
     │      reason="Critical bug found",    │
@@ -322,7 +322,7 @@
     ├─ DEV: Not required
     ├─ HML: Not required
     ├─ PROD: REQUIRED - all checks must pass
-    └─ Evaluator: SecZilla / Security Scanner
+    └─ Evaluator: Security / Security Scanner
 
     health_check
     ├─ Input: Service health endpoint response

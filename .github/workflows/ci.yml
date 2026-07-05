@@ -26,7 +26,7 @@ jobs:
           pipeline-mcp-server,
           qa-mcp-server,
           deploy-mcp-server,
-          agent-twin-mcp-server,
+          dev-twin-mcp-server,
           config-mcp-server,
           infra-mcp-server,
           ai-governance-mcp-server,
@@ -74,7 +74,7 @@ jobs:
     strategy:
       matrix:
         server: [
-          frontzilla-pixelfera-mcp-server
+          frontend-pixelfera-mcp-server
         ]
     steps:
       - uses: actions/checkout@v4

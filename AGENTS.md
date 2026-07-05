@@ -134,7 +134,7 @@ todos seguem a Parte I.
 
 4. Ao finalizar todo o trabalho:
    ```
-   mcp__session-mcp__end_session(session_id, actor={type:"agent",id:"<NomeZilla>"}, rationale, final_summary)
+   mcp__session-mcp__end_session(session_id, actor={type:"agent",id:"<NomeDevTeam>"}, rationale, final_summary)
    ```
 
 **Impacto**: Sem registro, o trabalho é invisível ao sistema, não tem rastreabilidade, não pode ser auditado e quebrará compliance.
@@ -155,7 +155,7 @@ Exemplos:
 
 ### Onde aplica
 
-- **Todos os Zillas** (QAZilla, SecZilla, ArchZilla, BackZilla, FrontZilla, OpsZilla, POZilla, ProductZilla)
+- **Todos os DevTeam** (QA-Engineer, Security, Architecture, Backend, Frontend, DevOps, Product-Owner, Product-Manager)
 - **Todos os agentes Claude Code** neste ecossistema
 - **Todos os MCPs** que invocam outros MCPs
 
@@ -543,7 +543,7 @@ o MCP** em vez de alternativas manuais. Referência completa de tools e namespac
 
 | MCP | Domínio | Porta |
 |-----|---------|-------|
-| `agent-twin-mcp` | Autenticação, perfil, contexto git/OS — **chame `authenticate` PRIMEIRO** | 7098 |
+| `dev-twin-mcp` | Autenticação, perfil, contexto git/OS — **chame `authenticate` PRIMEIRO** | 7098 |
 | `config-mcp` | Credenciais, env vars por perfil/tenant, hardware | 7099 |
 | `deploy-mcp` | Git, commits, PRs, GitHub Actions, ACR | — |
 | `docs-mcp` | Geração, validação e auditoria de documentação | — |
@@ -4383,7 +4383,7 @@ Agente IA
 
 > **Nota sobre MCPs operacionais:** O `mcp/` neste template é um exemplo de referência para
 > implementar o Trinity Pattern. Os 11 servidores MCP operacionais da plataforma (session, test,
-> docs, services, pipeline, qa, deploy, agent-twin, config, infra, ai-governance) foram
+> docs, services, pipeline, qa, deploy, dev-twin, config, infra, ai-governance) foram
 > migrados para [platform-devs](https://github.com/dataforalltech/platform-devs).
 >
 > **Se está desenvolvendo para a plataforma:** leia a documentação em `platform-devs`.

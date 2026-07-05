@@ -23,7 +23,7 @@ Todos localizados em `/home/dev/repos/platform-devs/`:
 
 | MCP | Tamanho | Linhas | Status |
 |-----|---------|--------|--------|
-| `agent-twin-mcp.py` | 12K | 326 | ✓ |
+| `dev-twin-mcp.py` | 12K | 326 | ✓ |
 | `config-mcp.py` | 8.0K | 171 | ✓ |
 | `session-mcp.py` | 8.0K | 171 | ✓ |
 | `audit-mcp.py` | 8.0K | 171 | ✓ |
@@ -43,19 +43,19 @@ Todos localizados em `/home/dev/repos/platform-devs/`:
 
 **Status**: ✓ 17/17 Compilam e Funcionam
 
-### 1.2 Node MCPs - Zillas (8)
+### 1.2 Node MCPs - DevTeam (8)
 Todos em `/home/dev/repos/platform-devs/*-mcp-server/dist/server.js`:
 
-| Zilla | Tamanho | Status |
+| DevTeam | Tamanho | Status |
 |-------|---------|--------|
-| archzilla | 3.7K | ✓ |
-| backzilla | 4.4K | ✓ |
-| frontzilla-pixelfera | 5.2K | ✓ |
-| opszilla | 4.0K | ✓ |
-| pozilla | 3.7K | ✓ |
-| productzilla | 3.7K | ✓ |
-| qazilla | 3.6K | ✓ |
-| seczilla | 3.7K | ✓ |
+| architecture | 3.7K | ✓ |
+| backend | 4.4K | ✓ |
+| frontend-pixelfera | 5.2K | ✓ |
+| devops | 4.0K | ✓ |
+| product-owner | 3.7K | ✓ |
+| product-manager | 3.7K | ✓ |
+| qa-engineer | 3.6K | ✓ |
+| security | 3.7K | ✓ |
 
 **Status**: ✓ 8/8 Compilados e Funcionam
 
@@ -87,7 +87,7 @@ Em `/home/dev/repos/platform-devs/services/*/`:
 
 ### 2.2 Compilação Node
 ```
-✓ Todos 8 Zillas têm dist/server.js > 3.6K
+✓ Todos 8 DevTeam têm dist/server.js > 3.6K
 ✓ Todos implementam protocolo JSON-RPC 2.0
 ✓ Todos têm package.json válido
 ```
@@ -118,7 +118,7 @@ Implementação Padrão:
 Executado em 2026-05-11 18:19:48 UTC:
 
 ```
-✓ agent-twin-mcp:   RESPONDENDO (5 tools)
+✓ dev-twin-mcp:   RESPONDENDO (5 tools)
   - authenticate
   - whoami
   - get_twin_context
@@ -148,8 +148,8 @@ Executado em 2026-05-11 18:19:48 UTC:
 
 ### 4.1 Sintoma
 ```
-❌ Quando invoco mcp__agent-twin-mcp__whoami() via Claude Code:
-   → Retorna "(mcp__agent-twin-mcp__whoami completed with no output)"
+❌ Quando invoco mcp__dev-twin-mcp__whoami() via Claude Code:
+   → Retorna "(mcp__dev-twin-mcp__whoami completed with no output)"
 ```
 
 ### 4.2 Causa Raiz
@@ -173,7 +173,7 @@ cp /home/dev/repos/platform-devs/.mcp.json /home/dev/.claude/.mcp.json
 
 ### Nível 1: IMEDIATO (Fazer Agora)
 - [ ] Reiniciar sessão Claude Code (`/session-init`)
-- [ ] Testar novamente com `mcp__agent-twin-mcp__whoami()`
+- [ ] Testar novamente com `mcp__dev-twin-mcp__whoami()`
 - [ ] Verificar se há mensagens de erro em logs
 
 ### Nível 2: CURTO PRAZO (Esta Semana)

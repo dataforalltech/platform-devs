@@ -12,7 +12,7 @@
 
 ### What Was Done
 
-Added Pydantic `BaseModel` validation classes to `qazilla_mcp.py`:
+Added Pydantic `BaseModel` validation classes to `qa-engineer_mcp.py`:
 
 ```python
 # ✅ NEW: Input validation models
@@ -51,16 +51,16 @@ class CreateBugReportRequest(BaseModel):
 
 ### Implementation Path
 
-1. **qazilla** (7201) — ✅ DONE (Pydantic models added)
-2. **seczilla** (7202) — TODO: Add same models
-3. **archzilla** (7203) — TODO: Add same models
-4. **backzilla** (7204) — TODO: Add same models
-5. **frontzilla** (7205) — TODO: Add same models
-6. **opszilla** (7206) — TODO: Add same models
-7. **pozilla** (7207) — TODO: Add same models
-8. **productzilla** (7208) — TODO: Add same models
-9. **cross-zilla-validators** (7209) — TODO: Add same models
-10. **zilla-observatory** (7210) — TODO: Add same models
+1. **qa-engineer** (7201) — ✅ DONE (Pydantic models added)
+2. **security** (7202) — TODO: Add same models
+3. **architecture** (7203) — TODO: Add same models
+4. **backend** (7204) — TODO: Add same models
+5. **frontend** (7205) — TODO: Add same models
+6. **devops** (7206) — TODO: Add same models
+7. **product-owner** (7207) — TODO: Add same models
+8. **product-manager** (7208) — TODO: Add same models
+9. **cross-devteam-validators** (7209) — TODO: Add same models
+10. **devteam-observatory** (7210) — TODO: Add same models
 
 ### Testing
 
@@ -105,16 +105,16 @@ curl -X POST http://localhost:7201/mcp/tools/call \
 
 ### What Was Done
 
-Created `db/create_restricted_pg_user.sql` to setup `app_zillas` user with least-privilege:
+Created `db/create_restricted_pg_user.sql` to setup `app_devteam` user with least-privilege:
 
 ```sql
 -- Create restricted role
-CREATE ROLE app_zillas WITH LOGIN PASSWORD 'generate_strong_password_here';
+CREATE ROLE app_devteam WITH LOGIN PASSWORD 'generate_strong_password_here';
 
 -- Grant minimal permissions (ONLY CRUD, no DDL/admin)
-GRANT USAGE ON SCHEMA public TO app_zillas;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_zillas;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_zillas;
+GRANT USAGE ON SCHEMA public TO app_devteam;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_devteam;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO app_devteam;
 
 -- No permissions for: CREATE, DROP, ALTER, SUPERUSER, CREATEDB, etc.
 ```
@@ -141,28 +141,28 @@ psql -h localhost -U postgres -d app -f db/create_restricted_pg_user.sql
 
 # 2. Generate strong password and update (replace in script first)
 # 3. Update environment variables in ~/.platform/env:
-export POSTGRES_USER=app_zillas
+export POSTGRES_USER=app_devteam
 export POSTGRES_PASSWORD=your_strong_password
 
 # 4. Test connection (should work)
-psql -h localhost -U app_zillas -d app -c "SELECT version();"
+psql -h localhost -U app_devteam -d app -c "SELECT version();"
 
-# 5. All Zillas will connect as app_zillas (not postgres superuser)
+# 5. All DevTeam will connect as app_devteam (not postgres superuser)
 ```
 
 ### Verification
 
 ```bash
-# Check that app_zillas exists and has correct permissions
+# Check that app_devteam exists and has correct permissions
 psql -h localhost -U postgres -d app -c "
   SELECT rolname, rolcanlogin, rolsuper FROM pg_roles
-  WHERE rolname = 'app_zillas';
+  WHERE rolname = 'app_devteam';
 "
 
 # Output should show:
 #  rolname    | rolcanlogin | rolsuper
 # ------------|-------------|----------
-#  app_zillas | t           | f
+#  app_devteam | t           | f
 #  (1 row)
 ```
 
@@ -235,8 +235,8 @@ async def log_api_calls(request, call_next):
 ## ✅ Checklist: Before Production Deployment
 
 ### HIGH (Blocking)
-- [x] Pydantic input validation added to qazilla
-- [ ] Pydantic input validation propagated to all 10 Zillas
+- [x] Pydantic input validation added to qa-engineer
+- [ ] Pydantic input validation propagated to all 10 DevTeam
 - [x] PostgreSQL restricted user script created
 - [ ] PostgreSQL restricted user applied in production
 
@@ -247,7 +247,7 @@ async def log_api_calls(request, call_next):
 
 ### Validation
 - [ ] POST/PUT endpoints reject invalid input (422 response)
-- [ ] All Zillas connect as app_zillas (not postgres)
+- [ ] All DevTeam connect as app_devteam (not postgres)
 - [ ] No permission escalation possible
 - [ ] Security scans pass (bandit, OWASP ZAP)
 
@@ -256,14 +256,14 @@ async def log_api_calls(request, call_next):
 ## 📋 Next Steps
 
 1. **Immediate** (Before Merge):
-   - [ ] Copy qazilla Pydantic models to other 9 Zillas
+   - [ ] Copy qa-engineer Pydantic models to other 9 DevTeam
    - [ ] Re-run security tests (bandit)
    - [ ] Verify no integration test failures
 
 2. **Pre-Production** (Before Deployment):
    - [ ] Execute `db/create_restricted_pg_user.sql` in staging
-   - [ ] Update environment variables to use app_zillas
-   - [ ] Test all 10 Zillas with restricted user
+   - [ ] Update environment variables to use app_devteam
+   - [ ] Test all 10 DevTeam with restricted user
    - [ ] Smoke tests passing with new user
 
 3. **Optional** (Post-Release):
@@ -278,10 +278,10 @@ async def log_api_calls(request, call_next):
 
 - **SECURITY_REVIEW.md** — Full security analysis
 - **db/create_restricted_pg_user.sql** — PostgreSQL user setup script
-- **qazilla_mcp.py** — Pydantic validation implementation example
+- **qa-engineer_mcp.py** — Pydantic validation implementation example
 - **Pydantic Docs** — https://docs.pydantic.dev/
 
 ---
 
 **Status**: ✅ HIGH issues FIXED  
-**Next**: Apply same fixes to remaining 9 Zillas
+**Next**: Apply same fixes to remaining 9 DevTeam

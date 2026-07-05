@@ -3,9 +3,9 @@
 ## Status: 10 of 12 System MCPs Converted ✅
 
 ### Completed Conversions ✅
-- **agent-twin-mcp** — Authentication & identity (HTTP on 7100, docker port 7101:7100)
+- **dev-twin-mcp** — Authentication & identity (HTTP on 7100, docker port 7101:7100)
 - **config-mcp** — Credentials & environment (HTTP on 7100, docker port 7102:7100)
-- **8 Zillas** — All converted (archzilla, backzilla, frontzilla, opszilla, pozilla, productzilla, qazilla, seczilla)
+- **8 DevTeam** — All converted (architecture, backend, frontend, devops, product-owner, product-manager, qa-engineer, security)
 
 ### Remaining to Convert ⏳
 - **session-mcp** — Session & task management
@@ -163,7 +163,7 @@ For each MCP, add a service definition:
 ```
 
 **Port Mapping Convention:**
-- agent-twin-mcp: 7101:7100
+- dev-twin-mcp: 7101:7100
 - config-mcp: 7102:7100
 - session-mcp: 7103:7100
 - audit-mcp: 7104:7100
@@ -183,7 +183,7 @@ For each MCP, add a service definition:
 Add each MCP to the `MCP_REGISTRY`:
 ```python
 MCP_REGISTRY = {
-    "agent-twin-mcp": "http://agent-twin-mcp:7100",
+    "dev-twin-mcp": "http://dev-twin-mcp:7100",
     "config-mcp": "http://config-mcp:7100",
     "session-mcp": "http://session-mcp:7100",  # ADD
     # ... etc
@@ -199,7 +199,7 @@ In `docker-compose.yml` mcp-gateway service:
 depends_on:
   - redis
   - postgres
-  - agent-twin-mcp
+  - dev-twin-mcp
   - config-mcp
   - session-mcp    # ADD
   - audit-mcp      # ADD
@@ -268,7 +268,7 @@ curl -H "Authorization: Bearer test-developer-token" \
 
 # Test rate limiting
 curl -H "Authorization: Bearer test-readonly-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools/call \
+  http://localhost:8080/mcp/qa-engineer-mcp/tools/call \
   -X POST \
   -H "Content-Type: application/json" \
   -d '{"name":"test","arguments":{}}'

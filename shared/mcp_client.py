@@ -1,4 +1,4 @@
-"""Shared MCP HTTP Client for cross-MCP calls in Zillas."""
+"""Shared MCP HTTP Client for cross-MCP calls in DevTeam."""
 import httpx
 import json
 from typing import Any

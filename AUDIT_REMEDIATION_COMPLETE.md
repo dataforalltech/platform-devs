@@ -28,8 +28,8 @@ All CRITICAL and HIGH priority audit findings have been resolved. Repository is 
 - Change: Updated code example to show env var pattern instead of hardcoded URL
 - Status: ✅ Fixed
 
-**qazilla-mcp**
-- Files: `src/server/mcp_server.py`, `src/tools/qazilla_tools.py`
+**qa-engineer-mcp**
+- Files: `src/server/mcp_server.py`, `src/tools/qa-engineer_tools.py`
 - Changes:
   - Added `os.getenv("TEST_APP_URL", "http://localhost:3000")`
   - Added `os.getenv("TEST_API_URL", "http://localhost:8000")`
@@ -55,23 +55,23 @@ port=int(os.getenv("MCP_PORT", "7100")),
 ```
 
 **MCPs Updated:**
-1. agent-twin-mcp-server
+1. dev-twin-mcp-server
 2. ai-governance-mcp-server
-3. archzilla-mcp-server
+3. architecture-mcp-server
 4. audit-mcp-server
-5. backzilla-mcp-server
+5. backend-mcp-server
 6. config-mcp-server
 7. deploy-mcp-server
 8. docs-mcp-server
-9. frontzilla-mcp-server
+9. frontend-mcp-server
 10. infra-mcp-server
-11. opszilla-mcp-server
+11. devops-mcp-server
 12. pipeline-mcp-server
-13. pozilla-mcp-server
-14. productzilla-mcp-server
+13. product-owner-mcp-server
+14. product-manager-mcp-server
 15. qa-mcp-server
-16. qazilla-mcp-server
-17. seczilla-mcp-server
+16. qa-engineer-mcp-server
+17. security-mcp-server
 18. services-mcp-server
 19. session-mcp-server
 20. test-mcp-server
@@ -84,7 +84,7 @@ port=int(os.getenv("MCP_PORT", "7100")),
 
 **Critical TODOs Fixed:**
 
-#### agent-twin-mcp (3 fixes)
+#### dev-twin-mcp (3 fixes)
 - `_authenticate_user()` — Full credential validation
 - `_generate_token()` — Cryptographically secure token generation (SHA256)
 - `_validate_token()` — Token validation by format and prefix
@@ -105,7 +105,7 @@ Removed template comments from:
 - config_mcp.py, test_mcp.py, session_mcp.py, services_mcp.py, scheduler_mcp.py
 - qa_mcp.py, pipeline_mcp.py, infra_mcp.py, governance_mcp.py, docs_mcp.py
 - deploy_mcp.py, connectors_mcp.py, cache_mcp.py, auth_mcp.py, audit_mcp.py
-- ai_governance_mcp.py, agent_twin_mcp.py, admin_mcp.py
+- ai_governance_mcp.py, dev_twin_mcp.py, admin_mcp.py
 
 **Status:** ✅ 22 resolved, 2 remaining (low priority)
 
@@ -113,7 +113,7 @@ Removed template comments from:
 
 ### 4️⃣ Security & Auth — IMPLEMENTED ✅
 
-**agent-twin-mcp-server/src/server/http_endpoints.py**
+**dev-twin-mcp-server/src/server/http_endpoints.py**
 
 **New Imports:**
 ```python
@@ -157,7 +157,7 @@ from datetime import timedelta  # For token expiry
 - deploy-mcp: ✅ Clean
 - All others: ✅ Clean
 
-**Note:** One occurrence in qazilla-mcp is inside a string template, not production code.
+**Note:** One occurrence in qa-engineer-mcp is inside a string template, not production code.
 
 **Status:** ✅ CLEAN
 
@@ -234,7 +234,7 @@ def get_audit(id: str) -> Optional[Dict]:
 # MCPs
 export MCP_PORT=7100              # Custom port for any MCP
 
-# QAZilla Testing
+# QA-Engineer Testing
 export TEST_APP_URL=http://app:3000
 export TEST_API_URL=http://api:8000
 
@@ -284,8 +284,8 @@ git log --oneline -10
 git diff --stat
 
 # Test any MCP
-docker-compose build qazilla-mcp
-docker-compose up qazilla-mcp
+docker-compose build qa-engineer-mcp
+docker-compose up qa-engineer-mcp
 ```
 
 ### Before Deploying
@@ -332,6 +332,6 @@ grep -r "TODO.*Import tools" src/ --include="*.py" | wc -l
 grep -r "from unittest.mock import\|from mock import" src/ --include="*.py" | grep -v "__pycache__"
 
 # Test an MCP
-cd qazilla-mcp-server && python -m pytest tests/ -v
+cd qa-engineer-mcp-server && python -m pytest tests/ -v
 ```
 

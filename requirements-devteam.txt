@@ -1,0 +1,19 @@
+# DevTeam Python MCP Stack
+# All 10 DevTeam use the same dependencies
+
+# Web Framework
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.6.0
+
+# Database
+psycopg2-binary>=2.9.0
+asyncpg>=0.29.0
+
+# Utilities
+python-dotenv>=1.0.0
+
+# Development (optional)
+# pytest==7.4.3
+# pytest-asyncio==0.21.1
+# httpx==0.25.2

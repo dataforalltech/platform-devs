@@ -43,11 +43,11 @@ Add a new entry to the `mcpServers` object in `/home/dev/.claude.json`:
 
 **Node.js MCP** (using compiled output):
 ```json
-"frontzilla-pixelfera-mcp-server": {
+"frontend-pixelfera-mcp-server": {
   "command": "bash",
   "args": [
     "-c",
-    "cd /home/dev/repos/platform-devs/frontzilla-pixelfera-mcp-server && node dist/server.js"
+    "cd /home/dev/repos/platform-devs/frontend-pixelfera-mcp-server && node dist/server.js"
   ]
 }
 ```
@@ -97,10 +97,10 @@ Example project-level structure (informational only):
 ```json
 {
   "mcpServers": {
-    "frontzilla-pixelfera-mcp-server": {
+    "frontend-pixelfera-mcp-server": {
       "command": "node",
       "args": ["dist/server.js"],
-      "cwd": "/home/dev/repos/platform-devs/frontzilla-pixelfera-mcp-server"
+      "cwd": "/home/dev/repos/platform-devs/frontend-pixelfera-mcp-server"
     }
   }
 }

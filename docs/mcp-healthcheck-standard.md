@@ -18,7 +18,7 @@ Resposta esperada (HTTP 200):
 
 | Serviço            | Porta interna | Porta host |
 |--------------------|--------------|------------|
-| agent-twin-mcp     | 7100         | 27101      |
+| dev-twin-mcp     | 7100         | 27101      |
 | config-mcp         | 7099         | 27102      |
 | session-mcp        | 7100         | 27103      |
 | audit-mcp          | 7100         | 27104      |

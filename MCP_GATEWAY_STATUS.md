@@ -26,7 +26,7 @@
 ### Hybrid MCP Servers Converted (10/16 Critical)
 
 #### System MCPs (2/2 converted) ✅
-1. ✅ **agent-twin-mcp** — Authentication, identity, context (port 7101 ↔ 7100)
+1. ✅ **dev-twin-mcp** — Authentication, identity, context (port 7101 ↔ 7100)
    - Converted to hybrid mode (stdio + HTTP async)
    - Builds successfully, HTTP endpoints working
    
@@ -34,15 +34,15 @@
    - Converted to hybrid mode (stdio + HTTP async)
    - Builds successfully, HTTP endpoints working
 
-#### Zilla MCPs (8/8 converted) ✅
-1. ✅ **archzilla-mcp** — Software architecture (port 7118 ↔ 7100)
-2. ✅ **backzilla-mcp** — Backend architecture (port 7119 ↔ 7100)
-3. ✅ **frontzilla-mcp** — Frontend design (port 7120 ↔ 7100)
-4. ✅ **opszilla-mcp** — Operations & DevOps (port 7121 ↔ 7100)
-5. ✅ **pozilla-mcp** — Product management (port 7122 ↔ 7100)
-6. ✅ **productzilla-mcp** — Product strategy (port 7123 ↔ 7100)
-7. ✅ **qazilla-mcp** — QA & testing (port 7124 ↔ 7100)
-8. ✅ **seczilla-mcp** — Security & compliance (port 7125 ↔ 7100)
+#### DevTeam MCPs (8/8 converted) ✅
+1. ✅ **architecture-mcp** — Software architecture (port 7118 ↔ 7100)
+2. ✅ **backend-mcp** — Backend architecture (port 7119 ↔ 7100)
+3. ✅ **frontend-mcp** — Frontend design (port 7120 ↔ 7100)
+4. ✅ **devops-mcp** — Operations & DevOps (port 7121 ↔ 7100)
+5. ✅ **product-owner-mcp** — Product management (port 7122 ↔ 7100)
+6. ✅ **product-manager-mcp** — Product strategy (port 7123 ↔ 7100)
+7. ✅ **qa-engineer-mcp** — QA & testing (port 7124 ↔ 7100)
+8. ✅ **security-mcp** — Security & compliance (port 7125 ↔ 7100)
 
 ---
 
@@ -74,7 +74,7 @@ See `MCP_CONVERSION_PATTERN.md` for complete step-by-step guide:
 
 ### Docker Compose Port Allocation
 ```
-7101 ↔ 7100 = agent-twin-mcp (system)
+7101 ↔ 7100 = dev-twin-mcp (system)
 7102 ↔ 7100 = config-mcp (system)
 7103 ↔ 7100 = session-mcp (system) [pending]
 7104 ↔ 7100 = audit-mcp (system) [pending]
@@ -86,14 +86,14 @@ See `MCP_CONVERSION_PATTERN.md` for complete step-by-step guide:
 7110 ↔ 7100 = services-mcp (system) [pending]
 7111 ↔ 7100 = test-mcp (system) [pending]
 7112 ↔ 7100 = ai-governance-mcp (system) [pending]
-7118 ↔ 7100 = archzilla-mcp (zilla)
-7119 ↔ 7100 = backzilla-mcp (zilla)
-7120 ↔ 7100 = frontzilla-mcp (zilla)
-7121 ↔ 7100 = opszilla-mcp (zilla)
-7122 ↔ 7100 = pozilla-mcp (zilla)
-7123 ↔ 7100 = productzilla-mcp (zilla)
-7124 ↔ 7100 = qazilla-mcp (zilla)
-7125 ↔ 7100 = seczilla-mcp (zilla)
+7118 ↔ 7100 = architecture-mcp (devteam)
+7119 ↔ 7100 = backend-mcp (devteam)
+7120 ↔ 7100 = frontend-mcp (devteam)
+7121 ↔ 7100 = devops-mcp (devteam)
+7122 ↔ 7100 = product-owner-mcp (devteam)
+7123 ↔ 7100 = product-manager-mcp (devteam)
+7124 ↔ 7100 = qa-engineer-mcp (devteam)
+7125 ↔ 7100 = security-mcp (devteam)
 8080 ↔ 8080 = mcp-gateway (proxy)
 8000 ↔ 8000 = mcp-registry (discovery)
 ```
@@ -103,7 +103,7 @@ See `MCP_CONVERSION_PATTERN.md` for complete step-by-step guide:
 ## 🧪 Testing Checklist
 
 ### Build Verification
-- ✅ `docker compose build agent-twin-mcp` — Success
+- ✅ `docker compose build dev-twin-mcp` — Success
 - ✅ `docker compose build config-mcp` — Success
 - ✅ `docker compose build mcp-gateway` — Success
 - ⏳ All other MCPs — Build verification pending
@@ -122,7 +122,7 @@ curl -H "Authorization: Bearer test-admin-token" \
 
 # Test rate limiting
 curl -H "Authorization: Bearer test-readonly-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools
+  http://localhost:8080/mcp/qa-engineer-mcp/tools
 
 # Test audit logging
 # (Check PostgreSQL mcp_audit_log table)
@@ -166,7 +166,7 @@ curl -X POST \
    - Test cross-MCP HTTP calls
 
 7. **Validate with session-init protocol**
-   - Ensure agent-twin-mcp → session-mcp → config-mcp chain works
+   - Ensure dev-twin-mcp → session-mcp → config-mcp chain works
    - Test multi-MCP workflows through gateway
 
 ---
@@ -195,13 +195,13 @@ curl -X POST \
 │              Internal MCP Network (docker-bridge)               │
 │  ┌─────────────────────────────────────────────────────────┐   │
 │  │  System MCPs (10 total)                                 │   │
-│  │  agent-twin-mcp, config-mcp, session-mcp,              │   │
+│  │  dev-twin-mcp, config-mcp, session-mcp,              │   │
 │  │  audit-mcp, deploy-mcp, docs-mcp, infra-mcp,           │   │
 │  │  pipeline-mcp, qa-mcp, services-mcp                    │   │
 │  ├─────────────────────────────────────────────────────────┤   │
-│  │  Zilla MCPs (8 total)                                   │   │
-│  │  archzilla, backzilla, frontzilla, opszilla,            │   │
-│  │  pozilla, productzilla, qazilla, seczilla              │   │
+│  │  DevTeam MCPs (8 total)                                   │   │
+│  │  architecture, backend, frontend, devops,            │   │
+│  │  product-owner, product-manager, qa-engineer, security              │   │
 │  └─────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
         ↓ (stdio + HTTP)           ↓ (HTTP only from gateway)
@@ -251,13 +251,13 @@ curl -X POST \
 - ✅ `MCP_GATEWAY_STATUS.md` — This file
 
 ### Modified Files
-- ✅ `agent-twin-mcp-server/src/server/mcp_server.py` — Hybrid mode
-- ✅ `agent-twin-mcp-server/Dockerfile` — pyproject.toml entrypoint
+- ✅ `dev-twin-mcp-server/src/server/mcp_server.py` — Hybrid mode
+- ✅ `dev-twin-mcp-server/Dockerfile` — pyproject.toml entrypoint
 - ✅ `config-mcp-server/src/server/mcp_server.py` — Hybrid mode
 - ✅ `config-mcp-server/Dockerfile` — pyproject.toml entrypoint
-- ✅ `docker-compose.yml` — Agent-twin, config-mcp services, gateway depends_on
-- ✅ `mcp-gateway/src/proxy/router.py` — Added agent-twin-mcp, config-mcp to registry
-- ✅ `8 x Zilla Dockerfiles` — Previously updated (not detailed here)
+- ✅ `docker-compose.yml` — Dev-twin, config-mcp services, gateway depends_on
+- ✅ `mcp-gateway/src/proxy/router.py` — Added dev-twin-mcp, config-mcp to registry
+- ✅ `8 x DevTeam Dockerfiles` — Previously updated (not detailed here)
 
 ### Unchanged (Working as-is)
 - ✅ `mcp-gateway/src/main.py` — Already correct
@@ -285,7 +285,7 @@ docker compose logs -f mcp-gateway
 curl -H "Authorization: Bearer test-admin-token" http://localhost:8080/mcp
 
 # Check MCP health
-curl http://localhost:7101/health  # agent-twin-mcp
+curl http://localhost:7101/health  # dev-twin-mcp
 curl http://localhost:7102/health  # config-mcp
 ```
 

@@ -10,19 +10,19 @@
 ## Executive Summary
 
 This document provides week-by-week implementation tasks for consolidating:
-1. **Testing MCPs** (qazilla + qa-mcp + test-mcp → qazilla)
-2. **Security MCPs** (seczilla + qa-mcp security → seczilla)
+1. **Testing MCPs** (qa-engineer + qa-mcp + test-mcp → qa-engineer)
+2. **Security MCPs** (security + qa-mcp security → security)
 
 No breaking changes. All MCPs remain operational during transition.
 
 ---
 
-## Consolidation 1: Testing (qazilla + qa-mcp + test-mcp)
+## Consolidation 1: Testing (qa-engineer + qa-mcp + test-mcp)
 
 ### Current Architecture
 
 ```
-qazilla-mcp (20 tools)
+qa-engineer-mcp (20 tools)
 ├─ test_planning: analyze_quality_requirement, generate_test_plan, review_acceptance_criteria
 ├─ test_cases: generate_test_cases, generate_gherkin_scenarios, generate_e2e_tests, generate_api_tests
 ├─ automation: generate_unit_tests, generate_playwright_tests, generate_cypress_tests, ...
@@ -63,7 +63,7 @@ TOTAL: 45 tools across 3 MCPs
 ### Target Architecture
 
 ```
-qazilla-mcp (45 tools)
+qa-engineer-mcp (45 tools)
 ├─ Strategy & Planning (20 original tools)
 │  ├─ analyze_quality_requirement
 │  ├─ generate_test_plan
@@ -75,10 +75,10 @@ qazilla-mcp (45 tools)
 │  ├─ run_unit_tests ← qa-mcp.run_unit_tests
 │  ├─ run_e2e_tests ← qa-mcp.run_e2e_tests
 │  ├─ run_linter ← qa-mcp.run_linter
-│  ├─ run_security_scan ← qa-mcp.run_security_scan [WILL MOVE TO SECZILLA]
+│  ├─ run_security_scan ← qa-mcp.run_security_scan [WILL MOVE TO SECURITY]
 │  ├─ run_type_check ← qa-mcp.run_type_check
 │  ├─ check_accessibility ← qa-mcp.check_accessibility
-│  ├─ check_dependencies ← qa-mcp.check_dependencies [WILL MOVE TO SECZILLA]
+│  ├─ check_dependencies ← qa-mcp.check_dependencies [WILL MOVE TO SECURITY]
 │  └─ ... [remaining execution tools]
 │
 └─ Planning & Tracking (10 wrapped test-mcp tools)
@@ -96,11 +96,11 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 
 #### Week 1: Wrapper Foundation (May 13-17)
 
-**Task 1.1: Create Tool Wrapper Layer in QAZilla**
-- **Owner**: Backend engineer (BackZilla lead)
+**Task 1.1: Create Tool Wrapper Layer in QA-Engineer**
+- **Owner**: Backend engineer (Backend lead)
 - **Time**: 8 hours
 - **Steps**:
-  1. Add new file: `qazilla-mcp-server/src/tools/qa_wrappers.ts`
+  1. Add new file: `qa-engineer-mcp-server/src/tools/qa_wrappers.ts`
   2. Implement wrapper functions:
      ```typescript
      export async function run_unit_tests(params: RunUnitTestsParams): Promise<Result> {
@@ -123,13 +123,13 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Owner**: Backend engineer
 - **Time**: 6 hours
 - **Steps**:
-  1. Add new file: `qazilla-mcp-server/src/tools/test_plan_wrappers.ts`
+  1. Add new file: `qa-engineer-mcp-server/src/tools/test_plan_wrappers.ts`
   2. Implement 10 wrapper functions (same pattern)
   3. Register in TOOL_SCHEMAS
   4. Add 30 unit tests
 
-**Task 1.3: Update QAZilla Server Registration**
-- **Owner**: DevOps (OpsZilla)
+**Task 1.3: Update QA-Engineer Server Registration**
+- **Owner**: DevOps (DevOps)
 - **Time**: 2 hours
 - **Steps**:
   1. Update `.mcp.json`: tools count 20 → 45
@@ -144,12 +144,12 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 #### Week 2: Test-MCP Tools Integration (May 20-24)
 
 **Task 2.1: Integrate Test-MCP Plan Management**
-- **Owner**: QA engineer (QAZilla lead)
+- **Owner**: QA engineer (QA-Engineer lead)
 - **Time**: 8 hours
 - **Steps**:
-  1. Add to qazilla.db: new tables for test plans if not already present
+  1. Add to qa-engineer.db: new tables for test plans if not already present
   2. Verify test-mcp database compatibility
-  3. Add migration: copy existing test plans schema to qazilla context
+  3. Add migration: copy existing test plans schema to qa-engineer context
   4. Add tests: create_test_plan, add_scenario, record_result workflows
   5. Validate: Run full test suite
 
@@ -157,7 +157,7 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Owner**: QA engineer
 - **Time**: 6 hours
 - **Steps**:
-  1. Add checklist table to qazilla.db
+  1. Add checklist table to qa-engineer.db
   2. Implement run_checklist wrapper (call test-mcp internally)
   3. Add workflow tests
   4. Verify checklist data model compatibility
@@ -167,11 +167,11 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Time**: 4 hours
 - **Steps**:
   1. Create DEPRECATION.md in test-mcp/
-  2. Document migration path: test-mcp → qazilla
+  2. Document migration path: test-mcp → qa-engineer
   3. Email all consumers: "test-mcp will be deprecated in 3 months"
-  4. Add warning logs to test-mcp APIs pointing to qazilla
+  4. Add warning logs to test-mcp APIs pointing to qa-engineer
 
-**Deliverable**: Full integration of test-mcp tools into qazilla, +200 lines code, +50 tests
+**Deliverable**: Full integration of test-mcp tools into qa-engineer, +200 lines code, +50 tests
 
 ---
 
@@ -182,19 +182,19 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Time**: 10 hours
 - **Steps**:
   1. For each qa-mcp tool (except security ones):
-     - Add wrapper in `qazilla-mcp-server/src/tools/qa_execution_wrappers.ts`
+     - Add wrapper in `qa-engineer-mcp-server/src/tools/qa_execution_wrappers.ts`
      - Test wrapper with real pytest/jest runs
-     - Add workflow test: qazilla → run_unit_tests → parse output → record_result
+     - Add workflow test: qa-engineer → run_unit_tests → parse output → record_result
   2. Tools to wrap:
      - run_unit_tests, run_e2e_tests, run_linter, run_type_check
      - check_accessibility, analyze_complexity, get_coverage_report
      - run_api_tests, visual_regression, screenshot_page
   3. Validate: All 10 execution tests pass
 
-**Task 3.2: Security Tools → Move to SecZilla (Deferred)**
-- **Owner**: Security engineer (SecZilla lead)
+**Task 3.2: Security Tools → Move to Security (Deferred)**
+- **Owner**: Security engineer (Security lead)
 - **Time**: 0 hours (deferred to consolidation 2)
-- **Note**: Mark as "will be moved to seczilla" in deprecation docs
+- **Note**: Mark as "will be moved to security" in deprecation docs
 
 **Task 3.3: Deprecate qa-mcp Public APIs**
 - **Owner**: Documentation
@@ -202,8 +202,8 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Steps**:
   1. Create DEPRECATION.md in qa-mcp/
   2. Add warning messages to all public tools
-  3. Document migration: qa-mcp.run_* → qazilla.run_*
-  4. Keep qa-mcp internal (used by qazilla as backend)
+  3. Document migration: qa-mcp.run_* → qa-engineer.run_*
+  4. Keep qa-mcp internal (used by qa-engineer as backend)
 
 **Deliverable**: Full integration of qa-mcp execution tools, 200+ lines, 100+ tests
 
@@ -215,18 +215,18 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Owner**: QA lead + Developer
 - **Time**: 8 hours
 - **Steps**:
-  1. **Scenario 1**: Feature development workflow using qazilla only
-     - Dev: write code + qazilla.generate_unit_tests()
-     - Dev: qazilla.run_unit_tests() [instead of qa-mcp]
-     - QA: qazilla.create_test_plan() + qazilla.generate_e2e_tests()
-     - QA: qazilla.run_e2e_tests() [instead of qa-mcp]
+  1. **Scenario 1**: Feature development workflow using qa-engineer only
+     - Dev: write code + qa-engineer.generate_unit_tests()
+     - Dev: qa-engineer.run_unit_tests() [instead of qa-mcp]
+     - QA: qa-engineer.create_test_plan() + qa-engineer.generate_e2e_tests()
+     - QA: qa-engineer.run_e2e_tests() [instead of qa-mcp]
      - Result: Feature passes all gates
   2. **Scenario 2**: Release management workflow
-     - QA: qazilla.generate_uat_checklist() + qazilla.run_checklist()
-     - QA: qazilla.generate_quality_gate() → all passing
+     - QA: qa-engineer.generate_uat_checklist() + qa-engineer.run_checklist()
+     - QA: qa-engineer.generate_quality_gate() → all passing
      - Result: Release approved
   3. **Scenario 3**: Quality metrics
-     - Dev: qazilla.get_coverage_report()
+     - Dev: qa-engineer.get_coverage_report()
      - Result: Coverage data fetched and displayed
   4. Verify: All workflows work, all tools callable
 
@@ -234,9 +234,9 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Owner**: DevOps
 - **Time**: 4 hours
 - **Steps**:
-  1. Measure: qazilla request latency vs. direct qa-mcp calls
+  1. Measure: qa-engineer request latency vs. direct qa-mcp calls
      - Target: <10ms overhead per call
-  2. Measure: Memory usage (qazilla + wrappers vs. separate MCPs)
+  2. Measure: Memory usage (qa-engineer + wrappers vs. separate MCPs)
   3. Report findings
 
 **Task 4.3: Documentation & Migration Guide**
@@ -244,11 +244,11 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Time**: 6 hours
 - **Steps**:
   1. Create MIGRATION.md:
-     - "From qa-mcp to qazilla" guide
+     - "From qa-mcp to qa-engineer" guide
      - Code examples for each migration
      - FAQ: Why consolidate?
   2. Update ARCHITECTURE_PROFILES_WORKFLOWS.md with new consolidated workflows
-  3. Record 10-minute video: "Using QAZilla for all QA tasks"
+  3. Record 10-minute video: "Using QA-Engineer for all QA tasks"
   4. Update team onboarding materials
 
 **Task 4.4: Deprecation Notices & Roadmap**
@@ -257,9 +257,9 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 - **Steps**:
   1. Email all teams: "qa-mcp & test-mcp deprecation timeline"
      - Timeline: 3 months deprecation period
-     - By Sep 10: All consumers must migrate to qazilla
+     - By Sep 10: All consumers must migrate to qa-engineer
      - By Oct 10: qa-mcp & test-mcp removed from production
-  2. Add to sprint planning: "Migrate from qa-mcp to qazilla"
+  2. Add to sprint planning: "Migrate from qa-mcp to qa-engineer"
   3. Create Jira epic: "QA Tool Consolidation" with child tasks
 
 **Deliverable**: Full testing report, performance benchmarks, migration guide
@@ -269,16 +269,16 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 ### Consolidation 1 Success Criteria
 
 ✅ **Functional**:
-- All 45 qazilla tools callable without errors
+- All 45 qa-engineer tools callable without errors
 - 150+ unit tests passing (100% coverage of wrappers)
 - 6+ E2E workflow tests passing
 
 ✅ **Performance**:
-- qazilla.run_unit_tests latency < 50ms (including qa-mcp call)
+- qa-engineer.run_unit_tests latency < 50ms (including qa-mcp call)
 - Memory footprint same as before consolidation
 
 ✅ **Adoption**:
-- 3+ teams migrated from qa-mcp to qazilla
+- 3+ teams migrated from qa-mcp to qa-engineer
 - 0 blocking issues reported
 - Feedback: "Easier to use"
 
@@ -289,12 +289,12 @@ RESULT: 45 tools, 1 MCP, unified QA domain
 
 ---
 
-## Consolidation 2: Security (seczilla + qa-mcp security tools)
+## Consolidation 2: Security (security + qa-mcp security tools)
 
 ### Current Architecture
 
 ```
-seczilla-mcp (20 tools)
+security-mcp (20 tools)
 ├─ threat_modeling: generate_threat_model, map_security_risks, ...
 ├─ control_design: generate_security_controls, validate_against_standards, ...
 ├─ security_architecture: generate_security_architecture, ...
@@ -303,8 +303,8 @@ seczilla-mcp (20 tools)
 └─ ... [20 security-focused tools]
 
 qa-mcp (15 tools)
-├─ run_security_scan (bandit/npm audit) ← MOVE TO SECZILLA
-├─ check_dependencies (pip-audit) ← MOVE TO SECZILLA
+├─ run_security_scan (bandit/npm audit) ← MOVE TO SECURITY
+├─ check_dependencies (pip-audit) ← MOVE TO SECURITY
 ├─ [13 other non-security tools]
 
 ai-governance-mcp (14 tools)
@@ -314,14 +314,14 @@ ai-governance-mcp (14 tools)
 └─ ... [14 governance tools]
 
 ISSUE:
-  Security scanning (qa-mcp) is isolated from threat modeling (seczilla)
-  Flow is broken: seczilla designs threats → qa-mcp scans → gap
+  Security scanning (qa-mcp) is isolated from threat modeling (security)
+  Flow is broken: security designs threats → qa-mcp scans → gap
 ```
 
 ### Target Architecture
 
 ```
-seczilla-mcp (25 tools)
+security-mcp (25 tools)
 ├─ threat_modeling: [20 original tools]
 │  ├─ generate_threat_model
 │  ├─ map_security_risks
@@ -351,7 +351,7 @@ RESULT:
 #### Week 2: Security Consolidation Design (May 20-24)
 
 **Task 2.1: Analyze Security Tool Dependencies**
-- **Owner**: Security engineer (SecZilla lead)
+- **Owner**: Security engineer (Security lead)
 - **Time**: 6 hours
 - **Steps**:
   1. Map current usage: who calls run_security_scan, check_dependencies?
@@ -363,7 +363,7 @@ RESULT:
 - **Owner**: Security engineer
 - **Time**: 4 hours
 - **Steps**:
-  1. Design new seczilla tools:
+  1. Design new security tools:
      - `run_security_scan(repo_path, framework="auto")` → calls qa-mcp internally
      - `check_dependencies(repo_path)` → calls qa-mcp internally
      - `scan_dependency_risks(...)` → enhanced version with risk assessment
@@ -379,7 +379,7 @@ RESULT:
 - **Owner**: Security engineer
 - **Time**: 10 hours
 - **Steps**:
-  1. Add file: `seczilla-mcp-server/src/tools/security_scanning.ts`
+  1. Add file: `security-mcp-server/src/tools/security_scanning.ts`
   2. Implement 5 new tools (wrappers + enhancements)
   3. Add database tables: security_scans, vulnerability_assessment
   4. Add 60 unit tests
@@ -389,7 +389,7 @@ RESULT:
 - **Owner**: Security engineer
 - **Time**: 6 hours
 - **Steps**:
-  1. Add relationship: threat_model → controls → scans (in seczilla.db)
+  1. Add relationship: threat_model → controls → scans (in security.db)
   2. Add query: get_threats_for_scan(repo_id) → returns relevant threats
   3. Add validation: verify all threats have corresponding controls + scans
   4. Add tests
@@ -398,8 +398,8 @@ RESULT:
 - **Owner**: Documentation
 - **Time**: 4 hours
 - **Steps**:
-  1. Update qa-mcp DEPRECATION.md: move security tools to seczilla by Oct 10
-  2. Add warning to qa-mcp.run_security_scan: "Use seczilla.run_security_scan instead"
+  1. Update qa-mcp DEPRECATION.md: move security tools to security by Oct 10
+  2. Add warning to qa-mcp.run_security_scan: "Use security.run_security_scan instead"
   3. Document migration path for security scans
 
 ---
@@ -411,17 +411,17 @@ RESULT:
 - **Time**: 8 hours
 - **Steps**:
   1. **Scenario 1**: Threat modeling + control validation
-     - seczilla.generate_threat_model(app)
-     - seczilla.generate_security_controls(threats)
-     - seczilla.validate_security_controls() → verifies all controls defined
+     - security.generate_threat_model(app)
+     - security.generate_security_controls(threats)
+     - security.validate_security_controls() → verifies all controls defined
      - Result: Security review complete
   2. **Scenario 2**: Security scanning + validation
-     - seczilla.run_security_scan(repo_path)
-     - seczilla.validate_threat_model(threats, evidence)
+     - security.run_security_scan(repo_path)
+     - security.validate_threat_model(threats, evidence)
      - Result: Threats matched with scan evidence
   3. **Scenario 3**: Dependency risk assessment
-     - seczilla.check_dependencies(repo_path)
-     - seczilla.scan_dependency_risks()
+     - security.check_dependencies(repo_path)
+     - security.scan_dependency_risks()
      - Result: Risk ratings assigned
   4. Verify: All workflows work end-to-end
 
@@ -429,18 +429,18 @@ RESULT:
 - **Owner**: Governance engineer
 - **Time**: 4 hours
 - **Steps**:
-  1. Verify: seczilla doesn't duplicate ai-governance contract validation
+  1. Verify: security doesn't duplicate ai-governance contract validation
   2. Document: Clear boundary
-     - seczilla: threat & vulnerability management
+     - security: threat & vulnerability management
      - ai-governance: ecosystem contracts & governance
-  3. Add integration test: seczilla → calls ai-governance for contract validation
+  3. Add integration test: security → calls ai-governance for contract validation
   4. Result: No overlap, clear domain separation
 
 **Task 4.3: Security Documentation**
 - **Owner**: Security engineer
 - **Time**: 6 hours
 - **Steps**:
-  1. Create SECURITY_WORKFLOW.md: Complete security workflow using seczilla
+  1. Create SECURITY_WORKFLOW.md: Complete security workflow using security
   2. Update threat modeling template: Now includes scanning + control validation
   3. Create security ADR: "Consolidated threat → control → scan flow"
   4. Training: 15-minute video on new security consolidation
@@ -458,7 +458,7 @@ RESULT:
 ### Consolidation 2 Success Criteria
 
 ✅ **Functional**:
-- All 25 seczilla tools callable without errors
+- All 25 security tools callable without errors
 - 100+ unit tests passing
 - 4+ E2E security workflows passing
 
@@ -478,14 +478,14 @@ RESULT:
 
 ### For Testing Consolidation:
 
-1. **If qazilla wrapper fails**:
-   - Revert: qazilla commit
+1. **If qa-engineer wrapper fails**:
+   - Revert: qa-engineer commit
    - Fallback: Teams continue using qa-mcp + test-mcp separately
    - No breaking changes (wrappers are additive)
 
 2. **If qa-mcp deprecation causes issues**:
    - Keep qa-mcp in production (don't remove)
-   - Both qa-mcp + qazilla coexist
+   - Both qa-mcp + qa-engineer coexist
    - Migrate teams gradually (no forced deadline)
 
 ### For Security Consolidation:
@@ -572,7 +572,7 @@ Same approach: wrappers are additive, fallback is easy.
 
 ## Success Criteria Checklist
 
-- [ ] All 45 qazilla tools functional
+- [ ] All 45 qa-engineer tools functional
 - [ ] <10ms wrapper latency overhead
 - [ ] 150+ new unit tests passing
 - [ ] 6+ E2E workflows tested

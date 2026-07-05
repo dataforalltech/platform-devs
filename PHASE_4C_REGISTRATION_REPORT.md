@@ -27,7 +27,7 @@
 **Registration Date:** 2026-05-09T22:40:37Z to 22:40:44Z
 
 ```
-22:40:37Z → agent-twin-mcp     (7098) → CREATED
+22:40:37Z → dev-twin-mcp     (7098) → CREATED
 22:40:38Z → config-mcp         (7099) → CREATED
 22:40:39Z → docs-mcp           (7100) → UPDATED
 22:40:39Z → session-mcp        (7101) → CREATED
@@ -79,7 +79,7 @@
 ```
 SERVICE              PORT  TYPE   ENV    HEALTH          STATUS       TAGS
 ─────────────────────────────────────────────────────────────────────────────
-agent-twin-mcp      7098  docker local  /health         ⚠️ unknown   infra, mcp
+dev-twin-mcp      7098  docker local  /health         ⚠️ unknown   infra, mcp
 config-mcp          7099  docker local  /health         ⚠️ unknown   infra, mcp
 docs-mcp            7100  docker local  /health         ⚠️ unknown   infra, mcp
 session-mcp         7101  docker local  /health         ⚠️ unknown   infra, mcp
@@ -135,7 +135,7 @@ TOTAL: 5 services | CREATED: 0 | UPDATED: 5 | HEALTHY: 0 (expected)
 **Conflict Check:** ✅ No conflicts detected
 
 ```
-7098 ← agent-twin-mcp
+7098 ← dev-twin-mcp
 7099 ← config-mcp
 7100 ← docs-mcp
 7101 ← session-mcp
@@ -222,13 +222,13 @@ mcp__services-mcp__find_by_port --port 8001
 
 ```bash
 # Get service metadata
-mcp__services-mcp__get_service --name agent-twin-mcp
+mcp__services-mcp__get_service --name dev-twin-mcp
 
 # Check service status (with health check)
-mcp__services-mcp__service_status --name agent-twin-mcp
+mcp__services-mcp__service_status --name dev-twin-mcp
 
 # Check service health only
-mcp__services-mcp__check_health --name agent-twin-mcp
+mcp__services-mcp__check_health --name dev-twin-mcp
 ```
 
 ---
@@ -279,7 +279,7 @@ Benefits:
 All use: `http://localhost:<port>/health`
 
 ```
-✅ 7098 /health → agent-twin-mcp
+✅ 7098 /health → dev-twin-mcp
 ✅ 7099 /health → config-mcp
 ✅ 7100 /health → docs-mcp
 ✅ 7101 /health → session-mcp
@@ -443,7 +443,7 @@ mcp__services-mcp__get_port_map
 
 ```bash
 # Sample each service type
-mcp__services-mcp__service_status --name agent-twin-mcp
+mcp__services-mcp__service_status --name dev-twin-mcp
 mcp__services-mcp__service_status --name auth-mcp
 mcp__services-mcp__service_status --name platform-auth
 ```

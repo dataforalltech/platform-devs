@@ -10,7 +10,7 @@
 
 | Service | Port | Health Endpoint | Status | Last Check | Registered |
 |---------|------|-----------------|--------|------------|----|
-| agent-twin-mcp | 7098 | `/health` | ⚠️ unknown | 2026-05-09T22:41:12Z | 2026-05-09T22:40:37Z |
+| dev-twin-mcp | 7098 | `/health` | ⚠️ unknown | 2026-05-09T22:41:12Z | 2026-05-09T22:40:37Z |
 | config-mcp | 7099 | `/health` | ⚠️ unknown | 2026-05-09T22:41:18Z | 2026-05-09T22:40:38Z |
 | docs-mcp | 7100 | `/health` | ⚠️ unknown | 2026-05-09T22:41:18Z | 2026-05-09T19:30:28Z |
 | session-mcp | 7101 | `/health` | ⚠️ unknown | 2026-05-09T22:41:26Z | 2026-05-09T22:40:39Z |

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 
-import asyncio
 import json
 import logging
 from datetime import date, datetime
@@ -20,6 +19,26 @@ from ..db.store import TestStore
 from ..tools import checklist_tool, plan_tool, scenario_tool, validation_tool
 
 logger = logging.getLogger(__name__)
+
+
+# Escopo mínimo por ferramenta (least privilege). write = ação/mutação; read = consulta.
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # Consultas (read)
+    "get_test_plan": "test:read",
+    "list_test_plans": "test:read",
+    "double_check": "test:read",
+    "get_validation_status": "test:read",
+    # Ações (write)
+    "create_test_plan": "test:write",
+    "generate_scenarios": "test:write",
+    "add_scenario": "test:write",
+    "record_result": "test:write",
+    "create_checklist": "test:write",
+    "run_checklist": "test:write",
+    "check_item": "test:write",
+    "add_bug": "test:write",
+}
+SCOPES_SUPPORTED = ["test:read", "test:write"]
 
 
 class _JSONEncoder(json.JSONEncoder):
@@ -363,32 +382,33 @@ def build_server() -> tuple[Any, ...]:
 
     return server, settings, store, http_app
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware.
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
+
+    server, _settings, _store, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("TEST_RESOURCE", "http://localhost:7117/mcp"),
+        prm_url=os.getenv("TEST_PRM_URL", "http://localhost:7117/.well-known/oauth-protected-resource"),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    asyncio.run(_run())
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7117")))
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The platform ecosystem consists of **30 interconnected MCPs** serving **5 distinct user profiles**. This document maps how profiles execute 6 critical workflows using specialized and shared tools across Tier 1 (Zilla specialists), Tier 2 (Infrastructure), Tier 3 (Specialized), and Tier 4 (Service MCPs).
+The platform ecosystem consists of **30 interconnected MCPs** serving **5 distinct user profiles**. This document maps how profiles execute 6 critical workflows using specialized and shared tools across Tier 1 (DevTeam specialists), Tier 2 (Infrastructure), Tier 3 (Specialized), and Tier 4 (Service MCPs).
 
 **Key Finding**: 3 consolidation opportunities identified to eliminate fragmentation and unify 70+ overlapping tools into 40 canonical tools.
 
@@ -18,14 +18,14 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 
 ### Profile 1: Development (Backend/Frontend Engineer)
 
-**Who**: Backend engineers, Frontend engineers, ArchZilla, BackZilla, FrontZilla  
+**Who**: Backend engineers, Frontend engineers, Architecture, Backend, Frontend  
 **Context**: Write code, design APIs, design UIs, test locally, commit changes  
-**Primary MCPs**: archzilla, backzilla, frontzilla, qa-mcp, docs-mcp, deploy-mcp  
+**Primary MCPs**: architecture, backend, frontend, qa-mcp, docs-mcp, deploy-mcp  
 **Workflow Loop**: Write → Test → Review → Commit → Push → Auto-Deploy to Dev
 
 **Typical Session**:
-1. Start: `archzilla.analyze_architecture_requirement()`
-2. Code: `backzilla.generate_fastapi_router()` or `frontzilla.generate_react_component()`
+1. Start: `architecture.analyze_architecture_requirement()`
+2. Code: `backend.generate_fastapi_router()` or `frontend.generate_react_component()`
 3. Test: `qa-mcp.run_unit_tests()` + `qa-mcp.run_type_check()`
 4. Review: `qa-mcp.run_linter()` + `docs-mcp.lint_markdown()`
 5. Commit: `deploy-mcp.commit_files()`
@@ -37,14 +37,14 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 
 ### Profile 2: QA/Release Manager
 
-**Who**: QAZilla, QA engineers, Release managers  
+**Who**: QA-Engineer, QA engineers, Release managers  
 **Context**: Validate quality gates, execute comprehensive testing, promote between environments, sign-off releases  
-**Primary MCPs**: qazilla-mcp, test-mcp, quality-gates-system, pipeline-mcp, services-mcp  
+**Primary MCPs**: qa-engineer-mcp, test-mcp, quality-gates-system, pipeline-mcp, services-mcp  
 **Workflow Loop**: Plan → Execute → Validate → Gate → Promote → Deploy
 
 **Typical Session**:
-1. Create Test Plan: `qazilla.create_test_plan(feature, scope)`
-2. Generate Scenarios: `qazilla.generate_test_scenarios(category="e2e")`
+1. Create Test Plan: `qa-engineer.create_test_plan(feature, scope)`
+2. Generate Scenarios: `qa-engineer.generate_test_scenarios(category="e2e")`
 3. Execute: `qa-mcp.run_e2e_tests(base_url, scenarios)`
 4. Record Results: `test-mcp.record_result(scenario_id, status)`
 5. Quality Gate: `pipeline-mcp.add_gate_result(service, env, gate_type, passed)`
@@ -57,14 +57,14 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 
 ### Profile 3: Governance/Security/Compliance (Auditor)
 
-**Who**: SecZilla, AI-Governance, Compliance officers, Security engineers  
+**Who**: Security, AI-Governance, Compliance officers, Security engineers  
 **Context**: Audit decisions, validate contracts, threat modeling, LGPD/SOC2 compliance  
-**Primary MCPs**: seczilla-mcp, ai-governance-mcp, audit-mcp, docs-mcp  
+**Primary MCPs**: security-mcp, ai-governance-mcp, audit-mcp, docs-mcp  
 **Workflow Loop**: Threat Model → Risk Assessment → Control Design → Audit → Evidence
 
 **Typical Session**:
-1. Analyze: `seczilla.generate_threat_model(application, architecture)`
-2. Design Controls: `seczilla.generate_security_controls(threats)`
+1. Analyze: `security.generate_threat_model(application, architecture)`
+2. Design Controls: `security.generate_security_controls(threats)`
 3. Validate: `ai-governance-mcp.validate_agent_decision(repo, task, proposed_change)`
 4. Scan: `qa-mcp.run_security_scan(repo_path, framework="auto")`
 5. Document: `docs-mcp.generate_doc(template="ADR", variables={...})`
@@ -76,20 +76,20 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 
 ### Profile 4: Infrastructure/DevOps/SRE (Ops)
 
-**Who**: OpsZilla, SRE engineers, Infrastructure team, Ops managers  
+**Who**: DevOps, SRE engineers, Infrastructure team, Ops managers  
 **Context**: IaC design, deployment automation, monitoring, incident response, scaling  
-**Primary MCPs**: opszilla-mcp, infra-mcp, pipeline-mcp, services-mcp, zilla-observatory  
+**Primary MCPs**: devops-mcp, infra-mcp, pipeline-mcp, services-mcp, devteam-observatory  
 **Workflow Loop**: Plan → Provision → Deploy → Monitor → Auto-Remediate
 
 **Typical Session**:
-1. Design: `opszilla.generate_terraform_module(cloud_provider, resources)`
+1. Design: `devops.generate_terraform_module(cloud_provider, resources)`
 2. Validate IaC: `infra-mcp.terraform_validate(path)`
 3. Plan: `infra-mcp.terraform_plan(path, out_file)`
 4. Cost Check: `infra-mcp.cost_estimate_infracost(plan_path, delta_threshold=100)`
 5. Policy Scan: `infra-mcp.policy_scan_checkov(path, framework="terraform")`
 6. Deploy: `deploy-mcp.deploy(service, environment="prod")`
-7. Monitor: `zilla-observatory.get_service_metrics(service, time_range="1h")`
-8. Alert: `zilla-observatory.configure_alert(metric, threshold, action)`
+7. Monitor: `devteam-observatory.get_service_metrics(service, time_range="1h")`
+8. Alert: `devteam-observatory.configure_alert(metric, threshold, action)`
 
 **Success Metric**: Infrastructure as code 100% compliant, zero policy violations, <5min recovery time
 
@@ -97,19 +97,19 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 
 ### Profile 5: Product/Strategy (PM)
 
-**Who**: ProductZilla, POZilla, Product managers, Stakeholders  
+**Who**: Product-Manager, Product-Owner, Product managers, Stakeholders  
 **Context**: Define features, roadmap, metrics, success criteria, go-to-market strategy  
-**Primary MCPs**: productzilla-mcp, pozilla-mcp, analytics-mcp, scheduler-mcp  
+**Primary MCPs**: product-manager-mcp, product-owner-mcp, analytics-mcp, scheduler-mcp  
 **Workflow Loop**: Discover → Define → Prioritize → Launch → Measure
 
 **Typical Session**:
-1. Analyze: `productzilla.analyze_product_problem()`
-2. Define Vision: `productzilla.define_product_vision()`
-3. Generate Spec: `productzilla.generate_feature_spec()`
-4. Handoff: `productzilla.generate_handoff_to_engineering()`
-5. Create Epic: `pozilla.generate_epic()`
-6. Breakdown: `pozilla.generate_feature_breakdown()`
-7. Prioritize: `pozilla.prioritize_backlog_items(framework="RICE")`
+1. Analyze: `product-manager.analyze_product_problem()`
+2. Define Vision: `product-manager.define_product_vision()`
+3. Generate Spec: `product-manager.generate_feature_spec()`
+4. Handoff: `product-manager.generate_handoff_to_engineering()`
+5. Create Epic: `product-owner.generate_epic()`
+6. Breakdown: `product-owner.generate_feature_breakdown()`
+7. Prioritize: `product-owner.prioritize_backlog_items(framework="RICE")`
 8. Measure: `analytics-mcp.get_feature_metrics(feature_id, metrics=[...])`
 
 **Success Metric**: Feature adoption > target KPI, NPS improvement, revenue impact positive
@@ -121,64 +121,64 @@ The platform ecosystem consists of **30 interconnected MCPs** serving **5 distin
 ### Workflow A: Feature Development (Parallel Dev + Design + QA)
 
 ```
-Timeline: 2–4 weeks | Participants: Dev (BackZilla), Design (FrontZilla), 
-          Arch (ArchZilla), QA (QAZilla), Ops (OpsZilla), Security (SecZilla)
+Timeline: 2–4 weeks | Participants: Dev (Backend), Design (Frontend), 
+          Arch (Architecture), QA (QA-Engineer), Ops (DevOps), Security (Security)
 
 PHASE 1: DISCOVERY & PLANNING (Week 0)
-├─ ProductZilla: analyze_product_problem()
-├─ POZilla: generate_feature_breakdown()
-└─ ProductZilla: generate_handoff_to_engineering()
+├─ Product-Manager: analyze_product_problem()
+├─ Product-Owner: generate_feature_breakdown()
+└─ Product-Manager: generate_handoff_to_engineering()
 
 PHASE 2: ARCHITECTURE & DESIGN (Week 1, Parallel)
-├─ ArchZilla: analyze_architecture_requirement()
+├─ Architecture: analyze_architecture_requirement()
 │  └─ Call: ai-governance.validate_contract()
-├─ FrontZilla: analyze_requirement()
-│  └─ FrontZilla: generate_wireframe()
-│  └─ FrontZilla: generate_component_spec()
-└─ OpsZilla: analyze_infrastructure_requirement()
-   └─ OpsZilla: generate_terraform_module()
+├─ Frontend: analyze_requirement()
+│  └─ Frontend: generate_wireframe()
+│  └─ Frontend: generate_component_spec()
+└─ DevOps: analyze_infrastructure_requirement()
+   └─ DevOps: generate_terraform_module()
 
 PHASE 3: IMPLEMENTATION (Week 1-2, Parallel)
-├─ BackZilla: generate_fastapi_router()
-│  ├─ BackZilla: generate_database_schema()
-│  ├─ BackZilla: generate_service_layer()
-│  ├─ BackZilla: generate_migration()
+├─ Backend: generate_fastapi_router()
+│  ├─ Backend: generate_database_schema()
+│  ├─ Backend: generate_service_layer()
+│  ├─ Backend: generate_migration()
 │  └─ Call: qa-mcp.run_unit_tests() + qa-mcp.run_security_scan()
 │
-├─ FrontZilla: generate_react_component()
-│  ├─ FrontZilla: generate_custom_hook()
-│  ├─ FrontZilla: generate_form_with_validation()
+├─ Frontend: generate_react_component()
+│  ├─ Frontend: generate_custom_hook()
+│  ├─ Frontend: generate_form_with_validation()
 │  └─ Call: qa-mcp.check_accessibility(url, standard="WCAG2AA")
 │
-└─ OpsZilla: generate_kubernetes_manifest()
-   ├─ OpsZilla: generate_docker_compose() [local dev]
+└─ DevOps: generate_kubernetes_manifest()
+   ├─ DevOps: generate_docker_compose() [local dev]
    ├─ Call: infra-mcp.terraform_plan()
    └─ Call: infra-mcp.policy_scan_checkov()
 
 PHASE 4: SECURITY REVIEW (Week 2)
-├─ SecZilla: generate_threat_model(feature, architecture)
-├─ SecZilla: generate_security_controls(threats)
+├─ Security: generate_threat_model(feature, architecture)
+├─ Security: generate_security_controls(threats)
 ├─ Call: qa-mcp.run_security_scan(repo_path)
 ├─ Call: docs-mcp.generate_doc(template="ADR")
 └─ Call: ai-governance.validate_lib_change() [if applicable]
 
 PHASE 5: COMPREHENSIVE TESTING (Week 2-3)
-├─ QAZilla: create_test_plan(feature, scope)
-├─ QAZilla: generate_test_scenarios(category="rest_api")
-├─ QAZilla: generate_e2e_tests(framework="playwright")
-├─ QAZilla: generate_gherkin_scenarios()
+├─ QA-Engineer: create_test_plan(feature, scope)
+├─ QA-Engineer: generate_test_scenarios(category="rest_api")
+├─ QA-Engineer: generate_e2e_tests(framework="playwright")
+├─ QA-Engineer: generate_gherkin_scenarios()
 └─ Call: qa-mcp.run_e2e_tests(base_url, test_path)
 
 PHASE 6: RELEASE DECISION (Week 3)
-├─ POZilla: validate_story_readiness()
-├─ QAZilla: generate_quality_gate(criteria=[...])
+├─ Product-Owner: validate_story_readiness()
+├─ QA-Engineer: generate_quality_gate(criteria=[...])
 ├─ Call: quality-gates-system.release_gate(service, env="homol")
 └─ Call: pipeline.promote_service(service, homol→prod)
 
 PHASE 7: DEPLOYMENT & MONITORING (Week 3-4)
-├─ OpsZilla: release via deploy-mcp.deploy(service, env="prod")
+├─ DevOps: release via deploy-mcp.deploy(service, env="prod")
 ├─ Call: services-mcp.check_health(service)
-├─ Call: zilla-observatory.configure_alert(metric, threshold)
+├─ Call: devteam-observatory.configure_alert(metric, threshold)
 └─ Call: analytics.track_feature_metrics(feature_id)
 
 SUCCESS CRITERIA:
@@ -195,12 +195,12 @@ SUCCESS CRITERIA:
 ### Workflow B: Threat Modeling & Security Review
 
 ```
-Timeline: 1–2 weeks | Participants: SecZilla, ArchZilla, BackZilla, QA team
+Timeline: 1–2 weeks | Participants: Security, Architecture, Backend, QA team
 
 PHASE 1: THREAT IDENTIFICATION
-├─ SecZilla: generate_threat_model(application, architecture)
-│  └─ Store in seczilla.db: threat_models table
-├─ SecZilla: map_security_risks()
+├─ Security: generate_threat_model(application, architecture)
+│  └─ Store in security.db: threat_models table
+├─ Security: map_security_risks()
 └─ Call: ai-governance.validate_agent_decision(
       repository="platform-x",
       task="Security Review",
@@ -208,9 +208,9 @@ PHASE 1: THREAT IDENTIFICATION
    )
 
 PHASE 2: CONTROL DESIGN
-├─ SecZilla: generate_security_controls(threats)
-├─ SecZilla: generate_security_architecture(security_requirements)
-└─ SecZilla: validate_against_standards(controls, standard="NIST-800-53")
+├─ Security: generate_security_controls(threats)
+├─ Security: generate_security_architecture(security_requirements)
+└─ Security: validate_against_standards(controls, standard="NIST-800-53")
 
 PHASE 3: DEPENDENCY & VULNERABILITY SCANNING
 ├─ Call: qa-mcp.check_dependencies(repo_path)
@@ -219,16 +219,16 @@ PHASE 3: DEPENDENCY & VULNERABILITY SCANNING
 
 PHASE 4: DOCUMENTATION & APPROVAL
 ├─ Call: docs-mcp.generate_doc(template="ADR", variables={decision: "Security architecture"})
-├─ SecZilla: generate_security_handbook()
-└─ SecZilla: publish_security_requirements(
-      notify=[archzilla, backzilla, opszilla],
+├─ Security: generate_security_handbook()
+└─ Security: publish_security_requirements(
+      notify=[architecture, backend, devops],
       blockers_critical=true
    )
 
 PHASE 5: EVIDENCE & AUDIT
 ├─ All decisions logged to audit-mcp
 ├─ Call: audit-mcp.get_audit_log(query="stats")
-└─ SecZilla creates ticket for implementation teams
+└─ Security creates ticket for implementation teams
 
 SUCCESS CRITERIA:
 ✅ All OWASP Top 10 addressed
@@ -243,7 +243,7 @@ SUCCESS CRITERIA:
 ### Workflow C: Deployment Pipeline (Dev → Homol → Prod)
 
 ```
-Timeline: Hours to days | Participants: DevOps (OpsZilla), QA (QAZilla), Release Manager
+Timeline: Hours to days | Participants: DevOps (DevOps), QA (QA-Engineer), Release Manager
 
 ENTRY: PR created on develop branch → automated flow begins
 
@@ -269,7 +269,7 @@ PHASE 2: PROMOTE TO HOMOL (DEV → HOMOL)
 ├─ Status: waiting_approval
 ├─ QA executes:
 │  ├─ qa-mcp.run_e2e_tests(base_url="homol.internal", test_path="./e2e")
-│  ├─ qazilla.create_test_plan() + qazilla.generate_test_scenarios()
+│  ├─ qa-engineer.create_test_plan() + qa-engineer.generate_test_scenarios()
 │  └─ test-mcp.record_result(scenario_id, status="passed")
 ├─ pipeline-mcp.add_gate_result(service, "homol", "e2e_tests", passed=true)
 ├─ pipeline-mcp.add_gate_result(service, "homol", "health_check", passed=true)
@@ -312,14 +312,14 @@ PHASE 5: DEPLOY TO PROD
 │  ├─ Traffic migration (10% → 50% → 100%)
 │  └─ Keep old version ready for rollback (5 minutes window)
 ├─ services-mcp.check_health(service_name, timeout=10)
-└─ zilla-observatory.configure_alert(
+└─ devteam-observatory.configure_alert(
       metric="error_rate",
       threshold=0.01,
       action="page_on_call"
    )
 
 PHASE 6: MONITORING & ROLLBACK (ON-CALL)
-├─ Real-time monitoring via zilla-observatory
+├─ Real-time monitoring via devteam-observatory
 ├─ If issues detected:
 │  ├─ SRE: pipeline-mcp.rollback(
 │       service="platform-x",
@@ -341,10 +341,10 @@ SUCCESS CRITERIA:
 
 ---
 
-### Workflow D: Cross-Zilla Validation (Ecosystem Health Check)
+### Workflow D: Cross-DevTeam Validation (Ecosystem Health Check)
 
 ```
-Timeline: Daily, automated | Participants: ai-governance-mcp, cross-zilla-validators
+Timeline: Daily, automated | Participants: ai-governance-mcp, cross-devteam-validators
 
 PHASE 1: ECOSYSTEM GRAPH ANALYSIS
 ├─ ai-governance.query_ecosystem_graph(node_id=None, query="stats")
@@ -355,7 +355,7 @@ PHASE 2: CONTRACT VALIDATION
 ├─ For each service:
 │  ├─ ai-governance.find_consumers_of(service_id)
 │  ├─ ai-governance.find_dependencies_of(service_id, include_transitive=true)
-│  └─ cross-zilla-validators.validate_contract_compatibility(
+│  └─ cross-devteam-validators.validate_contract_compatibility(
 │       provider=service_id,
 │       consumers=[...],
 │       contract_type="api"
@@ -363,7 +363,7 @@ PHASE 2: CONTRACT VALIDATION
 └─ Report: Breaking changes, missing consumers, orphaned edges
 
 PHASE 3: SUGGESTION VALIDATION
-├─ cross-zilla-validators.validate_suggestion_cross_repo(
+├─ cross-devteam-validators.validate_suggestion_cross_repo(
       source_repo="platform-auth",
       target_repo="platform-gateway",
       suggestion_type="improvement"
@@ -395,11 +395,11 @@ SUCCESS CRITERIA:
 ### Workflow E: Release Management (Version Bump & Go-Live)
 
 ```
-Timeline: 1 week per release cycle | Participants: POZilla, Release Manager, All MCPs
+Timeline: 1 week per release cycle | Participants: Product-Owner, Release Manager, All MCPs
 
 PHASE 1: DEFINE RELEASE
-├─ POZilla: generate_release_notes(version, features, fixes)
-├─ POZilla: generate_release_plan(version, phases, timeline)
+├─ Product-Owner: generate_release_notes(version, features, fixes)
+├─ Product-Owner: generate_release_plan(version, phases, timeline)
 └─ Notify: All teams via ai-governance.broadcast()
 
 PHASE 2: PREPARE DEPLOYMENT
@@ -472,15 +472,15 @@ SUCCESS CRITERIA:
 ### Current Distribution (45+ MCPs, 350+ tools)
 
 ```
-TIER 1: ZILLA SPECIALISTS (8 MCPs, 134 tools)
-├─ FrontZilla: 30 tools (25.9%)
-├─ OpsZilla: 19 tools (16.4%)
-├─ ArchZilla: 18 tools (15.5%)
-├─ ProductZilla: 18 tools (15.5%)
-├─ POZilla: 17 tools (14.7%)
-├─ BackZilla: 14 tools (12.1%)
-├─ QAZilla: 20 tools (17.2%)
-└─ SecZilla: 20 tools (17.2%)
+TIER 1: DEVTEAM SPECIALISTS (8 MCPs, 134 tools)
+├─ Frontend: 30 tools (25.9%)
+├─ DevOps: 19 tools (16.4%)
+├─ Architecture: 18 tools (15.5%)
+├─ Product-Manager: 18 tools (15.5%)
+├─ Product-Owner: 17 tools (14.7%)
+├─ Backend: 14 tools (12.1%)
+├─ QA-Engineer: 20 tools (17.2%)
+└─ Security: 20 tools (17.2%)
 
 TIER 2: INFRASTRUCTURE (12 MCPs, 130+ tools)
 ├─ deploy-mcp: 15 tools
@@ -494,12 +494,12 @@ TIER 2: INFRASTRUCTURE (12 MCPs, 130+ tools)
 ├─ services-mcp: 8 tools
 ├─ config-mcp: 8 tools
 ├─ audit-mcp: 5 tools
-└─ agent-twin-mcp: 4 tools
+└─ dev-twin-mcp: 4 tools
 
 TIER 3: SPECIALIZED (3 MCPs, 36 tools)
-├─ zilla-observatory: 20 tools
+├─ devteam-observatory: 20 tools
 ├─ knowledge-base-mcp: 6 tools
-└─ cross-zilla-validators: 10 tools
+└─ cross-devteam-validators: 10 tools
 
 TIER 4: SERVICES (10 MCPs, 75+ tools)
 ├─ monitor-mcp: 10 tools
@@ -519,78 +519,78 @@ TOTAL: ~375 tools across 45 MCPs
 ### Problem 1: Testing Fragmentation (70+ Overlapping Tools)
 
 **Current State**:
-- **qazilla-mcp**: 20 tools (test planning, generation, automation, bug management, quality gates)
+- **qa-engineer-mcp**: 20 tools (test planning, generation, automation, bug management, quality gates)
 - **qa-mcp**: 15 tools (run_unit_tests, run_linter, run_security_scan, check_coverage, etc.)
 - **test-mcp**: 10 tools (create_test_plan, generate_scenarios, record_result, run_checklist, etc.)
 
 **Overlaps**:
-- `qazilla.generate_unit_tests` + `qa-mcp.run_unit_tests` + `test-mcp` setup
-- `qazilla.generate_e2e_tests` + `qa-mcp.run_e2e_tests`
-- `qazilla.generate_gherkin_scenarios` + `test-mcp.generate_scenarios`
-- `qazilla.create_test_plan` + `test-mcp.create_test_plan`
+- `qa-engineer.generate_unit_tests` + `qa-mcp.run_unit_tests` + `test-mcp` setup
+- `qa-engineer.generate_e2e_tests` + `qa-mcp.run_e2e_tests`
+- `qa-engineer.generate_gherkin_scenarios` + `test-mcp.generate_scenarios`
+- `qa-engineer.create_test_plan` + `test-mcp.create_test_plan`
 
-**Recommendation: Consolidate into QAZilla**
+**Recommendation: Consolidate into QA-Engineer**
 ```
 BEFORE:
-  qazilla-mcp (20) → design test strategy
+  qa-engineer-mcp (20) → design test strategy
   qa-mcp (15) → execute tests
   test-mcp (10) → manage test plans
   Total: 45 tools, 3 MCPs
 
 AFTER:
-  qazilla-mcp (45) → unified QA + testing dominio
+  qa-engineer-mcp (45) → unified QA + testing dominio
     ├─ 20 original tools
-    ├─ 15 qa-mcp tools wrapped: run_unit_tests → qazilla.run_unit_tests()
-    ├─ 10 test-mcp tools wrapped: create_test_plan → qazilla.create_test_plan()
+    ├─ 15 qa-mcp tools wrapped: run_unit_tests → qa-engineer.run_unit_tests()
+    ├─ 10 test-mcp tools wrapped: create_test_plan → qa-engineer.create_test_plan()
   Result: -2 MCPs, 1 unified context for QA teams
 ```
 
 **Migration Path**:
-1. Move qa-mcp.run_unit_tests → qazilla.run_unit_tests (wrapper calling qa-mcp internally)
-2. Move test-mcp.create_test_plan → qazilla.create_test_plan (wrapper)
+1. Move qa-mcp.run_unit_tests → qa-engineer.run_unit_tests (wrapper calling qa-mcp internally)
+2. Move test-mcp.create_test_plan → qa-engineer.create_test_plan (wrapper)
 3. Deprecate test-mcp (no breaking changes)
 4. Deprecate qa-mcp.run_* public APIs (keep internal for other MCPs)
-5. Update all references in workflows to use qazilla directly
+5. Update all references in workflows to use qa-engineer directly
 
 ---
 
 ### Problem 2: Security Tool Fragmentation (40+ Overlapping Tools)
 
 **Current State**:
-- **seczilla-mcp**: 20 tools (threat modeling, control design, review)
+- **security-mcp**: 20 tools (threat modeling, control design, review)
 - **qa-mcp**: 3 tools (run_security_scan, check_dependencies, analyze_complexity)
 - **ai-governance-mcp**: 14 tools (validation, contract checking)
 
 **Overlaps**:
-- `seczilla.review_secure_code` + `qa-mcp.run_security_scan`
-- `seczilla.validate_against_standards` + `ai-governance.validate_contract`
+- `security.review_secure_code` + `qa-mcp.run_security_scan`
+- `security.validate_against_standards` + `ai-governance.validate_contract`
 
-**Recommendation: Integrate SecZilla with QA, Keep ai-governance Separate**
+**Recommendation: Integrate Security with QA, Keep ai-governance Separate**
 ```
 BEFORE:
-  seczilla-mcp (20) → threat & control design
+  security-mcp (20) → threat & control design
   qa-mcp (3) → security scanning/audit
   ai-governance-mcp (14) → governance + contracts
   Total: 37 tools dedicated to security
 
 AFTER:
-  seczilla-mcp (25) → unified security
+  security-mcp (25) → unified security
     ├─ 20 original tools
     ├─ 5 new tools: run_security_scan(), check_dependencies(), validate_threat_model()
     └─ These call qa-mcp internally (hidden)
   
-  qa-mcp (3 deprecated) → tools move to seczilla, qa-mcp becomes internal-only
+  qa-mcp (3 deprecated) → tools move to security, qa-mcp becomes internal-only
   
   ai-governance-mcp (14) → KEEP SEPARATE (ecosystem contracts, not security)
 
-Result: Security domain unified in seczilla, ai-governance keeps ecosystem role
+Result: Security domain unified in security, ai-governance keeps ecosystem role
 ```
 
 **Migration Path**:
-1. Add wrapper tools to seczilla: `run_security_scan()`, `check_dependencies()`
+1. Add wrapper tools to security: `run_security_scan()`, `check_dependencies()`
 2. These wrappers call qa-mcp.run_security_scan internally
-3. Update seczilla workflows to call `seczilla.run_security_scan()` instead of `qa-mcp`
-4. Mark qa-mcp security tools as deprecated (redirect to seczilla)
+3. Update security workflows to call `security.run_security_scan()` instead of `qa-mcp`
+4. Mark qa-mcp security tools as deprecated (redirect to security)
 5. Keep ai-governance separate (different domain: contracts, not security threats)
 
 ---
@@ -598,44 +598,44 @@ Result: Security domain unified in seczilla, ai-governance keeps ecosystem role
 ### Problem 3: Observability Fragmentation (30+ Overlapping Tools)
 
 **Current State**:
-- **zilla-observatory**: 20 tools (metrics, dashboards, alerts, ecosystem monitoring)
+- **devteam-observatory**: 20 tools (metrics, dashboards, alerts, ecosystem monitoring)
 - **monitor-mcp**: 10 tools (logs, metrics, traces, alerts) — Service MCP
 
 **Overlaps**:
-- `zilla-observatory.get_service_metrics` + `monitor-mcp.get_metrics`
-- `zilla-observatory.configure_alert` + `monitor-mcp.configure_alert`
-- `zilla-observatory.get_ecosystem_health` + `monitor-mcp.get_health_check`
+- `devteam-observatory.get_service_metrics` + `monitor-mcp.get_metrics`
+- `devteam-observatory.configure_alert` + `monitor-mcp.configure_alert`
+- `devteam-observatory.get_ecosystem_health` + `monitor-mcp.get_health_check`
 
 **Recommendation: Keep Separate (Different Domains)**
 ```
 KEEP AS IS:
-  zilla-observatory (20) → Zilla ecosystem + dashboards (MCP specialist)
+  devteam-observatory (20) → DevTeam ecosystem + dashboards (MCP specialist)
   monitor-mcp (10) → General platform monitoring (Service MCP)
 
 REASONING:
-  - zilla-observatory = DOMAIN: Zilla team's tools + ecosystem dashboards
+  - devteam-observatory = DOMAIN: DevTeam team's tools + ecosystem dashboards
   - monitor-mcp = DOMAIN: General services + applications
   - No need to merge (clear separation of concerns)
-  - Integration: zilla-observatory.configure_alert() calls monitor-mcp internally
+  - Integration: devteam-observatory.configure_alert() calls monitor-mcp internally
 ```
 
 **Integration Strategy** (no consolidation needed):
-1. zilla-observatory stays as primary interface for Zilla teams
+1. devteam-observatory stays as primary interface for DevTeam teams
 2. monitor-mcp stays as service for apps/services to call
-3. When zilla-observatory needs metrics → calls monitor-mcp internally
-4. Clear domain boundary: Zilla-specific vs. Generic
+3. When devteam-observatory needs metrics → calls monitor-mcp internally
+4. Clear domain boundary: DevTeam-specific vs. Generic
 
 ---
 
 ### Problem 4: Ops & Infrastructure (Separate, No Overlap)
 
 **Current State**:
-- **opszilla-mcp**: 19 tools (design, docker, k8s, terraform design)
+- **devops-mcp**: 19 tools (design, docker, k8s, terraform design)
 - **infra-mcp**: 9 tools (execution: terraform plan/apply, checkov, cost estimation)
 
 **Status**: GOOD SEPARATION
 ```
-opszilla (19) → DESIGN PHASE
+devops (19) → DESIGN PHASE
 ├─ generate_terraform_module()
 ├─ generate_kubernetes_manifest()
 ├─ generate_dockerfile()
@@ -649,7 +649,7 @@ infra-mcp (9) → EXECUTION PHASE
 ├─ cost_estimate_infracost()
 └─ terraform_apply() [if approved]
 
-Clear flow: opszilla designs → infra-mcp executes + validates
+Clear flow: devops designs → infra-mcp executes + validates
 ```
 
 **Recommendation**: KEEP AS IS (Perfect separation)
@@ -660,7 +660,7 @@ Clear flow: opszilla designs → infra-mcp executes + validates
 
 **Current State**:
 - **docs-mcp**: 12 tools (templates, linting, audit, search)
-- Each Zilla generates own docs via `generate_doc()` calls
+- Each DevTeam generates own docs via `generate_doc()` calls
 
 **Status**: GOOD (Cross-MCP pattern)
 ```
@@ -671,7 +671,7 @@ docs-mcp (12) → Shared utilities
 ├─ validate_doc()
 ├─ search_docs()
 
-Usage: Every Zilla calls docs-mcp.generate_doc() to create ADRs, docs
+Usage: Every DevTeam calls docs-mcp.generate_doc() to create ADRs, docs
 No consolidation needed. Already following best practice.
 ```
 
@@ -683,10 +683,10 @@ No consolidation needed. Already following best practice.
 
 | Action | MCPs Affected | Tools Before | Tools After | Benefit | Priority |
 |--------|---------------|--------------|-------------|---------|----------|
-| **Consolidate Testing** | qazilla ← qa-mcp + test-mcp | 45 tools / 3 MCPs | 45 tools / 1 MCP | -2 MCPs, unified QA context | **P1** |
-| **Integrate Security** | seczilla ← qa-mcp (security) | 37 tools / 2 MCPs | 25 tools + 14 in ai-gov / 2 MCPs | Unified threat→control flow | **P1** |
-| **Keep Ops Separate** | opszilla + infra-mcp | 28 tools / 2 MCPs | 28 tools / 2 MCPs | Design-execute separation works | ✓ |
-| **Keep Observability Integrated** | zilla-observatory + monitor-mcp | 30 tools / 2 MCPs | 30 tools / 2 MCPs | Domain separation clear | ✓ |
+| **Consolidate Testing** | qa-engineer ← qa-mcp + test-mcp | 45 tools / 3 MCPs | 45 tools / 1 MCP | -2 MCPs, unified QA context | **P1** |
+| **Integrate Security** | security ← qa-mcp (security) | 37 tools / 2 MCPs | 25 tools + 14 in ai-gov / 2 MCPs | Unified threat→control flow | **P1** |
+| **Keep Ops Separate** | devops + infra-mcp | 28 tools / 2 MCPs | 28 tools / 2 MCPs | Design-execute separation works | ✓ |
+| **Keep Observability Integrated** | devteam-observatory + monitor-mcp | 30 tools / 2 MCPs | 30 tools / 2 MCPs | Domain separation clear | ✓ |
 | **Docs as Utilities** | docs-mcp (shared) | 12 tools / 1 MCP | 12 tools / 1 MCP | Already exemplary | ✓ |
 
 ---
@@ -694,14 +694,14 @@ No consolidation needed. Already following best practice.
 ## Implementation Roadmap
 
 ### Phase 1: Testing Consolidation (Week 1-2)
-1. Add wrapper tools to QAZilla for qa-mcp functions
-2. Update QAZilla to call qa-mcp internally
+1. Add wrapper tools to QA-Engineer for qa-mcp functions
+2. Update QA-Engineer to call qa-mcp internally
 3. Deprecate test-mcp public API
 4. Update all workflow documentation
 
 ### Phase 2: Security Integration (Week 2-3)
-1. Add wrapper tools to SecZilla for qa-mcp security functions
-2. Update SecZilla workflows to use `seczilla.run_security_scan()`
+1. Add wrapper tools to Security for qa-mcp security functions
+2. Update Security workflows to use `security.run_security_scan()`
 3. Deprecate qa-mcp security tools public API
 4. Update security workflows
 

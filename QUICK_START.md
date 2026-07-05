@@ -8,35 +8,35 @@
 
 ---
 
-## PASSO 2: Integrar 8 Zillas (30 min)
+## PASSO 2: Integrar 8 DevTeam (30 min)
 
-### Atalho: Copiar ZillaIntegration.ts
+### Atalho: Copiar DevTeamIntegration.ts
 
 ```bash
 cd /home/dev/repos/platform-devs
 
 # Já criado em:
-ls -la ZillaIntegration.ts
+ls -la DevTeamIntegration.ts
 
-# Adicionar import em cada Zilla server.ts:
-for zilla in archzilla-mcp-server backzilla-mcp-server frontzilla-pixelfera-mcp-server opszilla-mcp-server pozilla-mcp-server productzilla-mcp-server qa-mcp-server seczilla-mcp-server; do
-  echo "Atualizando $zilla..."
+# Adicionar import em cada DevTeam server.ts:
+for devteam in architecture-mcp-server backend-mcp-server frontend-pixelfera-mcp-server devops-mcp-server product-owner-mcp-server product-manager-mcp-server qa-mcp-server security-mcp-server; do
+  echo "Atualizando $devteam..."
   # Adicionar no início do arquivo:
-  # import ZillaIntegration from '../../ZillaIntegration';
+  # import DevTeamIntegration from '../../DevTeamIntegration';
 done
 ```
 
-### Exemplo: ProductZilla
+### Exemplo: Product-Manager
 
-Abrir `/productzilla-mcp-server/src/server.ts` e adicionar:
+Abrir `/product-manager-mcp-server/src/server.ts` e adicionar:
 
 ```typescript
-import ZillaIntegration from '../../ZillaIntegration';
+import DevTeamIntegration from '../../DevTeamIntegration';
 
 // Em generateFeatureSpec():
 async generateFeatureSpec(requirement: string) {
-  const zillaInt = new ZillaIntegration('ProductZilla');
-  return zillaInt.executeWorkflow(
+  const devteamInt = new DevTeamIntegration('Product-Manager');
+  return devteamInt.executeWorkflow(
     'generate_feature_spec',
     async () => {
       const spec = await this.generateSpec(requirement);
@@ -50,7 +50,7 @@ async generateFeatureSpec(requirement: string) {
 ### Verificar Integração
 
 ```bash
-# Compilar cada Zilla
+# Compilar cada DevTeam
 npm run build
 
 # Testar imports
@@ -59,7 +59,7 @@ npm run test -- --testPathPattern="integration"
 # Commit
 git add .
 git commit -m "feat: integrate knowledge-base, validators, quality-gates, observatory MCPs"
-git push origin feature/zilla-integration
+git push origin feature/devteam-integration
 ```
 
 ---
@@ -71,27 +71,27 @@ git push origin feature/zilla-integration
 ```bash
 # Abrir 8 terminais ou tmux sessions
 
-# Terminal 1: ProductZilla — Spec
-npm run zilla:product -- --task oauth2_spec
+# Terminal 1: Product-Manager — Spec
+npm run devteam:product -- --task oauth2_spec
 
-# Terminal 2: POZilla — Breakdown
-npm run zilla:po -- --task breakdown --spec oauth2_v1
+# Terminal 2: Product-Owner — Breakdown
+npm run devteam:po -- --task breakdown --spec oauth2_v1
 
 # Terminals 3-6: Paralelo (Arch, Back, Front, Ops)
-npm run zilla:arch -- --task design --spec oauth2_v1 &
-npm run zilla:back -- --task implement --blueprint oauth2_arch_v1 &
-npm run zilla:front -- --task design-ui --spec oauth2_v1 &
-npm run zilla:ops -- --task deploy --api oauth2_api_v1 &
+npm run devteam:arch -- --task design --spec oauth2_v1 &
+npm run devteam:back -- --task implement --blueprint oauth2_arch_v1 &
+npm run devteam:front -- --task design-ui --spec oauth2_v1 &
+npm run devteam:ops -- --task deploy --api oauth2_api_v1 &
 wait
 
-# Terminal 7: QAZilla — Tests
-npm run zilla:qa -- --task e2e --spec oauth2_v1 --api oauth2_api_v1
+# Terminal 7: QA-Engineer — Tests
+npm run devteam:qa -- --task e2e --spec oauth2_v1 --api oauth2_api_v1
 
-# Terminal 8: SecZilla — Security
-npm run zilla:sec -- --task threat-model --blueprint oauth2_arch_v1
+# Terminal 8: Security — Security
+npm run devteam:sec -- --task threat-model --blueprint oauth2_arch_v1
 
-# Terminal 9: POZilla — Finalize
-npm run zilla:po -- --task finalize --feature oauth2_v1
+# Terminal 9: Product-Owner — Finalize
+npm run devteam:po -- --task finalize --feature oauth2_v1
 
 # Verificar Observatory
 open http://localhost:7113/dashboard/oauth2_integration
@@ -100,15 +100,15 @@ open http://localhost:7113/dashboard/oauth2_integration
 ### Expected Output
 
 ```
-✅ ProductZilla: spec_id=oauth2_v1 (8 stories, 34 points)
-✅ POZilla: breakdown_complete
-✅ ArchZilla: blueprint_id=oauth2_arch_v1
-✅ BackZilla: api_id=oauth2_api_v1 (5 endpoints)
-✅ FrontZilla: components=4, accessibility_passed
-✅ OpsZilla: staging_deployed, performance_ok
-✅ QAZilla: e2e_tests_passed (8/8, 92% coverage)
-✅ SecZilla: threat_model_complete, no_critical_issues
-✅ POZilla: feature_ready_for_release
+✅ Product-Manager: spec_id=oauth2_v1 (8 stories, 34 points)
+✅ Product-Owner: breakdown_complete
+✅ Architecture: blueprint_id=oauth2_arch_v1
+✅ Backend: api_id=oauth2_api_v1 (5 endpoints)
+✅ Frontend: components=4, accessibility_passed
+✅ DevOps: staging_deployed, performance_ok
+✅ QA-Engineer: e2e_tests_passed (8/8, 92% coverage)
+✅ Security: threat_model_complete, no_critical_issues
+✅ Product-Owner: feature_ready_for_release
 
 Observatory Dashboard: 14/14 gates PASSED ✅
 ```
@@ -142,17 +142,17 @@ docker build -f knowledge-base-mcp/Dockerfile \
   -t platform-knowledge-base-mcp:v1.0.0 \
   knowledge-base-mcp/
 
-docker build -f cross-zilla-validators/Dockerfile \
+docker build -f cross-devteam-validators/Dockerfile \
   -t platform-validators-mcp:v1.0.0 \
-  cross-zilla-validators/
+  cross-devteam-validators/
 
 docker build -f quality-gates-system/Dockerfile \
   -t platform-quality-gates-mcp:v1.0.0 \
   quality-gates-system/
 
-docker build -f zilla-observatory/Dockerfile \
+docker build -f devteam-observatory/Dockerfile \
   -t platform-observatory-mcp:v1.0.0 \
-  zilla-observatory/
+  devteam-observatory/
 ```
 
 ### 4.3 — Deploy
@@ -199,7 +199,7 @@ curl http://localhost:7102/services/health | jq '.'
 open http://localhost:7113/dashboard
 
 # Expected:
-# - 8 Zillas: Online ✅
+# - 8 DevTeam: Online ✅
 # - 35 Serviços: Online ✅
 # - Feature OAuth2: 100% Complete ✅
 # - Quality Gates: 14/14 PASSED ✅
@@ -209,7 +209,7 @@ open http://localhost:7113/dashboard
 
 ## Troubleshooting
 
-### Zilla não conecta a MCP
+### DevTeam não conecta a MCP
 
 ```bash
 # Verificar se porta está aberta
@@ -231,8 +231,8 @@ curl -X POST http://localhost:7111/tools/call \
   -d '{
     "name": "validate_completeness",
     "arguments": {
-      "from_zilla": "ProductZilla",
-      "to_zilla": "ArchZilla",
+      "from_devteam": "Product-Manager",
+      "to_devteam": "Architecture",
       "payload": {"spec_id": "test"}
     }
   }' | jq '.'
@@ -274,8 +274,8 @@ sqlite3 /data/observatory.db "SELECT COUNT(*) FROM metrics;"
 
 Antes de considerar "PRONTO PARA PRODUÇÃO":
 
-- [ ] PASSO 2: Todos os 8 Zillas compilam sem erros
-- [ ] PASSO 2: ZillaIntegration import funciona
+- [ ] PASSO 2: Todos os 8 DevTeam compilam sem erros
+- [ ] PASSO 2: DevTeamIntegration import funciona
 - [ ] PASSO 3: E2E OAuth2 executa até o fim
 - [ ] PASSO 3: Observatory mostra 100% progress
 - [ ] PASSO 3: 14/14 gates PASSED
@@ -291,7 +291,7 @@ Antes de considerar "PRONTO PARA PRODUÇÃO":
 
 Após completar todos os 4 passos, você terá:
 
-✅ Ecossistema de 8 Zillas plenamente coordenado
+✅ Ecossistema de 8 DevTeam plenamente coordenado
 ✅ 4 MCPs em produção (portas 7110-7113)
 ✅ Validação automática de handoffs
 ✅ Quality gates bloqueantes
@@ -305,7 +305,7 @@ Após completar todos os 4 passos, você terá:
 ## Suporte
 
 Documentação completa em:
-- `/ZILLA_INTEGRATION_EXAMPLES.md` — Padrão por Zilla
+- `/DEVTEAM_INTEGRATION_EXAMPLES.md` — Padrão por DevTeam
 - `/PASSO_3_E2E_OAUTH2_TEST.md` — Detalhes do teste E2E
 - `/PASSO_4_DEPLOY_PRODUCTION.md` — Detalhes do deployment
 - `/EXECUTION_SUMMARY.md` — Visão geral completa

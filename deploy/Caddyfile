@@ -1,0 +1,198 @@
+# ============================================================================
+# Caddyfile — Borda TLS do piloto MCP (proxy reverso)
+# ----------------------------------------------------------------------------
+# Topologia: SÓ o Caddy é público. Ele termina TLS (ACME automático) e roteia
+# por PATH, sob um único host, para os serviços MCP que vivem na rede PRIVADA
+# (docker-compose.pilot.yml). Nenhum serviço de app expõe porta no host.
+#
+#   Claude Code ──HTTPS──▶ Caddy ──HTTP (rede privada)──▶ seczilla-mcp:7100
+#                                 ├─────────────────────▶ auth-mcp:7103  (Authorization Server)
+#                                 └─────────────────────▶ mcp-gateway:8080
+#
+# ----------------------------------------------------------------------------
+# COMO TROCAR O DOMÍNIO:
+#   1. Substitua "mcp.suaempresa.com" pelo seu domínio real (aqui e no .env).
+#   2. Aponte o DNS A/AAAA do domínio para o IP público do host.
+#   3. Ajuste `email` no bloco global para o contato ACME/Let's Encrypt.
+#   4. Garanta que AS_ISSUER, SECZILLA_RESOURCE, AS_JWKS_URL e SECZILLA_PRM_URL
+#      (no .env) usem EXATAMENTE este mesmo host/paths — os apps constroem as
+#      URLs de discovery a partir dessas variáveis, então elas precisam bater
+#      com o que o Caddy expõe publicamente.
+# ============================================================================
+
+# --- Opções globais --------------------------------------------------------
+{
+	# E-mail usado pelo ACME (Let's Encrypt) para avisos de expiração.
+	# Troque pelo contato real de operações antes de ir para produção.
+	email ops@suaempresa.com
+
+	# Para testar emissão de certificados sem bater no rate limit da produção,
+	# descomente a linha abaixo (usa o staging do Let's Encrypt):
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+# ----------------------------------------------------------------------------
+# Trecho reutilizável: security headers (espírito do harden_headers do SecZilla,
+# OWASP Secure Headers). Aplicado a todos os sites abaixo via `import`.
+# ----------------------------------------------------------------------------
+(security_headers) {
+	header {
+		# HSTS: força HTTPS por 2 anos, incl. subdomínios (só faz sentido sob TLS real).
+		Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+		# Impede o navegador de "adivinhar" o content-type (anti MIME sniffing).
+		X-Content-Type-Options "nosniff"
+		# Sem embedding em frames de terceiros (anti clickjacking).
+		X-Frame-Options "DENY"
+		# Não vaza a URL de origem para outros sites.
+		Referrer-Policy "no-referrer"
+		# CSP mínima: estas são APIs JSON/JSON-RPC, não servem HTML navegável.
+		Content-Security-Policy "default-src 'none'; frame-ancestors 'none'"
+		# Remove headers que revelam a stack (fingerprinting).
+		-Server
+		-X-Powered-By
+	}
+}
+
+# ============================================================================
+# PRODUÇÃO — host público único, TLS automático via ACME
+# ============================================================================
+mcp.suaempresa.com {
+	import security_headers
+
+	# ------------------------------------------------------------------------
+	# ROTA /seczilla/* → SecZilla (Streamable HTTP, escuta na 7100).
+	#
+	# Decisão de roteamento: usamos `handle_path`, que REMOVE o prefixo `/seczilla`
+	# antes de encaminhar. Assim:
+	#   público  https://mcp.suaempresa.com/seczilla/mcp
+	#     → upstream  seczilla-mcp:7100/mcp                (endpoint MCP nativo)
+	#   público  https://mcp.suaempresa.com/seczilla/.well-known/oauth-protected-resource
+	#     → upstream  seczilla-mcp:7100/.well-known/oauth-protected-resource
+	#   público  https://mcp.suaempresa.com/seczilla/v1/health
+	#     → upstream  seczilla-mcp:7100/v1/health
+	#
+	# IMPORTANTE (.well-known): o cliente OAuth do Claude Code, ao tomar 401,
+	# lê o header WWW-Authenticate e busca o `.well-known/oauth-protected-resource`
+	# do RESOURCE. Como o SecZilla anuncia RESOURCE = SECZILLA_RESOURCE
+	# (= https://mcp.suaempresa.com/seczilla/mcp) e o PRM em SECZILLA_PRM_URL
+	# (= https://mcp.suaempresa.com/seczilla/.well-known/oauth-protected-resource),
+	# esse path PRECISA ser servido exatamente aqui. O `handle_path` acima já cobre,
+	# pois o SecZilla registra a rota interna em `/.well-known/oauth-protected-resource`.
+	handle_path /seczilla/* {
+		reverse_proxy seczilla-mcp:7100
+	}
+
+	# ------------------------------------------------------------------------
+	# DEMAIS ZILLAS — mesmo padrão handle_path (strip do prefixo). Cada RESOURCE/PRM
+	# público (https://host/<zilla>/mcp) é servido aqui e resolve 1:1 no upstream.
+	handle_path /qazilla/* {
+		reverse_proxy qazilla-mcp:7124
+	}
+	handle_path /archzilla/* {
+		reverse_proxy archzilla-mcp:7118
+	}
+	handle_path /backzilla/* {
+		reverse_proxy backzilla-mcp:7119
+	}
+	handle_path /frontzilla/* {
+		reverse_proxy frontzilla-mcp:7120
+	}
+	handle_path /opszilla/* {
+		reverse_proxy opszilla-mcp:7121
+	}
+	handle_path /pozilla/* {
+		reverse_proxy pozilla-mcp:7122
+	}
+	handle_path /productzilla/* {
+		reverse_proxy productzilla-mcp:7123
+	}
+
+	# ------------------------------------------------------------------------
+	# ROTA /auth/* → Authorization Server (auth-mcp, escuta na 7103).
+	#
+	# Também via `handle_path` (remove `/auth`). O AS constrói TODAS as suas URLs
+	# a partir de AS_ISSUER (= https://mcp.suaempresa.com/auth). Logo:
+	#   público  .../auth/.well-known/oauth-authorization-server  → upstream /.well-known/oauth-authorization-server
+	#   público  .../auth/.well-known/jwks.json                   → upstream /.well-known/jwks.json
+	#   público  .../auth/oauth/token                             → upstream /oauth/token
+	#   público  .../auth/oauth/authorize                         → upstream /oauth/authorize
+	#   público  .../auth/oauth/introspect                        → upstream /oauth/introspect
+	#   público  .../auth/register                                → upstream /register
+	#
+	# IMPORTANTE (.well-known do AS): o Claude Code descobre o Authorization Server
+	# lendo `oauth-authorization-server` a partir do `issuer` que o PRM do SecZilla
+	# aponta (AS_ISSUER). Por isso AS_ISSUER TEM de ser https://mcp.suaempresa.com/auth
+	# e este bloco TEM de servir o `.well-known` sem stripping adicional. O jwks_uri
+	# publicado no metadata (=$AS_ISSUER/.well-known/jwks.json) precisa resolver aqui.
+	handle_path /auth/* {
+		reverse_proxy auth-mcp:7103
+	}
+
+	# ------------------------------------------------------------------------
+	# ROTA /gateway/* → MCP Gateway (Resource Server / edge de política, 8080).
+	handle_path /gateway/* {
+		reverse_proxy mcp-gateway:8080
+	}
+
+	# Qualquer outra rota: 404 explícito (não vaza nada).
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ============================================================================
+# DEV LOCAL — mesma topologia, TLS interno (self-signed) do Caddy.
+# ----------------------------------------------------------------------------
+# Sobe em https://localhost com um certificado da CA interna do Caddy
+# (`tls internal`). Para o Claude Code confiar sem avisos, instale a CA raiz do
+# Caddy no truststore do sistema, OU use mkcert (ver DEPLOY_PILOT.md).
+# As mesmas rotas por path do bloco de produção valem aqui.
+# ============================================================================
+https://localhost {
+	tls internal
+	import security_headers
+
+	handle_path /seczilla/* {
+		reverse_proxy seczilla-mcp:7100
+	}
+	handle_path /qazilla/* {
+		reverse_proxy qazilla-mcp:7124
+	}
+	handle_path /archzilla/* {
+		reverse_proxy archzilla-mcp:7118
+	}
+	handle_path /backzilla/* {
+		reverse_proxy backzilla-mcp:7119
+	}
+	handle_path /frontzilla/* {
+		reverse_proxy frontzilla-mcp:7120
+	}
+	handle_path /opszilla/* {
+		reverse_proxy opszilla-mcp:7121
+	}
+	handle_path /pozilla/* {
+		reverse_proxy pozilla-mcp:7122
+	}
+	handle_path /productzilla/* {
+		reverse_proxy productzilla-mcp:7123
+	}
+	handle_path /auth/* {
+		reverse_proxy auth-mcp:7103
+	}
+	handle_path /gateway/* {
+		reverse_proxy mcp-gateway:8080
+	}
+	handle {
+		respond "Not Found" 404
+	}
+}
+
+# ----------------------------------------------------------------------------
+# HTTP :80 — apenas para o desafio ACME e redirect para HTTPS em produção.
+# Em produção com um domínio real, o Caddy já redireciona :80 → :443
+# automaticamente para o site nomeado; este bloco cobre acessos por IP/host
+# nu em dev (redireciona tudo para HTTPS).
+# ----------------------------------------------------------------------------
+:80 {
+	redir https://{host}{uri} permanent
+}

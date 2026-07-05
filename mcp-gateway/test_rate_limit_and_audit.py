@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
-"""Test rate limiting and audit logging functionality."""
+"""Test rate limiting and audit logging functionality.
+
+Script de integração MANUAL (requer gateway + Postgres rodando). Os tokens de teste
+hardcoded foram removidos do gateway; forneça tokens reais via env. Gere um static
+token e seu hash com:
+
+    python -c "import bcrypt, secrets; raw=secrets.token_urlsafe(32); \
+print(raw); print(bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode())"
+
+e registre o hash em GATEWAY_STATIC_TOKENS_JSON no gateway.
+"""
 import asyncio
+import os
 import httpx
 import psycopg2
 import json
 from time import sleep
 
 GATEWAY_URL = "http://localhost:8080"
-ADMIN_TOKEN = "test-admin-token"
-DEV_TOKEN = "test-developer-token"
+# Tokens reais fornecidos por env (sem hardcode). Ver docstring acima.
+ADMIN_TOKEN = os.environ.get("GATEWAY_ADMIN_TOKEN", "")
+DEV_TOKEN = os.environ.get("GATEWAY_DEV_TOKEN", "")
 PG_HOST = "localhost"
 PG_PORT = 5433
 PG_DB = "platform_staging"
@@ -46,7 +58,7 @@ async def test_rate_limiting():
         for i in range(10):
             try:
                 resp = await client.post(
-                    f"{GATEWAY_URL}/mcp/qazilla-mcp/tools/call",
+                    f"{GATEWAY_URL}/mcp/qa-engineer-mcp/tools/call",
                     json={"name": "generate_test_cases", "arguments": {}},
                     headers={"Authorization": f"Bearer {ADMIN_TOKEN}"},
                     timeout=5,
@@ -92,7 +104,7 @@ async def test_audit_logging():
     # Make a request with developer token
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{GATEWAY_URL}/mcp/qazilla-mcp/tools/call",
+            f"{GATEWAY_URL}/mcp/qa-engineer-mcp/tools/call",
             json={"name": "generate_test_cases", "arguments": {"scenario": "test"}},
             headers={"Authorization": f"Bearer {DEV_TOKEN}"},
             timeout=5,
@@ -127,9 +139,9 @@ async def test_audit_logging():
     count = cur.fetchone()[0]
     print(f"✓ Index query (user_id): {count} records for dev1")
 
-    cur.execute("SELECT COUNT(*) FROM mcp_audit_log WHERE mcp='qazilla-mcp'")
+    cur.execute("SELECT COUNT(*) FROM mcp_audit_log WHERE mcp='qa-engineer-mcp'")
     count = cur.fetchone()[0]
-    print(f"✓ Index query (mcp): {count} records for qazilla-mcp")
+    print(f"✓ Index query (mcp): {count} records for qa-engineer-mcp")
 
     cur.close()
     conn.close()
@@ -151,7 +163,7 @@ async def test_rbac_blocking():
     # Try to call a restricted tool
     async with httpx.AsyncClient() as client:
         resp = await client.post(
-            f"{GATEWAY_URL}/mcp/seczilla-mcp/tools/call",
+            f"{GATEWAY_URL}/mcp/security-mcp/tools/call",
             json={"name": "generate_threat_model", "arguments": {}},
             headers={"Authorization": f"Bearer {DEV_TOKEN}"},
             timeout=5,

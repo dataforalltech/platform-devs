@@ -15,12 +15,10 @@ from __future__ import annotations
 
 import os
 
-import asyncio
 import json
 import logging
 from typing import Any
 
-from fastapi import FastAPI
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
@@ -753,22 +751,49 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
+# Escopos por ferramenta (least privilege)                                     #
+# ─────────────────────────────────────────────────────────────────────────── #
+# read  = consultas/status/healthcheck (não altera estado remoto).
+# write = ação que MUTA estado (git, PR, deploy, push ACR, workflow, clone) —
+#         SENSÍVEIS: podem alterar repositórios, disparar deploys ou publicar imagens.
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # ── deploy:read — consultas/status/healthcheck ─────────────────────────── #
+    "list_repos": "deploy:read",
+    "list_branches": "deploy:read",
+    "get_pr": "deploy:read",
+    "list_prs": "deploy:read",
+    "list_workflow_runs": "deploy:read",
+    "get_workflow_run": "deploy:read",
+    "get_deploy_status": "deploy:read",
+    "get_pipeline_templates": "deploy:read",
+    "list_acr_images": "deploy:read",
+    "ensure_all_repos_healthy": "deploy:read",  # healthcheck (dry_run seguro por default seria ideal)
+    "get_repos_root": "deploy:read",
+    "list_local_repos": "deploy:read",
+    # ── deploy:write — ações que MUTAM estado (SENSÍVEIS) ──────────────────── #
+    "create_branch": "deploy:write",       # SENSÍVEL: git — cria branch no repo remoto
+    "commit_files": "deploy:write",        # SENSÍVEL: git commit/push — altera conteúdo do repo
+    "create_pr": "deploy:write",           # SENSÍVEL: cria Pull Request
+    "merge_pr": "deploy:write",            # SENSÍVEL: merge — integra código na base
+    "cancel_workflow_run": "deploy:write", # SENSÍVEL: cancela execução de workflow em curso
+    "trigger_workflow": "deploy:write",    # SENSÍVEL: dispara workflow (workflow_dispatch)
+    "deploy": "deploy:write",              # SENSÍVEL: dispara deploy para um ambiente
+    "scaffold_pipeline": "deploy:write",   # SENSÍVEL: commit de workflows no repo alvo
+    "setup_repo": "deploy:write",          # SENSÍVEL: grava GitHub Actions secrets no repo
+    "acr_build": "deploy:write",           # SENSÍVEL: docker build + push de imagem para o ACR
+    "set_repos_root": "deploy:write",      # SENSÍVEL: persiste config no config-mcp / cria diretório
+    "clone_repo": "deploy:write",          # SENSÍVEL: clona repo (escreve no filesystem local)
+}
+SCOPES_SUPPORTED = ["deploy:read", "deploy:write"]
+
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), "SCOPE_FOR_TOOL cobre todas as tools"
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
 # Server                                                                       #
 # ─────────────────────────────────────────────────────────────────────────── #
-def _build_http_app() -> FastAPI:
-    """Build FastAPI app for Deploy HTTP on port 7100."""
-    app = FastAPI(title="Deploy API", version="0.1.0", docs_url="/docs")
-
-    @app.get("/v1/health")
-    def health() -> dict:
-        return {"status": "ok", "service": "deploy-mcp"}
-
-    return app
-
-
 def build_server() -> tuple[Any, ...]:
     settings = get_settings()
-    http_app = _build_http_app()
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 
     client = GitHubClient(settings)
@@ -805,18 +830,7 @@ def build_server() -> tuple[Any, ...]:
 
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
-
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
-
-    return server, settings, client, http_app
+    return server, settings, client
 
 
 def _dispatch(
@@ -1012,31 +1026,36 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    Preserva build_server() (Server de baixo nível + _dispatch com client/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware com
+    escopo por ferramenta (least privilege via SCOPE_FOR_TOOL).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _settings, _client = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("DEPLOY_RESOURCE", "http://localhost:7110/mcp"),
+        prm_url=os.getenv(
+            "DEPLOY_PRM_URL",
+            "http://localhost:7110/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7110")))
 
 
 if __name__ == "__main__":

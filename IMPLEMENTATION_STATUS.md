@@ -7,20 +7,20 @@
 
 ## Summary
 
-The MCP Gateway is now **fully operational** with centralized authentication, RBAC, rate limiting, and audit logging. All 8 Zillas and 18 MCPs support both stdio (original) and HTTP modes, enabling multi-access patterns (Claude Code CLI, HTTP REST, Jupyter Notebooks).
+The MCP Gateway is now **fully operational** with centralized authentication, RBAC, rate limiting, and audit logging. All 8 DevTeam and 18 MCPs support both stdio (original) and HTTP modes, enabling multi-access patterns (Claude Code CLI, HTTP REST, Jupyter Notebooks).
 
 ---
 
 ## Completed Work
 
-### Fase 1 — Modo Híbrido nos Zillas ✅
-- ✅ All 8 Zillas (SecZilla, ArchZilla, BackZilla, FrontZilla, OpsZilla, ProductZilla, POZilla, QAZilla) updated to support:
+### Fase 1 — Modo Híbrido nos DevTeam ✅
+- ✅ All 8 DevTeam (Security, Architecture, Backend, Frontend, DevOps, Product-Manager, Product-Owner, QA-Engineer) updated to support:
   - **stdio** for direct Claude integration
   - **HTTP :7100** for gateway and cross-MCP calls
 - ✅ Shared `hybrid_server.py` pattern ensures consistency
-- ✅ Each Zilla properly registers and lists tools
+- ✅ Each DevTeam properly registers and lists tools
 - ✅ Tools endpoint `/tools` returns tool names (fixed to include `"name"` field)
-- ✅ All 8 Zillas have 3-4 functional tools each, persisted to PostgreSQL
+- ✅ All 8 DevTeam have 3-4 functional tools each, persisted to PostgreSQL
 
 ### Fase 2 — MCP Gateway (MVP) ✅
 - ✅ **Created** `/mcp-gateway/` with complete FastAPI implementation
@@ -78,17 +78,17 @@ The MCP Gateway is now **fully operational** with centralized authentication, RB
 ```bash
 # Admin full access
 curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools/call \
+  http://localhost:8080/mcp/qa-engineer-mcp/tools/call \
   -d '{"name": "generate_test_cases", "arguments": {}}'
 
 # Developer scoped access
 curl -H "Authorization: Bearer test-developer-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools/call \
+  http://localhost:8080/mcp/qa-engineer-mcp/tools/call \
   -d '{"name": "generate_test_cases", "arguments": {}}'
 
 # Forbidden access returns 403
 curl -H "Authorization: Bearer test-developer-token" \
-  http://localhost:8080/mcp/seczilla-mcp/tools/call \
+  http://localhost:8080/mcp/security-mcp/tools/call \
   -d '{"name": "generate_threat_model", "arguments": {}}'
   # Returns 403, logged as "forbidden"
 ```
@@ -196,8 +196,8 @@ CREATE INDEX idx_audit_mcp_tool_ts ON mcp_audit_log (mcp, tool, ts);
 - **mcp-gateway/src/middleware/audit_logger.py** — PostgreSQL audit trail
 - **mcp-gateway/src/persistence/tool_interceptor.py** — Tool result persistence
 
-### Zillas (Hybrid Mode)
-- **All 8 Zillas**: `src/server/mcp_server.py` updated to run:
+### DevTeam (Hybrid Mode)
+- **All 8 DevTeam**: `src/server/mcp_server.py` updated to run:
   - stdio MCP (for Claude/registry)
   - HTTP FastAPI (for gateway on port 7100)
 - **Shared**: `shared/hybrid_server.py` — Reusable pattern
@@ -236,9 +236,9 @@ python3 mcp-gateway/test_rate_limit_and_audit.py
 curl -H "Authorization: Bearer test-admin-token" \
   http://localhost:8080/mcp | jq .
 
-# Call a tool (if Zillas are running)
+# Call a tool (if DevTeam are running)
 curl -H "Authorization: Bearer test-admin-token" \
-  -X POST http://localhost:8080/mcp/qazilla-mcp/tools/call \
+  -X POST http://localhost:8080/mcp/qa-engineer-mcp/tools/call \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_test_cases", "arguments": {}}'
 ```
@@ -247,7 +247,7 @@ curl -H "Authorization: Bearer test-admin-token" \
 
 ## Next Steps (Beyond MVP)
 
-1. **Production Authentication**: Replace test tokens with bcrypt PostgreSQL lookup from agent-twin-mcp
+1. **Production Authentication**: Replace test tokens with bcrypt PostgreSQL lookup from dev-twin-mcp
 2. **Token Management UI**: Admin dashboard for creating/revoking tokens
 3. **Quota Management**: Self-service quota increase requests
 4. **Analytics Dashboard**: Grafana + Prometheus for gateway metrics
@@ -284,7 +284,7 @@ curl -H "Authorization: Bearer test-admin-token" \
 - [x] Successful calls logged with status='success'
 - [x] Errors logged with status='error'
 - [x] Client IP and user-agent captured
-- [x] All 8 Zillas support hybrid mode (stdio + HTTP)
+- [x] All 8 DevTeam support hybrid mode (stdio + HTTP)
 
 ---
 

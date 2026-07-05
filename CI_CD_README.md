@@ -1,8 +1,8 @@
-# CI/CD Pipeline for Python Zillas
+# CI/CD Pipeline for Python DevTeam
 
 ## Overview
 
-Automated GitHub Actions workflow for all 10 Zilla MCPs with:
+Automated GitHub Actions workflow for all 10 DevTeam MCPs with:
 - ✅ Python syntax validation
 - ✅ Linting (ruff)
 - ✅ Type checking (mypy)
@@ -13,16 +13,16 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
 
 ## Workflow File
 
-**Location**: `.github/workflows/zillas-python-ci.yml`
+**Location**: `.github/workflows/devteam-python-ci.yml`
 
 **Triggers**:
 - `push` to `develop` or `main`
 - Pull requests to `develop` or `main`
 - Changes in:
   - `*-mcp-server/` directories
-  - `cross-zilla-validators/`
-  - `zilla-observatory/`
-  - `requirements-zillas.txt`
+  - `cross-devteam-validators/`
+  - `devteam-observatory/`
+  - `requirements-devteam.txt`
 
 ---
 
@@ -36,7 +36,7 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
 
 1. **Install Dependencies**
    ```bash
-   pip install -r requirements-zillas.txt
+   pip install -r requirements-devteam.txt
    ```
 
 2. **Linting (ruff)**
@@ -45,12 +45,12 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
 
 3. **Type Checking (mypy)**
    - Validates Python type annotations
-   - Runs on all 10 Zilla implementations
+   - Runs on all 10 DevTeam implementations
    - Ignores missing external library stubs
 
 4. **Syntax Validation**
    ```bash
-   python -m py_compile <each-zilla>.py
+   python -m py_compile <each-devteam>.py
    ```
 
 5. **Import Testing**
@@ -62,7 +62,7 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
    - Flags TODO/FIXME comments
 
 7. **Code Statistics**
-   - Reports lines of code per Zilla
+   - Reports lines of code per DevTeam
    - Counts functions and classes
    - Useful for change analysis
 
@@ -85,7 +85,7 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
    - Tests INSERT operation
 
 3. **Verify Imports**
-   - Confirms all Zilla modules can be imported
+   - Confirms all DevTeam modules can be imported
    - Validates FastAPI/Uvicorn integration
 
 ### 3. Notify Job
@@ -101,15 +101,15 @@ Automated GitHub Actions workflow for all 10 Zilla MCPs with:
 
 ```
 ✅ Syntax validation
-   - qazilla_mcp.py: OK
-   - seczilla_mcp.py: OK
+   - qa-engineer_mcp.py: OK
+   - security_mcp.py: OK
    - ... (8 more)
 
 ✅ Linting check
    - No major issues found
 
 ✅ Type checking
-   - 10 Zillas analyzed
+   - 10 DevTeam analyzed
    - Warnings: 0
 
 ✅ PostgreSQL integration
@@ -151,7 +151,7 @@ ruff check . --select=E,F,W,I --line-length=100
 
 ### Type Checking
 
-**mypy** checks all 10 Zillas with:
+**mypy** checks all 10 DevTeam with:
 - `--ignore-missing-imports` — ignore stubs for `fastapi`, `psycopg2`, etc.
 
 To add stricter checking:
@@ -176,7 +176,7 @@ mypy ... --strict --no-implicit-optional
 
 ```bash
 # Install dev dependencies
-pip install -r requirements-zillas.txt
+pip install -r requirements-devteam.txt
 pip install ruff mypy
 
 # Lint
@@ -184,12 +184,12 @@ ruff check . --select=E,F,W
 
 # Type check
 mypy \
-  qazilla-mcp-server/qazilla_mcp.py \
-  seczilla-mcp-server/seczilla_mcp.py \
+  qa-engineer-mcp-server/qa-engineer_mcp.py \
+  security-mcp-server/security_mcp.py \
   ... (all 10)
 
 # Syntax check
-python -m py_compile qazilla-mcp-server/qazilla_mcp.py
+python -m py_compile qa-engineer-mcp-server/qa-engineer_mcp.py
 
 # Test PostgreSQL connection
 python3 -c "
@@ -256,8 +256,8 @@ docker-compose down
 
 **Issue**: "ModuleNotFoundError: No module named 'fastapi'"
 ```
-Solution: Check requirements-zillas.txt is installed
-pip install -r requirements-zillas.txt
+Solution: Check requirements-devteam.txt is installed
+pip install -r requirements-devteam.txt
 ```
 
 **Issue**: "Type checking failed: Cannot find implementation or library stub"
@@ -278,9 +278,9 @@ The workflow starts it automatically in the integration-test job
 Solution: Check paths in the on.push.paths section
 Your changes must match one of:
 - *-mcp-server/**
-- cross-zilla-validators/**
-- zilla-observatory/**
-- requirements-zillas.txt
+- cross-devteam-validators/**
+- devteam-observatory/**
+- requirements-devteam.txt
 ```
 
 ---
@@ -324,16 +324,16 @@ Before merging a PR, ensure:
 
 1. **GitHub Actions tab**
    - https://github.com/YOUR_ORG/platform-devs/actions
-   - Filter: `Zillas Python CI/CD`
+   - Filter: `DevTeam Python CI/CD`
 
 2. **Badge in README**
    ```markdown
-   ![CI/CD](https://github.com/YOUR_ORG/platform-devs/workflows/Zillas%20Python%20CI%2FCD/badge.svg)
+   ![CI/CD](https://github.com/YOUR_ORG/platform-devs/workflows/DevTeam%20Python%20CI%2FCD/badge.svg)
    ```
 
 3. **CLI Check**
    ```bash
-   gh workflow view zillas-python-ci.yml --repo=YOUR_ORG/platform-devs
+   gh workflow view devteam-python-ci.yml --repo=YOUR_ORG/platform-devs
    ```
 
 ---
@@ -368,11 +368,11 @@ Before merging a PR, ensure:
 For workflow issues:
 1. Check the action logs: GitHub Actions tab → Workflow run → Job logs
 2. Run checks locally to reproduce
-3. Verify requirements-zillas.txt has all dependencies
+3. Verify requirements-devteam.txt has all dependencies
 4. Check Python version compatibility (3.10+)
 
 ---
 
 **Status**: ✅ **CI/CD PIPELINE READY**  
-**File**: `.github/workflows/zillas-python-ci.yml`  
+**File**: `.github/workflows/devteam-python-ci.yml`  
 **Updated**: 2026-05-11

@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Audit of 20 MCPs (12 system + 8 Zillas) identified **906 total findings** across:
+Audit of 20 MCPs (12 system + 8 DevTeam) identified **906 total findings** across:
 - **Stub functions** — Placeholder implementations without logic
 - **Hardcoded values** — Hardcoded strings, ports, URLs, credentials
 - **Mocks** — Mock implementations in production code
@@ -42,7 +42,7 @@ Audit of 20 MCPs (12 system + 8 Zillas) identified **906 total findings** across
 | ai-governance-mcp | URL | `https://prod.example.com/api` | 🔴 CRITICAL |
 | deploy-mcp | URLs | GitHub API endpoints | 🔴 CRITICAL |
 | services-mcp | Ports | Test ports 8001-8080 | 🟠 HIGH |
-| qazilla-mcp | URL | `http://localhost:3000/8000` | 🔴 CRITICAL |
+| qa-engineer-mcp | URL | `http://localhost:3000/8000` | 🔴 CRITICAL |
 
 **Action:** Move all URLs/endpoints to environment variables or config files
 
@@ -107,7 +107,7 @@ def get_config():
 
 | MCP | TODOs | Examples |
 |-----|-------|----------|
-| agent-twin-mcp | 6 | `# TODO: Implement token rotation` |
+| dev-twin-mcp | 6 | `# TODO: Implement token rotation` |
 | audit-mcp | 1 | `# TODO: Add compliance checks` |
 | deploy-mcp | 2 | `# TODO: Support auto-merge` |
 | All others | 1-3 each | Various incomplete features |
@@ -158,12 +158,12 @@ port=int(os.getenv("MCP_PORT", "7100"))
 | docs-mcp | 70 | 0 | 2 | 68 | 🟠 HIGH |
 | audit-mcp | 34 | 0 | 1 | 33 | 🟡 MEDIUM |
 | config-mcp | 27 | 0 | 2 | 25 | 🟡 MEDIUM |
-| agent-twin-mcp | 16 | 0 | 2 | 14 | 🟡 MEDIUM |
-| qazilla-mcp | 17 | 1 | 2 | 14 | 🟡 MEDIUM |
+| dev-twin-mcp | 16 | 0 | 2 | 14 | 🟡 MEDIUM |
+| qa-engineer-mcp | 17 | 1 | 2 | 14 | 🟡 MEDIUM |
 | pipeline-mcp | 17 | 0 | 1 | 16 | 🟡 MEDIUM |
 | session-mcp | 5 | 0 | 0 | 5 | 🟢 LOW |
 | test-mcp | 5 | 0 | 0 | 5 | 🟢 LOW |
-| Other Zillas | 1-2 | 0 | 0 | 1-2 | 🟢 LOW |
+| Other DevTeam | 1-2 | 0 | 0 | 1-2 | 🟢 LOW |
 
 ---
 

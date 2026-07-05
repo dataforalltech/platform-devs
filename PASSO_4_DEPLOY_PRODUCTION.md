@@ -1,4 +1,4 @@
-# PASSO 4: Deploy para Produção — 4 MCPs + Zilla Integration
+# PASSO 4: Deploy para Produção — 4 MCPs + DevTeam Integration
 
 ## Objetivo
 Deploy das 4 MCPs compiladas para produção com:
@@ -12,9 +12,9 @@ Deploy das 4 MCPs compiladas para produção com:
 ## Pré-requisitos
 
 ✅ PASSO 1: 4 PRs criadas (PR #3-6)
-✅ PASSO 2: ZillaIntegration.ts + padrões de integração
+✅ PASSO 2: DevTeamIntegration.ts + padrões de integração
 ✅ PASSO 3: Teste E2E OAuth2 concluído com sucesso
-✅ Branches: feature/knowledge-base-mcp, feature/cross-zilla-validators, feature/quality-gates-system, feature/zilla-observatory
+✅ Branches: feature/knowledge-base-mcp, feature/cross-devteam-validators, feature/quality-gates-system, feature/devteam-observatory
 
 ---
 
@@ -25,9 +25,9 @@ Deploy das 4 MCPs compiladas para produção com:
 | PR | Título | Branch | Status |
 |----|--------|--------|--------|
 | #3 | Phase 1 — Knowledge Base MCP | feature/knowledge-base-mcp | ⏳ Ready for merge |
-| #4 | Phase 2 — Cross-Zilla Validators | feature/cross-zilla-validators | ⏳ Ready for merge |
+| #4 | Phase 2 — Cross-DevTeam Validators | feature/cross-devteam-validators | ⏳ Ready for merge |
 | #5 | Phase 3 — Quality Gates System | feature/quality-gates-system | ⏳ Ready for merge |
-| #6 | Phase 4 — Zilla Observatory | feature/zilla-observatory | ⏳ Ready for merge |
+| #6 | Phase 4 — DevTeam Observatory | feature/devteam-observatory | ⏳ Ready for merge |
 
 ### Processo de Merge
 
@@ -72,7 +72,7 @@ gh release create v1.0.0-ecosystem \
 - SQLite indexing
 - 20+ testes
 
-### Phase 2 — Cross-Zilla Validators (18 validators)
+### Phase 2 — Cross-DevTeam Validators (18 validators)
 - Validação de handoffs
 - 18 validadores específicos
 - 40+ testes
@@ -82,15 +82,15 @@ gh release create v1.0.0-ecosystem \
 - Bloqueio de progresso até aprovação
 - 30+ testes
 
-### Phase 4 — Zilla Observatory (10 tools)
+### Phase 4 — DevTeam Observatory (10 tools)
 - Observabilidade em tempo real
-- Dashboards por Zilla
+- Dashboards por DevTeam
 - Alertas de anomalias
 - 35+ testes
 
 ## Integration
 
-- ZillaIntegration.ts: Padrão unificado para todos os 8 Zillas
+- DevTeamIntegration.ts: Padrão unificado para todos os 8 DevTeam
 - Handoff validation automática
 - Metrics agregadas no Observatory
 - E2E OAuth2 test: ✅ ALL GATES PASSED
@@ -106,9 +106,9 @@ gh release create v1.0.0-ecosystem \
 | MCP | Porta | Tipo | Status |
 |-----|-------|------|--------|
 | knowledge-base-mcp | 7110 | Docker | ⏳ Build & Deploy |
-| cross-zilla-validators | 7111 | Docker | ⏳ Build & Deploy |
+| cross-devteam-validators | 7111 | Docker | ⏳ Build & Deploy |
 | quality-gates-system | 7112 | Docker | ⏳ Build & Deploy |
-| zilla-observatory | 7113 | Docker | ⏳ Build & Deploy |
+| devteam-observatory | 7113 | Docker | ⏳ Build & Deploy |
 
 ### Build Docker
 
@@ -121,20 +121,20 @@ docker build -f knowledge-base-mcp/Dockerfile \
   -t platform-knowledge-base-mcp:v1.0.0 \
   knowledge-base-mcp/
 
-# Cross-Zilla Validators
-docker build -f cross-zilla-validators/Dockerfile \
+# Cross-DevTeam Validators
+docker build -f cross-devteam-validators/Dockerfile \
   -t platform-validators-mcp:v1.0.0 \
-  cross-zilla-validators/
+  cross-devteam-validators/
 
 # Quality Gates System
 docker build -f quality-gates-system/Dockerfile \
   -t platform-quality-gates-mcp:v1.0.0 \
   quality-gates-system/
 
-# Zilla Observatory
-docker build -f zilla-observatory/Dockerfile \
+# DevTeam Observatory
+docker build -f devteam-observatory/Dockerfile \
   -t platform-observatory-mcp:v1.0.0 \
-  zilla-observatory/
+  devteam-observatory/
 
 # 2. Push para ACR (assumindo credenciais configuradas)
 docker push platform-knowledge-base-mcp:v1.0.0
@@ -167,7 +167,7 @@ services:
       timeout: 10s
       retries: 3
 
-  cross-zilla-validators:
+  cross-devteam-validators:
     image: platform-validators-mcp:v1.0.0
     ports:
       - "7111:7111"
@@ -199,7 +199,7 @@ services:
       timeout: 10s
       retries: 3
 
-  zilla-observatory:
+  devteam-observatory:
     image: platform-observatory-mcp:v1.0.0
     ports:
       - "7113:7113"
@@ -248,7 +248,7 @@ curl -X POST http://localhost:7102/services \
 curl -X POST http://localhost:7102/services \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "cross-zilla-validators",
+    "name": "cross-devteam-validators",
     "host": "localhost",
     "port": 7111,
     "type": "docker",
@@ -272,7 +272,7 @@ curl -X POST http://localhost:7102/services \
 curl -X POST http://localhost:7102/services \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "zilla-observatory",
+    "name": "devteam-observatory",
     "host": "localhost",
     "port": 7113,
     "type": "docker",
@@ -303,9 +303,9 @@ mcp-client services-mcp register_service \
 ```bash
 # 1. Check individual
 curl http://localhost:7110/health  # knowledge-base-mcp
-curl http://localhost:7111/health  # cross-zilla-validators
+curl http://localhost:7111/health  # cross-devteam-validators
 curl http://localhost:7112/health  # quality-gates-system
-curl http://localhost:7113/health  # zilla-observatory
+curl http://localhost:7113/health  # devteam-observatory
 
 # 2. Check agregado via services-mcp
 curl http://localhost:7102/services/health | jq '.[] | {name, status}'
@@ -316,7 +316,7 @@ curl http://localhost:7102/services/health | jq '.[] | {name, status}'
 #   "status": "healthy"
 # }
 # {
-#   "name": "cross-zilla-validators",
+#   "name": "cross-devteam-validators",
 #   "status": "healthy"
 # }
 # {
@@ -324,7 +324,7 @@ curl http://localhost:7102/services/health | jq '.[] | {name, status}'
 #   "status": "healthy"
 # }
 # {
-#   "name": "zilla-observatory",
+#   "name": "devteam-observatory",
 #   "status": "healthy"
 # }
 ```
@@ -353,8 +353,8 @@ curl -X POST http://localhost:7111/tools/call \
   -d '{
     "name": "validate_completeness",
     "arguments": {
-      "from_zilla": "ProductZilla",
-      "to_zilla": "ArchZilla",
+      "from_devteam": "Product-Manager",
+      "to_devteam": "Architecture",
       "payload": {"spec_id": "oauth2_v1"}
     }
   }' | jq '.passed'
@@ -365,7 +365,7 @@ curl -X POST http://localhost:7113/tools/call \
   -d '{
     "name": "report_metrics",
     "arguments": {
-      "zilla": "ProductZilla",
+      "devteam": "Product-Manager",
       "metrics": {"feature": "OAuth2", "status": "deployed"}
     }
   }'
@@ -385,9 +385,9 @@ cat >> /home/dev/.mcp.json << 'EOF'
     "port": 7110,
     "env": {}
   },
-  "cross-zilla-validators": {
+  "cross-devteam-validators": {
     "command": "docker",
-    "args": ["start", "cross-zilla-validators"],
+    "args": ["start", "cross-devteam-validators"],
     "port": 7111,
     "env": {}
   },
@@ -397,9 +397,9 @@ cat >> /home/dev/.mcp.json << 'EOF'
     "port": 7112,
     "env": {}
   },
-  "zilla-observatory": {
+  "devteam-observatory": {
     "command": "docker",
-    "args": ["start", "zilla-observatory"],
+    "args": ["start", "devteam-observatory"],
     "port": 7113,
     "env": {}
   }
@@ -416,7 +416,7 @@ EOF
 open http://localhost:7113/dashboard
 
 # Expected: Tela mostrando:
-# - 8 Zillas online ✅
+# - 8 DevTeam online ✅
 # - Feature OAuth2 100% complete ✅
 # - All gates passed ✅
 # - Real-time metrics streaming
@@ -461,7 +461,7 @@ open http://localhost:7110/docs
 ════════════════════════════════════════════════════════════════════════════════
 
 ✅ PASSO 1: 4 PRs Merged (main branch)
-✅ PASSO 2: 8 Zillas Integrados (ZillaIntegration.ts ativo)
+✅ PASSO 2: 8 DevTeam Integrados (DevTeamIntegration.ts ativo)
 ✅ PASSO 3: E2E OAuth2 100% Completo (all gates passed)
 ✅ PASSO 4: Deploy em Produção (4 MCPs rodando)
 
@@ -471,19 +471,19 @@ Ecosystem Status:
 
 MCPs Online (4/4):
   ✅ knowledge-base-mcp (port 7110) — 6 tools
-  ✅ cross-zilla-validators (port 7111) — 18 validators
+  ✅ cross-devteam-validators (port 7111) — 18 validators
   ✅ quality-gates-system (port 7112) — 10 gates
-  ✅ zilla-observatory (port 7113) — 10 tools
+  ✅ devteam-observatory (port 7113) — 10 tools
 
-Zillas Online (8/8):
-  ✅ ProductZilla — Feature specs ready
-  ✅ ArchZilla — Architecture design ready
-  ✅ BackZilla — API implementation ready
-  ✅ FrontZilla-PixelFera — UI design ready
-  ✅ OpsZilla — Deployment ready
-  ✅ QAZilla — Testing ready
-  ✅ SecZilla — Security approval ready
-  ✅ POZilla — Coordination ready
+DevTeam Online (8/8):
+  ✅ Product-Manager — Feature specs ready
+  ✅ Architecture — Architecture design ready
+  ✅ Backend — API implementation ready
+  ✅ Frontend-PixelFera — UI design ready
+  ✅ DevOps — Deployment ready
+  ✅ QA-Engineer — Testing ready
+  ✅ Security — Security approval ready
+  ✅ Product-Owner — Coordination ready
 
 Services: 35/35 Online ✅
 Quality Gates: 14/14 PASSED ✅
@@ -545,10 +545,10 @@ git checkout v0.9.0
 Ao completar PASSO 4, teremos:
 
 ✅ 4 MCPs compilados, testados e em produção
-✅ 8 Zillas completamente integrados
+✅ 8 DevTeam completamente integrados
 ✅ E2E OAuth2 feature pronta para produção
 ✅ Observable mostrando toda a pipeline em tempo real
 ✅ Zero downtime durante deploy
 ✅ Rollback plan pronto se necessário
 
-**Ecossistema de Zillas completamente funcional e escalável.**
+**Ecossistema de DevTeam completamente funcional e escalável.**

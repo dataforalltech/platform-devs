@@ -1,7 +1,7 @@
-# OpsZilla Monitoring Configuration
+# DevOps Monitoring Configuration
 # Repository Synchronization Metrics & Observability
 
-opszilla:
+devops:
   # ============================================================================
   # Dashboard: Repository Sync Metrics
   # ============================================================================

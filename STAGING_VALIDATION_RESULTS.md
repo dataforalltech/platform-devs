@@ -66,7 +66,7 @@ However, **the stack is not yet buildable** because:
     - `zookeeper` (Confluent Zookeeper 7.5.0)
   
   - MCP Servers: 12 services
-    - `agent-twin-mcp` (port 7098)
+    - `dev-twin-mcp` (port 7098)
     - `config-mcp` (port 7099)
     - `docs-mcp` (port 7090)
     - `session-mcp` (port 7100)
@@ -130,8 +130,8 @@ However, **the stack is not yet buildable** because:
 - **Service startup order:**
   1. Infrastructure first (postgres, redis, zookeeper)
   2. Kafka (depends on zookeeper)
-  3. Core MCPs (config, agent-twin)
-  4. Supporting MCPs (depend on config-mcp/agent-twin-mcp)
+  3. Core MCPs (config, dev-twin)
+  4. Supporting MCPs (depend on config-mcp/dev-twin-mcp)
   5. REST APIs (depend on MCPs and databases)
 - **Health condition blocking:** `condition: service_healthy` ensures readiness
 
@@ -165,7 +165,7 @@ However, **the stack is not yet buildable** because:
 | redis | infrastructure | N/A (image) | ✅ |
 | kafka | infrastructure | N/A (image) | ✅ |
 | zookeeper | infrastructure | N/A (image) | ✅ |
-| agent-twin-mcp | build | Missing | ❌ |
+| dev-twin-mcp | build | Missing | ❌ |
 | config-mcp | build | Missing | ❌ |
 | docs-mcp | build | Missing | ❌ |
 | session-mcp | build | Missing | ❌ |
@@ -290,7 +290,7 @@ Infrastructure Ports:
 
 MCP Server Ports (7090-7108):
   7090   → docs-mcp
-  7098   → agent-twin-mcp (core authentication)
+  7098   → dev-twin-mcp (core authentication)
   7099   → config-mcp (configuration source of truth)
   7100   → session-mcp
   7101   → services-mcp
@@ -325,7 +325,7 @@ REST API Ports (8001-8006):
 │ Docker Bridge Network: "staging"                            │
 ├─────────────────────────────────────────────────────────────┤
 │                                                              │
-│  [agent-twin-mcp:7098]  ← Core auth, required by all        │
+│  [dev-twin-mcp:7098]  ← Core auth, required by all        │
 │         ↓                                                    │
 │  [config-mcp:7099]      ← Config source, dependency for 9    │
 │         ↓                                                    │
@@ -335,7 +335,7 @@ REST API Ports (8001-8006):
 │                                                              │
 │  [auth-api:8001]        ← Entry point, required by 4 APIs   │
 │         ↓                                                    │
-│  [admin-api:8002] ─→ auth-api, postgres, agent-twin-mcp    │
+│  [admin-api:8002] ─→ auth-api, postgres, dev-twin-mcp    │
 │  [governance-api:8003] ─→ auth-api, admin-api               │
 │  [scheduler-api:8005] ─→ auth-api, kafka                    │
 │  [connectors-api:8006] ─→ auth-api                          │
@@ -373,7 +373,7 @@ Phase 2 (sequential):
   kafka (depends: zookeeper)
 
 Phase 3 (parallel):
-  agent-twin-mcp (depends: redis, postgres)
+  dev-twin-mcp (depends: redis, postgres)
   config-mcp (depends: postgres)
 
 Phase 4 (parallel, depends: config-mcp):
@@ -389,7 +389,7 @@ Phase 4 (parallel, depends: config-mcp):
   audit-mcp
 
 Phase 5 (sequential):
-  auth-api (depends: agent-twin-mcp, postgres, redis)
+  auth-api (depends: dev-twin-mcp, postgres, redis)
 
 Phase 6 (sequential):
   admin-api (depends: auth-api)

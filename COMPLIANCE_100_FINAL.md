@@ -15,7 +15,7 @@ Platform has achieved **ZERO blocking issues** and **100% compliance** across al
 - ✅ **Zero hardcoded credentials** — All environment-driven (os.getenv with fallbacks)
 - ✅ **Zero critical TODOs** — All 4 blocking TODOs implemented or resolved
 - ✅ **Zero hardcoded ports** — All configurable via MCP_PORT or service-specific vars
-- ✅ **Zero production mocks** — 1 false positive (qazilla-mcp string template) cleared
+- ✅ **Zero production mocks** — 1 false positive (qa-engineer-mcp string template) cleared
 
 ### Additional Completions (Beyond MVP)
 - ✅ **Rate limiter** — Implemented (Redis, per-second & per-month limits)
@@ -45,7 +45,7 @@ Platform has achieved **ZERO blocking issues** and **100% compliance** across al
 ## Phase-by-Phase Completion
 
 ### Phase 1 — Migration & Cleanup ✅ COMPLETE
-- ✅ SQLite → PostgreSQL (5 MCPs: infra, pipeline, qa, services, agent-twin)
+- ✅ SQLite → PostgreSQL (5 MCPs: infra, pipeline, qa, services, dev-twin)
 - ✅ Removed old allocator_store.py (SQLite version)
 - ✅ Credential hardcodes → os.getenv()
 - ✅ Port hardcodes → environment-configurable
@@ -82,14 +82,14 @@ Platform has achieved **ZERO blocking issues** and **100% compliance** across al
 ## Security Audit — 100% Pass
 
 ### Authentication & Tokens
-- ✅ Bearer token with bcrypt hashing (agent-twin-mcp)
+- ✅ Bearer token with bcrypt hashing (dev-twin-mcp)
 - ✅ Token validation against PostgreSQL
 - ✅ Test tokens for development (token_validator.py)
 - ✅ Session tokens (ephemeral) separate from user tokens (persistent)
 
 ### Authorization & RBAC
 - ✅ Role-based access control (admin, developer, agent, readonly)
-- ✅ Per-MCP scopes (e.g., developer can call qazilla-mcp, backzilla-mcp)
+- ✅ Per-MCP scopes (e.g., developer can call qa-engineer-mcp, backend-mcp)
 - ✅ Per-tool granularity (e.g., readonly only "status" endpoints)
 - ✅ Enforcement in proxy router (returns 403 if unauthorized)
 
@@ -173,7 +173,7 @@ curl http://localhost:8080/mcp
 
 # Call tool (requires token)
 curl -H "Authorization: Bearer test-admin-token" \
-  -X POST http://localhost:8080/mcp/qazilla-mcp/tools/call \
+  -X POST http://localhost:8080/mcp/qa-engineer-mcp/tools/call \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_unit_tests", "arguments": {...}}'
 ```
@@ -189,7 +189,7 @@ cd mcp-gateway
 pytest tests/ -v --cov=src
 
 # All MCPs
-cd agent-twin-mcp-server && pytest tests/ -v
+cd dev-twin-mcp-server && pytest tests/ -v
 cd config-mcp-server && pytest tests/ -v
 cd audit-mcp-server && pytest tests/ -v
 ```
@@ -215,12 +215,12 @@ curl -X GET http://localhost:8080/auth/validate \
 # Test rate limit (should get 429 after limit)
 for i in {1..100}; do
   curl -H "Authorization: Bearer test-developer-token" \
-    http://localhost:8080/mcp/qazilla-mcp/tools/call
+    http://localhost:8080/mcp/qa-engineer-mcp/tools/call
 done
 
 # Test RBAC (should get 403 for unauthorized tool)
 curl -H "Authorization: Bearer test-readonly-token" \
-  -X POST http://localhost:8080/mcp/backzilla-mcp/tools/call \
+  -X POST http://localhost:8080/mcp/backend-mcp/tools/call \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_service_layer", ...}'
 ```
