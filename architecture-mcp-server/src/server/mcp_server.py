@@ -9,7 +9,7 @@ Conforme MCP_SERVICE_STANDARD.md:
 from __future__ import annotations
 
 import os
-from typing import Callable
+from typing import Any, Callable
 
 from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
@@ -20,7 +20,7 @@ from src.tools.architecture_tools import (
     generate_solution_blueprint,
     generate_c4_diagram,
     generate_architecture,
-    stub_tool,
+    status,
 )
 
 # ── Configuração (env) ──────────────────────────────────────────────────── #
@@ -42,10 +42,99 @@ TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     "generate_c4_diagram": (generate_c4_diagram, "architecture:write", False),
     "generate_architecture": (generate_architecture, "architecture:write", False),
     # Leitura / status
-    "status": (stub_tool, "architecture:read", False),
+    "status": (status, "architecture:read", False),
 }
 
 SCOPES_SUPPORTED = ["architecture:read", "architecture:write"]
+
+# ── JSON input schemas (fonte de verdade documentada) ──────────────────────── #
+# O FastMCP deriva o inputSchema real de cada tool a partir das anotações de tipo
+# da função (ver build_mcp/list_tools). Este dicionário documenta o contrato
+# esperado — os campos e os obrigatórios — e é validado contra os schemas
+# derivados em _assert_schema_contract() no build, garantindo que assinatura e
+# contrato não divirjam. Cada tool recebe parâmetros (antes recebiam nenhum).
+TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "generate_c4_diagram": {
+        "type": "object",
+        "properties": {
+            "system_name": {"type": "string", "description": "Nome do software system em foco"},
+            "actors": {
+                "type": "array",
+                "description": "Pessoas/sistemas externos (str ou {name,type,description})",
+                "items": {"type": ["string", "object"]},
+            },
+            "containers": {
+                "type": "array",
+                "description": "Aplicações/serviços internos (str ou {name,technology,description})",
+                "items": {"type": ["string", "object"]},
+            },
+            "relationships": {
+                "type": "array",
+                "description": "Arestas {source,target,description,technology} ou 'A -> B'",
+                "items": {"type": ["string", "object"]},
+            },
+        },
+        "required": [],
+    },
+    "generate_solution_blueprint": {
+        "type": "object",
+        "properties": {
+            "requirements": {"type": "string", "description": "Requisitos funcionais/de negócio (texto livre)"},
+            "solution_name": {"type": "string", "description": "Nome da solução"},
+            "context": {"type": "string", "description": "Contexto adicional (domínio, org)"},
+            "constraints": {
+                "type": "array",
+                "description": "Restrições técnicas/organizacionais",
+                "items": {"type": "string"},
+            },
+        },
+        "required": [],
+    },
+    "generate_architecture": {
+        "type": "object",
+        "properties": {
+            "domain": {"type": "string", "description": "Domínio/negócio-alvo"},
+            "constraints": {
+                "type": "array",
+                "description": "Restrições técnicas/organizacionais",
+                "items": {"type": "string"},
+            },
+            "quality_attributes": {
+                "type": "array",
+                "description": "Atributos de qualidade priorizados",
+                "items": {"type": "string"},
+            },
+            "architecture_name": {"type": "string", "description": "Nome opcional; default derivado do domínio"},
+        },
+        "required": [],
+    },
+    "status": {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+}
+
+
+async def assert_schema_contract(mcp: FastMCP) -> None:
+    """Garante que os schemas derivados pelo FastMCP cobrem o contrato documentado.
+
+    Falha se uma assinatura de tool divergir de TOOL_INPUT_SCHEMAS — ex.: uma
+    propriedade documentada some da função. Chamada pelos testes; async porque
+    FastMCP.list_tools é async.
+    """
+    derived: dict[str, set[str]] = {}
+    for tool in await mcp.list_tools():
+        props = (tool.inputSchema or {}).get("properties", {})
+        derived[tool.name] = set(props.keys())
+    for name, contract in TOOL_INPUT_SCHEMAS.items():
+        expected = set(contract.get("properties", {}).keys())
+        actual = derived.get(name, set())
+        missing = expected - actual
+        if missing:
+            raise RuntimeError(
+                f"Tool '{name}' perdeu propriedades do contrato documentado: {sorted(missing)}"
+            )
 
 
 def _scope_for_request(method: str, tool: str | None) -> str | None:
@@ -59,7 +148,10 @@ def _scope_for_request(method: str, tool: str | None) -> str | None:
 def build_mcp() -> FastMCP:
     mcp = FastMCP(name="architecture-mcp", instructions=SYSTEM_PROMPT, stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"))
     for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
-        mcp.add_tool(fn, name=name)
+        # O inputSchema é derivado das anotações de tipo de cada fn (ver
+        # TOOL_INPUT_SCHEMAS para o contrato documentado). Antes as tools não
+        # recebiam argumentos; agora expõem parâmetros tipados.
+        mcp.add_tool(fn, name=name, description=(fn.__doc__ or "").strip().split("\n", 1)[0] or None)
     return mcp
 
 
