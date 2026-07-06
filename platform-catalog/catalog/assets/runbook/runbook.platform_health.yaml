@@ -16,27 +16,33 @@ spec:
   responsible_profile: devops
   tasks:
   - task_id: admin_health
-    operation_id: null
+    operation_id: admin.admin_health_check
     tool: admin.admin_health_check
     responsible: devops
     required: true
     depends_on: []
-    resolved: false
+    resolved: true
   - task_id: auth_health
-    operation_id: null
+    operation_id: auth.auth_health_check
     tool: auth.auth_health_check
     responsible: devops
     required: true
     depends_on:
     - admin_health
-    resolved: false
+    resolved: true
   - task_id: list_tenants
-    operation_id: null
+    operation_id: auth.auth_list_tenants
     tool: auth.auth_list_tenants
     responsible: qa-engineer
     required: false
     depends_on:
     - auth_health
-    resolved: false
-  unresolved_tools: 3
-relations: []
+    resolved: true
+  unresolved_tools: 0
+relations:
+- verb: uses
+  target: admin.admin_health_check
+- verb: uses
+  target: auth.auth_health_check
+- verb: uses
+  target: auth.auth_list_tenants

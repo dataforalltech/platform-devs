@@ -59,9 +59,11 @@ def store():
 
 
 def test_store_loads(store):
-    assert len(store.operations) == 288
-    assert len(store.tools) == 298
-    assert len(store.providers) == 20
+    st = store.stats()
+    assert st["owned_operations"] == 288 and st["external_operations"] == 3   # +admin/auth federados
+    assert len(store.operations) == 291
+    assert len(store.tools) == 301          # 298 owned + 3 external
+    assert len(store.providers) == 22       # 20 owned + admin + auth
 
 
 def test_get_and_queries(store):
@@ -116,6 +118,7 @@ def test_api_tools_and_resolve(client):
 
 def test_api_stats(client):
     s = client.get("/v1/stats").json()
-    assert s["operations"] == 288 and s["providers"] == 20
+    assert s["owned_operations"] == 288 and s["external_operations"] == 3
+    assert s["operations"] == 291
     assert "delivery" in s["operations_by_domain"]
     assert s["write_operations"] > 0

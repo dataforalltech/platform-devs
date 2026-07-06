@@ -32,6 +32,12 @@ class CatalogStore:
         self.operations = {e["metadata"]["uid"]: e for e in self._read("operations")}
         self.tools = self._read("tools")
         self.providers = {e["metadata"]["uid"]: e for e in self._read("providers")}
+        # Fase 1.1: mescla as Operations EXTERNAS federadas (catalog/external/*).
+        for e in self._read("external/operations"):
+            self.operations[e["metadata"]["uid"]] = e
+        self.tools += self._read("external/tools")
+        for e in self._read("external/providers"):
+            self.providers[e["metadata"]["uid"]] = e
         self._tools_by_op = {}
         for t in self.tools:
             self._tools_by_op.setdefault(t["spec"]["operation_id"], []).append(t)
@@ -143,6 +149,7 @@ class CatalogStore:
             if o["spec"]["authz"] == "write":
                 writes += 1
         multi = sum(1 for v in self._tools_by_op.values() if len(v) > 1)
+        external = sum(1 for o in self.operations.values() if o["spec"].get("external"))
         return {
             "operations": len(self.operations), "tools": len(self.tools),
             "providers": len(self.providers),
@@ -150,6 +157,8 @@ class CatalogStore:
             "operations_by_risk": by_risk,
             "write_operations": writes,
             "operations_with_multiple_tools": multi,
+            "external_operations": external,            # federadas (Fase 1.1)
+            "owned_operations": len(self.operations) - external,
         }
 
 

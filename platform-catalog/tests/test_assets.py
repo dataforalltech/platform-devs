@@ -56,14 +56,13 @@ def test_adr_and_reverse_query(store):
     assert "runbook.deploy_service" in store.assets_for_operation("delivery.deploy")
 
 
-# relation validation (§8) + fallback (platform_health não resolve admin/auth)
-def test_validation_clean_and_fallback(store):
-    assert validate_catalog(store) == []          # §1-§8 limpo (fallback não é violação)
+# relation validation (§8) — pós Fase 1.1, platform_health resolve via admin/auth federados
+def test_validation_clean_and_platform_health_resolved(store):
+    assert validate_catalog(store) == []          # §1-§8 limpo
     ph = store.get_asset("runbook.platform_health")
     assert ph is not None
-    unresolved = [t for t in ph["spec"]["tasks"] if not t["resolved"]]
-    assert unresolved and all(t["operation_id"] is None for t in unresolved)  # fallback mantém tool
-    assert all(t["tool"] for t in unresolved)
+    # admin/auth federados (external) → platform_health resolve 100%
+    assert all(t["resolved"] and t["operation_id"] in store.operations for t in ph["spec"]["tasks"])
 
 
 # API

@@ -1,0 +1,21 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: auth
+  uid: auth
+  domain: identity
+  title: auth
+  description: ''
+  owner: platform-auth
+  tags:
+  - identity
+  - external
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: auth (federated)
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+  external: true
+relations: []

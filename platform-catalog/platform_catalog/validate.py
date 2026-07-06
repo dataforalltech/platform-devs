@@ -17,7 +17,7 @@ from .registry import CatalogStore
 
 # efeitos que NUNCA podem ser baixo risco (write perigoso).
 DANGEROUS_EFFECTS = {"deploy", "delete", "rollback"}
-ID_RE = re.compile(r"^[a-z]+\.[a-z][a-z0-9_]*$")   # <domínio>.<tool> legível/estável
+ID_RE = re.compile(r"^[a-z][a-z0-9-]*\.[a-z][a-z0-9_]*$")   # <domínio|ns>.<tool>; ns externo pode ter hífen
 
 
 def validate_catalog(store: CatalogStore) -> list[str]:

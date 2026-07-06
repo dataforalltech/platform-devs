@@ -1,0 +1,9 @@
+{
+  "note": "STARTER — tools federadas de OUTROS repos, confirmadas (usadas por runbooks e verdes no gateway ao vivo). O conjunto COMPLETO (~88) vem do dump do gateway: rode scratchpad/dump_gateway_catalog.py com a plataforma de pé e re-rode `python -m platform_catalog.federate`.",
+  "source": "confirmed-subset",
+  "tools": [
+    {"namespace": "admin", "tool": "admin_health_check"},
+    {"namespace": "auth", "tool": "auth_health_check"},
+    {"namespace": "auth", "tool": "auth_list_tenants"}
+  ]
+}

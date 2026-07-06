@@ -15,14 +15,16 @@ def test_build_all_produces_asset_kinds():
     assert by_kind.get("ADR", 0) >= 9
 
 
-def test_runbook_resolves_tool_to_operation_with_fallback():
+def test_runbook_resolves_tool_to_operation():
     assets = {a["metadata"]["uid"]: a for a in build_all()}
     dep = assets["runbook.deploy_service"]
     assert all(t["resolved"] for t in dep["spec"]["tasks"])                   # tudo resolvido
     assert any(t["operation_id"] == "delivery.deploy" for t in dep["spec"]["tasks"])
-    ph = assets["runbook.platform_health"]                                    # admin/auth não catalogados
-    assert ph["spec"]["unresolved_tools"] >= 1
-    assert any(t["operation_id"] is None and t["tool"] for t in ph["spec"]["tasks"])  # fallback
+    # Fase 1.1: admin/auth federados → platform_health resolve 100% (fallback p/ tool
+    # sintética coberto em test_fallback_platform_health).
+    ph = assets["runbook.platform_health"]
+    assert ph["spec"]["unresolved_tools"] == 0
+    assert all(t["resolved"] for t in ph["spec"]["tasks"])
 
 
 def test_ingest_emits_asset_published_per_asset():

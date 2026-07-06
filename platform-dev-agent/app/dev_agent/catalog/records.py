@@ -91,11 +91,14 @@ class DirCatalogSource:
         ops_dir, tools_dir = self._dir / "operations", self._dir / "tools"
         if not ops_dir.exists() or not tools_dir.exists():
             return
+        # owned + external (Fase 1.1) — tools federadas resolvem igual às próprias.
+        op_files = list(ops_dir.glob("*.yaml")) + list((self._dir / "external" / "operations").glob("*.yaml"))
+        tool_files = list(tools_dir.glob("*.yaml")) + list((self._dir / "external" / "tools").glob("*.yaml"))
         ops = {}
-        for f in ops_dir.glob("*.yaml"):
+        for f in op_files:
             e = yaml.safe_load(f.read_text(encoding="utf-8"))
             ops[e["metadata"]["uid"]] = e
-        for f in tools_dir.glob("*.yaml"):
+        for f in tool_files:
             t = yaml.safe_load(f.read_text(encoding="utf-8"))
             spec = t["spec"]
             op = ops.get(spec["operation_id"])

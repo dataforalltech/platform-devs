@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: admin/admin_health_check
+  uid: admin:admin_health_check
+  domain: platform
+  title: admin_health_check @ admin (external)
+  description: ''
+  owner: platform-admin
+  tags:
+  - admin
+  - external
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: admin.admin_health_check
+  provider_id: admin
+  provider_version: 1.0.0
+  tool: admin_health_check
+  endpoint: streamable-http
+  selection: {}
+  external: true
+relations:
+- verb: implements
+  target: admin.admin_health_check
+- verb: provided-by
+  target: admin
