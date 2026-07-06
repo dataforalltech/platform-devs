@@ -62,8 +62,8 @@
 ### 1.3 Anomalias de MCP a resolver
 
 - **platform-governance-mcp**: `Exited(1)` (parado manualmente). **Progresso parcial:** o bug de contexto (era o mesmo do crm/K10 — o MCP mora em `mcp/src/server/mcp_server.py`, porta **7103**, compose faz `command` override `python -c "from src.server.mcp_server import main"` + `PYTHONPATH=/app`) **foi corrigido**: rebuild com `build-service.sh platform-governance-mcp platform-governance develop mcp/Dockerfile mcp` (contexto `mcp`) → a imagem agora tem `/app/src/server/`. **MAS falha um passo adiante:** `mcp_server.py` faz `from platform_governance.policy import ...` e a lib de política do repo (`src/platform_governance`, na RAIZ) **não entra** no build de contexto `mcp/`. → **dep cross-package**: o build precisa empacotar TAMBÉM o `src/platform_governance` da raiz (design de build do repo governance). Não é rebuild simples. Não registrado.
-- **platform-notification-mcp**: `unhealthy` — `/mcp/tools/list` 404 **e** `/openapi.json` 404 (docs off); grep de rotas em `/app` não achou o handler → **path de tools desconhecido**; precisa inspecionar a fonte do server. Registrado no gateway mas 404 no refresh.
-- **platform-iceberg-mcp**: confirmado **SEM imagem e SEM container** na box (nunca buildado aqui, apesar do §1.1 dizer "repo corrigido"). Precisa **clone + build + deploy + registro** (:7104). A linha de registro já existe no `register-mcp-backends.sh`.
+- **platform-notification-mcp**: **é um MCP de transporte SSE**, não HTTP — `CMD uvicorn notification_mcp.server.mcp_server:app :7100`, e o server é um **Starlette** com `Route("/sse", handle_sse)` + `Mount("/messages/", sse.handle_post_message)`. Por isso `/mcp/tools/list` dá 404 (não existe). Registrar como `sse` (path `/sse`) como o `auth-mcp` — MAS a **agregação SSE no front-door está pendente** (mesma nota do auth-mcp), então não agrega tools até o platform-mcp suportar SSE. Bloqueio = capability do front-door, não path.
+- **platform-iceberg-mcp**: ✅ **imagem BUILDADA** nesta sessão (`build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .` — contexto **RAIZ**, não `mcp`; o Dockerfile faz `COPY mcp/requirements.txt`+`COPY app/iceberg_mcp/`). CMD `python -m iceberg_mcp.server` :7104, `PYTHONPATH=/app`. **Falta deployar:** o compose `deploy/services/platform-iceberg/` **NÃO tem o service `platform-iceberg-mcp`** (só minio/polaris/trino/iceberg) — precisa autorar o service (redes `iceberg-net`+`platform-local`, :7104) + descobrir o env de conexão ao backend iceberg. Linha de registro já existe (:7104).
 
 ---
 
@@ -102,8 +102,8 @@
 | Subdomínio | Frontend (repo) | Backends principais | Tenant | Status |
 |---|---|---|---|---|
 | `app.dataforall.tech` (atual) | `platform-dataforall-frontend` (product-dataforall) | plataforma toda | `dataforall` | ✅ no ar |
-| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (product-sales) | platform-crm, platform-sales-partners (+ sales, marketing) | **`sales`** | frontend clonado (develop); backend crm+sales-partners no ar; **falta subir a borda** |
-| `partner.dataforall.tech` | (2º frontend novo — a definir/clonar) | platform-sales-partners | a definir | ⏳ planejado |
+| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (branch **`main`**) | platform-crm, platform-sales-partners | **`sales`** | backend crm+sales-partners MCP no ar; borda **NÃO** dedicada (catch-all vaza o SPA do app); repo é **Vite puro SEM Dockerfile** — falta scaffolding+build+rota |
+| `partner.dataforall.tech` | **`platform-sales-partners-frontend`** (branch **`develop`**) | platform-sales-partners | a definir (tenant) | idem: Vite puro sem Dockerfile; precisa scaffolding+build+rota + linha no PLATFORMS |
 | `admin.dataforall.tech` | (3º frontend novo — a definir/clonar) | platform-admin | a definir | ⏳ planejado |
 | `platform.dataforall.tech` | (provável = o "atual" renomeado, a confirmar) | plataforma toda | `dataforall` | ⏳ planejado |
 
@@ -115,7 +115,10 @@
 > SPA daquele produto + `/api`→gateway, (3) build do SPA. O wildcard DNS/Tunnel já cobre qualquer subdomínio.
 
 ### 3.1 Como subir um frontend novo (padrão)
-1. Clonar o repo do frontend (branch `develop`), `npm ci && npm run build` (Vite → `dist/`).
+
+> **Descoberto 2026-07-06:** o app (`platform-dataforall-frontend`, branch `main`) é buildado por um **Dockerfile multi-stage** (node build → `nginxinc/nginx-unprivileged:1.27-alpine` :8080) com `docker/nginx.conf` + `docker/30-runtime-env.sh` (gera `env.js` em runtime; envsubst só de `INTERNAL_TOKEN`/`GATEWAY_UPSTREAM`). Os repos `dataforall-sales-frontend` e `platform-sales-partners-frontend` são **Vite puros SEM esse scaffolding** — para buildá-los como imagem, **portar o `Dockerfile` + `docker/` do app** p/ cada um (ou buildar com um Dockerfile genérico à parte). Depois, a **borda** precisa virar roteadora por `server_name` (hoje é `server_name _` catch-all servindo só o app). Nomes de imagem sugeridos: `platform-sales-frontend`, `platform-sales-partners-frontend`.
+
+1. Clonar o repo do frontend, `npm ci && npm run build` (Vite → `dist/`).
 2. Servir o `dist/` num container nginx (ou um bloco no nginx da borda) que:
    - responde ao `server_name <sub>.dataforall.tech`,
    - serve o SPA (fallback `index.html`),
@@ -164,7 +167,7 @@
 ### A. Fechar o produto sales (escolha atual do usuário: "completar os 2 + frontend")
 1. ✅ **FEITO — crm-mcp e sales-partners-mcp** buildados, no ar (healthy) e registrados no front-door (1022 tools/26 services). sales-partners-mcp limpo; crm-mcp exigiu **4 correções de Dockerfile/pyproject + config** — ver runbook **K10**. ⚠️ crm-mcp foi buildado da **box** (correções ainda não commitadas no repo `platform-crm`) — ver **§7.D item 11b** (PR pendente) p/ reprodutibilidade.
 2. ✅ **FEITO — sales-partners migrado no tenant `sales`** (`alembic upgrade head`, rev 001→008; schema `sales` foi p/ 89 tabelas).
-3. **Borda `sales.dataforall.tech`:** ⚠️ **já responde HTTP 200** — o nginx é `server_name _` (catch-all), então o Tunnel wildcard + a linha `sales` no PLATFORMS + o gateway (resolve tenant por Host) já servem a borda com o **SPA genérico** (dataforall-frontend) apontado pro tenant `sales`. O que falta é o **frontend DEDICADO** (`product-sales` / `dataforall-sales-frontend`) — o repo **não está clonado na box**; para o SPA próprio: clonar + `npm ci && npm run build` + server_block no nginx da borda (§3.1). ← **decidir se o SPA genérico basta ou se quer o dedicado**.
+3. **Borda `sales.dataforall.tech` (e `partner`):** ⚠️ **cada subdomínio é um FRONTEND DISTINTO** (SPA próprio), não o mesmo SPA multi-tenant. Hoje o nginx é `server_name _` (catch-all) servindo **só a imagem do app** (`platform-dataforall-frontend`, SPA Vite embutido) → `sales`/`partner` **vazam o SPA do app** (errado). Falta: (a) **buildar 1 imagem por frontend** (`platform-sales-frontend`, `platform-partner-frontend`) do repo de cada um, mesmo padrão do app (`build-service.sh <img> <repo> <branch> Dockerfile .` — nginx + SPA embutido); (b) **rotear por `server_name`** na borda (Host → SPA correto; `/api`/`/ws`→gateway igual p/ todos, que resolve tenant por Host). Repos dos SPAs de sales/partner **não estão na box** e os nomes precisam ser confirmados. A linha `sales` no PLATFORMS já existe; `partner` precisa de linha + tenant se for tenant novo.
 
 ### B. Frontends adicionais
 4. Confirmar com o usuário o mapa subdomínio↔frontend↔tenant (§3). Subir `partner.`, `admin.`, `platform.` conforme (§3.1), criando tenants/PLATFORMS se necessário.

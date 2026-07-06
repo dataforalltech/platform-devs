@@ -42,7 +42,9 @@ reg platform-scheduler-mcp   mcp_http http://platform-scheduler-mcp:7106     /mc
 reg platform-dai-mcp         mcp_http http://platform-dai-mcp:7120          /mcp/tools/list  /mcp/tools/call  mcp  # 46 tools (le o OpenAPI da API)
 reg platform-crm-mcp         mcp_http http://platform-crm-mcp:7100          /mcp/tools/list  /mcp/tools/call  mcp  # 240 tools (crm-domain, tenant sales) — estilo mcp; openapi expoe /mcp/tools/{list,call} (NAO /v1/tools)
 reg platform-sales-partners-mcp mcp_http http://platform-sales-partners-mcp:7107 /mcp/tools/list /mcp/tools/call mcp  # comissoes/parceiros (tenant sales)
-# notification-mcp: /mcp/tools/list deu 404 (path a confirmar) — pendente
+# notification-mcp: MCP de transporte SSE (Starlette Route /sse + Mount /messages), NAO http.
+#   -> registrar como sse (igual auth-mcp): reg platform-notification-mcp sse http://platform-notification-mcp:7100 /sse /sse mcp
+#   mas a agregacao SSE do platform-mcp esta pendente, entao nao agrega tools ainda (ver K3/auth-mcp).
 
 echo "== recarrega o registry do platform-mcp =="
 docker restart platform-mcp >/dev/null 2>&1 && echo "platform-mcp reiniciado"
