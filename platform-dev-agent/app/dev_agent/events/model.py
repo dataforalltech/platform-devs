@@ -15,11 +15,26 @@ from datetime import datetime, timezone
 from enum import Enum
 
 _CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+_RAND_MASK = (1 << 80) - 1
+_last_ts = 0
+_last_rand = 0
 
 
 def new_ulid() -> str:
-    """ULID de 26 chars (48-bit tempo ms + 80-bit aleatório), ordenável no tempo."""
-    val = (int(time.time() * 1000) << 80) | int.from_bytes(os.urandom(10), "big")
+    """ULID MONOTÔNICO de 26 chars (48-bit tempo ms + 80-bit aleatório).
+
+    Dentro do mesmo milissegundo, incrementa a parte aleatória anterior (variante
+    monotônica da spec ULID) — garante que a ordem de EMISSÃO seja recuperável por
+    ordenação do id, sem depender do relógio de sub-ms.
+    """
+    global _last_ts, _last_rand
+    ts = int(time.time() * 1000)
+    if ts == _last_ts:
+        _last_rand = (_last_rand + 1) & _RAND_MASK
+    else:
+        _last_ts = ts
+        _last_rand = int.from_bytes(os.urandom(10), "big")
+    val = (ts << 80) | _last_rand
     out = []
     for _ in range(26):
         out.append(_CROCKFORD[val & 0x1F])
@@ -116,3 +131,15 @@ class Event:
             "correlation_id": self.correlation_id, "causation_id": self.causation_id,
             "data": self.data,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "Event":
+        """Reconstrói do envelope (value do Kafka) — preserva id/time p/ replay/dedup."""
+        return cls(
+            type=EventType(d["type"]), subject=d["subject"], data=d.get("data", {}),
+            tenant_id=d.get("tenant_id"), session_id=d.get("session_id"),
+            correlation_id=d.get("correlation_id"), causation_id=d.get("causation_id"),
+            source=d.get("source", "/platform-dev-agent/runtime"), id=d["id"],
+            time=d["time"], specversion=d.get("specversion", "1.0"),
+            datacontenttype=d.get("datacontenttype", "application/json"),
+        )
