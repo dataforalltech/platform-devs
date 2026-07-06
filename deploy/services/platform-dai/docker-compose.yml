@@ -78,15 +78,13 @@ services:
 
   # Sidecar MCP — imagem propria (Dockerfile.mcp copia mcp/; porta 7120). Le o OpenAPI da API
   # e expoe as operacoes como tools. env_prefix DAI_MCP_.
+  # (PyJWT[crypto] ja no requirements.mcp.txt do repo em develop, commit b5475ff — K8 resolvido;
+  #  usa o CMD default da imagem, sem workaround de pip no arranque.)
   platform-dai-mcp:
     image: d4all.azurecr.io/dataforall/3.0/platform-dai-mcp:${IMAGE_TAG:-latest}
     container_name: platform-dai-mcp
     restart: unless-stopped
     networks: [platform-local]
-    # requirements.mcp.txt do repo ESQUECEU o PyJWT (mcp/auth.py faz `import jwt`) -> a imagem crasha
-    # com ModuleNotFoundError. Instalamos no arranque (--user) antes do CMD. Fix de raiz: adicionar
-    # PyJWT[crypto] ao requirements.mcp.txt (tarefa). O CMD original e uvicorn mcp.server.mcp_server:app.
-    command: ["sh", "-c", "pip install --no-cache-dir --user 'PyJWT[crypto]>=2.8.0' >/dev/null 2>&1; exec uvicorn mcp.server.mcp_server:app --host 0.0.0.0 --port 7120 --log-level warning"]
     environment:
       TZ: UTC
       DAI_MCP_DAI_URL: http://platform-dai:5003
