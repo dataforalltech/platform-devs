@@ -35,7 +35,7 @@ jobs:
       - name: Instala dependencias minimas
         run: |
           python -m pip install --upgrade pip
-          pip install "mcp>=1.10" fastapi "uvicorn[standard]" python-multipart pyjwt cryptography bcrypt pytest pyyaml
+          pip install "mcp>=1.10" fastapi "uvicorn[standard]" python-multipart pyjwt cryptography bcrypt pytest pyyaml psycopg2-binary redis httpx
 
       - name: Passo 1 - Gate estatico do DoD (§11)
         run: python scripts/check_mcp_dod.py

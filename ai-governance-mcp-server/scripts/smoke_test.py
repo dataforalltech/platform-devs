@@ -119,9 +119,7 @@ def _summarize(tool: str, payload: dict) -> str:
     if tool == "get_fallback_policy":
         return f"allowed={payload.get('fallback_allowed')}"
     if tool == "get_contract_change_policy":
-        return (
-            f"breaking={payload.get('is_breaking_change')} risk={payload.get('risk_level')}"
-        )
+        return f"breaking={payload.get('is_breaking_change')} risk={payload.get('risk_level')}"
     if tool == "get_final_response_template":
         return f"sections={len(payload.get('sections', []))}"
     if tool == "get_pre_execution_checklist":

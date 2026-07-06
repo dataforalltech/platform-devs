@@ -70,7 +70,9 @@ jobs:
       - name: Verify Python syntax
         run: |
           echo "✅ Verifying Python syntax..."
-          python -m py_compile \
+          # Servers migrados para o layout src/ tiveram o monólito <name>_mcp.py removido.
+          # Compilamos o entrypoint legado quando existe; senão, o pacote src/ do server.
+          for legacy in \
             qa-engineer-mcp-server/qa-engineer_mcp.py \
             security-mcp-server/security_mcp.py \
             architecture-mcp-server/architecture_mcp.py \
@@ -80,7 +82,16 @@ jobs:
             product-owner-mcp-server/product-owner_mcp.py \
             product-manager-mcp-server/product-manager_mcp.py \
             cross-devteam-validators/cross_devteam_validators_mcp.py \
-            devteam-observatory/devteam_observatory_mcp.py
+            devteam-observatory/devteam_observatory_mcp.py; do
+            server="${legacy%%/*}"
+            if [ -f "$legacy" ]; then
+              python -m py_compile "$legacy" && echo "  ok (legacy)   $legacy"
+            elif [ -d "$server/src" ]; then
+              python -m compileall -q "$server/src" && echo "  ok (src/)     $server/src"
+            else
+              echo "  skip          $server (sem entrypoint legado nem src/)"
+            fi
+          done
 
       - name: Test imports
         run: |
@@ -99,7 +110,11 @@ jobs:
               'cross-devteam-validators/cross_devteam_validators_mcp.py',
               'devteam-observatory/devteam_observatory_mcp.py',
           ]
+          import os
           for f in files:
+              if not os.path.exists(f):
+                  print(f'⏭️  {f} (migrado para src/)')
+                  continue
               try:
                   with open(f) as fp:
                       code = compile(fp.read(), f, 'exec')
@@ -160,6 +175,7 @@ jobs:
           do
             file="${f%:*}"
             name="${f##*:}"
+            [ -f "$file" ] || { printf "%-25s | %5s | %9s | %8s\n" "$name" "-" "-" "(migrado)"; continue; }
             lines=$(wc -l < "$file")
             functions=$(grep -c "^\s*def " "$file" || echo 0)
             classes=$(grep -c "^\s*class " "$file" || echo 0)

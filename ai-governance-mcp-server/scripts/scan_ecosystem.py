@@ -82,15 +82,11 @@ _ENV_FILES = (
 # Regex para extrair porta de env files.
 _PORT_RE = re.compile(r"^\s*(?:SERVICE_PORT|APP_PORT|PORT)\s*=\s*(\d{2,5})\s*$", re.MULTILINE)
 # Regex para porta em docker-compose: `${SERVICE_PORT:-8014}:8000` ou `8014:8000`.
-_COMPOSE_PORT_RE = re.compile(
-    r"\$\{SERVICE_PORT:-(\d{4,5})\}:|\"(\d{4,5}):\d+\""
-)
+_COMPOSE_PORT_RE = re.compile(r"\$\{SERVICE_PORT:-(\d{4,5})\}:|\"(\d{4,5}):\d+\"")
 # Regex para URL_X env vars.
 _URL_ENV_RE = re.compile(r"^\s*(URL_[A-Z_]+)\s*=", re.MULTILINE)
 # Regex para libs privadas em deps (PEP 508 + nomes lib).
-_LIB_DEP_RE = re.compile(
-    r"\b(platform[-_][a-z0-9]+[-_]lib)\b", re.IGNORECASE
-)
+_LIB_DEP_RE = re.compile(r"\b(platform[-_][a-z0-9]+[-_]lib)\b", re.IGNORECASE)
 
 
 # --------------------------------------------------------------------- #
@@ -133,10 +129,7 @@ class DriftReport:
     @property
     def has_warnings(self) -> bool:
         return bool(
-            self.missing_from_yaml
-            or self.missing_on_disk
-            or self.lib_drift
-            or self.consume_drift
+            self.missing_from_yaml or self.missing_on_disk or self.lib_drift or self.consume_drift
         )
 
 
@@ -176,7 +169,7 @@ def _detect_port(repo_path: Path) -> tuple[int | None, str | None]:
             continue
         match = _PORT_RE.search(text)
         if match:
-            return int(match.group(1)), f"{env_name}:{text[:match.start()].count(chr(10)) + 1}"
+            return int(match.group(1)), f"{env_name}:{text[: match.start()].count(chr(10)) + 1}"
 
     # Fallback: docker-compose.yml | docker-compose.local.yml
     for compose_name in ("docker-compose.yml", "docker-compose.local.yml"):
@@ -428,8 +421,7 @@ def render_text(report: DriftReport) -> str:
         lines.append(f"X CONFLICTS ({len(report.conflicts)})")
         for c in report.conflicts:
             lines.append(
-                f"  {c['service']} ({c['field']}): "
-                f"yaml={c['yaml_value']} disk={c['disk_value']}"
+                f"  {c['service']} ({c['field']}): yaml={c['yaml_value']} disk={c['disk_value']}"
             )
             lines.append(f"    source: {c['disk_source']}")
         lines.append("")
@@ -460,13 +452,9 @@ def render_text(report: DriftReport) -> str:
         lines.append(f"~ LIB DRIFT ({len(report.lib_drift)})")
         for d in report.lib_drift:
             if d["only_in_yaml"]:
-                lines.append(
-                    f"  {d['service']}: only in yaml = {d['only_in_yaml']}"
-                )
+                lines.append(f"  {d['service']}: only in yaml = {d['only_in_yaml']}")
             if d["only_on_disk"]:
-                lines.append(
-                    f"  {d['service']}: only on disk = {d['only_on_disk']}"
-                )
+                lines.append(f"  {d['service']}: only on disk = {d['only_on_disk']}")
         lines.append("")
 
     if report.consume_drift:
