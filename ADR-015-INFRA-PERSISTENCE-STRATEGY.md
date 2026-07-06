@@ -43,6 +43,9 @@ proving nothing about correctness for the very server where correctness is harde
 3. This is a **deliberate, temporary, single-backend choice per server** — *not* a dual-DB
    fallback. ADR-001's principle stands for the fleet; infra/session are explicitly-scoped
    exceptions with the exit criteria below.
+4. **The exception does not generalize.** It applies to `infra-mcp` and `session-mcp` and to no
+   other server. Retaining or reintroducing SQLite for any other server requires its **own new
+   ADR** — this one must not be cited as precedent.
 
 ### Migration criteria (when infra/session move to PostgreSQL)
 
@@ -55,6 +58,22 @@ A server leaves this exception only when **all** hold:
 4. The deployment provisions a PostgreSQL instance reachable by these servers.
 
 Tracked as follow-up **`task_79edfb46`**.
+
+### This exception is self-limiting (a hard boundary, not a preference)
+
+The single-instance constraint is a **hard limit of this ADR**, not a soft preference. The
+exception becomes **automatically void** — and completing the migration criteria above becomes
+**mandatory, blocking work (not optional)** — the moment either server must:
+
+- run in more than one instance / behind a load balancer, **or**
+- persist allocator/session state durably across restarts in production, **or**
+- be promoted to the production environment.
+
+Until one of those triggers fires, SQLite is correct and sufficient. When one fires, this ADR
+grants **no waiver**: the PostgreSQL implementation must land first. This is the forcing function
+that keeps SQLite from silently becoming permanent — the architecture compels the migration at the
+scale/production boundary rather than leaving it to goodwill. Owner: `infra-mcp` / `session-mcp`
+maintainer; tracked in `task_79edfb46`.
 
 ## Consequences
 

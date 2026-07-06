@@ -3,8 +3,11 @@
 **Status**: ACCEPTED
 **Date**: 2026-07-06
 **Deciders**: caiog
-**Affects**: CI of all `*-mcp-server` (`.github/workflows/`: `test-all-mcps.yml`, `ci.yml`,
-`mcp-dod.yml`, `ai-governance-mcp-ci.yml`, `devteam-python-ci.yml`)
+**Affects**: the platform's automated validation gate for every `*-mcp-server`
+**Scope note**: the rules below are **CI-system- and tool-agnostic principles**. Each parenthetical
+*(today: …)* cites the current implementation (GitHub Actions + pytest / ruff / vitest) and may
+change without invalidating the principle. Current workflows: `test-all-mcps.yml`, `ci.yml`,
+`mcp-dod.yml`, `ai-governance-mcp-ci.yml`, `devteam-python-ci.yml`.
 
 ---
 
@@ -26,41 +29,51 @@ These principles are formalized here so they are not buried in commit history.
 
 ## Decision
 
-The following validation principles are the standard for every server in a CI matrix.
+The following are **durable engineering principles** for the platform's validation gate. Each
+states the principle first; the parenthetical *(today: …)* is the current implementation and may
+change (tooling, CI provider) **without invalidating the principle**.
 
-1. **Hermetic tests.** Tests make **no real I/O** — no database, network, subprocess,
-   filesystem side-effects, or real sleeps. All external dependencies are mocked
-   (`monkeypatch` / `unittest.mock`; PG stores via a mocked psycopg2 pool). A test that hangs
-   or reaches a real host (e.g. a Postgres at `claude-dev`) is a defect, not a passing test.
+1. **Tests are hermetic.** A test exercises only the code under test — **no real I/O**: no
+   database, network, subprocess, filesystem side-effects, or wall-clock sleeps. External
+   dependencies are substituted with test doubles. A test that hangs or reaches a real host is a
+   defect, not a pass. *(today: `monkeypatch`/`unittest.mock`; DB stores via a mocked psycopg2
+   pool — a suite once hung reaching a real Postgres at `claude-dev`.)*
 
-2. **Fresh, CI-faithful verification.** "Green locally" is only trusted when verified in a
-   **brand-new clean virtualenv** via `pip install -e ".[dev]"`. A reused/leaky venv hides
-   dependencies that are installed but **not declared** — exactly how the `pytest-cov` gap
-   below stayed invisible.
+2. **The gate is reproducible from a clean, isolated environment**, using **only declared
+   dependencies** — never ambient or pre-installed tooling. *(today: a brand-new virtualenv +
+   `pip install -e ".[dev]"`; for TypeScript servers, a clean `npm ci`.)*
 
-3. **Mandatory test plugins in `[dev]`.** Because the gate runs `pytest --cov`, every server's
-   `[project.optional-dependencies].dev` must declare: `pytest`, `pytest-asyncio` (async tests),
-   `pytest-mock`, and **`pytest-cov`**. A missing `pytest-cov` makes a clean CI install fail with
-   *"unrecognized arguments: --cov"*.
+3. **The dependency manifest is self-sufficient for the whole gate.** Everything the gate runs
+   must be a declared dependency; a clean install alone must be able to run lint, type-check,
+   tests and coverage. *(today, Python: `pytest`, `pytest-asyncio`, `pytest-mock`, `pytest-cov`
+   in `[dev]` — a missing `pytest-cov` broke `--cov` on a clean install and stayed invisible in
+   a reused/leaky venv; TS: the equivalent `devDependencies`.)*
 
-4. **Coverage ≥ 80%**, measured `--cov=src`. **No gate-weakening**: no lowered threshold, no
-   blanket `# noqa`, no `--no-cov`, no `skip`/`xfail` used to hide a real failure. A `skip` is
-   acceptable only for a test that genuinely cannot run in CI, with a documented `reason=`.
+4. **A minimum coverage bar is enforced honestly.** Source coverage must meet the platform bar,
+   and the gate is **never weakened to pass** — no lowered threshold, no blanket suppression, no
+   disabling coverage, no `skip`/`xfail` to hide a real failure (a skip is legitimate only for a
+   test that genuinely cannot run in the environment, with a documented reason). *(today: ≥ 80%
+   over `--cov=src`.)*
 
-5. **`fail-fast: false` on every test matrix.** One server's failure must never cancel or mask
-   its siblings (it did on PR #18 — one failure cancelled nine passing legs and obscured the
-   diagnosis). `test-all-mcps.yml` already set this; `ci.yml` now does too.
+5. **A component's failure never masks another's.** Independent units of the gate report
+   independently; one failure must not cancel or hide the others. *(today: `fail-fast: false` on
+   every test matrix — a single failure once cancelled nine passing legs on PR #18 and obscured
+   the diagnosis.)*
 
-6. **Matrix membership defines the gate.** Only servers listed in a CI matrix are gated. The
-   eight "template" servers (architecture, backend, devops, frontend, product-owner,
-   product-manager, qa-engineer, security) are intentionally **not** in a Python test matrix;
-   adding tests for them does not change CI status. Adding a server to the fleet means adding
-   it to the matrix **and** giving it the `[dev]` plugins + a hermetic suite.
+6. **What is gated is explicit.** Gate coverage is intentional and visible: a component is either
+   in the gate (with a hermetic suite + self-sufficient manifest) or explicitly out; adding a
+   component to the fleet means adding it to the gate. *(today: the servers listed in the CI
+   matrices; the eight "template" servers — architecture, backend, devops, frontend,
+   product-owner, product-manager, qa-engineer, security — are intentionally out of the Python
+   test matrix, so adding tests for them does not change gate status.)*
 
-7. **Lint is authoritative, verified with the pinned tool.** `ruff check` and
-   `ruff format --check` must be clean, run with the **ruff pinned in `.[dev]`** — never
-   approximated by an ad-hoc `grep` (ruff's `-->` diagnostic format is easy to miss and yields
-   false negatives).
+7. **Lint/format is authoritative and machine-verified with the project-pinned tool** — the
+   tool's own output is the source of truth, never approximated by ad-hoc parsing. *(today:
+   `ruff check` + `ruff format --check` from the pinned `ruff`; an ad-hoc `grep` missed ruff's
+   `-->` diagnostic format and produced false negatives.)*
+
+8. **Status is reported by objective counts**, never "100% / totally green" (see the Reporting
+   note above): *"N passed / M skipped (expected) / K failures"*, matching the checks panel.
 
 ## Consequences
 
