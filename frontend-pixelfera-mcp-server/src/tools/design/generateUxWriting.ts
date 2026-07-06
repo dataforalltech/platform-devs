@@ -4,7 +4,7 @@ import { GenerateUxWritingSchema } from '../../schemas/design.schema.js';
 
 export async function generateUxWriting(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateUxWritingSchema.parse(args);
   const tone = input.tone || 'professional';

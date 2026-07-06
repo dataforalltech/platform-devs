@@ -4,7 +4,7 @@ import { ReviewUiConsistencySchema } from '../../schemas/design.schema.js';
 
 export async function reviewUiConsistency(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = ReviewUiConsistencySchema.parse(args);
 

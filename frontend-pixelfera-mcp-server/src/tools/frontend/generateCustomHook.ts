@@ -4,7 +4,7 @@ import { GenerateCustomHookSchema } from '../../schemas/frontend.schema.js';
 
 export async function generateCustomHook(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateCustomHookSchema.parse(args);
 

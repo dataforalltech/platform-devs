@@ -9,8 +9,10 @@ Aqui apenas:
   3. Roteamos as chamadas do MCP para a função correspondente.
   4. Tratamos erros de validação devolvendo um payload `{"error": ...}` claro.
 
-O transporte é Streamable HTTP servido por uvicorn via `main()`
-(ver `build_app`/`main` no fim deste módulo e o `pyproject.toml`).
+Dois transportes convivem (ambos sobre o mesmo `build_server()`):
+  - Streamable HTTP + auth via `main()`/`build_app()` (console-script e Docker).
+  - stdio via `run_stdio()`, usado por `python -m src.server.mcp_server` e pelos
+    scripts que spawnam o servidor (smoke_test.py, precommit_validate.py).
 """
 
 from __future__ import annotations
@@ -950,11 +952,39 @@ def build_app(validators: Any = None):
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
+    """Entry point da console-script — Streamable HTTP + auth (uso em produção/Docker).
+
+    Depende de `shared.mcp_auth`, que só está disponível quando o módulo `shared/`
+    do monorepo está no PYTHONPATH (é o caso no Dockerfile, que faz COPY shared/).
+    """
     import uvicorn
 
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7112")))
 
 
+async def _run_stdio() -> None:
+    from mcp.server.stdio import stdio_server
+
+    server, _repo, _http = build_server()
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options(),
+        )
+
+
+def run_stdio() -> None:
+    """Entry point stdio — sem dependência de `shared`.
+
+    Usado por `python -m src.server.mcp_server` e pelos scripts que spawnam o
+    servidor via stdio (scripts/smoke_test.py, scripts/precommit_validate.py).
+    A console-script `ai-governance-mcp-server` continua em `main()` (HTTP).
+    """
+    import asyncio
+
+    asyncio.run(_run_stdio())
+
+
 if __name__ == "__main__":
-    main()
+    run_stdio()

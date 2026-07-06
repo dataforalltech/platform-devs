@@ -25,7 +25,7 @@ def get_compliance_checklist(
                 "tool": "get_compliance_checklist",
             }
 
-        with open(policy_file) as f:
+        with open(policy_file, encoding="utf-8") as f:
             policy = yaml.safe_load(f)
 
         checklist = []

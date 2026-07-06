@@ -4,7 +4,7 @@ import { GenerateReactComponentSchema } from '../../schemas/frontend.schema.js';
 
 export async function generateReactComponent(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateReactComponentSchema.parse(args);
   const styling = input.styling || 'tailwind';

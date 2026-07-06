@@ -140,10 +140,16 @@ def test_dependencies_with_depth_2_finds_transitive(repo):
 
 
 def test_dependencies_max_depth_validation(repo):
+    # max_depth só é validado/relevante quando include_transitive=True (ver schema
+    # da tool em mcp_server.py). Sem include_transitive, a profundidade é forçada a 1.
     with pytest.raises(ValueError):
-        find_dependencies_of(repo, node_id="dataforall-rag-service", max_depth=0)
+        find_dependencies_of(
+            repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=0
+        )
     with pytest.raises(ValueError):
-        find_dependencies_of(repo, node_id="dataforall-rag-service", max_depth=10)
+        find_dependencies_of(
+            repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=10
+        )
 
 
 # --------------------------- get_service_metadata --------------------------- #
@@ -241,29 +247,36 @@ def test_all_canonical_services_present(repo):
         "platform-security",
         "dataforall-ui-connect",
     }
-    res = query_ecosystem_graph(repo, kind="service", status="active")
+    # limit alto: o ecossistema tem >20 serviços ativos e a query pagina (default 20).
+    res = query_ecosystem_graph(repo, kind="service", status="active", limit=1000)
     ids = {n["id"] for n in res["results"]}
     missing = expected - ids
     assert not missing, f"serviços canônicos ausentes: {missing}"
 
 
 def test_each_active_service_has_port(repo):
-    """Cada serviço ativo (exceto template, pipeline) tem port atribuída — bate com §47."""
-    services_without_port = {"platform-service-template", "platform-pipeline"}
-    res = query_ecosystem_graph(repo, kind="service", status="active")
+    """Invariante porta↔aresta: todo serviço ativo com atributo `port` (§47) tem
+    exatamente a aresta runs_on_port correspondente.
+
+    Nem todo serviço ativo recebe porta — template, pipeline (interno) e os serviços
+    fora do stack Python/FastAPI (Java, frontends, produtos) não têm porta alocada.
+    A verdade canônica é: se o nó declara `port`, então há uma aresta runs_on_port.
+    """
+    # limit alto: >20 serviços ativos; a query pagina (default 20).
+    res = query_ecosystem_graph(repo, kind="service", status="active", limit=1000)
     for service in res["results"]:
-        if service["id"] in services_without_port:
+        if service.get("port") is None:
             continue
-        # Cada deve ter ao menos uma aresta runs_on_port
         edges = query_ecosystem_graph(
             repo, node_id=service["id"], relation="runs_on_port", direction="out"
         )
-        assert edges["total"] >= 1, f"{service['id']} não tem porta atribuída"
+        assert edges["total"] >= 1, f"{service['id']} declara port mas não tem aresta runs_on_port"
 
 
 def test_no_two_services_share_a_port(repo):
     """Cada porta tem no máximo um serviço (canonicidade)."""
-    res = query_ecosystem_graph(repo, kind="port")
+    # limit alto: há 22 portas; sem isto a query pagina (default 20) e omite portas.
+    res = query_ecosystem_graph(repo, kind="port", limit=1000)
     for port in res["results"]:
         edges = query_ecosystem_graph(
             repo, node_id=port["id"], relation="runs_on_port", direction="in"

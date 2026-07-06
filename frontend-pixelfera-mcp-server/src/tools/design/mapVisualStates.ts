@@ -4,7 +4,7 @@ import { MapVisualStatesSchema } from '../../schemas/design.schema.js';
 
 export async function mapVisualStates(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = MapVisualStatesSchema.parse(args);
 

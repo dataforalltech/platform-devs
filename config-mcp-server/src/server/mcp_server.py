@@ -548,9 +548,9 @@ def build_server() -> tuple[Any, ConfigStore, ConfigMcpSettings, FastAPI]:
     # Valida Fernet key imediatamente — falha rápida no startup
     try:
         encryptor.decrypt(encryptor.encrypt("_health_check_"))
-    except Exception:
+    except Exception as exc:
         _log.critical("invalid_or_missing_master_key — abortando.")
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
     store = ConfigStore(settings.store_path, encryptor)
 
     http_app = _build_http_app(store, settings)

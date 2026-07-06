@@ -4,7 +4,7 @@ import { ValidateVisualAccessibilitySchema } from '../../schemas/design.schema.j
 
 export async function validateVisualAccessibility(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = ValidateVisualAccessibilitySchema.parse(args);
 

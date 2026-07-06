@@ -15,7 +15,6 @@ export async function splitDesignAndFrontendTasks(
 
   const analysis = feature.analysis as Record<string, unknown>;
   const screens = (analysis.screens as string[]) || [];
-  const flows = (analysis.flows as string[]) || [];
 
   const pixelferaTasks = [
     '1. Create wireframes for all screens',

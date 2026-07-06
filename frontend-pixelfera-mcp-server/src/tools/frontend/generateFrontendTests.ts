@@ -4,7 +4,7 @@ import { GenerateFrontendTestsSchema } from '../../schemas/frontend.schema.js';
 
 export async function generateFrontendTests(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateFrontendTestsSchema.parse(args);
 

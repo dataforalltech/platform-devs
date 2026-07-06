@@ -4,7 +4,7 @@ import { ReviewFrontendCodeSchema } from '../../schemas/frontend.schema.js';
 
 export async function reviewFrontendCode(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = ReviewFrontendCodeSchema.parse(args);
 

@@ -79,7 +79,13 @@ def test_store_id_format_is_sortable(tmp_path):
         title="t2",
         description="d",
     )
-    assert a.id <= b.id
+    # A ordenação é garantida pelo prefixo de timestamp (até microssegundos). O
+    # sufixo UUID existe só para desempate de colisão e NÃO é ordenável — se os
+    # dois creates caírem no mesmo microssegundo, comparar o ID inteiro seria
+    # flaky (o sufixo aleatório inverte ~50% das vezes). Comparamos o prefixo.
+    prefix_a = a.id.split("-")[0]
+    prefix_b = b.id.split("-")[0]
+    assert prefix_a <= prefix_b
 
 
 def test_store_get_returns_none_for_missing(tmp_path):

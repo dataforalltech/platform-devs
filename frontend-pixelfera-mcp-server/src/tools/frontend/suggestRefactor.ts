@@ -4,7 +4,7 @@ import { SuggestRefactorSchema } from '../../schemas/frontend.schema.js';
 
 export async function suggestRefactor(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = SuggestRefactorSchema.parse(args);
 

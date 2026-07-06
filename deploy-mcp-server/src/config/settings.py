@@ -11,9 +11,13 @@ Exemplo de uso:
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import TYPE_CHECKING
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 class DeploySettings(BaseSettings):

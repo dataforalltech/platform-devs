@@ -4,7 +4,7 @@ import { GenerateNextjsPageSchema } from '../../schemas/frontend.schema.js';
 
 export async function generateNextjsPage(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateNextjsPageSchema.parse(args);
   const pageType = input.type || 'app-route';

@@ -4,7 +4,7 @@ import { GenerateApiServiceSchema } from '../../schemas/frontend.schema.js';
 
 export async function generateApiService(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateApiServiceSchema.parse(args);
   const baseUrl = input.base_url || 'http://localhost:3000/api';

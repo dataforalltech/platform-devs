@@ -4,7 +4,7 @@ import { GenerateTypescriptTypesSchema } from '../../schemas/frontend.schema.js'
 
 export async function generateTypescriptTypes(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateTypescriptTypesSchema.parse(args);
 

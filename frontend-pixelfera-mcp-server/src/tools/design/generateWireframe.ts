@@ -4,7 +4,7 @@ import { GenerateWireframeSchema } from '../../schemas/design.schema.js';
 
 export async function generateWireframe(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateWireframeSchema.parse(args);
 

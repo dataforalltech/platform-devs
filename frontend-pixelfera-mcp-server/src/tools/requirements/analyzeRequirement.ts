@@ -44,7 +44,7 @@ function extractFeatureName(requirement: string): string {
 
 function extractScreens(requirement: string): string[] {
   const screenPatterns = [
-    /(?:page|screen|view|dialog|modal)s?\s+(?:named|called|for)?\s+["\']?([^"\'.,]+)/gi,
+    /(?:page|screen|view|dialog|modal)s?\s+(?:named|called|for)?\s+["']?([^"'.,]+)/gi,
     /(?:create|show|edit|delete|list)\s+([a-z_\-\w]+)/gi,
   ];
   const screens = new Set<string>();

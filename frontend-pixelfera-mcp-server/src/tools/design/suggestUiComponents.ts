@@ -4,7 +4,7 @@ import { SuggestUiComponentsSchema } from '../../schemas/design.schema.js';
 
 export async function suggestUiComponents(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = SuggestUiComponentsSchema.parse(args);
 

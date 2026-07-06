@@ -117,7 +117,7 @@ class DocsChecker:
         readme = repo_path / "README.md"
         if readme.exists():
             try:
-                content = readme.read_text()
+                content = readme.read_text(encoding="utf-8")
                 return "environment" in content.lower() or "env_var" in content.lower()
             except Exception:
                 pass

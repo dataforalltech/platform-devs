@@ -4,7 +4,7 @@ import { GenerateFormWithValidationSchema } from '../../schemas/frontend.schema.
 
 export async function generateFormWithValidation(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
   const input = GenerateFormWithValidationSchema.parse(args);
   const library = input.library || 'react-hook-form';

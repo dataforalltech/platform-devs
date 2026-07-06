@@ -5,7 +5,7 @@ Endpoints para listar e gerenciar credenciais com segurança.
 """
 
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -168,7 +168,7 @@ class ConfigHTTPEndpoints:
                 from datetime import datetime as dt
 
                 expires = dt.fromisoformat(metadata["expires_at"].replace("Z", "+00:00"))
-                is_expired = expires < dt.now(dt.UTC)
+                is_expired = expires < dt.now(UTC)
 
             return {
                 "status": 200,

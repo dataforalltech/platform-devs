@@ -4,9 +4,9 @@ import { ValidateDesignSystemUsageSchema } from '../../schemas/workflow.schema.j
 
 export async function validateDesignSystemUsage(
   args: Record<string, unknown>,
-  store: FrontendPixelferaStore
+  _store: FrontendPixelferaStore
 ): Promise<Record<string, unknown>> {
-  const input = ValidateDesignSystemUsageSchema.parse(args);
+  ValidateDesignSystemUsageSchema.parse(args);
 
   const validation = {
     violations: [

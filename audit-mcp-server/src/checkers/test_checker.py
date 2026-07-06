@@ -7,7 +7,7 @@ class TestChecker:
     """Verifica existência de testes e cobertura."""
 
     @staticmethod
-    def run(repo_path: str) -> dict[str, Any]:
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]:
         """Retorna resultado de checagens de testes."""
         repo = Path(repo_path)
         items = []
@@ -62,7 +62,7 @@ class TestChecker:
         coverage_json = repo_path / "coverage.json"
         if coverage_json.exists():
             try:
-                with open(coverage_json) as f:
+                with open(coverage_json, encoding="utf-8") as f:
                     data = json.load(f)
                     if "totals" in data and "percent_covered" in data["totals"]:
                         return int(data["totals"]["percent_covered"])
