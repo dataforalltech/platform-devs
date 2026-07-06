@@ -42,7 +42,11 @@ reg platform-scheduler-mcp   mcp_http http://platform-scheduler-mcp:7106     /mc
 reg platform-dai-mcp         mcp_http http://platform-dai-mcp:7120          /mcp/tools/list  /mcp/tools/call  mcp  # 46 tools (le o OpenAPI da API)
 reg platform-crm-mcp         mcp_http http://platform-crm-mcp:7100          /mcp/tools/list  /mcp/tools/call  mcp  # 240 tools (crm-domain, tenant sales) — estilo mcp; openapi expoe /mcp/tools/{list,call} (NAO /v1/tools)
 reg platform-sales-partners-mcp mcp_http http://platform-sales-partners-mcp:7107 /mcp/tools/list /mcp/tools/call mcp  # comissoes/parceiros (tenant sales)
-reg platform-governance-mcp  mcp_http http://platform-governance-mcp:7103    /mcp/tools/list  /mcp/tools/call  mcp  # 8 tools; healthy. ATENCAO: /mcp/tools/list exige Bearer (Twin PEP, MCP_GOVERNANCE_SERVICE_TOKEN) -> front-door da 401 no refresh ate mandar auth por backend (K10)
+reg platform-governance-mcp  mcp_http http://platform-governance-mcp:7103    /mcp/tools/list  /mcp/tools/call  mcp  # 8 tools; healthy
+# governance-mcp gateia /mcp/tools/list (Twin PEP). O aggregator do platform-mcp manda Authorization: Bearer {apiKey}
+# se additional_info tiver apiKey (requer platform-mcp-gateway#9: load_from_db lendo additional_info). apiKey = INTERNAL_API_TOKEN.
+GTOK=$(grep '^INTERNAL_API_TOKEN=' /opt/dataforall/deploy/.env | cut -d= -f2-)
+M "UPDATE ADMIN_DATAFORALL.GATEWAY_MAPPING SET additional_info=JSON_OBJECT('apiKey','$GTOK') WHERE name_microservice='platform-governance-mcp';" && echo "  + governance-mcp apiKey (Bearer no list)"
 # notification-mcp: MCP de transporte SSE (Starlette Route /sse + Mount /messages), NAO http.
 #   -> registrar como sse (igual auth-mcp): reg platform-notification-mcp sse http://platform-notification-mcp:7100 /sse /sse mcp
 #   mas a agregacao SSE do platform-mcp esta pendente, entao nao agrega tools ainda (ver K3/auth-mcp).
