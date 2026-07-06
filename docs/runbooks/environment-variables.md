@@ -128,7 +128,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-marketing-agent | ⬜ | postgres | (não clonado) | ? | |
 | platform-finance | ⬜ | postgres | (não clonado) | ? | |
 | platform-finance-agent | ⬜ | postgres | (não clonado) | ? | |
-| platform-sales | ⬜ | postgres | (não clonado) | ? | |
+| platform-sales | ⏳ aguardar | **postgres-only** | develop | src/*_mcp (stdio) | **pending**: força DB_ENGINE=postgresql (RuntimeError se ≠), asyncpg + SQL postgres-only (ON CONFLICT/BIGSERIAL/$1) — não roda em MySQL sem reescrita |
 | platform-scheduler | ✅ | mysql (via PLATFORMS) | develop | mcp/ (bind-mount — K7) | APScheduler; engine resolvido de PLATFORMS.dataforall=mysql; JWT expire<=30; 8 tabelas `sch_`; MCP 21 tools |
 
 > Para engine **postgres**: `DB_ENGINE=postgresql`, `DB_HOST=tenant-postgres`, `DB_PORT=5432`,
