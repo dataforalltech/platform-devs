@@ -224,3 +224,6 @@ docker-compose.override.yml
 .terraform/
 *.tfstate
 *.tfstate.*
+
+# Dumps de backup de DB (dado sensível — ver scripts/dev_db_backup.py)
+scripts/backups/
