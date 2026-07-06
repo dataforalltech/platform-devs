@@ -26,7 +26,10 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `INTERNAL_API_TOKEN` | `••••` (hex 32) | on-box | token S2S compartilhado (todos os serviços + MCPs) |
 | `HEALTH_MONITORING_TOKEN` | `••••` (hex 32) | on-box | gateway (probe de health autenticado) |
 | `JWT_SECRET_KEY` | `••••` (hex 40) | on-box | auth/admin/governance/notification (service tokens HS/valida) |
-| `CREDENTIAL_ENCRYPTION_KEY` | `••••` (Fernet 44) | on-box | admin/governance/notification (cifra credenciais) |
+| `CREDENTIAL_ENCRYPTION_KEY` | `••••` (Fernet 44) | on-box | admin/governance/notification/connectors (cifra credenciais) |
+| `OAUTH_STATE_SECRET` | `••••` (hex 32) | on-box | connectors (assina state OAuth) |
+| `WEBHOOK_SECRET` | `••••` (hex 32) | on-box | connectors (assina tokens de webhook PIX/PSP) |
+| `FILE_PROXY_SECRET` | `••••` (hex 32) | on-box | connectors (assina URLs do file proxy) |
 
 ---
 
@@ -94,7 +97,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-governance | ✅ | mysql | develop | mcp | ENV_PROFILE=hml; gov-mcp build defeito |
 | platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
 | platform-cdc | ⬜ img✅ | mysql | develop | cdc_mcp | |
-| platform-connectors | ⬜ img✅ | mysql | develop | connectors_mcp | usa CREDENTIAL_ENCRYPTION_KEY |
+| platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
 | platform-analytics | ⬜ img✅ | mysql | develop | analytics_mcp | |
 | platform-communication | ⬜ img✅ | mysql | develop | mcp | |
 | platform-ml | ⬜ img✗ | mysql | develop | mcp | build falhou |
@@ -189,6 +192,17 @@ Porta publicada: `0.0.0.0:9999:8000` (frontend chega via host.docker.internal). 
 `KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENABLED=false`. Health: `:8000/api/health/ready`.
 MCP: `NOTIFICATION_MCP_NOTIFICATION_URL`, `NOTIFICATION_MCP_INTERNAL_API_TOKEN=••••`,
 `NOTIFICATION_MCP_DEFAULT_TENANT_ID=dataforall`, `NOTIFICATION_MCP_MCP_PORT=7100`.
+
+### platform-connectors — específicos
+`ENV_PROFILE=hml` (=APP_ENV), `HEALTH_PORT=9090` (health em `:9090/health/live`),
+`JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••` (Fernet, **obrigatória**),
+`OAUTH_STATE_SECRET=••••`, `WEBHOOK_SECRET=••••`, `FILE_PROXY_SECRET=••••` (**os 3 obrigatórios fora de dev**),
+`SERVICE_TENANT_ID=dataforall`, `URL_AUTH=http://platform-auth:8000/internal`,
+`URL_IAM=http://platform-admin:8000/api/v1/iam`, `URL_GOVERNANCE=http://platform-governance:8000`,
+`RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false`.
+MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-connectors:8000`,
+`CONNECTORS_MCP_INTERNAL_API_TOKEN=••••`, `CONNECTORS_MCP_DEFAULT_TENANT_ID=dataforall`,
+`CONNECTORS_MCP_REQUEST_TIMEOUT=600`, `CONNECTORS_MCP_AUTH_URL=http://platform-auth:8000/internal`.
 
 ---
 

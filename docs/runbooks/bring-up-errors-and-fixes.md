@@ -237,6 +237,11 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Migrations por serviço no tenant:** cada serviço com estado tem suas migrations Alembic no DB do tenant — admin (`adm_*`), auth (`auth_*`), governance (`gov_*`). `onboard-tenant.sh` roda os três.
 - **K3. platform-mcp agrega 0 tools (sidecars não registrados):** o front-door lê `ADMIN_DATAFORALL.GATEWAY_MAPPING`, mas (a) a tabela criada pelo bootstrap do gateway **não tem** as colunas `kind/mcp_url/tools_list_path/tools_call_path/call_style` (→ tudo cai em `kind=openapi`, 0 tools), e (b) os sidecars não estão registrados. **Correção:** `deploy/seed/register-mcp-backends.sh` — ALTER add colunas (migration 0003) + registra cada sidecar. **Convenções VARIAM por sidecar:** gateway-mcp = `mcp_http` `/mcp/tools/list`+`/mcp/tools/call` (style `mcp`); admin-mcp = `mcp_http` `/v1/tools`+`/v1/call` (style `v1`, **110 tools**); auth-mcp = `sse` em `/sse`. **Resultado:** `catalog: 113 tools` (gateway-mcp 3 + admin-mcp 110). **Status:** ✅ gateway+admin bakados; ⏳ auth-mcp (SSE) não agregou — agregação SSE do platform-mcp precisa de investigação (follow-up).
 
+### K4. platform-connectors — segredos extras obrigatórios em hml/prod
+- **Evidência:** restart-loop com `ValueError` sequencial no boot: `OAUTH_STATE_SECRET must be set`, depois `WEBHOOK_SECRET must be set (PIX)`, depois `FILE_PROXY_SECRET must be set`.
+- **Causa:** além do padrão (JWT_SECRET_KEY, CREDENTIAL_ENCRYPTION_KEY), o connectors exige mais 3 segredos fora de dev (assinam OAuth state, webhooks PIX/PSP e URLs do file proxy) — validados 1 a 1 no boot.
+- **Correção:** gerar e setar `OAUTH_STATE_SECRET`, `WEBHOOK_SECRET`, `FILE_PROXY_SECRET` no `.env` (hex 32). **Dica:** ao subir um serviço novo, `grep -nE 'must be set' app/core/config.py` no repo lista TODOS os obrigatórios de uma vez (evita iterar). **Status:** ✅ bakado (compose do connectors).
+
 ## J. Build / rebuild de imagens (na EC2)
 
 ### J1. SSM `AWS-RunShellScript` roda com `/bin/sh` (dash)

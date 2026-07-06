@@ -30,6 +30,8 @@ echo "== registra sidecars =="
 reg platform-api-gateway-mcp mcp_http http://platform-api-gateway-mcp:7100 /mcp/tools/list /mcp/tools/call mcp
 reg platform-admin-mcp       mcp_http http://platform-admin-mcp:7100       /v1/tools        /v1/call         v1
 reg platform-auth-mcp        sse      http://platform-auth-mcp:28000       /sse             /sse             mcp
+reg platform-connectors-mcp  mcp_http http://platform-connectors-mcp:28000 /mcp/tools/list  /mcp/tools/call  mcp
+# notification-mcp: /mcp/tools/list deu 404 (path a confirmar) — pendente
 
 echo "== recarrega o registry do platform-mcp =="
 docker restart platform-mcp >/dev/null 2>&1 && echo "platform-mcp reiniciado"
