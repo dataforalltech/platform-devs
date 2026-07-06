@@ -242,9 +242,10 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Causa:** além do padrão (JWT_SECRET_KEY, CREDENTIAL_ENCRYPTION_KEY), o connectors exige mais 3 segredos fora de dev (assinam OAuth state, webhooks PIX/PSP e URLs do file proxy) — validados 1 a 1 no boot.
 - **Correção:** gerar e setar `OAUTH_STATE_SECRET`, `WEBHOOK_SECRET`, `FILE_PROXY_SECRET` no `.env` (hex 32). **Dica:** ao subir um serviço novo, `grep -nE 'must be set' app/core/config.py` no repo lista TODOS os obrigatórios de uma vez (evita iterar). **Status:** ✅ bakado (compose do connectors).
 
-### K5. platform-communication-mcp — sem Dockerfile no repo
+### K5. platform-communication-mcp — sem imagem própria (ÚNICO caso)
+- **⚠️ PECULIARIDADE:** o `platform-communication` é o **ÚNICO serviço** cujo MCP **não tem imagem própria** `<svc>-mcp` no ACR. O design pretendia rodar o MCP a partir da **mesma imagem da API**, via a variável **`MCP_HTTP_MODE=1`** (+ `MCP_HTTP_PORT`, entry `python -m src.server.mcp_server`). Todos os OUTROS serviços têm uma imagem MCP separada (`platform-<svc>-mcp`, buildada de `mcp/Dockerfile`, `Dockerfile.mcp`, `Dockerfile.<svc>-mcp` ou `gateway_mcp/Dockerfile`).
 - **Evidência:** `ModuleNotFoundError: No module named 'src.server'` ao rodar `python -m src.server.mcp_server` da imagem da API.
-- **Causa:** o código do MCP está em `mcp/src/server/mcp_server.py`, mas o repo **não tem Dockerfile de MCP** e a imagem da API copia só `app/` + `src/` (não `mcp/`). Não dá p/ rodar da mesma imagem.
+- **Causa:** o código do MCP está em `mcp/src/server/mcp_server.py`, mas o repo **não tem Dockerfile de MCP** e a imagem da API copia só `app/` + `src/` (não `mcp/`) — então a abordagem "mesma imagem + `MCP_HTTP_MODE`" não funciona (o `mcp/` não está na imagem).
 - **Correção (dev no repo):** adicionar `mcp/Dockerfile` (FROM python, COPY mcp/, pip install, `WORKDIR /app/mcp`, CMD `MCP_HTTP_MODE=1 python -m src.server.mcp_server`) e rebuildar como `platform-communication-mcp`. **Status:** ⏳ pendente (repo; tarefa criada). A API funciona.
 
 ### K6. `uvicorn: No such option '--max-requests'` (CMD bakado inválido)

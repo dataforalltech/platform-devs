@@ -217,6 +217,15 @@ MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-con
 MCP (porta 7100, 117 tools): `ANALYTICS_MCP_ANALYTICS_URL=http://platform-analytics:8000`,
 `ANALYTICS_MCP_INTERNAL_API_TOKEN=••••`, `ANALYTICS_MCP_DEFAULT_TENANT_ID=dataforall`, `ANALYTICS_MCP_TWIN_ENFORCE=false`.
 
+### platform-communication — específicos
+`ENV_PROFILE=local-hml`, `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`,
+`INTERNAL_API_TOKEN=••••`, `NOTIFICATION_INTERNAL_TOKEN=••••`, `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`,
+`KAFKA_ENABLED=false`, `HEALTHCHECK_TENANT_ID=dataforall`. **CMD override** (`--limit-max-requests`, o
+bakado usa `--max-requests` inválido — K6). Health `:8000/api/health/live`.
+**MCP — ÚNICO caso sem imagem própria:** desenhado p/ rodar da MESMA imagem da API via `MCP_HTTP_MODE=1`
++ `MCP_HTTP_PORT` + `python -m src.server.mcp_server` (prefixo `MCP_REPO_*`). Hoje PENDENTE (K5: o `mcp/`
+não está na imagem da API e o repo não tem Dockerfile de MCP).
+
 ### platform-cdc — específicos
 `ENV_PROFILE=local-hml` (**{runtime}-{app}**, como o core — difere de governance/connectors/analytics),
 health `:8000/api/health/ready`, `INTERNAL_API_TOKEN=••••`, `URL_AUTH=http://platform-auth:8000/internal`,
