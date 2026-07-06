@@ -25,6 +25,12 @@ _CANNED: dict[str, dict[str, Any]] = {
     "services-mcp.check_health": {"status": "healthy", "service": "api"},
     "qa-mcp.run_tests": {"passed": 42, "failed": 0, "suite": "unit"},
     "qa-mcp.generate_report": {"report_url": "memory://qa-report", "format": "md"},
+    # Real qa/deploy operationIds (the catalog runbooks were renamed to match the
+    # actual servers: run_unit_tests / generate_qa_report / deploy). Old names kept
+    # above because several unit-test fixtures still use them as opaque tool strings.
+    "qa-mcp.run_unit_tests": {"passed": 42, "failed": 0, "suite": "unit"},
+    "qa-mcp.generate_qa_report": {"report_url": "memory://qa-report", "format": "md"},
+    "deploy-mcp.deploy": {"deployment_id": "dep-1", "status": "deployed"},
     # platform_health runbook — real gateway tool ids (admin/auth).
     "admin.admin_health_check": {"status": "healthy", "database": "healthy"},
     "auth.auth_health_check": {"status": "ok", "tenants_count": 6},

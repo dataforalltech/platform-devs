@@ -89,8 +89,8 @@ async def test_approve_all_executes_whole_plan() -> None:
     # The three tools really traversed the gateway, in DAG order.
     assert [tool for tool, _ in fake.idempotency_keys] == [
         "services-mcp.check_health",
-        "qa-mcp.run_tests",
-        "qa-mcp.generate_report",
+        "qa-mcp.run_unit_tests",
+        "qa-mcp.generate_qa_report",
     ]
     stored = await repo.load(proposal.plan.plan_id)
     assert stored.status is PlanStatus.DONE

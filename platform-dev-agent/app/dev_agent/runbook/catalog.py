@@ -77,7 +77,7 @@ _HEALTH_TO_REPORT = RunbookSpec(
             description="Run the automated test suite via the QA gateway.",
             required=True,
             responsible="qa-engineer",
-            tool="qa-mcp.run_tests",
+            tool="qa-mcp.run_unit_tests",
             input_schema={
                 "type": "object",
                 "properties": {"suite": {"type": "string"}},
@@ -90,7 +90,7 @@ _HEALTH_TO_REPORT = RunbookSpec(
             description="Generate a consolidated QA report via the QA gateway.",
             required=False,
             responsible="qa-engineer",
-            tool="qa-mcp.generate_report",
+            tool="qa-mcp.generate_qa_report",
             input_schema={
                 "type": "object",
                 "properties": {"format": {"type": "string"}},
@@ -131,7 +131,7 @@ _DEPLOY_SERVICE = RunbookSpec(
         "run_tests": RunbookTaskSpec(
             title="Run test suite",
             description="Roda a suite de testes antes de promover.",
-            required=True, responsible="qa-engineer", tool="qa-mcp.run_tests",
+            required=True, responsible="qa-engineer", tool="qa-mcp.run_unit_tests",
             input_schema={"type": "object", "properties": {"suite": {"type": "string"}},
                           "required": ["suite"]},
             depends_on=["check_health"],
@@ -139,7 +139,7 @@ _DEPLOY_SERVICE = RunbookSpec(
         "deploy": RunbookTaskSpec(
             title="Deploy the service (HIGH RISK)",
             description="Cria o deployment via deploy-mcp. Passo destrutivo -> N2.",
-            required=True, responsible="devops", tool="deploy-mcp.create_deployment",
+            required=True, responsible="devops", tool="deploy-mcp.deploy",
             input_schema={"type": "object",
                           "properties": {"service": {"type": "string"},
                                          "version": {"type": "string"}},

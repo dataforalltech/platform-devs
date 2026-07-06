@@ -94,8 +94,8 @@ async def test_e2e_local_read_pipeline_all_done() -> None:
     called_tools = [tool for tool, _ in fake.idempotency_keys]
     assert called_tools == [
         "services-mcp.check_health",
-        "qa-mcp.run_tests",
-        "qa-mcp.generate_report",
+        "qa-mcp.run_unit_tests",
+        "qa-mcp.generate_qa_report",
     ]
     assert all(key for _, key in fake.idempotency_keys)
 
