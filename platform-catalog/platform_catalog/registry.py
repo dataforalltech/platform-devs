@@ -64,6 +64,19 @@ class CatalogStore:
         return [o for o in self.operations.values()
                 if o["spec"]["risk"]["default_level"] == level]
 
+    #: blast radii que atingem produção/ambiente compartilhado (checklist §7).
+    PRODUCTION_BLAST = ("environment", "tenant", "global")
+
+    def find_production_impacting(self) -> list[dict]:
+        """"Quem pode impactar produção?" — Operations cujo blast_radius atinge
+        ambiente/tenant/global (ADR-009 D9.5). Enforcement, não decoração."""
+        return [o for o in self.operations.values()
+                if o["spec"]["risk"]["blast_radius"] in self.PRODUCTION_BLAST]
+
+    def providers_for(self, uid: str) -> list[str]:
+        """Providers que implementam a Operation (rastreabilidade — checklist §6)."""
+        return sorted({t["spec"]["provider_id"] for t in self._tools_by_op.get(uid, [])})
+
     def search(self, q: str) -> list[dict]:
         ql = q.lower()
         out = []

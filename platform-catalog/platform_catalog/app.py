@@ -111,6 +111,17 @@ def stats():
     return store().stats()
 
 
+@app.get("/v1/production-impact")
+def production_impact():
+    """Quem pode impactar produção? (checklist §7) — Operations de blast env/tenant/global
+    + os providers que as implementam (rastreabilidade §6)."""
+    s = store()
+    ops = s.find_production_impacting()
+    return {"count": len(ops),
+            "operations": [_brief(o) | {"providers": s.providers_for(o["metadata"]["uid"])}
+                           for o in ops]}
+
+
 def _brief(op: dict) -> dict:
     m, s = op["metadata"], op["spec"]
     return {"uid": m["uid"], "domain": m["domain"], "capability": s["capability"],
