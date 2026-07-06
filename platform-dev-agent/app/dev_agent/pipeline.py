@@ -23,6 +23,7 @@ from typing import Any
 
 from app.dev_agent.budget import RunBudget
 from app.dev_agent.capability import CapabilityEnforcer, CapabilityResolver
+from app.dev_agent.catalog import PolicyEngine, RegistryCapabilityResolver
 from app.dev_agent.gateway.client import GatewayToolClient
 from app.dev_agent.models.plan import ItemResult, Plan, PlanStatus, RiskLevel
 from app.dev_agent.plan.approval import ApprovalGate
@@ -72,12 +73,19 @@ class AutonomousPipeline:
         selector: RunbookSelector,
         builder: PlanBuilder | None = None,
         gate: ApprovalGate | None = None,
+        resolver: RegistryCapabilityResolver | None = None,
+        policy: PolicyEngine | None = None,
     ) -> None:
         self._repo = repo
         self._gateway = gateway
         self._enforcer = enforcer
         self._selector = selector
-        self._builder = builder or PlanBuilder(CapabilityResolver())
+        # Fase 2: com um RegistryCapabilityResolver, o builder classifica pelo
+        # CATÁLOGO (source of truth) e o executor enforça o PDP por efeito/blast.
+        # Sem ele, comportamento inalterado (heurística de verbo + só read/write).
+        self._resolver = resolver
+        self._policy = policy
+        self._builder = builder or PlanBuilder(resolver or CapabilityResolver())
         self._gate = gate or ApprovalGate()
 
     async def plan(
@@ -151,7 +159,10 @@ class AutonomousPipeline:
         if budget is not None:
             budget.start()  # anchor the wall-clock ceiling at the top of the run
 
-        executor = PlanExecutor(self._repo, self._gateway, self._enforcer)
+        executor = PlanExecutor(
+            self._repo, self._gateway, self._enforcer,
+            resolver=self._resolver, policy=self._policy,
+        )
         results = [
             r
             async for r in executor.execute(

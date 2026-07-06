@@ -66,12 +66,20 @@ def _build_gateway():
 # One pipeline instance for the server (in-memory plan store persists across calls
 # within a run). Enforcer grants every persona read+write for the PoC demo.
 from app.dev_agent.capability import CapabilityEnforcer  # noqa: E402
+from app.dev_agent.catalog import (  # noqa: E402
+    DirCatalogSource, PolicyEngine, RegistryCapabilityResolver,
+)
 from app.dev_agent.plan.repository import InMemoryPlanRepository  # noqa: E402
 
 _REPO = InMemoryPlanRepository()
 _ENFORCER = CapabilityEnforcer({pid: {Capability.READ, Capability.WRITE} for pid in PROFILES})
+# Fase 2: catálogo (Fase 1) como source of truth + PDP por recurso/efeito. O
+# DirCatalogSource lê platform-catalog/catalog quando presente; ausente (ex.: imagem
+# Docker sem o catálogo) degrada para a heurística (migração aditiva, ADR-009 D9.10).
+_RESOLVER = RegistryCapabilityResolver(DirCatalogSource())
 _PIPELINE = AutonomousPipeline(
-    repo=_REPO, gateway=_build_gateway(), enforcer=_ENFORCER, selector=RunbookSelector()
+    repo=_REPO, gateway=_build_gateway(), enforcer=_ENFORCER, selector=RunbookSelector(),
+    resolver=_RESOLVER, policy=PolicyEngine(),
 )
 
 

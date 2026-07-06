@@ -72,7 +72,8 @@ class PolicyEngine:
         self._fallback = PersonaPolicy(allowed_effects=frozenset({"read"}), max_blast="none")
 
     def policy_for(self, profile: str) -> PersonaPolicy:
-        return self._policies.get(profile, self._fallback)
+        # runbook usa "qa-engineer" (hífen); persona id é "qa_engineer" (underscore).
+        return self._policies.get(profile.replace("-", "_"), self._fallback)
 
     def decide(self, *, profile: str, record: CapabilityRecord) -> PolicyDecision:
         pol = self.policy_for(profile)

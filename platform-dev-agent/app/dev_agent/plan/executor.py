@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING
 
 from app.dev_agent.budget import BudgetExceeded
 from app.dev_agent.capability import CapabilityEnforcer
+from app.dev_agent.catalog import PolicyEngine, RegistryCapabilityResolver
 from app.dev_agent.gateway.client import GatewayToolClient, build_correlation
 from app.dev_agent.models.plan import (
     ItemResult,
@@ -79,10 +80,18 @@ class PlanExecutor:
         repo: PlanRepository,
         gateway: GatewayToolClient,
         enforcer: CapabilityEnforcer,
+        *,
+        resolver: RegistryCapabilityResolver | None = None,
+        policy: PolicyEngine | None = None,
     ) -> None:
         self._repo = repo
         self._gateway = gateway
         self._enforcer = enforcer
+        # Fase 2: PDP por recurso/efeito, opcional. Sem os dois, comportamento
+        # inalterado (só o gate read/write do enforcer). Com eles, cada item é
+        # avaliado contra o catálogo (source of truth) antes de rodar.
+        self._resolver = resolver
+        self._policy = policy
 
     async def execute(
         self,
@@ -166,6 +175,21 @@ class PlanExecutor:
                 results.append(result)
                 yield result
                 continue
+
+            # PDP por recurso/efeito (Fase 2 — ADR-005/ADR-009 D9.5). Consulta o
+            # catálogo (source of truth): se o (profile, effects/blast/domínio) for
+            # negado, o item é SKIPPED como policy_denied (não é erro; não aborta o
+            # plano). Só enforça tools CATALOGADAS — tool sem record passa (migração
+            # aditiva, D9.10). Antes do budget: item negado não consome orçamento.
+            if self._policy is not None and self._resolver is not None:
+                record = self._resolver.record(item.tool)
+                if record is not None:
+                    pdp = self._policy.decide(profile=item.responsible, record=record)
+                    if not pdp.allowed:
+                        result = await self._skip(item, f"policy_denied (PDP): {pdp.reason}")
+                        results.append(result)
+                        yield result
+                        continue
 
             # Budget: charge + check BEFORE dispatch, so a spent budget stops the
             # run rather than paying for one more call. On BudgetExceeded, skip
