@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/generate_test_cases
+  uid: qa-engineer-mcp:generate_test_cases
+  domain: testing
+  title: generate_test_cases @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_test_cases
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: generate_test_cases
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_test_cases
+- verb: provided-by
+  target: qa-engineer-mcp

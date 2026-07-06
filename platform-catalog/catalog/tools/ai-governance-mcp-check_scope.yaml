@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/check_scope
+  uid: ai-governance-mcp:check_scope
+  domain: governance
+  title: check_scope @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.check_scope
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: check_scope
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.check_scope
+- verb: provided-by
+  target: ai-governance-mcp

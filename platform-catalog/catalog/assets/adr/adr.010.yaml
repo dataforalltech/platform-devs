@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.010
+  uid: adr.010
+  title: ADR-010 — Platform Catalog — Meta-modelo de Kinds
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '010'
+  status: Proposed (V1)
+  path: ADR-010-PLATFORM-CATALOG.md
+relations:
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.007
+- verb: derivedFrom
+  target: adr.009
+- verb: derivedFrom
+  target: adr.011
+- verb: derivedFrom
+  target: adr.012
+- verb: derivedFrom
+  target: adr.014

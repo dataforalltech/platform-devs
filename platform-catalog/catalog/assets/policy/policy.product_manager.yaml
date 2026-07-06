@@ -1,0 +1,23 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.product_manager
+  uid: policy.product_manager
+  title: policy · product_manager
+  owner: platform
+  tags:
+  - policy
+  - product_manager
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: product_manager
+  allowed_effects:
+  - generate
+  - read
+  - write
+  max_blast: service
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.product_manager

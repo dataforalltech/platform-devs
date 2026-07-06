@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/generate_database_schema
+  uid: backend-mcp:generate_database_schema
+  domain: development
+  title: generate_database_schema @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_database_schema
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: generate_database_schema
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_database_schema
+- verb: provided-by
+  target: backend-mcp

@@ -1,0 +1,21 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.security
+  uid: policy.security
+  title: policy · security
+  owner: platform
+  tags:
+  - policy
+  - security
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: security
+  allowed_effects:
+  - read
+  max_blast: none
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.security

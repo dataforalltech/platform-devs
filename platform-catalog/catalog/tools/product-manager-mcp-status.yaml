@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-manager-mcp/status
+  uid: product-manager-mcp:status
+  domain: product
+  title: status @ product-manager-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-manager-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.status
+  provider_id: product-manager-mcp
+  provider_version: 1.0.0
+  tool: status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.status
+- verb: provided-by
+  target: product-manager-mcp

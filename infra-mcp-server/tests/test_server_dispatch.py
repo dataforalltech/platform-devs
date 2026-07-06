@@ -7,7 +7,7 @@ import json
 import pytest
 
 from src.config.settings import Settings
-from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
+from src.db.allocator_store import AllocatorPolicy, AllocatorStore
 from src.server.mcp_server import _TOOL_SCHEMAS, _dispatch
 from src.tools import checkov_tool, infracost_tool, terraform_tool
 from src.utils.subprocess_runner import CommandResult
@@ -15,8 +15,13 @@ from src.utils.subprocess_runner import CommandResult
 
 def _mock_result(stdout: str = "", exit_code: int = 0) -> CommandResult:
     return CommandResult(
-        cmd=["fake"], cwd="/", exit_code=exit_code, stdout=stdout,
-        stderr="", duration_ms=1, truncated=False,
+        cmd=["fake"],
+        cwd="/",
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr="",
+        duration_ms=1,
+        truncated=False,
     )
 
 
@@ -63,7 +68,8 @@ def test_dispatch_unknown_tool(fake_settings):
 
 def test_dispatch_terraform_validate(monkeypatch, fake_settings, allocator):
     monkeypatch.setattr(
-        terraform_tool, "run_command",
+        terraform_tool,
+        "run_command",
         lambda *a, **kw: _mock_result(stdout=json.dumps({"valid": True, "diagnostics": []})),
     )
     res = _dispatch("terraform_validate", {}, fake_settings, allocator)
@@ -82,7 +88,8 @@ def test_dispatch_cost_estimate_requires_plan_path(fake_settings):
 
 def test_dispatch_terraform_plan_uses_settings_root(monkeypatch, fake_settings, allocator):
     monkeypatch.setattr(
-        terraform_tool, "run_command",
+        terraform_tool,
+        "run_command",
         lambda *a, **kw: _mock_result(stdout="No changes.", exit_code=0),
     )
     res = _dispatch("terraform_plan", {}, fake_settings, allocator)
@@ -99,7 +106,9 @@ def test_dispatch_checkov_passes_skip_checks(monkeypatch, fake_settings, tmp_pat
 
     def fake_run(cmd, **kw):
         captured["cmd"] = cmd
-        return _mock_result(stdout=json.dumps({"results": {"failed_checks": [], "passed_checks": []}}))
+        return _mock_result(
+            stdout=json.dumps({"results": {"failed_checks": [], "passed_checks": []}})
+        )
 
     monkeypatch.setattr(checkov_tool, "run_command", fake_run)
     _dispatch(
@@ -117,7 +126,8 @@ def test_dispatch_infracost_custom_threshold(monkeypatch, fake_settings, tmp_pat
     plan = tmp_path / "x.tfplan"
     plan.write_text("bin")
     monkeypatch.setattr(
-        infracost_tool, "run_command",
+        infracost_tool,
+        "run_command",
         lambda *a, **kw: _mock_result(
             stdout=json.dumps(
                 {

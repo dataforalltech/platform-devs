@@ -91,7 +91,7 @@ docker-compose -f docker-compose.staging.yml logs kafka | grep "ready to serve r
 ```bash
 # Start all MCPs at once
 docker-compose -f docker-compose.staging.yml up -d \
-  agent-twin-mcp config-mcp docs-mcp session-mcp services-mcp \
+  dev-twin-mcp config-mcp docs-mcp session-mcp services-mcp \
   deploy-mcp qa-mcp test-mcp infra-mcp pipeline-mcp \
   ai-governance-mcp audit-mcp
 
@@ -123,7 +123,7 @@ docker-compose -f docker-compose.staging.yml ps
 # Expected: All containers in "healthy" state
 
 # Quick health check of all endpoints
-curl -s http://localhost:7098/health | jq .  # agent-twin-mcp
+curl -s http://localhost:7098/health | jq .  # dev-twin-mcp
 curl -s http://localhost:8001/health | jq .  # auth-api
 ```
 
@@ -144,8 +144,8 @@ python3 tests/e2e/staging-validation.py
    - Verifies `/health` endpoint accessible on all MCPs + APIs
    - Expected: 23/23 healthy
 
-2. **Agent Twin Authentication** (7098)
-   - Creates test agent via agent-twin-mcp
+2. **Dev Twin Authentication** (7098)
+   - Creates test agent via dev-twin-mcp
    - Expected: 200 status, latency <100ms
 
 3. **Auth API Login** (8001)

@@ -1,0 +1,23 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.product_owner
+  uid: policy.product_owner
+  title: policy · product_owner
+  owner: platform
+  tags:
+  - policy
+  - product_owner
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: product_owner
+  allowed_effects:
+  - generate
+  - read
+  - write
+  max_blast: service
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.product_owner

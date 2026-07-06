@@ -29,7 +29,7 @@ Users (Claude Code, Python, Node.js, Web)
     │  System MCPs (Python)       │
     │  :7100-7117 (18 MCPs)       │
     │                             │
-    │  Zilla MCPs (Node.js)       │
+    │  DevTeam MCPs (Node.js)       │
     │  :7118-7125 (8 MCPs)        │
     │                             │
     │  Registry (Discovery)       │
@@ -42,7 +42,7 @@ Users (Claude Code, Python, Node.js, Web)
 | MCP | Port | Tools | Status |
 |-----|------|-------|--------|
 | config-mcp | 7100 | 10 | ✅ |
-| agent-twin-mcp | 7101 | 10 | ⏳ |
+| dev-twin-mcp | 7101 | 10 | ⏳ |
 | session-mcp | 7102 | 10 | ✅ |
 | auth-mcp | 7103 | 10 | ✅ |
 | admin-mcp | 7104 | 10 | ✅ |
@@ -62,20 +62,20 @@ Users (Claude Code, Python, Node.js, Web)
 
 **Total System MCPs:** 18 | **Total Tools:** 170+ | **16/18 Ready**
 
-## Zilla MCPs (Node.js + TypeScript)
+## DevTeam MCPs (Node.js + TypeScript)
 
 | MCP | Port | Tools | Type |
 |-----|------|-------|------|
-| archzilla-mcp | 7118 | 18 | Architecture |
-| backzilla-mcp | 7119 | 14 | Backend |
-| frontzilla-mcp | 7120 | 26 | Frontend |
-| opszilla-mcp | 7121 | 19 | Operations |
-| pozilla-mcp | 7122 | 17 | Production |
-| productzilla-mcp | 7123 | 18 | Product |
-| qazilla-mcp | 7124 | 33 | QA |
-| seczilla-mcp | 7125 | 25 | Security |
+| architecture-mcp | 7118 | 18 | Architecture |
+| backend-mcp | 7119 | 14 | Backend |
+| frontend-mcp | 7120 | 26 | Frontend |
+| devops-mcp | 7121 | 19 | Operations |
+| product-owner-mcp | 7122 | 17 | Production |
+| product-manager-mcp | 7123 | 18 | Product |
+| qa-engineer-mcp | 7124 | 33 | QA |
+| security-mcp | 7125 | 25 | Security |
 
-**Total Zilla MCPs:** 8 | **Total Tools:** 170
+**Total DevTeam MCPs:** 8 | **Total Tools:** 170
 
 ## Service Discovery Registry
 
@@ -88,7 +88,7 @@ curl http://localhost:8000/services
 # Get statistics
 curl http://localhost:8000/stats
 
-# List by type (system or zilla)
+# List by type (system or devteam)
 curl http://localhost:8000/services/type/system
 
 # Get specific MCP info
@@ -233,11 +233,11 @@ platform-devs/
 ├── admin-mcp-server/
 ├── ... (16 more system MCPs)
 │
-├── archzilla-mcp-server/
+├── architecture-mcp-server/
 │   ├── src/server.ts
 │   └── Dockerfile
-├── backzilla-mcp-server/
-├── ... (6 more zilla MCPs)
+├── backend-mcp-server/
+├── ... (6 more devteam MCPs)
 │
 ├── scripts/
 │   ├── generate-fastapi-mcps.py    # Generate MCPs
@@ -396,9 +396,9 @@ curl http://localhost:8000/health
 
 2. **FastAPI is Standard** for System MCPs
    - Fast, type-safe, production-ready
-   - Consistent with backzilla (backend specialist)
+   - Consistent with backend (backend specialist)
 
-3. **Node.js Better for Zillas**
+3. **Node.js Better for DevTeam**
    - Zod for type-safe validation
    - System prompts as Resources
    - Profile-based customization
@@ -413,7 +413,7 @@ curl http://localhost:8000/health
 
 1. **Complete Phase 2** (2 manual fixes)
    ```bash
-   # Fix agent-twin-mcp and test-mcp tools
+   # Fix dev-twin-mcp and test-mcp tools
    python scripts/migrate-tools.py
    ```
 
@@ -437,7 +437,7 @@ curl http://localhost:8000/health
 
 ## Statistics
 
-- **MCPs:** 26 (18 system + 8 zilla)
+- **MCPs:** 26 (18 system + 8 devteam)
 - **Tools:** 270+ total
 - **Documentation:** 2500+ lines
 - **Code Generated:** 18 MCPs (auto)

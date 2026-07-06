@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: frontend-mcp/generate_form_with_validation
+  uid: frontend-mcp:generate_form_with_validation
+  domain: development
+  title: generate_form_with_validation @ frontend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - frontend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_form_with_validation
+  provider_id: frontend-mcp
+  provider_version: 1.0.0
+  tool: generate_form_with_validation
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_form_with_validation
+- verb: provided-by
+  target: frontend-mcp

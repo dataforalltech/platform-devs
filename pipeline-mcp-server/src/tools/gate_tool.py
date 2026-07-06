@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from ..db.store import PipelineStore, VALID_GATE_TYPES
+from ..db.store import VALID_GATE_TYPES, PipelineStore
 
 _log = logging.getLogger(__name__)
 
@@ -60,28 +60,32 @@ def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
             all_passed = False
         else:
             passed = bool(g["passed"])
-            summary.append({
-                "gate_type": gate_type,
-                "status": "passed" if passed else "failed",
-                "passed": passed,
-                "details": g.get("details"),
-                "evaluated_by": g.get("evaluated_by"),
-                "evaluated_at": g.get("evaluated_at"),
-            })
+            summary.append(
+                {
+                    "gate_type": gate_type,
+                    "status": "passed" if passed else "failed",
+                    "passed": passed,
+                    "details": g.get("details"),
+                    "evaluated_by": g.get("evaluated_by"),
+                    "evaluated_at": g.get("evaluated_at"),
+                }
+            )
             if not passed:
                 all_passed = False
 
     # Also include any extra gates that were recorded but not required
     for g in gate_results:
         if g["gate_type"] not in required_gates:
-            summary.append({
-                "gate_type": g["gate_type"],
-                "status": "extra",
-                "passed": bool(g["passed"]),
-                "details": g.get("details"),
-                "evaluated_by": g.get("evaluated_by"),
-                "evaluated_at": g.get("evaluated_at"),
-            })
+            summary.append(
+                {
+                    "gate_type": g["gate_type"],
+                    "status": "extra",
+                    "passed": bool(g["passed"]),
+                    "details": g.get("details"),
+                    "evaluated_by": g.get("evaluated_by"),
+                    "evaluated_at": g.get("evaluated_at"),
+                }
+            )
 
     return {
         "service": service,

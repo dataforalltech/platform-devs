@@ -1,0 +1,24 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.003
+  uid: adr.003
+  title: ADR-003 — Identidade MCP
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '003'
+  status: Proposed (V1)
+  path: ADR-003-MCP-IDENTITY.md
+relations:
+- verb: derivedFrom
+  target: adr.004
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.006
+- verb: derivedFrom
+  target: adr.007

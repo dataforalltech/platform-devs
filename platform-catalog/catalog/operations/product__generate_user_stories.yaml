@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: product/generate_user_stories
+  uid: product.generate_user_stories
+  domain: product
+  title: generate user stories
+  description: ''
+  owner: platform
+  tags:
+  - product
+  - product-ownership
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: product
+  capability: product-ownership
+  resource:
+    type: product_artifact
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:product_artifact

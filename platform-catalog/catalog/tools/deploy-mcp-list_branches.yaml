@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/list_branches
+  uid: deploy-mcp:list_branches
+  domain: delivery
+  title: list_branches @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.list_branches
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: list_branches
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.list_branches
+- verb: provided-by
+  target: deploy-mcp

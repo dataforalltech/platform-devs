@@ -18,6 +18,7 @@ Tools
 - set_workspace_config  : define/atualiza uma chave
 - list_workspace_config : lista todas as chaves com seus valores
 """
+
 from __future__ import annotations
 
 import logging
@@ -85,7 +86,9 @@ def get_workspace_config(
             "key": key.upper(),
             "value": value,
             "found": value is not None,
-            "source": "store" if store.get(WORKSPACE_NS, key.upper()) is not None else "env_fallback",
+            "source": "store"
+            if store.get(WORKSPACE_NS, key.upper()) is not None
+            else "env_fallback",
         }
 
     # Todas as chaves
@@ -187,26 +190,30 @@ def list_workspace_config(
         stored_val = stored.get(k)
         env_val = env_fallbacks.get(k)
         effective = stored_val or env_val
-        rows.append({
-            "key": k,
-            "value": effective,
-            "source": "store" if stored_val else ("env" if env_val else None),
-            "set": effective is not None,
-            "canonical": True,
-            "description": meta["description"],
-        })
+        rows.append(
+            {
+                "key": k,
+                "value": effective,
+                "source": "store" if stored_val else ("env" if env_val else None),
+                "set": effective is not None,
+                "canonical": True,
+                "description": meta["description"],
+            }
+        )
 
     # Chaves extras nao canonicas
     for k, v in stored.items():
         if k not in _CANONICAL_KEYS:
-            rows.append({
-                "key": k,
-                "value": v,
-                "source": "store",
-                "set": True,
-                "canonical": False,
-                "description": None,
-            })
+            rows.append(
+                {
+                    "key": k,
+                    "value": v,
+                    "source": "store",
+                    "set": True,
+                    "canonical": False,
+                    "description": None,
+                }
+            )
 
     missing = [r["key"] for r in rows if not r["set"] and r["canonical"]]
 
@@ -216,7 +223,8 @@ def list_workspace_config(
         "total": len(rows),
         "missing_canonical": missing,
         "setup_tip": (
-            f"Configure as chaves ausentes com set_workspace_config. "
-            f"Minimo recomendado: REPOS_ROOT."
-        ) if missing else None,
+            "Configure as chaves ausentes com set_workspace_config. Minimo recomendado: REPOS_ROOT."
+        )
+        if missing
+        else None,
     }

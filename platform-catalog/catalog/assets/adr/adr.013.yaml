@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.013
+  uid: adr.013
+  title: ADR-013 — Runtime
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '013'
+  status: Proposed (V1)
+  path: ADR-013-RUNTIME.md
+relations:
+- verb: derivedFrom
+  target: adr.004
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.007
+- verb: derivedFrom
+  target: adr.009
+- verb: derivedFrom
+  target: adr.012

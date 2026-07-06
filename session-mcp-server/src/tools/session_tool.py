@@ -29,6 +29,7 @@ def sanitize_branch(name: str) -> str:
     clean = _BRANCH_SAFE.sub("-", name).strip("-/")
     return (clean or "session")[:240]
 
+
 _VALID_STATUSES = {"active", "paused", "completed"}
 _VALID_ARTIFACT_TYPES = {
     "file_changed",
@@ -445,9 +446,7 @@ def approve_task(
     if isinstance(result, str):
         return {
             "error": "invalid_transition",
-            "details": (
-                f"Decisão só é aceita para tasks pending; status atual: '{result}'."
-            ),
+            "details": (f"Decisão só é aceita para tasks pending; status atual: '{result}'."),
             "current_status": result,
         }
     _record(
@@ -793,9 +792,7 @@ def accept_suggestion(
                 f"é para '{suggestion['target_repo']}'."
             ),
         }
-    needs_decision = (
-        needs_human_decision if needs_human_decision is not None else True
-    )
+    needs_decision = needs_human_decision if needs_human_decision is not None else True
     description = suggestion.get("description") or ""
     if suggestion.get("source_repo"):
         prefix = f"[suggestion #{suggestion_id} from {suggestion['source_repo']}]"

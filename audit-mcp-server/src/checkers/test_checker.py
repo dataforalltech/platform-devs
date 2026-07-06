@@ -7,7 +7,7 @@ class TestChecker:
     """Verifica existência de testes e cobertura."""
 
     @staticmethod
-    def run(repo_path: str) -> dict[str, Any]:
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]:
         """Retorna resultado de checagens de testes."""
         repo = Path(repo_path)
         items = []
@@ -22,7 +22,9 @@ class TestChecker:
                 "name": "has_tests",
                 "required": True,
                 "passed": has_tests,
-                "details": f"Found {len(list(tests_dir.glob('test_*.py')))} test files" if has_tests else "No test files found",
+                "details": f"Found {len(list(tests_dir.glob('test_*.py')))} test files"
+                if has_tests
+                else "No test files found",
             }
         )
 
@@ -60,7 +62,7 @@ class TestChecker:
         coverage_json = repo_path / "coverage.json"
         if coverage_json.exists():
             try:
-                with open(coverage_json) as f:
+                with open(coverage_json, encoding="utf-8") as f:
                     data = json.load(f)
                     if "totals" in data and "percent_covered" in data["totals"]:
                         return int(data["totals"]["percent_covered"])

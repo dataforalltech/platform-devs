@@ -11,12 +11,8 @@ _COVERAGE_JSON = json.dumps(
             "num_statements": 1000,
         },
         "files": {
-            "src/main.py": {
-                "summary": {"covered_lines": 95, "num_statements": 100}
-            },
-            "src/utils.py": {
-                "summary": {"covered_lines": 62, "num_statements": 100}
-            },
+            "src/main.py": {"summary": {"covered_lines": 95, "num_statements": 100}},
+            "src/utils.py": {"summary": {"covered_lines": 62, "num_statements": 100}},
         },
     }
 )

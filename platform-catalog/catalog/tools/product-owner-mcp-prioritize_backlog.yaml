@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/prioritize_backlog
+  uid: product-owner-mcp:prioritize_backlog
+  domain: product
+  title: prioritize_backlog @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.prioritize_backlog
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: prioritize_backlog
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.prioritize_backlog
+- verb: provided-by
+  target: product-owner-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/validate_story_testability
+  uid: qa-engineer-mcp:validate_story_testability
+  domain: testing
+  title: validate_story_testability @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.validate_story_testability
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: validate_story_testability
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.validate_story_testability
+- verb: provided-by
+  target: qa-engineer-mcp

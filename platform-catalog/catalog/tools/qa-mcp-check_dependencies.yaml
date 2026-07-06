@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/check_dependencies
+  uid: qa-mcp:check_dependencies
+  domain: testing
+  title: check_dependencies @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.check_dependencies
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: check_dependencies
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.check_dependencies
+- verb: provided-by
+  target: qa-mcp

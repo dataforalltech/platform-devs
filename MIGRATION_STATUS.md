@@ -12,7 +12,7 @@ All 11 operational MCP servers have been successfully migrated from `platform-se
 
 | Server | Status | Tests | Notes |
 |--------|--------|-------|-------|
-| agent-twin-mcp-server | ✅ | 47 pass | User/tenant context management |
+| dev-twin-mcp-server | ✅ | 47 pass | User/tenant context management |
 | ai-governance-mcp-server | ✅ | — | Governance policies, ecosystem mgmt |
 | config-mcp-server | ✅ | 22 pass | Centralized configuration |
 | deploy-mcp-server | ✅ | — | GitHub operations (commits, PRs) |
@@ -30,16 +30,16 @@ All 11 operational MCP servers have been successfully migrated from `platform-se
 
 Consolidated reusable clients into `shared/`:
 - `base_client.py` — HTTP client wrapper (AsyncClient with auth, timeouts)
-- `twin_client.py` — Agent-twin specific client
+- `twin_client.py` — Dev-twin specific client
 - `config_client.py` — Config-mcp specific client
 
-**Result:** Eliminated code duplication across agent-twin and config servers.
+**Result:** Eliminated code duplication across dev-twin and config servers.
 
 ## Repository Structure
 
 ```
 platform-devs/
-├── agent-twin-mcp-server/      ✅ Complete
+├── dev-twin-mcp-server/      ✅ Complete
 ├── ai-governance-mcp-server/   ✅ Complete (with ecosystem.yaml, knowledge-base/)
 ├── config-mcp-server/          ✅ Complete (imports from shared/)
 ├── deploy-mcp-server/          ✅ Complete (platform_template_repo → "platform-devs")
@@ -62,7 +62,7 @@ platform-devs/
 ## Validation
 
 ### Tests
-- **Ran successfully:** session-mcp-server (111), agent-twin (47), test (20), config (22)
+- **Ran successfully:** session-mcp-server (111), dev-twin (47), test (20), config (22)
 - **Status:** ✅ All verified servers pass test suites
 
 ### Structure

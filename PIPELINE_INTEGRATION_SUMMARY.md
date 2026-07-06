@@ -1,4 +1,4 @@
-# Pipeline Integration Summary — 8 Zillas
+# Pipeline Integration Summary — 8 DevTeam
 
 **Date**: 2026-05-10  
 **Status**: ✅ READY FOR DEPLOYMENT  
@@ -9,8 +9,8 @@
 ## 🎯 What We've Accomplished
 
 ### ✅ FASE 4: Profile-Based Prompts (Complete)
-All 8 Zillas now return **context-aware system prompts** based on user profile:
-- **Dev** — 175 lines of guidance per Zilla
+All 8 DevTeam now return **context-aware system prompts** based on user profile:
+- **Dev** — 175 lines of guidance per DevTeam
 - **ReleaseMgr** — Quality validation focus
 - **Auditor** — Governance & compliance
 - **Ops** — Production stability
@@ -21,18 +21,18 @@ All 8 Zillas now return **context-aware system prompts** based on user profile:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    ZILLAS PIPELINE STATE                     │
+│                    DEVTEAM PIPELINE STATE                     │
 ├──────────────┬──────────┬─────────┬──────────┬───────────────┤
 │ Service      │ Current  │ HML     │ PROD     │ Status        │
 ├──────────────┼──────────┼─────────┼──────────┼───────────────┤
-│ ArchZilla    │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ BackZilla    │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ FrontZilla   │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ OpsZilla     │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ POZilla      │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ ProductZilla │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ QAZilla      │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
-│ SecZilla     │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Architecture    │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Backend    │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Frontend   │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ DevOps     │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Product-Owner      │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Product-Manager │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ QA-Engineer      │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
+│ Security     │ DEV ✓    │ Ready   │ Ready*   │ REGISTERED    │
 └──────────────┴──────────┴─────────┴──────────┴───────────────┘
 *After HML validation
 ```
@@ -42,7 +42,7 @@ All 8 Zillas now return **context-aware system prompts** based on user profile:
 ## 📊 Quality Gates Configuration
 
 ### HML Environment (Homolog Testing)
-**Gates Required** (all 8 Zillas):
+**Gates Required** (all 8 DevTeam):
 1. ✅ `qa_tests` — Unit + integration tests passing
 2. ✅ `pr_approved` — Code review completed
 
@@ -50,7 +50,7 @@ All 8 Zillas now return **context-aware system prompts** based on user profile:
 **Action**: Auto-merge on gate success → Deploy to HML
 
 ### PROD Environment (Production)
-**Gates Required** (all 8 Zillas):
+**Gates Required** (all 8 DevTeam):
 1. ✅ `qa_tests` — Test coverage >80%, no failures
 2. ✅ `security_scan` — No critical/high vulnerabilities
 3. ✅ `pr_approved` — Code review approved
@@ -91,7 +91,7 @@ PROD (Manual, ~20 min)
 
 ## 📈 Observable Pipeline Metrics
 
-### Pipeline Health Dashboard (via zilla-observatory)
+### Pipeline Health Dashboard (via devteam-observatory)
 ```
 Pipeline Overview:
   ├─ Total Services: 8
@@ -101,12 +101,12 @@ Pipeline Overview:
   └─ Blocked Services: 0
 
 Per-Service Metrics:
-  ├─ ArchZilla
+  ├─ Architecture
   │  ├─ Current Env: dev
   │  ├─ Gates Passing: qa_tests ✓, pr_approved ✓
   │  ├─ Last Promotion: None
   │  └─ Promotion Ready: YES
-  ├─ BackZilla
+  ├─ Backend
   │  └─ ... (same pattern)
   ...
 ```
@@ -115,26 +115,26 @@ Per-Service Metrics:
 - ✉️ Gate failure → Slack #releases
 - ✉️ Manual approval ready → Slack @releasemgr
 - ✉️ Health check failure → Page on-call ops
-- ✉️ Security scan critical → Escalate to SecZilla
+- ✉️ Security scan critical → Escalate to Security
 
 ---
 
 ## 🚀 Next Steps
 
 ### Immediate (This Week)
-- [ ] Verify all 8 Zillas registered in pipeline-mcp
-- [ ] Test promotion flow: dev → hml with ArchZilla
-- [ ] Human approval workflow (1 Zilla end-to-end)
-- [ ] Monitor zilla-observatory during first promotion
+- [ ] Verify all 8 DevTeam registered in pipeline-mcp
+- [ ] Test promotion flow: dev → hml with Architecture
+- [ ] Human approval workflow (1 DevTeam end-to-end)
+- [ ] Monitor devteam-observatory during first promotion
 
 ### Short-term (Next 2 Weeks)
-- [ ] Promote all 8 Zillas to HML validation
+- [ ] Promote all 8 DevTeam to HML validation
 - [ ] Complete HML testing (manual QA)
-- [ ] First PROD deployment of ArchZilla
+- [ ] First PROD deployment of Architecture
 - [ ] Document lessons learned
 
 ### Medium-term (Month 1-2)
-- [ ] All 8 Zillas deployed to PROD
+- [ ] All 8 DevTeam deployed to PROD
 - [ ] Rollback procedure tested
 - [ ] Performance baseline established
 - [ ] Team training completed
@@ -145,14 +145,14 @@ Per-Service Metrics:
 
 ### Documentation (5 files created)
 1. ✅ `FASE4_PROFILE_BASED_PROMPTS.md` — Complete FASE 4 reference
-2. ✅ `PIPELINE_INTEGRATION_ZILLAS.md` — Detailed pipeline configuration
+2. ✅ `PIPELINE_INTEGRATION_DEVTEAM.md` — Detailed pipeline configuration
 3. ✅ `PIPELINE_REGISTRATION_SCRIPT.md` — Step-by-step registration guide
 4. ✅ `PIPELINE_INTEGRATION_SUMMARY.md` — This document
-5. ✅ `scripts/register-zillas-pipeline.sh` — Automated registration script
+5. ✅ `scripts/register-devteam-pipeline.sh` — Automated registration script
 
 ### Code (16 files modified)
-1. ✅ `*zilla-mcp-server/src/prompts/profilePrompts.ts` × 8
-2. ✅ `*zilla-mcp-server/src/server.ts` × 8
+1. ✅ `*devteam-mcp-server/src/prompts/profilePrompts.ts` × 8
+2. ✅ `*devteam-mcp-server/src/server.ts` × 8
 
 ### Artifacts
 - ✅ 8 services registered (ready)
@@ -167,8 +167,8 @@ Per-Service Metrics:
 ### Register Service
 ```bash
 pipeline-mcp.register_pipeline(
-  service="archzilla",
-  repo="platform-devs/archzilla-mcp-server",
+  service="architecture",
+  repo="platform-devs/architecture-mcp-server",
   base_branch="develop"
 )
 ```
@@ -176,7 +176,7 @@ pipeline-mcp.register_pipeline(
 ### Configure Gates
 ```bash
 pipeline-mcp.set_pipeline_config(
-  service="archzilla",
+  service="architecture",
   gates_required={
     "homol": ["qa_tests", "pr_approved"],
     "prod": ["qa_tests", "security_scan", "pr_approved", "health_check"]
@@ -190,7 +190,7 @@ pipeline-mcp.set_pipeline_config(
 pipeline-mcp.get_pipeline_overview()
 
 # Single service
-pipeline-mcp.get_pipeline(service="archzilla")
+pipeline-mcp.get_pipeline(service="architecture")
 
 # Promotion history
 pipeline-mcp.get_promotion_history(limit=20)
@@ -199,7 +199,7 @@ pipeline-mcp.get_promotion_history(limit=20)
 ### Record Gate Result
 ```bash
 pipeline-mcp.add_gate_result(
-  service="archzilla",
+  service="architecture",
   env="dev",
   gate_type="qa_tests",
   passed=true,
@@ -212,7 +212,7 @@ pipeline-mcp.add_gate_result(
 ```bash
 # Request promotion (human approval required)
 promotion = pipeline-mcp.promote_service(
-  service="archzilla",
+  service="architecture",
   from_env="dev",
   to_env="homol",
   promoted_by="releasemgr@example.com",
@@ -269,7 +269,7 @@ observatory.get_pipeline_health()
 
 ### For Developers
 - "Getting Started with Pipeline Promotions" (5 min)
-- "Profile-Based Prompts per Zilla" (10 min)
+- "Profile-Based Prompts per DevTeam" (10 min)
 - "Reviewing a Failed Quality Gate" (5 min)
 
 ### For Release Managers
@@ -286,10 +286,10 @@ observatory.get_pipeline_health()
 
 ## 🎯 Key Achievements
 
-✅ **FASE 4 Complete** — 8 Zillas with 5 profile-based prompts each  
+✅ **FASE 4 Complete** — 8 DevTeam with 5 profile-based prompts each  
 ✅ **Pipeline Ready** — 8 services, 16 quality gates, 3-env workflow  
-✅ **Observable** — Integrated with zilla-observatory for health monitoring  
-✅ **Scalable** — Pattern easily extends to new Zillas  
+✅ **Observable** — Integrated with devteam-observatory for health monitoring  
+✅ **Scalable** — Pattern easily extends to new DevTeam  
 ✅ **Documented** — 5 comprehensive guides + scripts  
 
 ---
@@ -297,10 +297,10 @@ observatory.get_pipeline_health()
 ## 📞 Support
 
 ### Questions?
-- **Pipeline-MCP**: See `PIPELINE_INTEGRATION_ZILLAS.md`
+- **Pipeline-MCP**: See `PIPELINE_INTEGRATION_DEVTEAM.md`
 - **FASE 4 Profiles**: See `FASE4_PROFILE_BASED_PROMPTS.md`
 - **Registration**: See `PIPELINE_REGISTRATION_SCRIPT.md`
-- **Scripts**: See `scripts/register-zillas-pipeline.sh`
+- **Scripts**: See `scripts/register-devteam-pipeline.sh`
 
 ### Issues?
 - Service not registering? Check repo name + base_branch

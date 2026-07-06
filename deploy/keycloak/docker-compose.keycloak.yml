@@ -1,0 +1,34 @@
+# ============================================================================
+# docker-compose.keycloak.yml — Keycloak de DEV para testar a federação OIDC real
+# ----------------------------------------------------------------------------
+# Sobe um Keycloak em http://localhost:8081 já com o realm "mcp" importado
+# (client mcp-auth-mcp, roles mcp-admins/mcp-devs, usuários alice/bob).
+#
+# Uso:
+#   docker compose -f deploy/keycloak/docker-compose.keycloak.yml up -d
+#   # depois rode auth-mcp + security com as envs AS_UPSTREAM_OIDC_* do bloco DEV
+#   # de deploy/.env.keycloak.example (issuer http://localhost:8081/realms/mcp).
+#
+# NÃO use este modo (start-dev, sem TLS, senha fraca) em produção.
+# ============================================================================
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: dev-keycloak
+    command: ["start-dev", "--import-realm", "--http-port=8081"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME_STRICT: "false"
+    ports:
+      - "8081:8081"
+    volumes:
+      # o Keycloak importa qualquer realm-*.json montado aqui no boot
+      - ./realm-mcp.json:/opt/keycloak/data/import/realm-mcp.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/8081 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s

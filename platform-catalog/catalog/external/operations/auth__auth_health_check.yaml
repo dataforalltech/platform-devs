@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: identity/auth_health_check
+  uid: auth.auth_health_check
+  domain: identity
+  title: auth_health_check
+  description: ''
+  owner: platform-auth
+  tags:
+  - identity
+  - external
+  - auth
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: identity
+  capability: auth
+  resource:
+    type: auth
+    parent: null
+    namespace: null
+  operation: auth
+  authz: read
+  risk:
+    effects:
+    - read
+    requires:
+    - auth
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+  external: true
+relations:
+- verb: acts-on
+  target: resource:auth

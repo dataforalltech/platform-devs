@@ -140,12 +140,7 @@ class TestScaffoldPipeline:
 
         import yaml
 
-        tpl_dir = (
-            Path(__file__).parent.parent
-            / "src"
-            / "knowledge"
-            / "pipeline_templates"
-        )
+        tpl_dir = Path(__file__).parent.parent / "src" / "knowledge" / "pipeline_templates"
         for yml_file in tpl_dir.glob("*.yml"):
             content = yml_file.read_text(encoding="utf-8")
             parsed = yaml.safe_load(content)

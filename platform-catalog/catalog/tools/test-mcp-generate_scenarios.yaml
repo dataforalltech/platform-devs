@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/generate_scenarios
+  uid: test-mcp:generate_scenarios
+  domain: testing
+  title: generate_scenarios @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_scenarios
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: generate_scenarios
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_scenarios
+- verb: provided-by
+  target: test-mcp

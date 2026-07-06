@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/revoke_token
+  uid: dev-twin-mcp:revoke_token
+  domain: platform
+  title: revoke_token @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.revoke_token
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: revoke_token
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.revoke_token
+- verb: provided-by
+  target: dev-twin-mcp

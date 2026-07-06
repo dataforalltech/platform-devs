@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/get_audit_log
+  uid: ai-governance-mcp:get_audit_log
+  domain: governance
+  title: get_audit_log @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.get_audit_log
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: get_audit_log
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.get_audit_log
+- verb: provided-by
+  target: ai-governance-mcp

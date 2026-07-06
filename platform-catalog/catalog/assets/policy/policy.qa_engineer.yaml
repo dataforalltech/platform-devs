@@ -1,0 +1,21 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.qa_engineer
+  uid: policy.qa_engineer
+  title: policy · qa_engineer
+  owner: platform
+  tags:
+  - policy
+  - qa_engineer
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: qa_engineer
+  allowed_effects:
+  - read
+  max_blast: none
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.qa_engineer

@@ -72,10 +72,7 @@ def deploy(
             return {
                 "error": "ValidationError",
                 "tool": "deploy",
-                "details": (
-                    f"environment inválido: {environment!r}. "
-                    "Use dev, hml ou prod."
-                ),
+                "details": (f"environment inválido: {environment!r}. Use dev, hml ou prod."),
             }
 
         actual_ref = ref or cfg["default_ref"]
@@ -84,8 +81,7 @@ def deploy(
                 "error": "ValidationError",
                 "tool": "deploy",
                 "details": (
-                    f"environment='{environment}' exige ref explícito. "
-                    f"Exemplo: {cfg['ref_hint']}"
+                    f"environment='{environment}' exige ref explícito. Exemplo: {cfg['ref_hint']}"
                 ),
             }
 

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/review_secure_code
+  uid: security-mcp:review_secure_code
+  domain: security
+  title: review_secure_code @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.review_secure_code
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: review_secure_code
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.review_secure_code
+- verb: provided-by
+  target: security-mcp

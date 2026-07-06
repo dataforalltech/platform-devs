@@ -32,34 +32,34 @@ def _parse_first_port(ports_str: str) -> int | None:
 
 # Padroes para detectar runtime a partir de cmdline / command / imagem
 _RUNTIME_PATTERNS: list[tuple[re.Pattern, str]] = [
-    (re.compile(r"\buvicorn\b",    re.IGNORECASE), "uvicorn"),
-    (re.compile(r"\bgunicorn\b",   re.IGNORECASE), "gunicorn"),
-    (re.compile(r"\bhypercorn\b",  re.IGNORECASE), "hypercorn"),
-    (re.compile(r"\bdaphne\b",     re.IGNORECASE), "daphne"),
-    (re.compile(r"\bwaitress\b",   re.IGNORECASE), "waitress"),
+    (re.compile(r"\buvicorn\b", re.IGNORECASE), "uvicorn"),
+    (re.compile(r"\bgunicorn\b", re.IGNORECASE), "gunicorn"),
+    (re.compile(r"\bhypercorn\b", re.IGNORECASE), "hypercorn"),
+    (re.compile(r"\bdaphne\b", re.IGNORECASE), "daphne"),
+    (re.compile(r"\bwaitress\b", re.IGNORECASE), "waitress"),
     (re.compile(r"\bnext\b|\bnpm\b|\bnode\b", re.IGNORECASE), "node"),
     (re.compile(r"\bjava\b|-jar\b", re.IGNORECASE), "java"),
-    (re.compile(r"\bnginx\b",      re.IGNORECASE), "nginx"),
-    (re.compile(r"\bcaddy\b",      re.IGNORECASE), "caddy"),
+    (re.compile(r"\bnginx\b", re.IGNORECASE), "nginx"),
+    (re.compile(r"\bcaddy\b", re.IGNORECASE), "caddy"),
     (re.compile(r"\bpython\b|\bpython3\b", re.IGNORECASE), "python"),
-    (re.compile(r"\bflask\b",      re.IGNORECASE), "flask"),
-    (re.compile(r"\bfastapi\b",    re.IGNORECASE), "fastapi"),
+    (re.compile(r"\bflask\b", re.IGNORECASE), "flask"),
+    (re.compile(r"\bfastapi\b", re.IGNORECASE), "fastapi"),
 ]
 
 # Deploy mode a partir de runtime
 _DEPLOY_MODE_MAP: dict[str, str] = {
-    "uvicorn":   "asgi",
-    "gunicorn":  "wsgi",
+    "uvicorn": "asgi",
+    "gunicorn": "wsgi",
     "hypercorn": "asgi",
-    "daphne":    "asgi",
-    "waitress":  "wsgi",
-    "node":      "node",
-    "java":      "jvm",
-    "nginx":     "proxy",
-    "caddy":     "proxy",
-    "python":    "script",
-    "flask":     "wsgi",
-    "fastapi":   "asgi",
+    "daphne": "asgi",
+    "waitress": "wsgi",
+    "node": "node",
+    "java": "jvm",
+    "nginx": "proxy",
+    "caddy": "proxy",
+    "python": "script",
+    "flask": "wsgi",
+    "fastapi": "asgi",
 }
 
 
@@ -78,8 +78,8 @@ def _deploy_mode(runtime: str) -> str:
 def _host_os() -> dict[str, str]:
     """Retorna info do OS do host onde o MCP esta rodando."""
     return {
-        "os_name": platform.system().lower(),      # linux | windows | darwin
-        "os_release": platform.release(),           # ex: 5.15.0-78-generic | 11 | 23.4.0
+        "os_name": platform.system().lower(),  # linux | windows | darwin
+        "os_release": platform.release(),  # ex: 5.15.0-78-generic | 11 | 23.4.0
     }
 
 
@@ -90,7 +90,9 @@ def _docker_inspect_runtime(container_ids: list[str], timeout: int = 8) -> dict[
     try:
         result = subprocess.run(
             ["docker", "inspect", "--format", "{{json .}}", *container_ids],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):
         return {}
@@ -107,11 +109,10 @@ def _docker_inspect_runtime(container_ids: list[str], timeout: int = 8) -> dict[
 
         cid = data.get("Id", "")[:12]
         config = data.get("Config", {})
-        host_config = data.get("HostConfig", {})
 
         # Comando de entrypoint + cmd
         entry = config.get("Entrypoint") or []
-        cmd   = config.get("Cmd") or []
+        cmd = config.get("Cmd") or []
         full_cmd = " ".join(entry + cmd)
 
         runtime = _detect_runtime(full_cmd)
@@ -123,12 +124,12 @@ def _docker_inspect_runtime(container_ids: list[str], timeout: int = 8) -> dict[
         hostname = config.get("Hostname", "")
 
         info[cid] = {
-            "runtime":     runtime,
-            "os_name":     host_os["os_name"],
-            "os_release":  host_os["os_release"],
-            "hostname":    hostname,
+            "runtime": runtime,
+            "os_name": host_os["os_name"],
+            "os_release": host_os["os_release"],
+            "hostname": hostname,
             "deploy_mode": _deploy_mode(runtime),
-            "full_cmd":    full_cmd,
+            "full_cmd": full_cmd,
         }
     return info
 
@@ -147,20 +148,29 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
     try:
         ps_result = subprocess.run(
             ["docker", "ps", "--format", "{{json .}}"],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except FileNotFoundError:
         return {"scanned": 0, "upserted": 0, "containers": [], "docker_error": "docker not found"}
     except subprocess.TimeoutExpired:
-        return {"scanned": 0, "upserted": 0, "containers": [], "docker_error": f"docker ps timeout ({timeout}s)"}
+        return {
+            "scanned": 0,
+            "upserted": 0,
+            "containers": [],
+            "docker_error": f"docker ps timeout ({timeout}s)",
+        }
 
     if ps_result.returncode != 0:
         return {
-            "scanned": 0, "upserted": 0, "containers": [],
+            "scanned": 0,
+            "upserted": 0,
+            "containers": [],
             "docker_error": ps_result.stderr.strip() or f"exit {ps_result.returncode}",
         }
 
-    ps_lines = [l.strip() for l in ps_result.stdout.splitlines() if l.strip()]
+    ps_lines = [line.strip() for line in ps_result.stdout.splitlines() if line.strip()]
     ps_data: list[dict] = []
     for line in ps_lines:
         try:
@@ -225,15 +235,17 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
         store.upsert(svc_name, fields)
         upserted += 1
 
-        containers.append({
-            "name": svc_name,
-            "port": port,
-            "image": image,
-            "runtime": runtime,
-            "deploy_mode": deploy_mode,
-            "hostname": hostname,
-            "os_name": fields["os_name"],
-        })
+        containers.append(
+            {
+                "name": svc_name,
+                "port": port,
+                "image": image,
+                "runtime": runtime,
+                "deploy_mode": deploy_mode,
+                "hostname": hostname,
+                "os_name": fields["os_name"],
+            }
+        )
 
     return {
         "scanned": len(ps_data),
@@ -309,19 +321,22 @@ def scan_processes(store: ServiceStore, *, min_port: int = 1024) -> dict[str, An
 
         # Registra no store com as informacoes de runtime
         svc_name = f"proc-{port}"
-        store.upsert(svc_name, {
-            "host": "localhost",
-            "port": port,
-            "pid": pid,
-            "type": "process",
-            "status": "running",
-            "runtime": runtime,
-            "deploy_mode": deploy_mode,
-            "os_name": host_os["os_name"],
-            "os_release": host_os["os_release"],
-            "hostname": hostname,
-            "metadata": {"proc_name": proc_name, "cmdline": cmdline[:512]},
-        })
+        store.upsert(
+            svc_name,
+            {
+                "host": "localhost",
+                "port": port,
+                "pid": pid,
+                "type": "process",
+                "status": "running",
+                "runtime": runtime,
+                "deploy_mode": deploy_mode,
+                "os_name": host_os["os_name"],
+                "os_release": host_os["os_release"],
+                "hostname": hostname,
+                "metadata": {"proc_name": proc_name, "cmdline": cmdline[:512]},
+            },
+        )
 
     return {"total": len(processes), "processes": processes}
 

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/set_pipeline_config
+  uid: pipeline-mcp:set_pipeline_config
+  domain: delivery
+  title: set_pipeline_config @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.set_pipeline_config
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: set_pipeline_config
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.set_pipeline_config
+- verb: provided-by
+  target: pipeline-mcp

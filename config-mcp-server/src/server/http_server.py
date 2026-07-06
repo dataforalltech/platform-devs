@@ -4,10 +4,11 @@ Config-MCP HTTP Server — FastAPI wrapper.
 Wires ConfigHTTPEndpoints into a FastAPI application on port 7099.
 """
 
-from fastapi import FastAPI, HTTPException, Query, Path
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Query
 
 logger = logging.getLogger(__name__)
 
@@ -38,99 +39,75 @@ def create_config_http_server(config_store, tenant_id: str = "platform_dev"):
         title="config-mcp",
         description="Configuration and credentials API",
         version="1.0.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     # ========== Health ==========
 
     @app.get("/health")
     async def health():
-        return {
-            "status": "ok",
-            "service": "config-mcp",
-            "port": 7099,
-            "tenant_id": tenant_id
-        }
+        return {"status": "ok", "service": "config-mcp", "port": 7099, "tenant_id": tenant_id}
 
     # ========== Credentials ==========
 
     @app.get("/credentials/list")
     async def get_credentials_list(
-        namespace: str = Query(None),
-        include_metadata: bool = Query(True)
+        namespace: str = Query(None), include_metadata: bool = Query(True)
     ):
         result = endpoints.get_credentials_list(
-            namespace=namespace,
-            include_metadata=include_metadata
+            namespace=namespace, include_metadata=include_metadata
         )
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.get("/credentials/metadata")
-    async def get_credentials_metadata(
-        namespace: str = Query(...),
-        key: str = Query(...)
-    ):
+    async def get_credentials_metadata(namespace: str = Query(...), key: str = Query(...)):
         result = endpoints.get_credentials_metadata(namespace, key)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.post("/credentials/validate")
-    async def post_credentials_validate(
-        namespace: str = Query(...),
-        key: str = Query(...)
-    ):
+    async def post_credentials_validate(namespace: str = Query(...), key: str = Query(...)):
         result = endpoints.post_credentials_validate(namespace, key)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.post("/credentials/rotate")
     async def post_credentials_rotate(
-        namespace: str = Query(...),
-        key: str = Query(...),
-        new_value: str = Query(...)
+        namespace: str = Query(...), key: str = Query(...), new_value: str = Query(...)
     ):
         result = endpoints.post_credentials_rotate(namespace, key, new_value)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.delete("/credentials")
-    async def delete_credentials(
-        namespace: str = Query(...),
-        key: str = Query(...)
-    ):
+    async def delete_credentials(namespace: str = Query(...), key: str = Query(...)):
         result = endpoints.delete_credentials(namespace, key)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.get("/credentials/namespaces")
     async def get_credentials_namespaces():
         result = endpoints.get_credentials_namespaces()
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     return app

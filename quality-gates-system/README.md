@@ -12,8 +12,8 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 ## Gate Types
 
 ### 1. Architecture Review Gate
-**Quando**: Depois que ArchZilla entregar blueprint
-**Responsável**: ArchZilla + ai-governance-mcp
+**Quando**: Depois que Architecture entregar blueprint
+**Responsável**: Architecture + ai-governance-mcp
 **Critérios**:
 ```
 ✓ ADR created and approved
@@ -30,7 +30,7 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 
 ### 2. API Contract Validation Gate
 **Quando**: API spec pronta
-**Responsável**: ArchZilla + BackZilla
+**Responsável**: Architecture + Backend
 **Critérios**:
 ```
 ✓ OpenAPI spec valid (openapi-generator passes)
@@ -41,13 +41,13 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 ✓ Rate limiting defined
 ✓ Backwards compatibility assessed
 ```
-**Ação se falhar**: QAZilla não pode escrever testes até passar
+**Ação se falhar**: QA-Engineer não pode escrever testes até passar
 
 ---
 
 ### 3. Code Quality Gate
 **Quando**: PR merged para develop
-**Responsável**: BackZilla + qa-mcp
+**Responsável**: Backend + qa-mcp
 **Critérios**:
 ```
 ✓ Code coverage >= 80%
@@ -63,8 +63,8 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 ---
 
 ### 4. Security Scan Gate
-**Quando**: Code finalizado, antes de QAZilla
-**Responsável**: SecZilla + qa-mcp
+**Quando**: Code finalizado, antes de QA-Engineer
+**Responsável**: Security + qa-mcp
 **Critérios**:
 ```
 ✓ SAST: no critical/high findings
@@ -75,13 +75,13 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 ✓ Kubernetes manifest scan: security rules met
 ✓ API security: no auth bypass patterns
 ```
-**Ação se falhar**: Feature bloqueada para staging; SecZilla must remediate
+**Ação se falhar**: Feature bloqueada para staging; Security must remediate
 
 ---
 
 ### 5. E2E Test Gate
 **Quando**: Testes E2E executados
-**Responsável**: QAZilla
+**Responsável**: QA-Engineer
 **Critérios**:
 ```
 ✓ All E2E tests passing
@@ -97,7 +97,7 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 
 ### 6. API Test Gate
 **Quando**: APIs implementadas e testadas
-**Responsável**: QAZilla
+**Responsável**: QA-Engineer
 **Critérios**:
 ```
 ✓ All endpoints tested (GET, POST, PUT, DELETE)
@@ -114,8 +114,8 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 ---
 
 ### 7. UI Accessibility Gate
-**Quando**: FrontZilla UI complete
-**Responsável**: QAZilla + axe-core
+**Quando**: Frontend UI complete
+**Responsável**: QA-Engineer + axe-core
 **Critérios**:
 ```
 ✓ WCAG 2.1 AA compliance
@@ -133,7 +133,7 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 
 ### 8. Performance Gate
 **Quando**: Load testing complete
-**Responsável**: OpsZilla + QAZilla
+**Responsável**: DevOps + QA-Engineer
 **Critérios**:
 ```
 ✓ API response time < SLA (e.g., 200ms p95)
@@ -149,7 +149,7 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 
 ### 9. Security Release Gate
 **Quando**: Antes de merge para main/release
-**Responsável**: SecZilla + QAZilla
+**Responsável**: Security + QA-Engineer
 **Critérios**:
 ```
 ✓ Threat model completed
@@ -166,7 +166,7 @@ Sistema automático de gates que bloqueia/libera features para próximas fases.
 
 ### 10. Release Gate
 **Quando**: Tudo pronto para produção
-**Responsável**: POZilla
+**Responsável**: Product-Owner
 **Critérios**:
 ```
 ✓ All quality gates PASSED
@@ -189,7 +189,7 @@ gates:
   architecture_review:
     enabled: true
     blocking: true
-    approvers: ["archzilla"]
+    approvers: ["architecture"]
     timeout: 7d
     auto_retry: false
     criteria:
@@ -276,7 +276,7 @@ GitHub PR
     ↓
 ✓ Security Scan Gate (pr created)
     ↓
-✓ Architecture Review Gate (ArchZilla review)
+✓ Architecture Review Gate (Architecture review)
     ↓
 PR merged to develop
     ↓
@@ -288,8 +288,8 @@ All gates PASSED
     ↓
 Create release branch from develop
     ↓
-✓ Security Release Gate (SecZilla final check)
-✓ Release Gate (POZilla approval)
+✓ Security Release Gate (Security final check)
+✓ Release Gate (Product-Owner approval)
     ↓
 Merge to main + deploy
 ```

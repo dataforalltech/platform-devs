@@ -17,7 +17,7 @@ class SecurityChecker:
     ]
 
     @staticmethod
-    def run(repo_path: str) -> dict[str, Any]:
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]:
         """Retorna resultado de checagens de segurança."""
         repo = Path(repo_path)
         items = []
@@ -88,7 +88,7 @@ class SecurityChecker:
                 continue
 
             try:
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                with open(file_path, encoding="utf-8", errors="ignore") as f:
                     content = f.read()
 
                     for pattern, cred_type in SecurityChecker.CREDENTIAL_PATTERNS:

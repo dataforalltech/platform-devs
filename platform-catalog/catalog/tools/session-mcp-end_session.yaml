@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/end_session
+  uid: session-mcp:end_session
+  domain: platform
+  title: end_session @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.end_session
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: end_session
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.end_session
+- verb: provided-by
+  target: session-mcp

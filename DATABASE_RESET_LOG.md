@@ -136,7 +136,7 @@ CREATE TABLE services (
 );
 ```
 
-### agent-twin-mcp (3 tables)
+### dev-twin-mcp (3 tables)
 ```sql
 CREATE TABLE agent_tokens (
     token_id      SERIAL PRIMARY KEY,
@@ -266,7 +266,7 @@ Delta:  +15 tables
 INSERT INTO agent_tokens (user_id, token_hash, token_prefix, scopes, active)
 VALUES 
   ('admin', 'hash_of_test_admin_token', 'test-ad', ARRAY['*'], TRUE),
-  ('dev1', 'hash_of_test_dev_token', 'test-de', ARRAY['qazilla-mcp', 'backzilla-mcp'], TRUE),
+  ('dev1', 'hash_of_test_dev_token', 'test-de', ARRAY['qa-engineer-mcp', 'backend-mcp'], TRUE),
   ('readonly', 'hash_of_test_readonly_token', 'test-ro', ARRAY['*'], TRUE);
 
 -- Add credential namespaces
@@ -288,7 +288,7 @@ curl http://localhost:8080/health
 ```bash
 pytest mcp-gateway/tests/test_gateway.py -v
 pytest infra-mcp-server/tests/ -v
-pytest agent-twin-mcp-server/tests/ -v
+pytest dev-twin-mcp-server/tests/ -v
 ```
 
 ### 4. Monitor Audit Log

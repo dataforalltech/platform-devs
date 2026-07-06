@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/run_checklist
+  uid: test-mcp:run_checklist
+  domain: testing
+  title: run_checklist @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_checklist
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: run_checklist
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_checklist
+- verb: provided-by
+  target: test-mcp

@@ -11,11 +11,11 @@
   - **Fix:** Updated example code to show env var pattern
   - **File:** `src/tools/policy_tool.py`
   
-- [x] qazilla-mcp: `http://localhost:3000` hardcoded defaults
+- [x] qa-engineer-mcp: `http://localhost:3000` hardcoded defaults
   - **Fix:** Added `os.getenv("TEST_APP_URL", "http://localhost:3000")` pattern
   - **Files Modified:**
     - `src/server/mcp_server.py` - Added constants DEFAULT_WEB_URL, DEFAULT_API_URL
-    - `src/tools/qazilla_tools.py` - Updated 3 function signatures to use os.getenv()
+    - `src/tools/qa-engineer_tools.py` - Updated 3 function signatures to use os.getenv()
   - **Functions Updated:**
     - `generate_e2e_tests()`
     - `generate_playwright_tests()`
@@ -69,7 +69,7 @@ Completed Critical TODOs:
 - [x] mcp-gateway/src/proxy/router.py:182 - Return actual quota data from Redis ✅
   - **Fix:** Implemented Redis query to fetch quota:* keys
   
-- [x] agent-twin-mcp/src/server/http_endpoints.py - Auth TODOs ✅
+- [x] dev-twin-mcp/src/server/http_endpoints.py - Auth TODOs ✅
   - `_authenticate_user()` - Implemented email/password validation
   - `_generate_token()` - Uses secrets.token_bytes() + SHA256
   - `_generate_session_token()` - Secure ephemeral token generation
@@ -122,13 +122,13 @@ Remaining TODOs:
 
 ### Phase 1
 1. ai-governance-mcp-server/src/tools/policy_tool.py (line 36)
-2. qazilla-mcp-server/src/tools/qazilla_tools.py (3 occurrences)
-3. qazilla-mcp-server/src/server/mcp_server.py (3 occurrences)
+2. qa-engineer-mcp-server/src/tools/qa-engineer_tools.py (3 occurrences)
+3. qa-engineer-mcp-server/src/server/mcp_server.py (3 occurrences)
 
 ### Phase 2
 1. audit-mcp-server/src/db/postgres_sync.py (20 return None)
 2. audit-mcp-server/src/knowledge/github_client.py (8 return None)
-3. agent-twin-mcp-server/src/db/token_store.py (1 return None)
+3. dev-twin-mcp-server/src/db/token_store.py (1 return None)
 4. mcp-gateway/src/auth/token_validator.py (3 return None)
 
 ### Phase 3

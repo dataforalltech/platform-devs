@@ -1,8 +1,8 @@
 # PASSO 3: Teste E2E OAuth2 — Workflow Completo
 
 ## Objetivo
-Simular a feature "OAuth2 Integration" através de todo o ecossistema de 8 Zillas, validando:
-- Handoffs entre Zillas (validadores)
+Simular a feature "OAuth2 Integration" através de todo o ecossistema de 8 DevTeam, validando:
+- Handoffs entre DevTeam (validadores)
 - Quality gates em cada etapa
 - Observatory mostrando progresso em tempo real
 - Resultado final: Feature 100% pronta com todos os gates PASSED
@@ -16,20 +16,20 @@ Simular a feature "OAuth2 Integration" através de todo o ecossistema de 8 Zilla
 **Descrição:** Implementar suporte OAuth2 (Google, GitHub, Microsoft) em toda a plataforma
 
 **Escopo:**
-1. ProductZilla: Define spec e user stories
-2. ArchZilla: Desenha arquitetura de autenticação
-3. BackZilla: Implementa OAuth2 endpoints e token management
-4. FrontZilla: Cria login UI com 3 provedores
-5. OpsZilla: Deploy em staging, setup de secrets
-6. QAZilla: Testes E2E de login flow, segurança
-7. SecZilla: Threat model, vulnerabilidades comuns
-8. POZilla: Coordena sprint, rastreia progresso
+1. Product-Manager: Define spec e user stories
+2. Architecture: Desenha arquitetura de autenticação
+3. Backend: Implementa OAuth2 endpoints e token management
+4. Frontend: Cria login UI com 3 provedores
+5. DevOps: Deploy em staging, setup de secrets
+6. QA-Engineer: Testes E2E de login flow, segurança
+7. Security: Threat model, vulnerabilidades comuns
+8. Product-Owner: Coordena sprint, rastreia progresso
 
 ---
 
 ## Fluxo Esperado
 
-### T0: ProductZilla — Feature Spec
+### T0: Product-Manager — Feature Spec
 
 ```
 Input: "Implementar OAuth2 (Google, GitHub, Microsoft)"
@@ -51,30 +51,30 @@ Gates: ✅ specification_complete_gate
   "status": "spec_defined",
   "stories": 8,
   "estimated_points": 34,
-  "zilla": "ProductZilla",
+  "devteam": "Product-Manager",
   "timestamp": "2026-05-10T14:30:00Z"
 }
 ```
 
 ---
 
-### T1: POZilla — Breakdown em Stories
+### T1: Product-Owner — Breakdown em Stories
 
 ```
 Input: spec_id = "oauth2_v1"
 
 Actions:
   1. breakdownFeatureIntoStories()
-  2. Validar com cross-zilla-validators
-  3. Atribuir a cada Zilla
+  2. Validar com cross-devteam-validators
+  3. Atribuir a cada DevTeam
   4. Registrar timeline
 
 Output: 
-  - AuthAPI: 13 points (BackZilla)
-  - AuthUI: 8 points (FrontZilla)
-  - OAuth2 Flow: 5 points (BackZilla)
-  - E2E Tests: 5 points (QAZilla)
-  - Security Audit: 3 points (SecZilla)
+  - AuthAPI: 13 points (Backend)
+  - AuthUI: 8 points (Frontend)
+  - OAuth2 Flow: 5 points (Backend)
+  - E2E Tests: 5 points (QA-Engineer)
+  - Security Audit: 3 points (Security)
 
 Gates: ✅ requirements_clarity_gate, ✅ estimation_gate
 ```
@@ -83,7 +83,7 @@ Gates: ✅ requirements_clarity_gate, ✅ estimation_gate
 
 ### T2-T5: Implementação Paralela (Arch → Back → Front → Ops)
 
-#### T2: ArchZilla — Architecture Design
+#### T2: Architecture — Architecture Design
 
 ```
 Input: spec_id, requirement
@@ -92,7 +92,7 @@ Actions:
   1. generateSolutionBlueprint()
   2. Definir: modules, APIs, data flow
   3. Validar schema compliance
-  4. Handoff para BackZilla
+  4. Handoff para Backend
 
 Output: blueprint_id = "oauth2_arch_v1"
 Gates: ✅ architecture_review_gate
@@ -104,13 +104,13 @@ Gates: ✅ architecture_review_gate
   "component": "OAuth2 Architecture",
   "status": "designed",
   "modules": ["auth_provider", "token_service", "session_manager"],
-  "zilla": "ArchZilla"
+  "devteam": "Architecture"
 }
 ```
 
 ---
 
-#### T3: BackZilla — API Implementation
+#### T3: Backend — API Implementation
 
 ```
 Input: blueprint_id, auth_flow_spec
@@ -124,7 +124,7 @@ Actions:
      - GET /auth/status
      - GET /auth/providers
   3. Validar schema compliance
-  4. Handoff para QAZilla e OpsZilla
+  4. Handoff para QA-Engineer e DevOps
 
 Output: api_id = "oauth2_api_v1", endpoints = 5
 Gates: ✅ code_quality_gate, ✅ api_specification_gate
@@ -132,7 +132,7 @@ Gates: ✅ code_quality_gate, ✅ api_specification_gate
 
 ---
 
-#### T4: FrontZilla — UI Design & Components
+#### T4: Frontend — UI Design & Components
 
 ```
 Input: spec_id, oauth2_providers = ["google", "github", "microsoft"]
@@ -141,7 +141,7 @@ Actions:
   1. generateScreen() para "Login" page
   2. generateComponent() "OAuthButton" (3 variantes)
   3. Validar acessibilidade (WCAG 2.1)
-  4. Handoff para QAZilla
+  4. Handoff para QA-Engineer
 
 Output: components = 4, design_tokens updated
 Gates: ✅ accessibility_gate, ✅ design_system_gate
@@ -149,7 +149,7 @@ Gates: ✅ accessibility_gate, ✅ design_system_gate
 
 ---
 
-#### T5: OpsZilla — Deployment Setup
+#### T5: DevOps — Deployment Setup
 
 ```
 Input: api_id, blueprint_id
@@ -168,7 +168,7 @@ Gates: ✅ performance_gate, ✅ deployment_readiness_gate
 
 ### T6-T7: Validação (QA + Security)
 
-#### T6: QAZilla — E2E Tests
+#### T6: QA-Engineer — E2E Tests
 
 ```
 Input: design_id, api_id, spec_id
@@ -203,13 +203,13 @@ Gates: ✅ test_coverage_gate (>85%), ✅ e2e_test_gate
   "tests_passed": 8,
   "coverage": 92,
   "performance_ms": 450,
-  "zilla": "QAZilla"
+  "devteam": "QA-Engineer"
 }
 ```
 
 ---
 
-#### T7: SecZilla — Threat Model & Security Review
+#### T7: Security — Threat Model & Security Review
 
 ```
 Input: blueprint_id, api_id
@@ -232,7 +232,7 @@ Gates: ✅ security_review_gate
 
 ---
 
-### T8: POZilla — Final Coordination
+### T8: Product-Owner — Final Coordination
 
 ```
 Input: All gate results from T2-T7
@@ -253,15 +253,15 @@ Output: Feature ready for production deployment
 ```
 Timeline Chart (Observable Dashboard):
 
-T0 [ProductZilla]      ▰─── spec_defined ✅
-T1 [POZilla]           ──▰── breakdown_complete ✅
-T2 [ArchZilla]         ────▰ architecture_reviewed ✅
-T3 [BackZilla]         ─────▰ api_implemented ✅
-T4 [FrontZilla]        ─────▰ ui_designed ✅
-T5 [OpsZilla]          ─────▰ deployed_to_staging ✅
-T6 [QAZilla]           ──────▰ tests_passed (8/8) ✅
-T7 [SecZilla]          ───────▰ security_approved ✅
-T8 [POZilla]           ────────▰ READY_FOR_RELEASE ✅
+T0 [Product-Manager]      ▰─── spec_defined ✅
+T1 [Product-Owner]           ──▰── breakdown_complete ✅
+T2 [Architecture]         ────▰ architecture_reviewed ✅
+T3 [Backend]         ─────▰ api_implemented ✅
+T4 [Frontend]        ─────▰ ui_designed ✅
+T5 [DevOps]          ─────▰ deployed_to_staging ✅
+T6 [QA-Engineer]           ──────▰ tests_passed (8/8) ✅
+T7 [Security]          ───────▰ security_approved ✅
+T8 [Product-Owner]           ────────▰ READY_FOR_RELEASE ✅
 
 ALL GATES PASSED: ✅✅✅✅✅✅✅✅✅✅
 ```
@@ -270,22 +270,22 @@ ALL GATES PASSED: ✅✅✅✅✅✅✅✅✅✅
 
 ## Quality Gates Checklist
 
-| Gate | Status | Zilla | Timestamp |
+| Gate | Status | DevTeam | Timestamp |
 |------|--------|-------|-----------|
-| specification_complete_gate | ✅ | ProductZilla | T0 |
-| requirements_clarity_gate | ✅ | POZilla | T1 |
-| estimation_gate | ✅ | POZilla | T1 |
-| architecture_review_gate | ✅ | ArchZilla | T2 |
-| api_specification_gate | ✅ | BackZilla | T3 |
-| code_quality_gate | ✅ | BackZilla | T3 |
-| design_system_gate | ✅ | FrontZilla | T4 |
-| accessibility_gate | ✅ | FrontZilla | T4 |
-| performance_gate | ✅ | OpsZilla | T5 |
-| deployment_readiness_gate | ✅ | OpsZilla | T5 |
-| test_coverage_gate | ✅ | QAZilla | T6 |
-| e2e_test_gate | ✅ | QAZilla | T6 |
-| security_review_gate | ✅ | SecZilla | T7 |
-| final_approval_gate | ✅ | POZilla | T8 |
+| specification_complete_gate | ✅ | Product-Manager | T0 |
+| requirements_clarity_gate | ✅ | Product-Owner | T1 |
+| estimation_gate | ✅ | Product-Owner | T1 |
+| architecture_review_gate | ✅ | Architecture | T2 |
+| api_specification_gate | ✅ | Backend | T3 |
+| code_quality_gate | ✅ | Backend | T3 |
+| design_system_gate | ✅ | Frontend | T4 |
+| accessibility_gate | ✅ | Frontend | T4 |
+| performance_gate | ✅ | DevOps | T5 |
+| deployment_readiness_gate | ✅ | DevOps | T5 |
+| test_coverage_gate | ✅ | QA-Engineer | T6 |
+| e2e_test_gate | ✅ | QA-Engineer | T6 |
+| security_review_gate | ✅ | Security | T7 |
+| final_approval_gate | ✅ | Product-Owner | T8 |
 
 ---
 
@@ -298,21 +298,21 @@ ALL GATES PASSED: ✅✅✅✅✅✅✅✅✅✅
 
 Feature: OAuth2 Integration
 Status: READY FOR RELEASE ✅
-Progress: 100% (8/8 Zillas completed)
+Progress: 100% (8/8 DevTeam completed)
 Total Points: 34 | Completed: 34 | In Progress: 0 | Blocked: 0
 
 ────────────────────────────────────────────────────────────────────────────────
 Timeline:
 ────────────────────────────────────────────────────────────────────────────────
 
-[ProductZilla]   ████████ ✅ Spec defined (8 stories)
-[POZilla]        ████████ ✅ Breakdown complete
-[ArchZilla]      ████████ ✅ Architecture reviewed
-[BackZilla]      ████████ ✅ API implemented (5 endpoints)
-[FrontZilla]     ████████ ✅ UI designed (4 components)
-[OpsZilla]       ████████ ✅ Deployed to staging
-[QAZilla]        ████████ ✅ E2E tests passed (8/8, 92% coverage)
-[SecZilla]       ████████ ✅ Security approved
+[Product-Manager]   ████████ ✅ Spec defined (8 stories)
+[Product-Owner]        ████████ ✅ Breakdown complete
+[Architecture]      ████████ ✅ Architecture reviewed
+[Backend]      ████████ ✅ API implemented (5 endpoints)
+[Frontend]     ████████ ✅ UI designed (4 components)
+[DevOps]       ████████ ✅ Deployed to staging
+[QA-Engineer]        ████████ ✅ E2E tests passed (8/8, 92% coverage)
+[Security]       ████████ ✅ Security approved
 
 ────────────────────────────────────────────────────────────────────────────────
 Quality Gates: 14/14 PASSED ✅
@@ -333,27 +333,27 @@ Ready to merge and deploy to production.
 ## Test Execution Steps (Manual / CI)
 
 ```bash
-# T0: ProductZilla
-npm run zilla:product -- --task oauth2_spec
+# T0: Product-Manager
+npm run devteam:product -- --task oauth2_spec
 
-# T1: POZilla
-npm run zilla:po -- --task breakdown --spec oauth2_v1
+# T1: Product-Owner
+npm run devteam:po -- --task breakdown --spec oauth2_v1
 
 # T2-T5: Parallel Execution
-npm run zilla:arch -- --task design --spec oauth2_v1 &
-npm run zilla:back -- --task implement --blueprint oauth2_arch_v1 &
-npm run zilla:front -- --task design-ui --spec oauth2_v1 &
-npm run zilla:ops -- --task deploy --api oauth2_api_v1 &
+npm run devteam:arch -- --task design --spec oauth2_v1 &
+npm run devteam:back -- --task implement --blueprint oauth2_arch_v1 &
+npm run devteam:front -- --task design-ui --spec oauth2_v1 &
+npm run devteam:ops -- --task deploy --api oauth2_api_v1 &
 wait
 
-# T6: QAZilla
-npm run zilla:qa -- --task e2e --spec oauth2_v1 --api oauth2_api_v1
+# T6: QA-Engineer
+npm run devteam:qa -- --task e2e --spec oauth2_v1 --api oauth2_api_v1
 
-# T7: SecZilla
-npm run zilla:sec -- --task threat-model --blueprint oauth2_arch_v1
+# T7: Security
+npm run devteam:sec -- --task threat-model --blueprint oauth2_arch_v1
 
-# T8: POZilla (aggregation)
-npm run zilla:po -- --task finalize --feature oauth2_v1
+# T8: Product-Owner (aggregation)
+npm run devteam:po -- --task finalize --feature oauth2_v1
 
 # Observatory: View real-time dashboard
 open http://localhost:7113/dashboard/oauth2_integration
@@ -374,6 +374,6 @@ open http://localhost:7113/dashboard/oauth2_integration
 ## Status After PASSO 3
 
 - PASSO 1: ✅ 4 PRs Criadas
-- PASSO 2: ✅ Integração com 8 Zillas (padrão pronto)
+- PASSO 2: ✅ Integração com 8 DevTeam (padrão pronto)
 - PASSO 3: ✅ Teste E2E OAuth2 (resultado esperado acima)
 - PASSO 4: ⏳ Deploy para produção

@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: architecture-mcp
+  uid: architecture-mcp
+  domain: architecture
+  title: architecture-mcp
+  description: ''
+  owner: platform
+  tags:
+  - architecture
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: architecture-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

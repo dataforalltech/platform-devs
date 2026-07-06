@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: auth/auth_health_check
+  uid: auth:auth_health_check
+  domain: identity
+  title: auth_health_check @ auth (external)
+  description: ''
+  owner: platform-auth
+  tags:
+  - auth
+  - external
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: auth.auth_health_check
+  provider_id: auth
+  provider_version: 1.0.0
+  tool: auth_health_check
+  endpoint: streamable-http
+  selection: {}
+  external: true
+relations:
+- verb: implements
+  target: auth.auth_health_check
+- verb: provided-by
+  target: auth

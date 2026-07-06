@@ -5,10 +5,10 @@ services:
   # System MCPs (Python - FastAPI)
   # ============================================================================
 
-  agent-twin-mcp:
+  dev-twin-mcp:
     build:
       context: .
-      dockerfile: agent-twin-mcp-server/Dockerfile
+      dockerfile: dev-twin-mcp-server/Dockerfile
     ports:
       - "27101:7100"
     environment:
@@ -29,7 +29,7 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=agent-twin-mcp"
+      - "mcp=dev-twin-mcp"
       - "type=system"
       - "language=python"
 
@@ -419,13 +419,13 @@ services:
       - "service=platform-admin"
 
   # ============================================================================
-  # Zilla MCPs (Node.js - já vêm em Docker)
+  # DevTeam MCPs (Node.js - já vêm em Docker)
   # ============================================================================
 
-  archzilla-mcp:
+  architecture-mcp:
     build:
       context: .
-      dockerfile: ./archzilla-mcp-server/Dockerfile
+      dockerfile: ./architecture-mcp-server/Dockerfile
     ports:
       - "27118:7100"
     environment:
@@ -435,14 +435,14 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=archzilla-mcp"
-      - "type=zilla"
+      - "mcp=architecture-mcp"
+      - "type=devteam"
       - "language=nodejs"
 
-  backzilla-mcp:
+  backend-mcp:
     build:
       context: .
-      dockerfile: ./backzilla-mcp-server/Dockerfile
+      dockerfile: ./backend-mcp-server/Dockerfile
     ports:
       - "27119:7100"
     environment:
@@ -452,13 +452,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=backzilla-mcp"
-      - "type=zilla"
+      - "mcp=backend-mcp"
+      - "type=devteam"
 
-  frontzilla-mcp:
+  frontend-mcp:
     build:
       context: .
-      dockerfile: ./frontzilla-mcp-server/Dockerfile
+      dockerfile: ./frontend-mcp-server/Dockerfile
     ports:
       - "27120:7100"
     environment:
@@ -467,13 +467,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=frontzilla-mcp"
-      - "type=zilla"
+      - "mcp=frontend-mcp"
+      - "type=devteam"
 
-  opszilla-mcp:
+  devops-mcp:
     build:
       context: .
-      dockerfile: ./opszilla-mcp-server/Dockerfile
+      dockerfile: ./devops-mcp-server/Dockerfile
     ports:
       - "27121:7100"
     environment:
@@ -483,13 +483,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=opszilla-mcp"
-      - "type=zilla"
+      - "mcp=devops-mcp"
+      - "type=devteam"
 
-  pozilla-mcp:
+  product-owner-mcp:
     build:
       context: .
-      dockerfile: ./pozilla-mcp-server/Dockerfile
+      dockerfile: ./product-owner-mcp-server/Dockerfile
     ports:
       - "27122:7100"
     environment:
@@ -499,13 +499,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=pozilla-mcp"
-      - "type=zilla"
+      - "mcp=product-owner-mcp"
+      - "type=devteam"
 
-  productzilla-mcp:
+  product-manager-mcp:
     build:
       context: .
-      dockerfile: ./productzilla-mcp-server/Dockerfile
+      dockerfile: ./product-manager-mcp-server/Dockerfile
     ports:
       - "27123:7100"
     environment:
@@ -515,13 +515,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=productzilla-mcp"
-      - "type=zilla"
+      - "mcp=product-manager-mcp"
+      - "type=devteam"
 
-  qazilla-mcp:
+  qa-engineer-mcp:
     build:
       context: .
-      dockerfile: ./qazilla-mcp-server/Dockerfile
+      dockerfile: ./qa-engineer-mcp-server/Dockerfile
     ports:
       - "27124:7100"
     environment:
@@ -531,13 +531,13 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=qazilla-mcp"
-      - "type=zilla"
+      - "mcp=qa-engineer-mcp"
+      - "type=devteam"
 
-  seczilla-mcp:
+  security-mcp:
     build:
       context: .
-      dockerfile: ./seczilla-mcp-server/Dockerfile
+      dockerfile: ./security-mcp-server/Dockerfile
     ports:
       - "27125:7100"
     environment:
@@ -547,8 +547,8 @@ services:
       - mcp-network
     restart: unless-stopped
     labels:
-      - "mcp=seczilla-mcp"
-      - "type=zilla"
+      - "mcp=security-mcp"
+      - "type=devteam"
 
   # ============================================================================
   # MCP Gateway / Registry (Optional - discovers all MCPs)
@@ -565,7 +565,7 @@ services:
     depends_on:
       - redis
       - postgres
-      - agent-twin-mcp
+      - dev-twin-mcp
       - config-mcp
       - session-mcp
       - audit-mcp
@@ -577,14 +577,14 @@ services:
       - services-mcp
       - test-mcp
       - ai-governance-mcp
-      - qazilla-mcp
-      - backzilla-mcp
-      - archzilla-mcp
-      - seczilla-mcp
-      - opszilla-mcp
-      - productzilla-mcp
-      - frontzilla-mcp
-      - pozilla-mcp
+      - qa-engineer-mcp
+      - backend-mcp
+      - architecture-mcp
+      - security-mcp
+      - devops-mcp
+      - product-manager-mcp
+      - frontend-mcp
+      - product-owner-mcp
     networks:
       - mcp-network
     restart: unless-stopped
@@ -604,8 +604,8 @@ services:
       PORT: 8000
     depends_on:
       - config-mcp
-      - agent-twin-mcp
-      - archzilla-mcp
+      - dev-twin-mcp
+      - architecture-mcp
     networks:
       - mcp-network
     restart: unless-stopped

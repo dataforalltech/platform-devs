@@ -14,7 +14,7 @@ def _debug_log(msg: str):
     print(msg, file=sys.stdout, flush=True)
 
 PERSISTENCE_RULES = {
-    # QAZilla - Testing
+    # QA-Engineer - Testing
     r'generate_test_plan': {
         'table': 'test_plans',
         'id_prefix': 'tp',
@@ -62,7 +62,7 @@ PERSISTENCE_RULES = {
         }
     },
 
-    # SecZilla - Security
+    # Security - Security
     r'generate_threat_model': {
         'table': 'threat_models',
         'id_prefix': 'tm',
@@ -83,7 +83,7 @@ PERSISTENCE_RULES = {
         }
     },
 
-    # ArchZilla - Architecture
+    # Architecture - Architecture
     r'(generate_solution_blueprint|generate_c4_diagram|generate_architecture)': {
         'table': 'architectures',
         'id_prefix': 'arch',
@@ -117,7 +117,7 @@ PERSISTENCE_RULES = {
         }
     },
 
-    # agent-twin-mcp - Identity & Context
+    # dev-twin-mcp - Identity & Context
     r'(authenticate|get_context|validate_token|whoami)': {
         'table': 'sessions',
         'id_prefix': 'sess',

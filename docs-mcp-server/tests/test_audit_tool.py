@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import os
+import subprocess
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from src.tools.audit_tool import (
+    _run_git_log_timestamp,
     audit_repo,
     find_stale_docs,
     generate_doc_report,
@@ -12,17 +14,10 @@ from src.tools.audit_tool import (
 )
 
 _README = (
-    "# Test Service\n\n"
-    "## Installation\n\nRun pip install.\n\n"
-    "## Usage\n\nImport and use.\n"
+    "# Test Service\n\n## Installation\n\nRun pip install.\n\n## Usage\n\nImport and use.\n"
 ) * 5
 
-_CHANGELOG = (
-    "# Changelog\n\n"
-    "## [Unreleased]\n\n"
-    "## [1.0.0] - 2026-01-01\n\n"
-    "### Added\n- Initial\n"
-)
+_CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
 
 
 def test_audit_repo_saves_to_store(store, settings, tmp_path):
@@ -169,3 +164,84 @@ def test_generate_doc_report_trend_improving(store, settings, tmp_path):
     result = generate_doc_report(store, settings, repo_path=str(tmp_path))
     # latest(80) > previous(50) by >=5 → improving
     assert result["trend"] == "improving"
+
+
+# ---------- _run_git_log_timestamp (subprocess mocked) ----------
+
+
+def test_run_git_log_timestamp_parses_stdout(tmp_path):
+    proc = MagicMock()
+    proc.stdout = "1700000000\n"
+    with patch("src.tools.audit_tool.subprocess.run", return_value=proc) as run:
+        ts = _run_git_log_timestamp(tmp_path / "README.md", tmp_path)
+    assert ts == 1700000000
+    run.assert_called_once()
+
+
+def test_run_git_log_timestamp_empty_stdout(tmp_path):
+    proc = MagicMock()
+    proc.stdout = "\n"
+    with patch("src.tools.audit_tool.subprocess.run", return_value=proc):
+        ts = _run_git_log_timestamp(tmp_path / "README.md", tmp_path)
+    assert ts is None
+
+
+def test_run_git_log_timestamp_git_missing(tmp_path):
+    with patch("src.tools.audit_tool.subprocess.run", side_effect=FileNotFoundError):
+        ts = _run_git_log_timestamp(tmp_path / "README.md", tmp_path)
+    assert ts is None
+
+
+def test_run_git_log_timestamp_timeout(tmp_path):
+    with patch(
+        "src.tools.audit_tool.subprocess.run",
+        side_effect=subprocess.TimeoutExpired(cmd="git", timeout=10),
+    ):
+        ts = _run_git_log_timestamp(tmp_path / "README.md", tmp_path)
+    assert ts is None
+
+
+def test_find_stale_docs_missing_repo_path(store, settings):
+    result = find_stale_docs(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"
+
+
+def test_find_stale_docs_nonexistent_repo(store, settings):
+    result = find_stale_docs(store, settings, repo_path="/nope/xyz")
+    assert result["error"] == "ValidationError"
+
+
+def test_audit_repo_recommendations_for_missing_and_stale(store, settings, tmp_path):
+    # Only an old README → missing CHANGELOG (full standard) and stale doc.
+    readme = ("# Svc\n\n## Installation\n\nInstall.\n\n## Usage\n\nUse.\n") * 6
+    old = tmp_path / "README.md"
+    old.write_text(readme, encoding="utf-8")
+    old_ts = time.time() - (200 * 86400)
+    os.utime(str(old), (old_ts, old_ts))
+
+    with patch("src.tools.audit_tool._run_git_log_timestamp", return_value=None):
+        result = audit_repo(store, settings, repo_path=str(tmp_path), standard="full")
+
+    recs = " ".join(result["recommendations"])
+    assert "obrigatórios" in recs  # missing CHANGELOG/AGENTS
+    assert result["summary"]["stale_docs"] >= 1
+    assert any("dias sem update" in r for r in result["recommendations"])
+
+
+def test_generate_doc_report_action_items_high_priority(store, settings, tmp_path):
+    # Seed a low-score audit with missing required + stale docs + issues.
+    store.save_audit(
+        repo_path=str(tmp_path),
+        score=30,
+        grade="F",
+        summary={"total_docs": 5, "stale_docs": 4, "missing_required": 2, "total_issues": 7},
+        details={},
+    )
+    result = generate_doc_report(store, settings, repo_path=str(tmp_path))
+
+    priorities = {a["priority"] for a in result["action_items"]}
+    actions = " ".join(a["action"] for a in result["action_items"])
+    assert "high" in priorities
+    assert "obrigatório" in actions
+    assert result["highlights"]["worst"]  # freshness worst path
+    assert result["trend"] == "no_history"

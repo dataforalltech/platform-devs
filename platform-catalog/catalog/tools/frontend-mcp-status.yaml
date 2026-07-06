@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: frontend-mcp/status
+  uid: frontend-mcp:status
+  domain: development
+  title: status @ frontend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - frontend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.status
+  provider_id: frontend-mcp
+  provider_version: 1.0.0
+  tool: status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.status
+- verb: provided-by
+  target: frontend-mcp

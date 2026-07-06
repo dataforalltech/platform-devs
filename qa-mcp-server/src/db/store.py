@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import json
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
 import logging
-from contextlib import contextmanager
-import threading
 import os
-from datetime import datetime, timezone
-from pathlib import Path
+import threading
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from typing import Any
+
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
 _log = logging.getLogger(__name__)
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class QAStore:

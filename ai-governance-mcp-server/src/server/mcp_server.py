@@ -1,4 +1,4 @@
-"""Servidor MCP — registra as tools e expõe via stdio.
+"""Servidor MCP — registra as tools e expõe via Streamable HTTP.
 
 Esta é a única camada que conhece o SDK MCP. As tools são funções puras
 em `src/tools/` que recebem o `GovernanceRepository` e devolvem dicts.
@@ -9,16 +9,16 @@ Aqui apenas:
   3. Roteamos as chamadas do MCP para a função correspondente.
   4. Tratamos erros de validação devolvendo um payload `{"error": ...}` claro.
 
-Para rodar: `python -m src.server.mcp_server` ou `ai-governance-mcp-server`
-(ver pyproject.toml).
+Dois transportes convivem (ambos sobre o mesmo `build_server()`):
+  - Streamable HTTP + auth via `main()`/`build_app()` (console-script e Docker).
+  - stdio via `run_stdio()`, usado por `python -m src.server.mcp_server` e pelos
+    scripts que spawnam o servidor (smoke_test.py, precommit_validate.py).
 """
 
 from __future__ import annotations
 
-import os
-
-import asyncio
 import json
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -124,7 +124,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "repository_name": {"type": "string", "description": "Nome do repositório alvo (opcional)."},
+                "repository_name": {
+                    "type": "string",
+                    "description": "Nome do repositório alvo (opcional).",
+                },
                 "task_type": {
                     "type": "string",
                     "description": "feature | bugfix | refactor | migration | infra | docs | test | chore",
@@ -259,8 +262,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "relation": {"type": "string", "enum": _RELATION_ENUM},
                 "direction": {"type": "string", "enum": ["out", "in", "both"]},
                 "filter_text": {"type": "string", "description": "Filtro de texto livre nos nós."},
-                "limit": {"type": "integer", "default": 20, "description": "Máximo de resultados. Padrão: 20."},
-                "offset": {"type": "integer", "default": 0, "description": "Paginação: pular N resultados."},
+                "limit": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Máximo de resultados. Padrão: 20.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": "Paginação: pular N resultados.",
+                },
             },
             "additionalProperties": False,
         },
@@ -274,7 +285,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "node_id": {"type": "string", "description": "id canônico do nó (service/contract/library)"},
+                "node_id": {
+                    "type": "string",
+                    "description": "id canônico do nó (service/contract/library)",
+                },
             },
             "required": ["node_id"],
             "additionalProperties": False,
@@ -706,7 +720,52 @@ def build_server() -> tuple[Any, ...]:
 
     return server, repo, http_app
 
-def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore) -> dict:
+
+# ---------------------------------------------------------------------- #
+# Escopo mínimo por ferramenta (least privilege).                        #
+#   aigov:read  -> consulta/análise/validação/monitoramento/detecção     #
+#   aigov:write -> mutação/criação/geração persistente de relatório       #
+# ---------------------------------------------------------------------- #
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # write: cria/muta estado
+    "submit_suggestion": "aigov:write",
+    "update_suggestion_status": "aigov:write",
+    "create_adr": "aigov:write",
+    # read: consulta/análise/validação/monitoramento/detecção
+    "get_agent_guidelines": "aigov:read",
+    "get_layer_policy": "aigov:read",
+    "get_forbidden_actions": "aigov:read",
+    "validate_agent_decision": "aigov:read",
+    "get_fallback_policy": "aigov:read",
+    "get_contract_change_policy": "aigov:read",
+    "get_final_response_template": "aigov:read",
+    "get_pre_execution_checklist": "aigov:read",
+    "search_governance_knowledge": "aigov:read",
+    "query_ecosystem_graph": "aigov:read",
+    "find_consumers_of": "aigov:read",
+    "find_dependencies_of": "aigov:read",
+    "get_service_metadata": "aigov:read",
+    "list_suggestions": "aigov:read",
+    "get_suggestion": "aigov:read",
+    "get_service_ownership": "aigov:read",
+    "get_service_dependencies": "aigov:read",
+    "get_port_map": "aigov:read",
+    "check_scope": "aigov:read",
+    "validate_lib_change": "aigov:read",
+    "validate_migration": "aigov:read",
+    "get_audit_log": "aigov:read",
+}
+SCOPES_SUPPORTED = ["aigov:read", "aigov:write"]
+
+# Garante que SCOPE_FOR_TOOL cobre exatamente todas as tools declaradas.
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL não cobre todas as tools"
+)
+
+
+def _dispatch(
+    name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore
+) -> dict:
     """Roteia a chamada para a função pura correspondente."""
     if name == "get_agent_guidelines":
         return get_agent_guidelines(
@@ -867,33 +926,65 @@ def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, *rest = build_server()
-    http_app = rest[-1]
+    Preserva build_server() (Server de baixo nível + dispatch com repo/audit);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware
+    com escopo por ferramenta (least privilege).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _repo, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("AIGOV_RESOURCE", "http://localhost:7112/mcp"),
+        prm_url=os.getenv(
+            "AIGOV_PRM_URL",
+            "http://localhost:7112/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    """Entry point para `ai-governance-mcp-server` no PATH."""
-    asyncio.run(_run())
+    """Entry point da console-script — Streamable HTTP + auth (uso em produção/Docker).
+
+    Depende de `shared.mcp_auth`, que só está disponível quando o módulo `shared/`
+    do monorepo está no PYTHONPATH (é o caso no Dockerfile, que faz COPY shared/).
+    """
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7112")))
+
+
+async def _run_stdio() -> None:
+    from mcp.server.stdio import stdio_server
+
+    server, _repo, _http = build_server()
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options(),
+        )
+
+
+def run_stdio() -> None:
+    """Entry point stdio — sem dependência de `shared`.
+
+    Usado por `python -m src.server.mcp_server` e pelos scripts que spawnam o
+    servidor via stdio (scripts/smoke_test.py, scripts/precommit_validate.py).
+    A console-script `ai-governance-mcp-server` continua em `main()` (HTTP).
+    """
+    import asyncio
+
+    asyncio.run(_run_stdio())
 
 
 if __name__ == "__main__":
-    main()
+    run_stdio()

@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/get_gateway_map
+  uid: infra.get_gateway_map
+  domain: infra
+  title: get gateway map
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - service-registry
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: service-registry
+  resource:
+    type: gate
+    parent: null
+    namespace: null
+  operation: get
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:gate

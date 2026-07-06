@@ -25,10 +25,10 @@ from typing import Any
 from ..config.settings import DeploySettings
 from ..knowledge.github_client import GitHubClient, GitHubClientError
 
-
 # ─────────────────────────────────────────────────────────────────────────── #
 # setup_repo                                                                   #
 # ─────────────────────────────────────────────────────────────────────────── #
+
 
 def setup_repo(
     client: GitHubClient,
@@ -119,6 +119,7 @@ def setup_repo(
 # acr_build                                                                    #
 # ─────────────────────────────────────────────────────────────────────────── #
 
+
 def acr_build(
     settings: DeploySettings,
     repo_path: str,
@@ -203,10 +204,14 @@ def acr_build(
 
     # ── docker build ───────────────────────────────────────────────────────── #
     build_cmd = [
-        "docker", "build",
-        "-t", full_image,
-        "-t", latest_image,
-        "-f", dockerfile,
+        "docker",
+        "build",
+        "-t",
+        full_image,
+        "-t",
+        latest_image,
+        "-f",
+        dockerfile,
         ".",
     ]
     try:
@@ -273,6 +278,7 @@ def acr_build(
 # ─────────────────────────────────────────────────────────────────────────── #
 # list_acr_images                                                              #
 # ─────────────────────────────────────────────────────────────────────────── #
+
 
 def list_acr_images(
     client: GitHubClient,

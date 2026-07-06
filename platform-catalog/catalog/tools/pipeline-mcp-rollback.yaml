@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/rollback
+  uid: pipeline-mcp:rollback
+  domain: delivery
+  title: rollback @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.rollback
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: rollback
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.rollback
+- verb: provided-by
+  target: pipeline-mcp

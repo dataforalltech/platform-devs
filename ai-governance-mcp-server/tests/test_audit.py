@@ -21,7 +21,6 @@ import pytest
 from src.knowledge.audit_store import AuditStore
 from src.tools.audit_tool import get_audit_log
 
-
 # ---------------------------------------------------------------------- #
 # Fixtures                                                                #
 # ---------------------------------------------------------------------- #
@@ -110,9 +109,18 @@ class TestAuditStoreRecord:
         store.record(result, result["input_summary"])
         entry = json.loads(store.path.read_text(encoding="utf-8").splitlines()[0])
         required_keys = {
-            "ts", "repo", "task_description", "approved", "risk_level",
-            "violations_count", "violations", "required_actions_count",
-            "required_actions", "affected_layers", "affected_files_count", "flags",
+            "ts",
+            "repo",
+            "task_description",
+            "approved",
+            "risk_level",
+            "violations_count",
+            "violations",
+            "required_actions_count",
+            "required_actions",
+            "affected_layers",
+            "affected_files_count",
+            "flags",
         }
         assert required_keys.issubset(entry.keys())
 
@@ -249,8 +257,14 @@ class TestAuditStoreStats:
         assert s["blocked"] == 0
 
     def test_stats_total_e_contagens(self, store: AuditStore) -> None:
-        store.record(_make_result(approved=True, risk="low"), _make_result(approved=True, risk="low")["input_summary"])
-        store.record(_make_result(approved=False, risk="critical"), _make_result(approved=False, risk="critical")["input_summary"])
+        store.record(
+            _make_result(approved=True, risk="low"),
+            _make_result(approved=True, risk="low")["input_summary"],
+        )
+        store.record(
+            _make_result(approved=False, risk="critical"),
+            _make_result(approved=False, risk="critical")["input_summary"],
+        )
         s = store.stats()
         assert s["total"] == 2
         assert s["approved"] == 1
@@ -259,7 +273,10 @@ class TestAuditStoreStats:
     def test_stats_block_rate(self, store: AuditStore) -> None:
         for _ in range(3):
             store.record(_make_result(approved=True), _make_result(approved=True)["input_summary"])
-        store.record(_make_result(approved=False, risk="critical"), _make_result(approved=False, risk="critical")["input_summary"])
+        store.record(
+            _make_result(approved=False, risk="critical"),
+            _make_result(approved=False, risk="critical")["input_summary"],
+        )
         s = store.stats()
         assert s["block_rate"] == pytest.approx(0.25, rel=1e-3)
 
@@ -277,8 +294,13 @@ class TestAuditStoreStats:
 
     def test_stats_top_repos(self, store: AuditStore) -> None:
         for _ in range(3):
-            store.record(_make_result(repo="platform-auth"), _make_result(repo="platform-auth")["input_summary"])
-        store.record(_make_result(repo="platform-ml"), _make_result(repo="platform-ml")["input_summary"])
+            store.record(
+                _make_result(repo="platform-auth"),
+                _make_result(repo="platform-auth")["input_summary"],
+            )
+        store.record(
+            _make_result(repo="platform-ml"), _make_result(repo="platform-ml")["input_summary"]
+        )
         s = store.stats()
         repos = {item["repo"]: item["count"] for item in s["top_repos"]}
         assert repos["platform-auth"] == 3
@@ -321,7 +343,10 @@ class TestGetAuditLogTool:
     def test_filtro_por_risk_level(self, repo, tmp_path: Path) -> None:
         audit = AuditStore(path=tmp_path / "decisions.jsonl")
         audit.record(_make_result(risk="low"), _make_result(risk="low")["input_summary"])
-        audit.record(_make_result(approved=False, risk="critical"), _make_result(approved=False, risk="critical")["input_summary"])
+        audit.record(
+            _make_result(approved=False, risk="critical"),
+            _make_result(approved=False, risk="critical")["input_summary"],
+        )
         result = get_audit_log(repo, audit, risk_level="critical", limit=100)
         assert result["count"] == 1
         assert result["entries"][0]["risk_level"] == "critical"
@@ -329,7 +354,10 @@ class TestGetAuditLogTool:
     def test_filtro_approved_false(self, repo, tmp_path: Path) -> None:
         audit = AuditStore(path=tmp_path / "decisions.jsonl")
         audit.record(_make_result(approved=True), _make_result(approved=True)["input_summary"])
-        audit.record(_make_result(approved=False, risk="critical"), _make_result(approved=False, risk="critical")["input_summary"])
+        audit.record(
+            _make_result(approved=False, risk="critical"),
+            _make_result(approved=False, risk="critical")["input_summary"],
+        )
         result = get_audit_log(repo, audit, approved=False, limit=100)
         assert result["count"] == 1
         assert result["entries"][0]["approved"] is False

@@ -8,16 +8,16 @@ RBAC_MAP = {
         "*": ["*"],
     },
     "developer": {
-        "backzilla-mcp": ["*"],
-        "archzilla-mcp": ["*"],
-        "qazilla-mcp": ["generate_unit_tests", "generate_api_tests", "generate_test_plan"],
+        "backend-mcp": ["*"],
+        "architecture-mcp": ["*"],
+        "qa-engineer-mcp": ["generate_unit_tests", "generate_api_tests", "generate_test_plan"],
     },
     "data-scientist": {
-        "qazilla-mcp": ["*"],
-        "pozilla-mcp": ["analyze_product_problem", "calculate_rice_score"],
+        "qa-engineer-mcp": ["*"],
+        "product-owner-mcp": ["analyze_product_problem", "calculate_rice_score"],
     },
     "product-owner": {
-        "pozilla-mcp": ["*"],
+        "product-owner-mcp": ["*"],
     },
     "readonly": {
         "*": ["status"],

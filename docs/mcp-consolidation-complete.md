@@ -29,7 +29,7 @@ Located in `/home/dev/repos/platform-devs/*-mcp-server/`
 | `config-mcp` | Configuration and credential management | 7099 | ✅ Active |
 | `services-mcp` | Service registry and health checks | 7100 | ✅ Active |
 | `deploy-mcp` | GitHub API, ACR, deployments | 7101 | ✅ Active |
-| `agent-twin-mcp` | Agent authentication and context | 7098 | ✅ Active |
+| `dev-twin-mcp` | Agent authentication and context | 7098 | ✅ Active |
 | `docs-mcp` | Documentation scanning and validation | 7102 | ✅ Active |
 | `pipeline-mcp` | Service pipeline and gates | 7103 | ✅ Active |
 | `qa-mcp` | QA: testing, lint, security, accessibility | 7104 | ✅ Active |

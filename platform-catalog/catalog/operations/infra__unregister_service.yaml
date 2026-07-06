@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/unregister_service
+  uid: infra.unregister_service
+  domain: infra
+  title: unregister service
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - service-registry
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: service-registry
+  resource:
+    type: service
+    parent: null
+    namespace: null
+  operation: unregister
+  authz: write
+  risk:
+    effects:
+    - delete
+    requires: []
+    blast_radius: service
+    default_level: high
+    approval_required: N2
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:service

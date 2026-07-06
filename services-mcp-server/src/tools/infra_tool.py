@@ -24,6 +24,7 @@ O sync busca por tipo exato primeiro, depois por nomes canonicos:
   redis   : ["redis", "platform-redis", "platform-cache", "cache"]
   kafka   : ["kafka", "platform-kafka"]
 """
+
 from __future__ import annotations
 
 import json
@@ -43,7 +44,7 @@ _log = logging.getLogger(__name__)
 _INFRA_DEFAULTS: dict[str, dict] = {
     "mysql": {
         "port": 3306,
-        "health_path": None,   # TCP-only, sem HTTP health
+        "health_path": None,  # TCP-only, sem HTTP health
         "tags": ["infra", "database", "mysql"],
         "protocol": "mysql",
     },
@@ -72,7 +73,7 @@ _INFRA_DEFAULTS: dict[str, dict] = {
         "protocol": "redis",
     },
     "kafka": {
-        "port": 9092,       # porta interna Docker
+        "port": 9092,  # porta interna Docker
         "host_port": 9094,  # porta EXTERNAL para acesso do host
         "health_path": None,
         "tags": ["infra", "messaging", "kafka"],
@@ -99,29 +100,30 @@ _IMAGE_TYPE_MAP: list[tuple[re.Pattern, str]] = [
 
 # Nomes canonicos por tipo para lookup no registry
 _CANONICAL_NAMES: dict[str, list[str]] = {
-    "mysql":    ["mysql", "platform-mysql", "mariadb", "db"],
-    "mariadb":  ["mariadb", "mysql", "platform-mysql", "db"],
+    "mysql": ["mysql", "platform-mysql", "mariadb", "db"],
+    "mariadb": ["mariadb", "mysql", "platform-mysql", "db"],
     "postgres": ["postgres", "postgresql", "platform-postgres", "db"],
-    "redis":    ["redis", "platform-redis", "platform-cache", "cache"],
-    "kafka":    ["kafka", "platform-kafka"],
-    "mongodb":  ["mongodb", "mongo", "platform-mongo"],
+    "redis": ["redis", "platform-redis", "platform-cache", "cache"],
+    "kafka": ["kafka", "platform-kafka"],
+    "mongodb": ["mongodb", "mongo", "platform-mongo"],
 }
 
 # Vars de .env por tipo
 _DB_HOST_VARS = re.compile(r"^(DB_HOST|ADMIN_DB_HOST|ADMIN_DB_HOST_\w+)$", re.IGNORECASE)
 _DB_PORT_VARS = re.compile(r"^(DB_PORT|ADMIN_DB_PORT|ADMIN_DB_PORT_\w+)$", re.IGNORECASE)
-_REDIS_VARS   = re.compile(
+_REDIS_VARS = re.compile(
     r"^(REDIS_URL|REDIS_HOST|REDIS_URI|RATE_LIMIT_STORAGE_URI|"
     r"CACHE_URL|CELERY_BROKER_URL|CELERY_RESULT_BACKEND)$",
     re.IGNORECASE,
 )
-_KAFKA_VARS   = re.compile(r"^KAFKA_BOOTSTRAP_SERVERS$", re.IGNORECASE)
+_KAFKA_VARS = re.compile(r"^KAFKA_BOOTSTRAP_SERVERS$", re.IGNORECASE)
 _DB_ENGINE_VAR = re.compile(r"^DB_ENGINE$", re.IGNORECASE)
-_DATABASE_URL  = re.compile(r"^DATABASE_URL$", re.IGNORECASE)
-_REDIS_SCHEME  = re.compile(r"^redis(s)?://", re.IGNORECASE)
+_DATABASE_URL = re.compile(r"^DATABASE_URL$", re.IGNORECASE)
+_REDIS_SCHEME = re.compile(r"^redis(s)?://", re.IGNORECASE)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _detect_image_type(image: str) -> str | None:
     for pattern, kind in _IMAGE_TYPE_MAP:
@@ -207,6 +209,7 @@ def _rebuild_redis_url(cur_val: str, new_host: str, new_port: int) -> str:
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
+
 def register_infra(
     store: ServiceStore,
     *,
@@ -243,7 +246,11 @@ def register_infra(
         "metadata": {
             "protocol": defaults["protocol"],
             "default_port": defaults["port"],
-            **({"host_port": host_port or defaults.get("host_port")} if kind_lower == "kafka" else {}),
+            **(
+                {"host_port": host_port or defaults.get("host_port")}
+                if kind_lower == "kafka"
+                else {}
+            ),
             **(metadata or {}),
         },
     }
@@ -280,7 +287,9 @@ def scan_infra(
     try:
         result = subprocess.run(
             ["docker", "ps", "--format", "{{json .}}"],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except FileNotFoundError:
         return {"scanned": 0, "registered": [], "error": "docker not found"}
@@ -289,11 +298,12 @@ def scan_infra(
 
     if result.returncode != 0:
         return {
-            "scanned": 0, "registered": [],
+            "scanned": 0,
+            "registered": [],
             "error": result.stderr.strip() or f"exit {result.returncode}",
         }
 
-    lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     registered: list[dict] = []
     skipped: list[str] = []
 
@@ -315,10 +325,14 @@ def scan_infra(
 
         # Para Kafka: prefere porta 9094 (EXTERNAL), senao a primeira mapeada
         if kind == "kafka":
-            kafka_port = next(
-                (hp for hp, cp in port_pairs if cp == 9094 or hp == 9094),
-                None,
-            ) or next((hp for hp, _ in port_pairs), None) or 9094
+            kafka_port = (
+                next(
+                    (hp for hp, cp in port_pairs if cp == 9094 or hp == 9094),
+                    None,
+                )
+                or next((hp for hp, _ in port_pairs), None)
+                or 9094
+            )
             host_port = kafka_port
             port_used = kafka_port
         else:
@@ -339,13 +353,15 @@ def scan_infra(
             container_name=container_name,
             metadata={"image": image, "ports_raw": ports_str},
         )
-        registered.append({
-            "name": svc_name,
-            "kind": kind,
-            "port": port_used,
-            "image": image,
-            "action": reg.get("action"),
-        })
+        registered.append(
+            {
+                "name": svc_name,
+                "kind": kind,
+                "port": port_used,
+                "image": image,
+                "action": reg.get("action"),
+            }
+        )
 
     return {
         "scanned": len(lines),
@@ -393,7 +409,7 @@ def sync_infra_env(
         db_type = db_kind or "mysql"  # fallback
 
     # Busca servicos no registry
-    db_svc    = _find_in_registry(store, db_type)
+    db_svc = _find_in_registry(store, db_type)
     redis_svc = _find_in_registry(store, "redis")
     kafka_svc = _find_in_registry(store, "kafka")
 
@@ -507,9 +523,23 @@ def sync_infra_env(
         _write_env_lines(env_path, new_lines)
 
     found_in_registry = {
-        "db": {"name": db_svc["name"], "host": db_svc["host"], "port": db_svc.get("port")} if db_svc else None,
-        "redis": {"name": redis_svc["name"], "host": redis_svc["host"], "port": redis_svc.get("port")} if redis_svc else None,
-        "kafka": {"name": kafka_svc["name"], "host": kafka_svc["host"], "port": kafka_svc.get("port")} if kafka_svc else None,
+        "db": {"name": db_svc["name"], "host": db_svc["host"], "port": db_svc.get("port")}
+        if db_svc
+        else None,
+        "redis": {
+            "name": redis_svc["name"],
+            "host": redis_svc["host"],
+            "port": redis_svc.get("port"),
+        }
+        if redis_svc
+        else None,
+        "kafka": {
+            "name": kafka_svc["name"],
+            "host": kafka_svc["host"],
+            "port": kafka_svc.get("port"),
+        }
+        if kafka_svc
+        else None,
     }
 
     return {

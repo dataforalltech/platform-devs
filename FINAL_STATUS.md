@@ -16,7 +16,7 @@ All 11 operational MCP servers have been successfully:
 
 | # | Server | Status | Port | Notes |
 |---|--------|--------|------|-------|
-| 1 | agent-twin-mcp | ✅ Connected | stdio | User/tenant context + auth |
+| 1 | dev-twin-mcp | ✅ Connected | stdio | User/tenant context + auth |
 | 2 | ai-governance-mcp | ✅ Connected | stdio | Governance policies, ecosystem |
 | 3 | config-mcp | ✅ Connected | stdio | Configuration + credentials (Fernet encrypted) |
 | 4 | deploy-mcp | ✅ Connected | stdio | GitHub operations (commits, PRs, ACR) |
@@ -93,7 +93,7 @@ platform-service-template/
 
 ### Test Coverage
 - **session-mcp**: 111 tests ✅
-- **agent-twin-mcp**: 47 tests ✅
+- **dev-twin-mcp**: 47 tests ✅
 - **test-mcp**: 20 tests ✅
 - **config-mcp**: 22 tests ✅
 - **Other servers**: Validated, deployment-ready
@@ -119,21 +119,21 @@ MCPs are automatically discovered by Claude Code. Tools become available once re
 
 ```bash
 # Example: session-mcp tools will be available as mcp__session-mcp__<toolname>
-# Example: agent-twin-mcp tools will be available as mcp__agent-twin-mcp__<toolname>
+# Example: dev-twin-mcp tools will be available as mcp__dev-twin-mcp__<toolname>
 ```
 
 ### Authenticate Required MCPs
 
 Some MCPs require initial authentication:
 
-1. **agent-twin-mcp**: Uses `TWIN_TOKEN` env var (from session)
+1. **dev-twin-mcp**: Uses `TWIN_TOKEN` env var (from session)
 2. **deploy-mcp**: Uses `DEPLOY_GITHUB_TOKEN` (pre-configured)
 3. **config-mcp**: Uses Fernet `CONFIG_MCP_MASTER_KEY` (pre-configured)
 
 ## Next Steps
 
 1. **Use the MCPs** — Call them directly in Claude Code sessions
-2. **Configure Secrets** — Update real tokens for deploy-mcp and agent-twin-mcp
+2. **Configure Secrets** — Update real tokens for deploy-mcp and dev-twin-mcp
 3. **Monitor CI/CD** — Watch GitHub Actions in platform-devs for automated tests
 4. **Extend** — Add new MCP servers following the Trinity Pattern
 
@@ -155,7 +155,7 @@ To revert to old MCP configuration:
 
 ```bash
 # Remove new MCPs
-claude mcp remove agent-twin-mcp
+claude mcp remove dev-twin-mcp
 claude mcp remove session-mcp
 # ... etc for all 11
 

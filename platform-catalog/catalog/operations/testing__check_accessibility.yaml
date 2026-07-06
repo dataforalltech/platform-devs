@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/check_accessibility
+  uid: testing.check_accessibility
+  domain: testing
+  title: check accessibility
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - quality
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: quality
+  resource:
+    type: test
+    parent: null
+    namespace: null
+  operation: check
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:test

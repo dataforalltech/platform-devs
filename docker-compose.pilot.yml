@@ -1,0 +1,380 @@
+# ============================================================================
+# docker-compose.pilot.yml — Stack de deploy do PILOTO MCP (Security + OAuth)
+# ----------------------------------------------------------------------------
+# Implementa a topologia de MCP_SERVICE_STANDARD.md §4/§10:
+#   - SÓ o Caddy é público (80/443). Ele termina TLS e roteia por path.
+#   - Os serviços de app (auth-mcp, security-mcp, mcp-gateway) vivem numa rede
+#     PRIVADA `mcp-private` (internal: true) — sem `ports:` publicados no host.
+#   - Segredos vêm por env (.env / secrets manager), zero hardcoded no git.
+#
+# Uso:
+#   cp deploy/.env.example .env   # e preencha os valores
+#   docker compose -f docker-compose.pilot.yml up -d
+#
+# Validar sintaxe:
+#   docker compose -f docker-compose.pilot.yml config
+# ============================================================================
+version: '3.9'
+
+services:
+  # --------------------------------------------------------------------------
+  # CADDY — único serviço público. TLS/ACME + proxy reverso por path.
+  # --------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: pilot-caddy
+    restart: unless-stopped
+    ports:
+      # ÚNICAS portas publicadas no host em todo o stack.
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Persistência dos certificados ACME e da CA interna (evita re-emissão).
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      # Caddy fica nas DUAS redes: `edge` (borda) e `mcp-private` (para alcançar
+      # os upstreams). Só ele faz essa ponte.
+      - edge
+      - mcp-private
+    depends_on:
+      - auth-mcp
+      - security-mcp
+      - qa-engineer-mcp
+      - architecture-mcp
+      - backend-mcp
+      - frontend-mcp
+      - devops-mcp
+      - product-owner-mcp
+      - product-manager-mcp
+      - mcp-gateway
+    labels:
+      - "role=edge-proxy"
+
+  # --------------------------------------------------------------------------
+  # AUTH-MCP — Authorization Server OAuth 2.1 (escuta na 7103). Rede privada.
+  # --------------------------------------------------------------------------
+  auth-mcp:
+    build:
+      context: .
+      dockerfile: auth-mcp-server/Dockerfile.as
+    container_name: pilot-auth-mcp
+    restart: unless-stopped
+    expose:
+      - "7103"          # visível SÓ na rede privada; nunca publicado no host.
+    environment:
+      # Issuer público = host do Caddy + prefixo /auth. O AS constrói todas as
+      # URLs de discovery (token, jwks, metadata) a partir daqui.
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env (ex https://mcp.suaempresa.com/auth)}"
+      # Chave RSA de assinatura (PKCS8 PEM). Sem ela, a chave é EFÊMERA (só dev).
+      AS_PRIVATE_KEY_PEM: ${AS_PRIVATE_KEY_PEM:-}
+      # Clients do grant client_credentials (JSON). Sem ele, cria client de DEMO.
+      AS_CLIENTS_JSON: ${AS_CLIENTS_JSON:-}
+      AS_KID: ${AS_KID:-auth-mcp-key-1}
+      AS_TOKEN_TTL: ${AS_TOKEN_TTL:-3600}
+      # Login da tela de consentimento (user store local) + federação SSO opcional.
+      USER_STORE: ${USER_STORE:-}
+      AS_DEV_USER: ${AS_DEV_USER:-dev}
+      AS_DEV_PASSWORD: ${AS_DEV_PASSWORD:-dev-password-change-me}
+      AS_UPSTREAM_OIDC_NAME: ${AS_UPSTREAM_OIDC_NAME:-SSO}
+      AS_UPSTREAM_OIDC_ISSUER: ${AS_UPSTREAM_OIDC_ISSUER:-}
+      AS_UPSTREAM_OIDC_CLIENT_ID: ${AS_UPSTREAM_OIDC_CLIENT_ID:-}
+      AS_UPSTREAM_OIDC_CLIENT_SECRET: ${AS_UPSTREAM_OIDC_CLIENT_SECRET:-}
+      AS_UPSTREAM_OIDC_REDIRECT_URI: ${AS_UPSTREAM_OIDC_REDIRECT_URI:-}
+      AS_UPSTREAM_OIDC_SCOPES: ${AS_UPSTREAM_OIDC_SCOPES:-openid email profile}
+      # OAuth store (clients/codes/refresh) persistido no Postgres do stack.
+      OAUTH_STORE: ${OAUTH_STORE:-postgres}
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_DB: ${PG_DB:-platform_pilot}
+      PG_USER: ${PG_USER:-platform}
+      PG_PASSWORD: "${PG_PASSWORD:?defina PG_PASSWORD no .env}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7103/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-private
+    labels:
+      - "mcp=auth-mcp"
+      - "role=authorization-server"
+
+  # --------------------------------------------------------------------------
+  # SECURITY-MCP — Resource Server (Streamable HTTP, escuta na 7100). Privada.
+  # --------------------------------------------------------------------------
+  security-mcp:
+    build:
+      context: .
+      dockerfile: security-mcp-server/Dockerfile
+    container_name: pilot-security-mcp
+    restart: unless-stopped
+    expose:
+      - "7100"          # visível SÓ na rede privada; nunca publicado no host.
+    environment:
+      MCP_PORT: ${SECURITY_MCP_PORT:-7100}
+      # Resource (aud dos tokens) = URL PÚBLICA do endpoint /mcp via Caddy.
+      SECURITY_RESOURCE: "${SECURITY_RESOURCE:?defina SECURITY_RESOURCE (ex https://mcp.suaempresa.com/security/mcp)}"
+      # Issuer do AS: o Security valida iss dos tokens e anuncia este AS no PRM.
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      # JWKS do AS. Em rede privada, o Security busca as chaves direto do container
+      # auth-mcp (não pela borda), por isso o default aponta o host interno.
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      # URL PÚBLICA do PRM (o que o Claude Code busca no fluxo OAuth).
+      SECURITY_PRM_URL: "${SECURITY_PRM_URL:?defina SECURITY_PRM_URL (ex https://mcp.suaempresa.com/security/.well-known/oauth-protected-resource)}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      - auth-mcp
+    networks:
+      - mcp-private
+    labels:
+      - "mcp=security-mcp"
+      - "role=resource-server"
+
+  # --------------------------------------------------------------------------
+  # DEMAIS DEVTEAM — todos Resource Servers (Streamable HTTP + auth), rede privada.
+  # Padrão idêntico ao security; RESOURCE/PRM derivam de MCP_PUBLIC_BASE_URL.
+  # --------------------------------------------------------------------------
+  qa-engineer-mcp:
+    build: { context: ., dockerfile: qa-engineer-mcp-server/Dockerfile }
+    container_name: pilot-qa-engineer-mcp
+    restart: unless-stopped
+    expose: ["7124"]
+    environment:
+      MCP_PORT: "7124"
+      QA_ENGINEER_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/qa-engineer/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      QA_ENGINEER_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/qa-engineer/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7124/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=qa-engineer-mcp", "role=resource-server"]
+
+  architecture-mcp:
+    build: { context: ., dockerfile: architecture-mcp-server/Dockerfile }
+    container_name: pilot-architecture-mcp
+    restart: unless-stopped
+    expose: ["7118"]
+    environment:
+      MCP_PORT: "7118"
+      ARCHITECTURE_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/architecture/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      ARCHITECTURE_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/architecture/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7118/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=architecture-mcp", "role=resource-server"]
+
+  backend-mcp:
+    build: { context: ., dockerfile: backend-mcp-server/Dockerfile }
+    container_name: pilot-backend-mcp
+    restart: unless-stopped
+    expose: ["7119"]
+    environment:
+      MCP_PORT: "7119"
+      BACKEND_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/backend/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      BACKEND_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/backend/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7119/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=backend-mcp", "role=resource-server"]
+
+  frontend-mcp:
+    build: { context: ., dockerfile: frontend-mcp-server/Dockerfile }
+    container_name: pilot-frontend-mcp
+    restart: unless-stopped
+    expose: ["7120"]
+    environment:
+      MCP_PORT: "7120"
+      FRONTEND_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/frontend/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      FRONTEND_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/frontend/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7120/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=frontend-mcp", "role=resource-server"]
+
+  devops-mcp:
+    build: { context: ., dockerfile: devops-mcp-server/Dockerfile }
+    container_name: pilot-devops-mcp
+    restart: unless-stopped
+    expose: ["7121"]
+    environment:
+      MCP_PORT: "7121"
+      DEVOPS_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/devops/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      DEVOPS_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/devops/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7121/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=devops-mcp", "role=resource-server"]
+
+  product-owner-mcp:
+    build: { context: ., dockerfile: product-owner-mcp-server/Dockerfile }
+    container_name: pilot-product-owner-mcp
+    restart: unless-stopped
+    expose: ["7122"]
+    environment:
+      MCP_PORT: "7122"
+      PRODUCT_OWNER_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/product-owner/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      PRODUCT_OWNER_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/product-owner/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7122/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=product-owner-mcp", "role=resource-server"]
+
+  product-manager-mcp:
+    build: { context: ., dockerfile: product-manager-mcp-server/Dockerfile }
+    container_name: pilot-product-manager-mcp
+    restart: unless-stopped
+    expose: ["7123"]
+    environment:
+      MCP_PORT: "7123"
+      PRODUCT_MANAGER_RESOURCE: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/product-manager/mcp"
+      AS_ISSUER: "${AS_ISSUER:?defina AS_ISSUER no .env}"
+      AS_JWKS_URL: "${AS_JWKS_URL:-http://auth-mcp:7103/.well-known/jwks.json}"
+      PRODUCT_MANAGER_PRM_URL: "${MCP_PUBLIC_BASE_URL:-https://mcp.suaempresa.com}/product-manager/.well-known/oauth-protected-resource"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7123/v1/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on: [auth-mcp]
+    networks: [mcp-private]
+    labels: ["mcp=product-manager-mcp", "role=resource-server"]
+
+  # --------------------------------------------------------------------------
+  # MCP-GATEWAY — edge de política / registry (escuta na 8080). Rede privada.
+  # --------------------------------------------------------------------------
+  mcp-gateway:
+    build:
+      context: ./mcp-gateway
+      dockerfile: Dockerfile
+    container_name: pilot-mcp-gateway
+    restart: unless-stopped
+    expose:
+      - "8080"          # visível SÓ na rede privada; nunca publicado no host.
+    environment:
+      PORT: ${GATEWAY_PORT:-8080}
+      # PG_* apontam para o serviço postgres do stack por default (senha via .env).
+      PG_HOST: ${PG_HOST:-postgres}
+      PG_PORT: ${PG_PORT:-5432}
+      PG_DB: ${PG_DB:-platform_pilot}
+      PG_USER: ${PG_USER:-platform}
+      PG_PASSWORD: "${PG_PASSWORD:?defina PG_PASSWORD no .env}"
+      REDIS_HOST: ${REDIS_HOST:-}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_DB: ${REDIS_DB:-3}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mcp-private
+    labels:
+      - "role=gateway"
+
+  # --------------------------------------------------------------------------
+  # POSTGRES — persistência do AS (oauth clients/codes/refresh) e do gateway
+  # (audit). Rede privada; nunca publicado no host.
+  # --------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: pilot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PG_DB:-platform_pilot}
+      POSTGRES_USER: ${PG_USER:-platform}
+      POSTGRES_PASSWORD: "${PG_PASSWORD:?defina PG_PASSWORD no .env}"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-platform} -d ${PG_DB:-platform_pilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks:
+      - mcp-private
+    labels:
+      - "role=database"
+
+# ============================================================================
+# Redes
+# ----------------------------------------------------------------------------
+#   edge         — bridge normal; SÓ o Caddy participa. É por onde as portas
+#                  80/443 chegam do host ao container do Caddy.
+#   mcp-private  — bridge `internal: true`: containers nela NÃO têm rota de
+#                  saída para o host/internet nem recebem portas publicadas.
+#                  É onde os MCPs vivem; só o Caddy (que também está na `edge`)
+#                  consegue alcançá-los.
+# ============================================================================
+networks:
+  edge:
+    driver: bridge
+  mcp-private:
+    driver: bridge
+    internal: true
+
+# ============================================================================
+# Volumes nomeados — persistência dos certificados ACME e config do Caddy.
+# ============================================================================
+volumes:
+  caddy_data:
+  caddy_config:
+  postgres_data:

@@ -1,0 +1,47 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/get_lease_ssh_key
+  uid: infra.get_lease_ssh_key
+  domain: infra
+  title: get lease ssh key
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - provisioning
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: provisioning
+  resource:
+    type: vm
+    parent: null
+    namespace: null
+  operation: get
+  authz: write
+  risk:
+    effects:
+    - write
+    requires:
+    - terraform
+    blast_radius: service
+    default_level: high
+    approval_required: N2
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:vm

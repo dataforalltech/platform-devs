@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/setup_repo
+  uid: deploy-mcp:setup_repo
+  domain: delivery
+  title: setup_repo @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.setup_repo
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: setup_repo
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.setup_repo
+- verb: provided-by
+  target: deploy-mcp

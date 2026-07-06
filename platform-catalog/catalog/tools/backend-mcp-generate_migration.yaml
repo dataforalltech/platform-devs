@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/generate_migration
+  uid: backend-mcp:generate_migration
+  domain: development
+  title: generate_migration @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_migration
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: generate_migration
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_migration
+- verb: provided-by
+  target: backend-mcp

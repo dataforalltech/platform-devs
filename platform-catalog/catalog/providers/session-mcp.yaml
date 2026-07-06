@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: session-mcp
+  uid: session-mcp
+  domain: platform
+  title: session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: session-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

@@ -2,7 +2,7 @@
 
 **Data:** 2026-05-10
 **Status:** Ready for implementation
-**Escopo:** 26 MCPs (18 system + 8 zilla) como serviços compartilhados
+**Escopo:** 26 MCPs (18 system + 8 devteam) como serviços compartilhados
 
 ---
 
@@ -22,7 +22,7 @@ User 2 (Python API)    ├──→ HTTP → Docker Network
 User 3 (Node.js)       │
 User 4 (Web)       ────┤   config-mcp:7100
                        ├──→ auth-mcp:7103
-                       ├──→ archzilla-mcp:7118
+                       ├──→ architecture-mcp:7118
                        └──→ ... (26 MCPs total)
 ```
 
@@ -43,14 +43,14 @@ User 4 (Web)       ────┤   config-mcp:7100
 │                   Docker Network (bridge)                    │
 │                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │ config-mcp   │  │ auth-mcp     │  │ archzilla... │       │
+│  │ config-mcp   │  │ auth-mcp     │  │ architecture... │       │
 │  │ :7100        │  │ :7103        │  │ :7118        │       │
 │  │ FastAPI      │  │ FastAPI      │  │ Node.js      │       │
 │  │ Python       │  │ Python       │  │ TypeScript   │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
 │                                                              │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │ session-mcp  │  │ admin-mcp    │  │ backzilla... │       │
+│  │ session-mcp  │  │ admin-mcp    │  │ backend... │       │
 │  │ :7102        │  │ :7104        │  │ :7119        │       │
 │  │ FastAPI      │  │ FastAPI      │  │ Node.js      │       │
 │  └──────────────┘  └──────────────┘  └──────────────┘       │
@@ -82,7 +82,7 @@ User 4 (Web)       ────┤   config-mcp:7100
 
 **MCPs:**
 - config-mcp (7100)
-- agent-twin-mcp (7101)
+- dev-twin-mcp (7101)
 - session-mcp (7102)
 - auth-mcp (7103)
 - admin-mcp (7104)
@@ -100,7 +100,7 @@ User 4 (Web)       ────┤   config-mcp:7100
 - cache-mcp (7116)
 - test-mcp (7117)
 
-### Zilla MCPs (8 total)
+### DevTeam MCPs (8 total)
 
 | Layer | Technology |
 |-------|-----------|
@@ -111,14 +111,14 @@ User 4 (Web)       ────┤   config-mcp:7100
 | Containerization | Docker |
 
 **MCPs:**
-- archzilla-mcp (7118)
-- backzilla-mcp (7119)
-- frontzilla-mcp (7120)
-- opszilla-mcp (7121)
-- pozilla-mcp (7122)
-- productzilla-mcp (7123)
-- qazilla-mcp (7124)
-- seczilla-mcp (7125)
+- architecture-mcp (7118)
+- backend-mcp (7119)
+- frontend-mcp (7120)
+- devops-mcp (7121)
+- product-owner-mcp (7122)
+- product-manager-mcp (7123)
+- qa-engineer-mcp (7124)
+- security-mcp (7125)
 
 ### Infrastructure
 
@@ -348,7 +348,7 @@ docker-compose up -d
 ```yaml
 # Scale individual MCPs
 kubectl scale deployment config-mcp --replicas=3
-kubectl scale deployment archzilla-mcp --replicas=2
+kubectl scale deployment architecture-mcp --replicas=2
 
 # Load Balancer
 apiVersion: v1
@@ -368,9 +368,9 @@ spec:
 
 ```
 [Server 1: 10 MCPs]        [Server 2: 10 MCPs]        [Server 3: Registry + DB]
-  config-mcp:7100           archzilla-mcp:7100          mcp-registry:8000
-  auth-mcp:7103             backzilla-mcp:7100          postgresql:5432
-  session-mcp:7102          ... more zillas ...         redis:6379
+  config-mcp:7100           architecture-mcp:7100          mcp-registry:8000
+  auth-mcp:7103             backend-mcp:7100          postgresql:5432
+  session-mcp:7102          ... more devteam ...         redis:6379
   ... more system MCPs ...
 
 [Load Balancer]

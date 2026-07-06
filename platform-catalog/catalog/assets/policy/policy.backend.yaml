@@ -1,0 +1,23 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.backend
+  uid: policy.backend
+  title: policy · backend
+  owner: platform
+  tags:
+  - policy
+  - backend
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: backend
+  allowed_effects:
+  - generate
+  - read
+  - write
+  max_blast: service
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.backend

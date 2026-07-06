@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/analyze_quality_requirement
+  uid: qa-engineer-mcp:analyze_quality_requirement
+  domain: testing
+  title: analyze_quality_requirement @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.analyze_quality_requirement
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: analyze_quality_requirement
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.analyze_quality_requirement
+- verb: provided-by
+  target: qa-engineer-mcp

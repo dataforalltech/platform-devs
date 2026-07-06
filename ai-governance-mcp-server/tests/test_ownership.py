@@ -193,9 +193,7 @@ def test_check_scope_high_for_multiple_services(repo):
 
 
 def test_check_scope_no_files_is_safe(repo):
-    res = check_scope(
-        repo, task_description="Apenas docs", changed_files=[]
-    )
+    res = check_scope(repo, task_description="Apenas docs", changed_files=[])
     assert res["approved"] is True
     assert res["changed_files_count"] == 0
 
@@ -285,6 +283,7 @@ def test_validate_lib_change_validates_input(repo):
 def test_tools_raise_graph_unavailable_when_no_ecosystem():
     class _StubRepo:
         ecosystem = None
+
     stub = _StubRepo()
     with pytest.raises(GraphUnavailable):
         get_service_ownership(stub, service_name="x")

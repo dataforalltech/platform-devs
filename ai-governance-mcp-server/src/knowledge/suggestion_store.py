@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -61,7 +61,7 @@ class SuggestionStore:
         # Inclui microssegundos para garantir ordering monotônica mesmo em
         # criações no mesmo segundo. O sufixo UUID resolve colisões muito
         # improváveis em microssegundos compartilhados.
-        ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%f")
+        ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f")
         suffix = uuid.uuid4().hex[:8]
         return f"{ts}-{suffix}"
 
@@ -69,8 +69,7 @@ class SuggestionStore:
     def _validate_id(suggestion_id: str) -> None:
         if not _ID_RE.match(suggestion_id):
             raise SuggestionStoreError(
-                f"id inválido: {suggestion_id!r}. "
-                "Formato esperado: YYYYMMDDTHHMMSSffffff-XXXXXXXX"
+                f"id inválido: {suggestion_id!r}. Formato esperado: YYYYMMDDTHHMMSSffffff-XXXXXXXX"
             )
 
     def _path(self, suggestion_id: str) -> Path:
@@ -95,7 +94,7 @@ class SuggestionStore:
         target_repo_canonical: str | None = None,
     ) -> Suggestion:
         """Cria uma nova sugestão e persiste no disco."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         suggestion_id = self._generate_id()
         suggestion = Suggestion(
             id=suggestion_id,
@@ -136,9 +135,7 @@ class SuggestionStore:
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError) as e:
-            raise SuggestionStoreError(
-                f"falha ao ler {suggestion_id}: {e}"
-            ) from e
+            raise SuggestionStoreError(f"falha ao ler {suggestion_id}: {e}") from e
         return Suggestion.model_validate(data)
 
     def list(self, filters: SuggestionFilters | None = None) -> list[Suggestion]:
@@ -156,7 +153,11 @@ class SuggestionStore:
                 )
                 continue
             suggestion = Suggestion.model_validate(data)
-            if f.target_repo and suggestion.target_repo != f.target_repo and suggestion.target_repo_canonical != f.target_repo:
+            if (
+                f.target_repo
+                and suggestion.target_repo != f.target_repo
+                and suggestion.target_repo_canonical != f.target_repo
+            ):
                 continue
             if f.status and suggestion.status != f.status:
                 continue
@@ -186,7 +187,7 @@ class SuggestionStore:
             # Sem mudança real — não polui o histórico.
             return suggestion
         change = StatusChange(
-            ts=datetime.now(timezone.utc).isoformat(),
+            ts=datetime.now(UTC).isoformat(),
             status=new_status,
             note=note,
             by=by,
@@ -221,9 +222,7 @@ class SuggestionStore:
             except (OSError, json.JSONDecodeError):
                 continue
             total += 1
-            by_status[data.get("status", "?")] = (
-                by_status.get(data.get("status", "?"), 0) + 1
-            )
+            by_status[data.get("status", "?")] = by_status.get(data.get("status", "?"), 0) + 1
             by_severity[data.get("severity", "?")] = (
                 by_severity.get(data.get("severity", "?"), 0) + 1
             )
@@ -262,6 +261,4 @@ class SuggestionStore:
                     tmp.unlink()
                 except OSError:
                     pass
-            raise SuggestionStoreError(
-                f"falha ao gravar {suggestion.id}: {e}"
-            ) from e
+            raise SuggestionStoreError(f"falha ao gravar {suggestion.id}: {e}") from e

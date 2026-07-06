@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import json
 import subprocess
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def get_coverage_report(
@@ -71,8 +71,7 @@ def get_coverage_report(
             # Try to generate
             try:
                 subprocess.run(
-                    ["python", "-m", "coverage", "json",
-                     "--omit=*/test*,*/venv*", "-q"],
+                    ["python", "-m", "coverage", "json", "--omit=*/test*,*/venv*", "-q"],
                     capture_output=True,
                     text=True,
                     cwd=repo_path,
@@ -88,18 +87,14 @@ def get_coverage_report(
                 lines_covered = totals.get("covered_lines", 0)
                 lines_total = totals.get("num_statements", 0)
                 overall_pct = (
-                    round(lines_covered / lines_total * 100, 2)
-                    if lines_total > 0
-                    else 0.0
+                    round(lines_covered / lines_total * 100, 2) if lines_total > 0 else 0.0
                 )
                 for fname, fdata in (data.get("files") or {}).items():
                     fsum = fdata.get("summary", {})
                     flines_total = fsum.get("num_statements", 0)
                     flines_covered = fsum.get("covered_lines", 0)
                     fpct = (
-                        round(flines_covered / flines_total * 100, 2)
-                        if flines_total > 0
-                        else 0.0
+                        round(flines_covered / flines_total * 100, 2) if flines_total > 0 else 0.0
                     )
                     modules.append({"file": fname, "coverage_pct": fpct})
             except (json.JSONDecodeError, KeyError):
@@ -165,11 +160,7 @@ def _compute_category_score(runs: list[dict], category: str) -> dict[str, Any]:
         else:
             score = max(0, 95 - low * 2)
         total = high + medium + low
-        desc = (
-            f"{high} high, {medium} medium, {low} low issues"
-            if total > 0
-            else "no issues"
-        )
+        desc = f"{high} high, {medium} medium, {low} low issues" if total > 0 else "no issues"
     elif category == "linter":
         errs = summary.get("errors", 0)
         warns = summary.get("warnings", 0)
@@ -259,19 +250,13 @@ def generate_qa_report(
     recommendations: list[str] = []
     sec = categories.get("security", {})
     if sec.get("score", 100) < 80:
-        recommendations.append(
-            f"Fix security issues: {sec.get('summary', '')} (bandit/npm audit)"
-        )
+        recommendations.append(f"Fix security issues: {sec.get('summary', '')} (bandit/npm audit)")
     dep = categories.get("dependencies", {})
     if dep.get("score", 100) < 80:
-        recommendations.append(
-            f"Update vulnerable dependencies: {dep.get('summary', '')}"
-        )
+        recommendations.append(f"Update vulnerable dependencies: {dep.get('summary', '')}")
     lint = categories.get("linter", {})
     if lint.get("score", 100) < 90:
-        recommendations.append(
-            f"Fix linter issues: {lint.get('summary', '')} (ruff/eslint)"
-        )
+        recommendations.append(f"Fix linter issues: {lint.get('summary', '')} (ruff/eslint)")
     cov = categories.get("coverage", {})
     if cov.get("score", 100) < settings.coverage_threshold:
         recommendations.append(
@@ -280,9 +265,7 @@ def generate_qa_report(
         )
     unit = categories.get("unit", {})
     if unit.get("score", 100) < 100:
-        recommendations.append(
-            f"Fix failing tests: {unit.get('summary', '')}"
-        )
+        recommendations.append(f"Fix failing tests: {unit.get('summary', '')}")
 
     run_id = store.save_run(
         run_type="qa_report",

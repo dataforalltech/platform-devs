@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/run_checklist
+  uid: testing.run_checklist
+  domain: testing
+  title: run checklist
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - test-planning
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: test-planning
+  resource:
+    type: checklist
+    parent: null
+    namespace: null
+  operation: run
+  authz: write
+  risk:
+    effects:
+    - execute
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: true
+      streaming: false
+      timeout_s: 900
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:checklist

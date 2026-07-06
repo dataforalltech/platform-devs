@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/query_ecosystem_graph
+  uid: ai-governance-mcp:query_ecosystem_graph
+  domain: governance
+  title: query_ecosystem_graph @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.query_ecosystem_graph
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: query_ecosystem_graph
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.query_ecosystem_graph
+- verb: provided-by
+  target: ai-governance-mcp

@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: governance/get_service_ownership
+  uid: governance.get_service_ownership
+  domain: governance
+  title: get service ownership
+  description: ''
+  owner: platform
+  tags:
+  - governance
+  - ai-governance
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: governance
+  capability: ai-governance
+  resource:
+    type: service
+    parent: null
+    namespace: null
+  operation: get
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:service

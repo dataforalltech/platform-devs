@@ -25,7 +25,9 @@ class DocsChecker:
                 "name": "has_readme",
                 "required": True,
                 "passed": (repo / "README.md").exists(),
-                "details": "README.md present" if (repo / "README.md").exists() else "README.md not found",
+                "details": "README.md present"
+                if (repo / "README.md").exists()
+                else "README.md not found",
             }
         )
 
@@ -94,7 +96,9 @@ class DocsChecker:
                 "name": "has_env_vars_documented",
                 "required": env != "dev",
                 "passed": has_env_docs,
-                "details": "Environment variables documented" if has_env_docs else "Environment variables not documented",
+                "details": "Environment variables documented"
+                if has_env_docs
+                else "Environment variables not documented",
             }
         )
 
@@ -113,7 +117,7 @@ class DocsChecker:
         readme = repo_path / "README.md"
         if readme.exists():
             try:
-                content = readme.read_text()
+                content = readme.read_text(encoding="utf-8")
                 return "environment" in content.lower() or "env_var" in content.lower()
             except Exception:
                 pass

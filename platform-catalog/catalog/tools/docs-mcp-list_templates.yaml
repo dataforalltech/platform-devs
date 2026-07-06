@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: docs-mcp/list_templates
+  uid: docs-mcp:list_templates
+  domain: documentation
+  title: list_templates @ docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - docs-mcp
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: documentation.list_templates
+  provider_id: docs-mcp
+  provider_version: 1.0.0
+  tool: list_templates
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: documentation.list_templates
+- verb: provided-by
+  target: docs-mcp

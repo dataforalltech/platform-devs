@@ -219,3 +219,11 @@ __marimo__/
 
 # Local Docker overrides (paths específicos da máquina — não versionar)
 docker-compose.override.yml
+
+# Terraform caches (nunca versionar — baixados por terraform init)
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Dumps de backup de DB (dado sensível — ver scripts/dev_db_backup.py)
+scripts/backups/

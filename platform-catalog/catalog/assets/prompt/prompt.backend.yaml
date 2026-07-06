@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.backend
+  uid: prompt.backend
+  title: system prompt · backend
+  owner: platform
+  tags:
+  - prompt
+  - backend
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: backend
+  content_ref: knowledge/profiles/backend.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.backend

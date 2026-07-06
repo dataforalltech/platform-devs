@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.security
+  uid: prompt.security
+  title: system prompt · security
+  owner: platform
+  tags:
+  - prompt
+  - security
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: security
+  content_ref: knowledge/profiles/security.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.security

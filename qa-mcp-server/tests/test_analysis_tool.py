@@ -80,7 +80,7 @@ _RADON_JSON = json.dumps(
 )
 
 _MYPY_OUTPUT = (
-    "src/main.py:10: error: Argument 1 to \"foo\" has incompatible type\n"
+    'src/main.py:10: error: Argument 1 to "foo" has incompatible type\n'
     "src/utils.py:5: warning: Unused variable x\n"
     "Found 1 error in 1 file (checked 20 source files)\n"
 )
@@ -191,9 +191,7 @@ def test_check_dependencies_python_pip_audit(store, settings, tmp_path):
 
 def test_check_dependencies_no_vulnerabilities(store, settings, tmp_path):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='test'")
-    clean_json = json.dumps(
-        {"dependencies": [{"name": "flask", "version": "3.0.0", "vulns": []}]}
-    )
+    clean_json = json.dumps({"dependencies": [{"name": "flask", "version": "3.0.0", "vulns": []}]})
     with patch(
         "src.tools.analysis_tool._run_subprocess",
         return_value=(0, clean_json, ""),
@@ -264,3 +262,276 @@ def test_analyze_complexity_above_threshold(store, settings, tmp_path):
         result = analyze_complexity(store, settings, repo_path=str(tmp_path), threshold=10)
     assert result["above_threshold"] == 1
     assert result["hotspots"][0]["complexity"] == 25
+
+
+# ---------- run_linter (JS/TS branch, fix, timeout) ----------
+
+_ESLINT_JSON = json.dumps(
+    [
+        {
+            "filePath": "src/app.js",
+            "messages": [
+                {"severity": 2, "line": 3, "column": 1, "ruleId": "no-unused-vars", "message": "x"},
+                {"severity": 1, "line": 8, "column": 2, "ruleId": "semi", "message": "missing ;"},
+            ],
+        },
+        {"filePath": "src/clean.js", "messages": []},
+    ]
+)
+
+
+def test_run_linter_javascript_eslint(store, settings, tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "app"}')
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        return_value=(1, _ESLINT_JSON, ""),
+    ):
+        result = run_linter(store, settings, repo_path=str(tmp_path))
+    assert result["framework"] == "javascript"
+    assert result["tool"] == "eslint"
+    assert result["errors"] == 1  # severity>=2
+    assert result["warnings"] == 1  # severity==1
+    assert result["files_checked"] == 1  # only files with messages
+
+
+def test_run_linter_python_with_fix(store, settings, tmp_path):
+    (tmp_path / "main.py").write_text("import os\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        return_value=(0, "[]", "Found 3 errors. Fixed 3 errors."),
+    ):
+        result = run_linter(store, settings, repo_path=str(tmp_path), fix=True)
+    assert result["fixed"] == 3
+
+
+def test_run_linter_timeout(store, settings, tmp_path):
+    import subprocess
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=subprocess.TimeoutExpired(cmd="ruff", timeout=1),
+    ):
+        result = run_linter(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "timeout"
+
+
+# ---------- run_security_scan (npm audit branch, not found, timeout) ----------
+
+
+def test_run_security_scan_npm_audit(store, settings, tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "app"}')
+    npm_json = json.dumps(
+        {
+            "vulnerabilities": {
+                "lodash": {"severity": "high", "name": "lodash", "title": "Prototype pollution"},
+                "minimist": {"severity": "moderate", "name": "minimist", "title": "ReDoS"},
+                "leftpad": {"severity": "low", "name": "leftpad", "title": "Minor"},
+            }
+        }
+    )
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        return_value=(1, npm_json, ""),
+    ):
+        result = run_security_scan(store, settings, repo_path=str(tmp_path))
+    assert result["tool"] == "npm_audit"
+    assert result["high"] == 1  # high counts as high
+    assert result["medium"] == 1  # moderate -> medium
+    assert result["low"] == 1
+    assert result["total_issues"] == 3
+
+
+def test_run_security_scan_tool_not_found(store, settings, tmp_path):
+    (tmp_path / "app.py").write_text("x = 1\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=FileNotFoundError("bandit not found"),
+    ):
+        result = run_security_scan(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "tool_not_found"
+    assert result["tool"] == "bandit"
+
+
+def test_run_security_scan_timeout(store, settings, tmp_path):
+    import subprocess
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=subprocess.TimeoutExpired(cmd="bandit", timeout=1),
+    ):
+        result = run_security_scan(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "timeout"
+
+
+# ---------- check_dependencies (safety fallback, npm, timeout) ----------
+
+
+def test_check_dependencies_safety_fallback(store, settings, tmp_path):
+    """pip-audit missing -> falls back to safety."""
+    import subprocess  # noqa: F401
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='test'")
+    safety_json = json.dumps([["requests", "<2.31", "2.25.0", "SSRF issue", "CVE-2023-1234"]])
+
+    calls = {"n": 0}
+
+    def _side_effect(cmd, **kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise FileNotFoundError("pip-audit not found")
+        return (0, safety_json, "")
+
+    with patch("src.tools.analysis_tool._run_subprocess", side_effect=_side_effect):
+        result = check_dependencies(store, settings, repo_path=str(tmp_path))
+    assert result["tool"] == "safety"
+    assert result["vulnerabilities"] == 1
+    assert result["findings"][0]["package"] == "requests"
+
+
+def test_check_dependencies_npm(store, settings, tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "app"}')
+    npm_json = json.dumps(
+        {
+            "vulnerabilities": {
+                "lodash": {
+                    "range": ">=4.0.0 <4.17.21",
+                    "name": "lodash",
+                    "title": "Prototype pollution",
+                    "fixAvailable": {"version": "4.17.21"},
+                }
+            }
+        }
+    )
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        return_value=(1, npm_json, ""),
+    ):
+        result = check_dependencies(store, settings, repo_path=str(tmp_path))
+    assert result["tool"] == "npm_audit"
+    assert result["framework"] == "javascript"
+    assert result["vulnerabilities"] == 1
+    assert result["findings"][0]["fix_version"] == "4.17.21"
+
+
+def test_check_dependencies_timeout(store, settings, tmp_path):
+    import subprocess
+
+    (tmp_path / "pyproject.toml").write_text("[project]")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=subprocess.TimeoutExpired(cmd="pip-audit", timeout=1),
+    ):
+        result = check_dependencies(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "timeout"
+
+
+# ---------- run_type_check (tsc branch, not found, timeout) ----------
+
+
+def test_run_type_check_tsc(store, settings, tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "app"}')
+    tsc_output = (
+        "src/app.ts(10,5): error TS2322: Type 'string' is not assignable to type 'number'.\n"
+        "src/util.ts(3,1): warning TS6133: 'x' is declared but never used.\n"
+    )
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        return_value=(1, tsc_output, ""),
+    ):
+        result = run_type_check(store, settings, repo_path=str(tmp_path), framework="typescript")
+    assert result["tool"] == "tsc"
+    assert result["errors"] == 1
+    assert result["warnings"] == 1
+    assert result["issues"][0]["file"] == "src/app.ts"
+
+
+def test_run_type_check_tool_not_found(store, settings, tmp_path):
+    (tmp_path / "app.py").write_text("x = 1\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=FileNotFoundError("mypy not found"),
+    ):
+        result = run_type_check(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "tool_not_found"
+    assert result["tool"] == "mypy"
+
+
+def test_run_type_check_timeout(store, settings, tmp_path):
+    import subprocess
+
+    (tmp_path / "app.py").write_text("x = 1\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=subprocess.TimeoutExpired(cmd="mypy", timeout=1),
+    ):
+        result = run_type_check(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "timeout"
+
+
+# ---------- analyze_complexity (JS grep branch, not found, timeout) ----------
+
+
+def test_analyze_complexity_javascript_grep(store, settings, tmp_path):
+    (tmp_path / "package.json").write_text('{"name": "app"}')
+    # Write a JS file with many branches so cc exceeds a low threshold.
+    (tmp_path / "complex.js").write_text(
+        "function f(){ if(a){} else if(b){} for(;;){} while(x){} "
+        "if(c&&d||e){} switch(y){} try{}catch(z){} }\n"
+    )
+    result = analyze_complexity(store, settings, repo_path=str(tmp_path), threshold=1)
+    assert result["tool"] == "grep_count"
+    assert result["total_functions"] >= 1
+    assert result["above_threshold"] >= 1
+
+
+def test_analyze_complexity_tool_not_found(store, settings, tmp_path):
+    (tmp_path / "app.py").write_text("def f(): pass\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=FileNotFoundError("radon not found"),
+    ):
+        result = analyze_complexity(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "tool_not_found"
+    assert result["tool"] == "radon"
+
+
+def test_analyze_complexity_timeout(store, settings, tmp_path):
+    import subprocess
+
+    (tmp_path / "app.py").write_text("def f(): pass\n")
+    with patch(
+        "src.tools.analysis_tool._run_subprocess",
+        side_effect=subprocess.TimeoutExpired(cmd="radon", timeout=1),
+    ):
+        result = analyze_complexity(store, settings, repo_path=str(tmp_path))
+    assert result["error"] == "timeout"
+
+
+# ---------- validation errors (empty repo_path) ----------
+
+
+def test_run_linter_missing_repo(store, settings):
+    result = run_linter(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"
+
+
+def test_run_security_scan_missing_repo(store, settings):
+    result = run_security_scan(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"
+
+
+def test_check_dependencies_missing_repo(store, settings):
+    result = check_dependencies(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"
+
+
+def test_run_type_check_missing_repo(store, settings):
+    result = run_type_check(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"
+
+
+def test_analyze_complexity_missing_repo(store, settings):
+    result = analyze_complexity(store, settings, repo_path="")
+    assert result["error"] == "ValidationError"

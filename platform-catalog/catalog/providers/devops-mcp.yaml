@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: devops-mcp
+  uid: devops-mcp
+  domain: development
+  title: devops-mcp
+  description: ''
+  owner: platform
+  tags:
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: devops-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

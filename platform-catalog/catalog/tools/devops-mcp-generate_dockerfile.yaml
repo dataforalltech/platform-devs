@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: devops-mcp/generate_dockerfile
+  uid: devops-mcp:generate_dockerfile
+  domain: development
+  title: generate_dockerfile @ devops-mcp
+  description: ''
+  owner: platform
+  tags:
+  - devops-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_dockerfile
+  provider_id: devops-mcp
+  provider_version: 1.0.0
+  tool: generate_dockerfile
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_dockerfile
+- verb: provided-by
+  target: devops-mcp

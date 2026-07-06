@@ -65,9 +65,7 @@ def test_check_doc_standards_grade_calculation(store, settings, tmp_path):
 
 def test_check_doc_standards_returns_recommendations(store, settings, tmp_path):
     # Only README, missing CHANGELOG → should have recommendations for standard level
-    readme = (
-        "# Service\n\n## Installation\n\nInstall it.\n\n## Usage\n\nUse it.\n"
-    ) * 8
+    readme = ("# Service\n\n## Installation\n\nInstall it.\n\n## Usage\n\nUse it.\n") * 8
     (tmp_path / "README.md").write_text(readme, encoding="utf-8")
 
     result = check_doc_standards(store, settings, repo_path=str(tmp_path), standard="standard")

@@ -79,9 +79,9 @@
 ```
 main (production releases)
   └─ develop (integration branch)
-      ├─ feature/cross-zilla-validators (Phase 2)
+      ├─ feature/cross-devteam-validators (Phase 2)
       ├─ feature/quality-gates-system (Phase 3)
-      ├─ feature/zilla-observatory (Observability)
+      ├─ feature/devteam-observatory (Observability)
       └─ session/* (experimentation)
 ```
 
@@ -139,9 +139,9 @@ deploy-mcp::merge_branch(
 # Criar PRs para Phase 2 features
 deploy-mcp::create_pr(
   repo="platform-devs",
-  title="feat: Phase 2 — Cross-Zilla Validators (18 tools)",
+  title="feat: Phase 2 — Cross-DevTeam Validators (18 tools)",
   base="main",
-  head="feature/cross-zilla-validators"
+  head="feature/cross-devteam-validators"
 )
 ```
 

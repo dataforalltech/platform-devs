@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.qa_engineer
+  uid: prompt.qa_engineer
+  title: system prompt · qa_engineer
+  owner: platform
+  tags:
+  - prompt
+  - qa_engineer
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: qa_engineer
+  content_ref: knowledge/profiles/qa_engineer.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.qa_engineer

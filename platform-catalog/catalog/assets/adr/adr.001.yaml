@@ -1,0 +1,16 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.001
+  uid: adr.001
+  title: 'ADR-001: Migration from TypeScript/SQLite to Python/PostgreSQL'
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '001'
+  status: unknown
+  path: ADR-001-PYTHON-POSTGRESQL-MIGRATION.md
+relations: []

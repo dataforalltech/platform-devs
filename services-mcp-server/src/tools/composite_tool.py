@@ -166,7 +166,13 @@ def list_environments(store: ServiceStore) -> dict[str, Any]:
     for row in rows:
         env = row.get("environment") or "unknown"
         if env not in env_map:
-            env_map[env] = {"environment": env, "total": 0, "running": 0, "stopped": 0, "unknown": 0}
+            env_map[env] = {
+                "environment": env,
+                "total": 0,
+                "running": 0,
+                "stopped": 0,
+                "unknown": 0,
+            }
         env_map[env]["total"] += 1
         status = row.get("status") or "unknown"
         if status == "running":

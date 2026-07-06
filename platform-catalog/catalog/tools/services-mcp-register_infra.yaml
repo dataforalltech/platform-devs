@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/register_infra
+  uid: services-mcp:register_infra
+  domain: infra
+  title: register_infra @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.register_infra
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: register_infra
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.register_infra
+- verb: provided-by
+  target: services-mcp

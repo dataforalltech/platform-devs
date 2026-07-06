@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/scaffold_pipeline
+  uid: deploy-mcp:scaffold_pipeline
+  domain: delivery
+  title: scaffold_pipeline @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.scaffold_pipeline
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: scaffold_pipeline
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.scaffold_pipeline
+- verb: provided-by
+  target: deploy-mcp

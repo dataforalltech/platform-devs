@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/get_validation_status
+  uid: test-mcp:get_validation_status
+  domain: testing
+  title: get_validation_status @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.get_validation_status
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: get_validation_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.get_validation_status
+- verb: provided-by
+  target: test-mcp

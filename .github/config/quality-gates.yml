@@ -1,5 +1,5 @@
 # Quality Gates Configuration
-# Integração com Pipeline-MCP e OpsZilla
+# Integração com Pipeline-MCP e DevOps
 
 gates:
   # ============================================================================
@@ -138,7 +138,7 @@ notifications:
 # Dashboards & Observability
 # ============================================================================
 observability:
-  opszilla:
+  devops:
     enabled: true
     dashboard: "repo-sync-metrics"
     metrics:

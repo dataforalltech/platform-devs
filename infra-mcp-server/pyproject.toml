@@ -1,26 +1,29 @@
 [project]
 name = "infra-mcp-server"
 version = "0.1.0"
-description = "MCP Server para operações de infraestrutura (terraform, policy scan, cost estimate). Read-only por design — operações de mutação ficam fora do escopo (ver ADR-0001)."
+description = "MCP Server para operações de infraestrutura (terraform, policy scan, cost estimate) e alocação de VMs. Read+write: além das tools de leitura, expõe tools de mutação do allocator (request_vm, release_lease, extend_lease, cancel_queued_request, get_lease_ssh_key)."
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [
     { name = "dataforalltech platform team" },
 ]
 dependencies = [
-    "mcp>=1.2.0,<2.0",
+    "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
     "cryptography>=42.0.0",
     "psycopg2-binary>=2.9",
     "fastapi>=0.104.0,<1.0",
     "uvicorn[standard]>=0.24.0,<1.0",
+    "pyjwt>=2.8.0",
+    "bcrypt>=4.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0,<9.0",
     "pytest-asyncio>=0.23.0,<1.0",
+    "pytest-cov>=4.0.0",
     "ruff>=0.4.0,<1.0",
 ]
 

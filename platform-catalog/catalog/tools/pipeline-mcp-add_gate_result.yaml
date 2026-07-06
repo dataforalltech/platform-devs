@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/add_gate_result
+  uid: pipeline-mcp:add_gate_result
+  domain: delivery
+  title: add_gate_result @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.add_gate_result
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: add_gate_result
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.add_gate_result
+- verb: provided-by
+  target: pipeline-mcp

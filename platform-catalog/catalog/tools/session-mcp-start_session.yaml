@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/start_session
+  uid: session-mcp:start_session
+  domain: platform
+  title: start_session @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.start_session
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: start_session
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.start_session
+- verb: provided-by
+  target: session-mcp

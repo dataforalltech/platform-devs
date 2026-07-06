@@ -21,7 +21,9 @@ class SessionSettings(BaseSettings):
     pg_port: int = Field(default=5432, description="PostgreSQL port")
     pg_db: str = Field(default="app", description="PostgreSQL database name")
     pg_user: str = Field(default="postgres", description="PostgreSQL user")
-    pg_password: str = Field(default="postgres_password_local_dev", description="PostgreSQL password")
+    pg_password: str = Field(
+        default="postgres_password_local_dev", description="PostgreSQL password"
+    )
     pg_min_conn: int = Field(default=2, description="Minimum pool connections")
     pg_max_conn: int = Field(default=10, description="Maximum pool connections")
 

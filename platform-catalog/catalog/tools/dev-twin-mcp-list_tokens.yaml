@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/list_tokens
+  uid: dev-twin-mcp:list_tokens
+  domain: platform
+  title: list_tokens @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.list_tokens
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: list_tokens
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.list_tokens
+- verb: provided-by
+  target: dev-twin-mcp

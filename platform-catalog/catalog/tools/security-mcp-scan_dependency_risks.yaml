@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/scan_dependency_risks
+  uid: security-mcp:scan_dependency_risks
+  domain: security
+  title: scan_dependency_risks @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.scan_dependency_risks
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: scan_dependency_risks
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.scan_dependency_risks
+- verb: provided-by
+  target: security-mcp

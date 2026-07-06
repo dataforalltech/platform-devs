@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/create_adr
+  uid: ai-governance-mcp:create_adr
+  domain: governance
+  title: create_adr @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.create_adr
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: create_adr
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.create_adr
+- verb: provided-by
+  target: ai-governance-mcp

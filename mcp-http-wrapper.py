@@ -25,7 +25,7 @@ TIMEOUT = 30.0
 # MCP Port mapping (discovered dynamically, but fallback here)
 MCP_PORTS = {
     "config-mcp": 7100,
-    "agent-twin-mcp": 7101,
+    "dev-twin-mcp": 7101,
     "session-mcp": 7102,
     "auth-mcp": 7103,
     "admin-mcp": 7104,

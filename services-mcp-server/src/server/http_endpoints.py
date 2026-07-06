@@ -4,9 +4,9 @@ Services-MCP HTTP Endpoints — PostgreSQL Integration.
 Endpoints para gerenciar service registry com health checks.
 """
 
-from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,9 +25,12 @@ class ServicesHTTPEndpoints:
 
     # ========== GET /services ==========
 
-    def get_services(self, environment: Optional[str] = None,
-                     status: Optional[str] = None,
-                     service_type: Optional[str] = None) -> Dict[str, Any]:
+    def get_services(
+        self,
+        environment: str | None = None,
+        status: str | None = None,
+        service_type: str | None = None,
+    ) -> dict[str, Any]:
         """
         GET /services
 
@@ -57,37 +60,24 @@ class ServicesHTTPEndpoints:
             }
         """
         try:
-            services = self.postgres_sync.list_services(
-                environment=environment,
-                status=status
-            )
+            services = self.postgres_sync.list_services(environment=environment, status=status)
 
             if services is None:
-                return {
-                    'status': 500,
-                    'error': 'database_error'
-                }
+                return {"status": 500, "error": "database_error"}
 
             # Filter by type if specified
             if service_type:
-                services = [s for s in services if s.get('type') == service_type]
+                services = [s for s in services if s.get("type") == service_type]
 
-            return {
-                'status': 200,
-                'services': [dict(s) for s in services],
-                'total': len(services)
-            }
+            return {"status": 200, "services": [dict(s) for s in services], "total": len(services)}
 
         except Exception as e:
             logger.error(f"Error in GET /services: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /services/:name ==========
 
-    def get_service(self, name: str) -> Dict[str, Any]:
+    def get_service(self, name: str) -> dict[str, Any]:
         """
         GET /services/{name}
 
@@ -121,28 +111,28 @@ class ServicesHTTPEndpoints:
             service = self.postgres_sync.get_service(name)
 
             if service is None:
-                return {
-                    'status': 404,
-                    'error': 'service_not_found'
-                }
+                return {"status": 404, "error": "service_not_found"}
 
             return {
-                'status': 200,
-                **service  # Spread service dict
+                "status": 200,
+                **service,  # Spread service dict
             }
 
         except Exception as e:
             logger.error(f"Error in GET /services/{name}: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /services ==========
 
-    def post_services(self, name: str, service_type: str, host: str,
-                      port: int, health_check_url: Optional[str] = None,
-                      **kwargs) -> Dict[str, Any]:
+    def post_services(
+        self,
+        name: str,
+        service_type: str,
+        host: str,
+        port: int,
+        health_check_url: str | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         POST /services
 
@@ -177,52 +167,44 @@ class ServicesHTTPEndpoints:
             # Step 1: Check if already exists
             existing = self.postgres_sync.get_service(name)
             if existing:
-                return {
-                    'status': 409,
-                    'error': 'service_already_exists'
-                }
+                return {"status": 409, "error": "service_already_exists"}
 
             # Step 2: Register in PostgreSQL
             service_data = {
-                'name': name,
-                'type': service_type,
-                'host': host,
-                'port': port,
-                'health_check_url': health_check_url,
-                'description': kwargs.get('description'),
-                'environment': kwargs.get('environment', 'dev'),
-                'requires_auth': kwargs.get('requires_auth', False),
+                "name": name,
+                "type": service_type,
+                "host": host,
+                "port": port,
+                "health_check_url": health_check_url,
+                "description": kwargs.get("description"),
+                "environment": kwargs.get("environment", "dev"),
+                "requires_auth": kwargs.get("requires_auth", False),
             }
 
             self.postgres_sync.sync_service_registered(service_data)
 
             # Step 3: Log audit trail
             self.postgres_sync.log_action(
-                action='register',
-                service_name=name,
-                details=service_data
+                action="register", service_name=name, details=service_data
             )
 
             logger.info(f"✅ Service registered: {name}")
 
             return {
-                'status': 201,
-                'id': None,  # Would be returned from PostgreSQL insert
-                'name': name,
-                'status': 'unknown',
-                'created_at': datetime.utcnow().isoformat() + 'Z'
+                "status": 201,
+                "id": None,  # Would be returned from PostgreSQL insert
+                "name": name,
+                "service_status": "unknown",
+                "created_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /services: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== PATCH /services/:name ==========
 
-    def patch_service(self, name: str, **updates) -> Dict[str, Any]:
+    def patch_service(self, name: str, **updates) -> dict[str, Any]:
         """
         PATCH /services/{name}
 
@@ -250,39 +232,29 @@ class ServicesHTTPEndpoints:
             # Step 1: Check if exists
             service = self.postgres_sync.get_service(name)
             if service is None:
-                return {
-                    'status': 404,
-                    'error': 'service_not_found'
-                }
+                return {"status": 404, "error": "service_not_found"}
 
             # Step 2: Update in PostgreSQL
             self.postgres_sync.sync_service_updated(name, updates)
 
             # Step 3: Log audit trail
-            self.postgres_sync.log_action(
-                action='update',
-                service_name=name,
-                details=updates
-            )
+            self.postgres_sync.log_action(action="update", service_name=name, details=updates)
 
             logger.info(f"✅ Service updated: {name}")
 
             return {
-                'status': 200,
-                'updated': True,
-                'updated_at': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "updated": True,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in PATCH /services/{name}: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /services/health ==========
 
-    def get_services_health(self) -> Dict[str, Any]:
+    def get_services_health(self) -> dict[str, Any]:
         """
         GET /services/health
 
@@ -306,37 +278,32 @@ class ServicesHTTPEndpoints:
         try:
             all_services = self.postgres_sync.list_services()
             if all_services is None:
-                return {
-                    'status': 500,
-                    'error': 'database_error'
-                }
+                return {"status": 500, "error": "database_error"}
 
             unhealthy = self.postgres_sync.list_unhealthy_services()
 
-            healthy = sum(1 for s in all_services if s.get('status') == 'healthy')
+            healthy = sum(1 for s in all_services if s.get("status") == "healthy")
             unhealthy_count = len(unhealthy) if unhealthy else 0
-            unknown = sum(1 for s in all_services if s.get('status') == 'unknown')
+            unknown = sum(1 for s in all_services if s.get("status") == "unknown")
 
             return {
-                'status': 200,
-                'healthy': healthy,
-                'unhealthy': unhealthy_count,
-                'unknown': unknown,
-                'total': len(all_services),
-                'unhealthy_services': [dict(s) for s in (unhealthy or [])]
+                "status": 200,
+                "healthy": healthy,
+                "unhealthy": unhealthy_count,
+                "unknown": unknown,
+                "total": len(all_services),
+                "unhealthy_services": [dict(s) for s in (unhealthy or [])],
             }
 
         except Exception as e:
             logger.error(f"Error in GET /services/health: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /services/:name/health-check ==========
 
-    def post_service_health_check(self, name: str, status: str,
-                                  response_time_ms: Optional[float] = None) -> Dict[str, Any]:
+    def post_service_health_check(
+        self, name: str, status: str, response_time_ms: float | None = None
+    ) -> dict[str, Any]:
         """
         POST /services/{name}/health-check
 
@@ -359,47 +326,36 @@ class ServicesHTTPEndpoints:
             # Step 1: Check if exists
             service = self.postgres_sync.get_service(name)
             if service is None:
-                return {
-                    'status': 404,
-                    'error': 'service_not_found'
-                }
+                return {"status": 404, "error": "service_not_found"}
 
             # Step 2: Update status in PostgreSQL
             self.postgres_sync.sync_health_check_result(
-                name,
-                status=status,
-                response_time_ms=response_time_ms
+                name, status=status, response_time_ms=response_time_ms
             )
 
             # Step 3: Log audit trail
             self.postgres_sync.log_action(
-                action='health_check',
+                action="health_check",
                 service_name=name,
-                details={
-                    'status': status,
-                    'response_time_ms': response_time_ms
-                }
+                details={"status": status, "response_time_ms": response_time_ms},
             )
 
             logger.debug(f"✅ Health check recorded: {name} → {status}")
 
             return {
-                'status': 200,
-                'updated': True,
-                'service_status': status,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "updated": True,
+                "service_status": status,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /services/{name}/health-check: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== DELETE /services/:name ==========
 
-    def delete_service(self, name: str) -> Dict[str, Any]:
+    def delete_service(self, name: str) -> dict[str, Any]:
         """
         DELETE /services/{name}
 
@@ -420,32 +376,22 @@ class ServicesHTTPEndpoints:
             # Step 1: Check if exists
             service = self.postgres_sync.get_service(name)
             if service is None:
-                return {
-                    'status': 404,
-                    'error': 'service_not_found'
-                }
+                return {"status": 404, "error": "service_not_found"}
 
             # Step 2: Remove from PostgreSQL
             self.postgres_sync.sync_service_removed(name)
 
             # Step 3: Log audit trail
-            self.postgres_sync.log_action(
-                action='unregister',
-                service_name=name,
-                details={}
-            )
+            self.postgres_sync.log_action(action="unregister", service_name=name, details={})
 
             logger.info(f"✅ Service removed: {name}")
 
             return {
-                'status': 200,
-                'deleted': True,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "deleted": True,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in DELETE /services/{name}: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}

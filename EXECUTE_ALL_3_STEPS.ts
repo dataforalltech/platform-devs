@@ -2,7 +2,7 @@
  * EXECUTE_ALL_3_STEPS.ts
  *
  * Executa TODOS os 3 passos finais em paralelo:
- * PASSO 2: Integrar 8 Zillas com MCPs (imports + calls)
+ * PASSO 2: Integrar 8 DevTeam com MCPs (imports + calls)
  * PASSO 3: Teste E2E OAuth2 completo (11 dias em minutos)
  * PASSO 4: Deploy para produção (merge, tag, build, push)
  *
@@ -10,55 +10,55 @@
  */
 
 import { mcpClient } from '@platform/mcp-client';
-import ZillaIntegration from './ZillaIntegration';
+import DevTeamIntegration from './DevTeamIntegration';
 
 // ============================================================================
-// PASSO 2: INTEGRAR 8 ZILLAS COM MCPs
+// PASSO 2: INTEGRAR 8 DEVTEAM COM MCPs
 // ============================================================================
 
-class Passo2_ZillaIntegration {
+class Passo2_DevTeamIntegration {
   static async execute(): Promise<void> {
     console.log('\n╔════════════════════════════════════════════════════════════╗');
-    console.log('║ PASSO 2: INTEGRAR 8 ZILLAS COM MCPs                       ║');
+    console.log('║ PASSO 2: INTEGRAR 8 DEVTEAM COM MCPs                       ║');
     console.log('║ Duração: 30 minutos                                        ║');
     console.log('╚════════════════════════════════════════════════════════════╝\n');
 
-    const zillas = [
-      'ProductZilla',
-      'ArchZilla',
-      'BackZilla',
-      'FrontZilla-PixelFera',
-      'OpsZilla',
-      'QAZilla',
-      'SecZilla',
-      'POZilla',
+    const devteam = [
+      'Product-Manager',
+      'Architecture',
+      'Backend',
+      'Frontend-PixelFera',
+      'DevOps',
+      'QA-Engineer',
+      'Security',
+      'Product-Owner',
     ];
 
-    for (const zillaName of zillas) {
-      console.log(`[${zillaName}] Adicionando imports + MCP calls...`);
-      const integration = new ZillaIntegration(zillaName);
+    for (const devteamName of devteam) {
+      console.log(`[${devteamName}] Adicionando imports + MCP calls...`);
+      const integration = new DevTeamIntegration(devteamName);
 
       try {
         // 1. Validar documentação (knowledge-base-mcp)
         await integration.validateDocumentationContext({
-          zilla: zillaName,
+          devteam: devteamName,
           task: `integration_setup`,
         });
 
         // 2. Registrar no Observatory
         await integration.reportMetrics({
-          zilla: zillaName,
+          devteam: devteamName,
           action: 'imports_added',
           status: 'completed',
         });
 
-        console.log(`  ✅ ${zillaName} integrado com sucesso`);
+        console.log(`  ✅ ${devteamName} integrado com sucesso`);
       } catch (error) {
-        console.error(`  ❌ ${zillaName} falhou: ${error}`);
+        console.error(`  ❌ ${devteamName} falhou: ${error}`);
       }
     }
 
-    console.log('\n✅ PASSO 2 COMPLETO: 8 Zillas integradas com MCPs\n');
+    console.log('\n✅ PASSO 2 COMPLETO: 8 DevTeam integradas com MCPs\n');
   }
 }
 
@@ -71,12 +71,12 @@ class Passo3_E2E_OAuth2 {
     console.log('\n╔════════════════════════════════════════════════════════════╗');
     console.log('║ PASSO 3: TESTE E2E OAuth2                                 ║');
     console.log('║ Feature: OAuth2 Integration (Google, GitHub, Microsoft)    ║');
-    console.log('║ Timeline: T0-T8 com paralelo T2-T5 (4 Zillas em paralelo)  ║');
+    console.log('║ Timeline: T0-T8 com paralelo T2-T5 (4 DevTeam em paralelo)  ║');
     console.log('║ Duração: 1-2 horas (simulated in minutes)                  ║');
     console.log('╚════════════════════════════════════════════════════════════╝\n');
 
-    // T0: ProductZilla cria spec
-    console.log('[T0] ProductZilla: Gerando feature spec...');
+    // T0: Product-Manager cria spec
+    console.log('[T0] Product-Manager: Gerando feature spec...');
     const productSpec = {
       feature_id: 'feat_oauth2',
       title: 'OAuth2 Login Integration',
@@ -100,8 +100,8 @@ class Passo3_E2E_OAuth2 {
     };
     console.log('  ✅ Feature spec gerada (8 acceptance criteria)\n');
 
-    // T1: POZilla quebra em stories
-    console.log('[T1] POZilla: Quebrando epic em stories...');
+    // T1: Product-Owner quebra em stories
+    console.log('[T1] Product-Owner: Quebrando epic em stories...');
     const stories = [
       'Google OAuth2 Implementation',
       'GitHub OAuth2 Implementation',
@@ -114,68 +114,68 @@ class Passo3_E2E_OAuth2 {
     ];
     console.log(`  ✅ 8 stories criadas (34 story points, 11 dias de timeline)\n`);
 
-    // T2-T5: PARALELO - ArchZilla, BackZilla, FrontZilla, OpsZilla
+    // T2-T5: PARALELO - Architecture, Backend, Frontend, DevOps
     console.log('[T2-T5] PARALELO: Arch + Back + Front + Ops executando...');
     const [archResult, backResult, frontResult, opsResult] = await Promise.all([
       (async () => {
-        console.log('  [ArchZilla] Gerando blueprint...');
-        const integration = new ZillaIntegration('ArchZilla');
+        console.log('  [Architecture] Gerando blueprint...');
+        const integration = new DevTeamIntegration('Architecture');
         await integration.reportMetrics({
           action: 'blueprint_generated',
           endpoint_count: 3,
           status: 'completed',
         });
-        console.log('  ✅ ArchZilla: API contract (3 endpoints)');
+        console.log('  ✅ Architecture: API contract (3 endpoints)');
         return { blueprint: 'OAuth2 Architecture', status: 'passed' };
       })(),
       (async () => {
-        console.log('  [BackZilla] Gerando router FastAPI...');
-        const integration = new ZillaIntegration('BackZilla');
+        console.log('  [Backend] Gerando router FastAPI...');
+        const integration = new DevTeamIntegration('Backend');
         await integration.reportMetrics({
           action: 'router_generated',
           endpoints: 3,
           status: 'completed',
         });
-        console.log('  ✅ BackZilla: FastAPI router (3 endpoints)');
+        console.log('  ✅ Backend: FastAPI router (3 endpoints)');
         return { router: 'OAuth2 Router', status: 'passed' };
       })(),
       (async () => {
-        console.log('  [FrontZilla] Gerando componentes React...');
-        const integration = new ZillaIntegration('FrontZilla-PixelFera');
+        console.log('  [Frontend] Gerando componentes React...');
+        const integration = new DevTeamIntegration('Frontend-PixelFera');
         await integration.reportMetrics({
           action: 'components_generated',
           components: 1,
           status: 'completed',
         });
-        console.log('  ✅ FrontZilla: OAuthLoginButton component');
+        console.log('  ✅ Frontend: OAuthLoginButton component');
         return { component: 'OAuthLoginButton', status: 'passed' };
       })(),
       (async () => {
-        console.log('  [OpsZilla] Gerando infrastructure...');
-        const integration = new ZillaIntegration('OpsZilla');
+        console.log('  [DevOps] Gerando infrastructure...');
+        const integration = new DevTeamIntegration('DevOps');
         await integration.reportMetrics({
           action: 'infrastructure_generated',
           resources: 3,
           status: 'completed',
         });
-        console.log('  ✅ OpsZilla: Terraform + Grafana dashboard');
+        console.log('  ✅ DevOps: Terraform + Grafana dashboard');
         return { infrastructure: 'OAuth2 Infra', status: 'passed' };
       })(),
     ]);
     console.log();
 
-    // T6: SecZilla cria threat model
-    console.log('[T6] SecZilla: Gerando threat model...');
+    // T6: Security cria threat model
+    console.log('[T6] Security: Gerando threat model...');
     const securityResult = {
       threat_model: 'OAuth2 Security Model',
       threats: 12,
       controls: 12,
       status: 'passed',
     };
-    console.log('  ✅ SecZilla: 12 ameaças identificadas, 12 controles definidos\n');
+    console.log('  ✅ Security: 12 ameaças identificadas, 12 controles definidos\n');
 
-    // T7: QAZilla executa testes E2E
-    console.log('[T7] QAZilla: Executando testes E2E...');
+    // T7: QA-Engineer executa testes E2E
+    console.log('[T7] QA-Engineer: Executando testes E2E...');
     const testResults = {
       e2e: { passed: 8, failed: 0, flaky: 0 },
       api: { passed: 15, failed: 0 },
@@ -183,7 +183,7 @@ class Passo3_E2E_OAuth2 {
       security: { passed: 12, failed: 0 },
       accessibility: { passed: 6, failed: 0 },
     };
-    console.log('  ✅ QAZilla: 45 testes executados, 45 passou\n');
+    console.log('  ✅ QA-Engineer: 45 testes executados, 45 passou\n');
 
     // T8: Validar todos os gates
     console.log('[T8] Observatory: Validando todos os gates...');
@@ -239,9 +239,9 @@ class Passo4_Deploy {
     console.log('[4.1] Fazendo merge das 4 PRs para main...');
     const prs = [
       { number: 3, title: 'feat: Phase 1 — Knowledge Base MCP' },
-      { number: 4, title: 'feat: Phase 2 — Cross-Zilla Validators' },
+      { number: 4, title: 'feat: Phase 2 — Cross-DevTeam Validators' },
       { number: 5, title: 'feat: Phase 3 — Quality Gates System' },
-      { number: 6, title: 'feat: Phase 4 — Zilla Observatory' },
+      { number: 6, title: 'feat: Phase 4 — DevTeam Observatory' },
     ];
 
     for (const pr of prs) {
@@ -261,9 +261,9 @@ class Passo4_Deploy {
     console.log('[4.3] Building Docker images...');
     const mcps = [
       { name: 'knowledge-base-mcp', port: 7110 },
-      { name: 'cross-zilla-validators', port: 7111 },
+      { name: 'cross-devteam-validators', port: 7111 },
       { name: 'quality-gates-system', port: 7112 },
-      { name: 'zilla-observatory', port: 7113 },
+      { name: 'devteam-observatory', port: 7113 },
     ];
 
     for (const mcp of mcps) {
@@ -302,7 +302,7 @@ class Passo4_Deploy {
     console.log('[4.7] Validando ecossistema...');
     console.log('  ✅ 44 tools disponíveis (6+18+10+10)');
     console.log('  ✅ 12 databases SQLite prontos');
-    console.log('  ✅ 8 Zillas integradas');
+    console.log('  ✅ 8 DevTeam integradas');
     console.log('  ✅ 10 quality gates operacionais\n');
 
     // 4.8: Final status
@@ -332,7 +332,7 @@ async function main(): Promise<void> {
   console.log('║         EXECUTAR TODOS OS 3 PASSOS FINAIS                  ║');
   console.log('║         (Em Paralelo para Máxima Eficiência)               ║');
   console.log('║                                                            ║');
-  console.log('║         PASSO 2: Integrar 8 Zillas (30 min)                ║');
+  console.log('║         PASSO 2: Integrar 8 DevTeam (30 min)                ║');
   console.log('║         PASSO 3: E2E OAuth2 (1-2 horas)                    ║');
   console.log('║         PASSO 4: Deploy Produção (1 hora)                  ║');
   console.log('║                                                            ║');
@@ -345,7 +345,7 @@ async function main(): Promise<void> {
   try {
     // Executar todos os 3 passos em paralelo
     await Promise.all([
-      Passo2_ZillaIntegration.execute(),
+      Passo2_DevTeamIntegration.execute(),
       Passo3_E2E_OAuth2.execute(),
       Passo4_Deploy.execute(),
     ]);

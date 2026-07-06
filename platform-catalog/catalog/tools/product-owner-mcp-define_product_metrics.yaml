@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/define_product_metrics
+  uid: product-owner-mcp:define_product_metrics
+  domain: product
+  title: define_product_metrics @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.define_product_metrics
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: define_product_metrics
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.define_product_metrics
+- verb: provided-by
+  target: product-owner-mcp

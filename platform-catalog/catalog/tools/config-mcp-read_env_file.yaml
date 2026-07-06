@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: config-mcp/read_env_file
+  uid: config-mcp:read_env_file
+  domain: infra
+  title: read_env_file @ config-mcp
+  description: ''
+  owner: platform
+  tags:
+  - config-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.read_env_file
+  provider_id: config-mcp
+  provider_version: 1.0.0
+  tool: read_env_file
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.read_env_file
+- verb: provided-by
+  target: config-mcp

@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: platform/admin_health_check
+  uid: admin.admin_health_check
+  domain: platform
+  title: admin_health_check
+  description: ''
+  owner: platform-admin
+  tags:
+  - platform
+  - external
+  - admin
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: platform
+  capability: admin
+  resource:
+    type: admin
+    parent: null
+    namespace: null
+  operation: admin
+  authz: read
+  risk:
+    effects:
+    - read
+    requires:
+    - admin
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+  external: true
+relations:
+- verb: acts-on
+  target: resource:admin

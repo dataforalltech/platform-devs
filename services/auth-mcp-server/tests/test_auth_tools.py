@@ -243,7 +243,6 @@ async def test_auth_get_me_500(mock_api_client: MagicMock) -> None:
     assert "error" in data
 
 
-
 @pytest.mark.asyncio
 async def test_auth_list_tenants_exception(mock_api_client: MagicMock) -> None:
     """Test list tenants with exception."""
@@ -402,4 +401,3 @@ async def test_auth_logout_403(mock_api_client: MagicMock) -> None:
     assert len(result) == 1
     data = json.loads(result[0].text)
     assert "error" in data or data.get("status") == "error"
-

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/acr_build
+  uid: deploy-mcp:acr_build
+  domain: delivery
+  title: acr_build @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.acr_build
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: acr_build
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.acr_build
+- verb: provided-by
+  target: deploy-mcp

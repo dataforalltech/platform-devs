@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -41,7 +41,7 @@ def _url_slug(url: str) -> str:
 
 
 def _timestamp() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    return datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
 
 def screenshot_page(

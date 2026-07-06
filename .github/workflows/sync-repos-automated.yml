@@ -222,12 +222,12 @@ jobs:
           echo "Status: ${{ steps.gate_branch.outputs.gate_status }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "- Monitor via OpsZilla dashboard" >> $GITHUB_STEP_SUMMARY
+          echo "- Monitor via DevOps dashboard" >> $GITHUB_STEP_SUMMARY
           echo "- Review discrepancies in validation report" >> $GITHUB_STEP_SUMMARY
           echo "- Reconcile if needed" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
-  # Stage 4: Monitoring & Observability (OpsZilla Integration)
+  # Stage 4: Monitoring & Observability (DevOps Integration)
   # ============================================================================
   monitoring:
     name: 📊 Monitoring & Observability
@@ -309,7 +309,7 @@ jobs:
               print(f"Error: {e}")
           EOF
 
-      - name: 🎯 OpsZilla Metrics
+      - name: 🎯 DevOps Metrics
         run: |
           echo "📊 Repository Synchronization Metrics"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

@@ -25,7 +25,10 @@ def add_finding(
     Bugs críticos bloqueiam a aprovação via double_check().
     """
     if not plan_id or not title or not description:
-        return {"error": "ValidationError", "details": "plan_id, title e description são obrigatórios"}
+        return {
+            "error": "ValidationError",
+            "details": "plan_id, title e description são obrigatórios",
+        }
     if severity not in _VALID_SEVERITIES:
         return {
             "error": "ValidationError",
@@ -42,7 +45,9 @@ def add_finding(
         evidence=evidence,
     )
     if severity == "critical":
-        result["warning"] = "Finding CRITICAL registrado — o plano NAO pode ser aprovado enquanto houver findings criticos em aberto."
+        result["warning"] = (
+            "Finding CRITICAL registrado — o plano NAO pode ser aprovado enquanto houver findings criticos em aberto."
+        )
     return result
 
 
@@ -61,7 +66,9 @@ def double_check(
     summary = result.get("summary", {})
 
     if summary.get("ready_to_ship"):
-        result["verdict"] = "APROVADO — todos os cenários executados, sem falhas abertas e sem findings criticos."
+        result["verdict"] = (
+            "APROVADO — todos os cenários executados, sem falhas abertas e sem findings criticos."
+        )
     else:
         blockers = []
         if summary.get("not_executed_count", 0) > 0:

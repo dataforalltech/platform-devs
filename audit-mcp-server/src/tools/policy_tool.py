@@ -1,5 +1,6 @@
-import yaml
 from pathlib import Path
+
+import yaml
 
 from ..config.settings import AuditSettings
 from ..db.store import AuditStore
@@ -22,7 +23,7 @@ def get_compliance_policy(
                 "tool": "get_compliance_policy",
             }
 
-        with open(policy_file) as f:
+        with open(policy_file, encoding="utf-8") as f:
             policy = yaml.safe_load(f)
 
         return {

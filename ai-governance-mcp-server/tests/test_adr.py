@@ -75,7 +75,10 @@ def test_increments_adr_number_when_existing(repo, tmp_path):
 def test_filename_padded_to_4_digits(repo, tmp_path):
     res = create_adr(
         repo,
-        title="T", context="C", decision="D", consequences="Cs",
+        title="T",
+        context="C",
+        decision="D",
+        consequences="Cs",
         repo_path=str(tmp_path),
     )
     assert "0001" in res["filename"]
@@ -107,7 +110,11 @@ def test_template_includes_all_sections(repo, tmp_path):
 
 def test_includes_metadata_in_frontmatter(repo, tmp_path):
     res = create_adr(
-        repo, title="T", context="C", decision="D", consequences="Cs",
+        repo,
+        title="T",
+        context="C",
+        decision="D",
+        consequences="Cs",
         repo_path=str(tmp_path),
     )
     content = (tmp_path / "docs" / "decisions" / res["filename"]).read_text(encoding="utf-8")
@@ -122,7 +129,11 @@ def test_includes_metadata_in_frontmatter(repo, tmp_path):
 
 def test_returns_relative_path_when_inside_base(repo, tmp_path):
     res = create_adr(
-        repo, title="T", context="C", decision="D", consequences="Cs",
+        repo,
+        title="T",
+        context="C",
+        decision="D",
+        consequences="Cs",
         repo_path=str(tmp_path),
     )
     # path deve ser relativo (não começar com tmp_path absoluto)
@@ -138,7 +149,10 @@ def test_returns_relative_path_when_inside_base(repo, tmp_path):
 )
 def test_validates_required_fields(repo, tmp_path, field):
     args = dict(
-        title="T", context="C", decision="D", consequences="Cs",
+        title="T",
+        context="C",
+        decision="D",
+        consequences="Cs",
         repo_path=str(tmp_path),
     )
     args[field] = ""
@@ -155,7 +169,11 @@ def test_skips_non_numeric_adr_files_in_count(repo, tmp_path):
     (decisions / "README.md").write_text("# readme", encoding="utf-8")
 
     res = create_adr(
-        repo, title="T", context="C", decision="D", consequences="Cs",
+        repo,
+        title="T",
+        context="C",
+        decision="D",
+        consequences="Cs",
         repo_path=str(tmp_path),
     )
     # Como nenhum adr-NNNN.md existia, deve criar adr-0001.md

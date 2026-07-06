@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/context_status
+  uid: dev-twin-mcp:context_status
+  domain: platform
+  title: context_status @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.context_status
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: context_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.context_status
+- verb: provided-by
+  target: dev-twin-mcp

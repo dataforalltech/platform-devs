@@ -57,24 +57,33 @@ class TestStartSession:
 
     def test_uses_custom_base_branch(self, store):
         result = start_session(
-            store, "develop",
-            title="Fix bug", objective="Corrigir NPE",
-            repo="platform-api", base_branch="main",
+            store,
+            "develop",
+            title="Fix bug",
+            objective="Corrigir NPE",
+            repo="platform-api",
+            base_branch="main",
         )
         assert result["base_branch"] == "main"
         assert result["next_action"]["args"]["from_ref"] == "main"
 
     def test_missing_title_returns_error(self, store):
         result = start_session(
-            store, "develop",
-            title="", objective="algum objetivo", repo="platform-api",
+            store,
+            "develop",
+            title="",
+            objective="algum objetivo",
+            repo="platform-api",
         )
         assert result["error"] == "ValidationError"
 
     def test_missing_objective_returns_error(self, store):
         result = start_session(
-            store, "develop",
-            title="algum título", objective="", repo="platform-api",
+            store,
+            "develop",
+            title="algum título",
+            objective="",
+            repo="platform-api",
         )
         assert result["error"] == "ValidationError"
 
@@ -323,13 +332,13 @@ class TestEndSession:
         assert result["status"] == "completed"
 
     def test_missing_actor_blocks(self, store, active_session):
-        result = end_session(
-            store, session_id=active_session["id"], actor=None, rationale="x"
-        )
+        result = end_session(store, session_id=active_session["id"], actor=None, rationale="x")
         assert result["error"] == "ValidationError"
 
     def test_missing_rationale_blocks(self, store, active_session):
-        result = end_session(store, session_id=active_session["id"], actor=_ACTOR_HUMAN, rationale="")
+        result = end_session(
+            store, session_id=active_session["id"], actor=_ACTOR_HUMAN, rationale=""
+        )
         assert result["error"] == "ValidationError"
 
 
@@ -504,9 +513,7 @@ class TestCancelTask:
     def test_cancels_with_reason(self, store, active_session):
         sid = active_session["id"]
         task = add_task(store, session_id=sid, title="t")
-        result = cancel_task(
-            store, task_id=task["id"], actor=_ACTOR_HUMAN, reason="escopo mudou"
-        )
+        result = cancel_task(store, task_id=task["id"], actor=_ACTOR_HUMAN, reason="escopo mudou")
         assert result["status"] == "cancelled"
         assert result["result"] == "escopo mudou"
 
@@ -665,7 +672,15 @@ class TestResumeWarnsWhenRepoMissing:
                     """INSERT INTO sessions (id, name, title, objective, repo, branch,
                        status, started_at, last_updated_at)
                        VALUES (%s, %s, %s, %s, NULL, NULL, %s, %s, %s)""",
-                    ("sess_legacy", "old-name", "Legacy", "obj antigo", "active", "2020-01-01", "2020-01-01"),
+                    (
+                        "sess_legacy",
+                        "old-name",
+                        "Legacy",
+                        "obj antigo",
+                        "active",
+                        "2020-01-01",
+                        "2020-01-01",
+                    ),
                 )
         result = resume_session(store, session_id="sess_legacy")
         assert any("REPO_MISSING" in w for w in result["warnings"])
@@ -685,25 +700,19 @@ class TestResumeWarnsWhenRepoMissing:
 class TestNeedsHumanDecision:
     def test_add_task_with_flag(self, store, active_session):
         sid = active_session["id"]
-        task = add_task(
-            store, session_id=sid, title="risky migration", needs_human_decision=True
-        )
+        task = add_task(store, session_id=sid, title="risky migration", needs_human_decision=True)
         assert task["needs_human_decision"] == 1
         assert task["decision"] is None
 
     def test_start_task_blocks_until_decision(self, store, active_session):
         sid = active_session["id"]
-        task = add_task(
-            store, session_id=sid, title="risky migration", needs_human_decision=True
-        )
+        task = add_task(store, session_id=sid, title="risky migration", needs_human_decision=True)
         result = start_task(store, task_id=task["id"])
         assert result["error"] == "human_decision_pending"
 
     def test_approve_go_unblocks_start(self, store, active_session):
         sid = active_session["id"]
-        task = add_task(
-            store, session_id=sid, title="risky migration", needs_human_decision=True
-        )
+        task = add_task(store, session_id=sid, title="risky migration", needs_human_decision=True)
         approval = approve_task(
             store,
             task_id=task["id"],
@@ -718,9 +727,7 @@ class TestNeedsHumanDecision:
 
     def test_approve_no_go_cancels(self, store, active_session):
         sid = active_session["id"]
-        task = add_task(
-            store, session_id=sid, title="risky migration", needs_human_decision=True
-        )
+        task = add_task(store, session_id=sid, title="risky migration", needs_human_decision=True)
         approval = approve_task(
             store,
             task_id=task["id"],
@@ -735,19 +742,13 @@ class TestNeedsHumanDecision:
     def test_no_go_requires_rationale(self, store, active_session):
         sid = active_session["id"]
         task = add_task(store, session_id=sid, title="x", needs_human_decision=True)
-        result = approve_task(
-            store, task_id=task["id"], decision="no_go", actor=_ACTOR_HUMAN
-        )
+        result = approve_task(store, task_id=task["id"], decision="no_go", actor=_ACTOR_HUMAN)
         assert result["error"] == "ValidationError"
 
     def test_invalid_decision_returns_error(self, store, active_session):
         sid = active_session["id"]
-        task = add_task(
-            store, session_id=sid, title="x", needs_human_decision=True
-        )
-        result = approve_task(
-            store, task_id=task["id"], decision="maybe", actor=_ACTOR_HUMAN
-        )
+        task = add_task(store, session_id=sid, title="x", needs_human_decision=True)
+        result = approve_task(store, task_id=task["id"], decision="maybe", actor=_ACTOR_HUMAN)
         assert result["error"] == "ValidationError"
 
     def test_normal_task_unaffected(self, store, active_session):
@@ -796,9 +797,7 @@ class TestSubmitSuggestion:
         assert result["needs_human_decision"] is True
 
     def test_invalid_kind_returns_error(self, store):
-        result = submit_suggestion(
-            store, source_repo="a", target_repo="b", title="t", kind="weird"
-        )
+        result = submit_suggestion(store, source_repo="a", target_repo="b", title="t", kind="weird")
         assert result["error"] == "ValidationError"
 
     def test_missing_required_returns_error(self, store):
@@ -858,9 +857,7 @@ class TestAcceptSuggestion:
         assert result["error"] == "ValidationError"
 
     def test_already_accepted_blocks(self, store, active_session):
-        s = submit_suggestion(
-            store, source_repo="x", target_repo=active_session["repo"], title="x"
-        )
+        s = submit_suggestion(store, source_repo="x", target_repo=active_session["repo"], title="x")
         accept_suggestion(
             store,
             suggestion_id=s["id"],
@@ -887,16 +884,12 @@ class TestRejectDeferSupersede:
 
     def test_reject_without_reason_blocks(self, store):
         s = submit_suggestion(store, source_repo="x", target_repo="y", title="t")
-        result = reject_suggestion(
-            store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason=""
-        )
+        result = reject_suggestion(store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason="")
         assert result["error"] == "ValidationError"
 
     def test_defer(self, store):
         s = submit_suggestion(store, source_repo="x", target_repo="y", title="t")
-        result = defer_suggestion(
-            store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason="depois"
-        )
+        result = defer_suggestion(store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason="depois")
         assert result["status"] == "deferred"
 
     def test_supersede_with_reference(self, store):
@@ -914,12 +907,8 @@ class TestRejectDeferSupersede:
 
 class TestStartSessionIncludesSuggestions:
     def test_pending_suggestions_in_payload(self, store):
-        submit_suggestion(
-            store, source_repo="x", target_repo="platform-target", title="s1"
-        )
-        submit_suggestion(
-            store, source_repo="x", target_repo="platform-target", title="s2"
-        )
+        submit_suggestion(store, source_repo="x", target_repo="platform-target", title="s1")
+        submit_suggestion(store, source_repo="x", target_repo="platform-target", title="s2")
         session = start_session(
             store,
             "develop",
@@ -962,9 +951,7 @@ class TestDecisionsAudit:
             actor=_ACTOR_HUMAN,
             rationale="reviewed",
         )
-        decisions = list_decisions_tool(
-            store, target_type="task", target_id=str(task["id"])
-        )
+        decisions = list_decisions_tool(store, target_type="task", target_id=str(task["id"]))
         assert decisions["count"] == 1
         d = decisions["decisions"][0]
         assert d["actor_type"] == "human"
@@ -978,9 +965,7 @@ class TestDecisionsAudit:
 
         sid = active_session["id"]
         task = add_task(store, session_id=sid, title="x")
-        cancel_task(
-            store, task_id=task["id"], actor=_ACTOR_AGENT, reason="abandoned"
-        )
+        cancel_task(store, task_id=task["id"], actor=_ACTOR_AGENT, reason="abandoned")
         decisions = list_decisions_tool(store, action="cancel_task")
         assert decisions["count"] == 1
         assert decisions["decisions"][0]["actor_type"] == "agent"
@@ -990,9 +975,7 @@ class TestDecisionsAudit:
         from src.tools.session_tool import list_decisions_tool
 
         s = submit_suggestion(store, source_repo="x", target_repo="y", title="t")
-        reject_suggestion(
-            store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason="dup"
-        )
+        reject_suggestion(store, suggestion_id=s["id"], actor=_ACTOR_HUMAN, reason="dup")
         decisions = list_decisions_tool(store, target_type="suggestion")
         assert decisions["count"] == 1
         assert decisions["decisions"][0]["action"] == "reject_suggestion"

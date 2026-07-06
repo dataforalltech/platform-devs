@@ -1,0 +1,47 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/release_lease
+  uid: infra.release_lease
+  domain: infra
+  title: release lease
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - provisioning
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: provisioning
+  resource:
+    type: vm
+    parent: null
+    namespace: null
+  operation: release
+  authz: write
+  risk:
+    effects:
+    - deploy
+    requires:
+    - terraform
+    blast_radius: environment
+    default_level: high
+    approval_required: N2
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:vm

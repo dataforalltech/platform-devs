@@ -173,30 +173,23 @@ async def list_tools() -> list[Tool]:
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
     """Call a tool by name with the given arguments."""
+    handlers = {
+        "auth_health_check": auth_tools.auth_health_check,
+        "auth_check_email": auth_tools.auth_check_email,
+        "auth_list_tenants": auth_tools.auth_list_tenants,
+        "auth_login": auth_tools.auth_login,
+        "auth_get_me": auth_tools.auth_get_me,
+        "auth_get_permissions": auth_tools.auth_get_permissions,
+        "auth_refresh_token": auth_tools.auth_refresh_token,
+        "auth_logout": auth_tools.auth_logout,
+        "auth_get_service_token": auth_tools.auth_get_service_token,
+        "auth_validate_token": auth_tools.auth_validate_token,
+    }
     try:
         logger.info(f"Calling tool: {name}")
 
-        if name == "auth_health_check":
-            return await auth_tools.auth_health_check()
-        elif name == "auth_check_email":
-            return await auth_tools.auth_check_email(**arguments)
-        elif name == "auth_list_tenants":
-            return await auth_tools.auth_list_tenants()
-        elif name == "auth_login":
-            return await auth_tools.auth_login(**arguments)
-        elif name == "auth_get_me":
-            return await auth_tools.auth_get_me(**arguments)
-        elif name == "auth_get_permissions":
-            return await auth_tools.auth_get_permissions(**arguments)
-        elif name == "auth_refresh_token":
-            return await auth_tools.auth_refresh_token(**arguments)
-        elif name == "auth_logout":
-            return await auth_tools.auth_logout(**arguments)
-        elif name == "auth_get_service_token":
-            return await auth_tools.auth_get_service_token(**arguments)
-        elif name == "auth_validate_token":
-            return await auth_tools.auth_validate_token(**arguments)
-        else:
+        handler = handlers.get(name)
+        if handler is None:
             return [
                 TextContent(
                     type="text",
@@ -208,6 +201,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[TextContent]:
                     ),
                 )
             ]
+        return await handler(**arguments)
     except Exception as e:
         logger.exception(f"Error calling tool {name}")
         return [

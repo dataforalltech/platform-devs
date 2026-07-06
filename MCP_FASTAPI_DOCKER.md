@@ -32,7 +32,7 @@ User 4 (Web)       ────┤
 | HTTP Server | Uvicorn |
 | Containerization | Docker + Docker Compose |
 | Language (System MCPs) | Python 3.11 |
-| Language (Zilla MCPs) | Node.js (TypeScript transpiled) |
+| Language (DevTeam MCPs) | Node.js (TypeScript transpiled) |
 | Service Discovery | MCP Registry (HTTP) |
 | Networking | Docker bridge network |
 
@@ -125,7 +125,7 @@ services:
 | MCP | Porta |
 |-----|-------|
 | config-mcp | 7100 |
-| agent-twin-mcp | 7101 |
+| dev-twin-mcp | 7101 |
 | session-mcp | 7102 |
 | auth-mcp | 7103 |
 | admin-mcp | 7104 |
@@ -143,18 +143,18 @@ services:
 | cache-mcp | 7116 |
 | test-mcp | 7117 |
 
-### Zilla MCPs (Node.js) - 7118-7125
+### DevTeam MCPs (Node.js) - 7118-7125
 
 | MCP | Porta (Externa) | Porta (Interna) |
 |-----|-----------------|-----------------|
-| archzilla-mcp | 7118 | 7100 |
-| backzilla-mcp | 7119 | 7100 |
-| frontzilla-mcp | 7120 | 7100 |
-| opszilla-mcp | 7121 | 7100 |
-| pozilla-mcp | 7122 | 7100 |
-| productzilla-mcp | 7123 | 7100 |
-| qazilla-mcp | 7124 | 7100 |
-| seczilla-mcp | 7125 | 7100 |
+| architecture-mcp | 7118 | 7100 |
+| backend-mcp | 7119 | 7100 |
+| frontend-mcp | 7120 | 7100 |
+| devops-mcp | 7121 | 7100 |
+| product-owner-mcp | 7122 | 7100 |
+| product-manager-mcp | 7123 | 7100 |
+| qa-engineer-mcp | 7124 | 7100 |
+| security-mcp | 7125 | 7100 |
 
 ### Gateway & Registry
 
@@ -229,7 +229,7 @@ curl http://localhost:8000/services/config-mcp
 
 # List by type
 curl http://localhost:8000/services/type/system
-curl http://localhost:8000/services/type/zilla
+curl http://localhost:8000/services/type/devteam
 
 # Get auto-generated config
 curl http://localhost:8000/config

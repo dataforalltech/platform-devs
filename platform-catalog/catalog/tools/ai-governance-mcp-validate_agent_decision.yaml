@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/validate_agent_decision
+  uid: ai-governance-mcp:validate_agent_decision
+  domain: governance
+  title: validate_agent_decision @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.validate_agent_decision
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: validate_agent_decision
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.validate_agent_decision
+- verb: provided-by
+  target: ai-governance-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/ensure_all_repos_healthy
+  uid: deploy-mcp:ensure_all_repos_healthy
+  domain: delivery
+  title: ensure_all_repos_healthy @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.ensure_all_repos_healthy
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: ensure_all_repos_healthy
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.ensure_all_repos_healthy
+- verb: provided-by
+  target: deploy-mcp

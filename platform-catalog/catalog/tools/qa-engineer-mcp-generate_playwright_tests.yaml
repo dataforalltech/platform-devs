@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/generate_playwright_tests
+  uid: qa-engineer-mcp:generate_playwright_tests
+  domain: testing
+  title: generate_playwright_tests @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_playwright_tests
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: generate_playwright_tests
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_playwright_tests
+- verb: provided-by
+  target: qa-engineer-mcp

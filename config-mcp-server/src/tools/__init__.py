@@ -1,4 +1,5 @@
 """config-mcp-server — exportacoes de todas as 21 tools."""
+
 from __future__ import annotations
 
 from .credential_tool import (
@@ -19,7 +20,12 @@ from .env_tool import (
     sync_env_file,
 )
 from .sysinfo_tool import get_physical_info
-from .tenant_tool import get_session_tenant_config, get_tenant_config, list_tenants, set_tenant_config
+from .tenant_tool import (
+    get_session_tenant_config,
+    get_tenant_config,
+    list_tenants,
+    set_tenant_config,
+)
 from .workspace_tool import get_workspace_config, list_workspace_config, set_workspace_config
 
 __all__ = [

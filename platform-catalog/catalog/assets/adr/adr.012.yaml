@@ -1,0 +1,30 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.012
+  uid: adr.012
+  title: ADR-012 — Event Model
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '012'
+  status: Proposed (V1)
+  path: ADR-012-EVENT-MODEL.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.006
+- verb: derivedFrom
+  target: adr.007
+- verb: derivedFrom
+  target: adr.009
+- verb: derivedFrom
+  target: adr.013
+- verb: derivedFrom
+  target: adr.014

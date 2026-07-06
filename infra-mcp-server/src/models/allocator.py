@@ -21,7 +21,7 @@ chegarmos em Phase 2c, `provision_vm()` chama terraform_apply via Phase 1.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -31,11 +31,11 @@ from pydantic import BaseModel, Field, field_validator
 # --------------------------------------------------------------------- #
 # Specs com escala de risco/custo crescente. Specs novas exigem ADR.
 VMSpecName = Literal[
-    "cpu-small",   # ~2 vCPU / 4 GB — baixo custo, default p/ tarefas leves
+    "cpu-small",  # ~2 vCPU / 4 GB — baixo custo, default p/ tarefas leves
     "cpu-medium",  # ~4 vCPU / 16 GB
-    "cpu-large",   # ~8 vCPU / 32 GB
-    "high-mem",    # ~4 vCPU / 64 GB — caro
-    "gpu-a100",    # exige aprovação humana out-of-band
+    "cpu-large",  # ~8 vCPU / 32 GB
+    "high-mem",  # ~4 vCPU / 64 GB — caro
+    "gpu-a100",  # exige aprovação humana out-of-band
 ]
 
 # Specs que SEMPRE exigem aprovação humana — request_vm com elas vai para

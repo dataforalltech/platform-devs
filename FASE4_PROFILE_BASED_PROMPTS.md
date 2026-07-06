@@ -2,27 +2,27 @@
 
 **Status**: ✅ COMPLETED  
 **Date**: 2026-05-10  
-**Zillas**: 8/8 implemented  
-**Build Status**: ArchZilla ✅, ProductZilla ✅, POZilla ✅
+**DevTeam**: 8/8 implemented  
+**Build Status**: Architecture ✅, Product-Manager ✅, Product-Owner ✅
 
 ---
 
 ## Overview
 
-FASE 4 implements **context-aware system prompts** that adapt to user profiles. Each Zilla now returns customized prompts based on the caller's role: **Dev**, **ReleaseMgr**, **Auditor**, **Ops**, or **PM**.
+FASE 4 implements **context-aware system prompts** that adapt to user profiles. Each DevTeam now returns customized prompts based on the caller's role: **Dev**, **ReleaseMgr**, **Auditor**, **Ops**, or **PM**.
 
 ### Pattern
 
 ```
-URI: prompt://zilla_system_prompt?profile=Dev
+URI: prompt://devteam_system_prompt?profile=Dev
 Response: Base prompt + Dev-specific goals/focus/tools/examples
 ```
 
 ---
 
-## Implementation Across 8 Zillas
+## Implementation Across 8 DevTeam
 
-### 1. **ArchZilla** (Architecture Design)
+### 1. **Architecture** (Architecture Design)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Build Status**: ✅ Passes (zero errors)
 - **Profiles**:
@@ -32,11 +32,11 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Infrastructure architecture, scalability, high availability
   - **PM**: Architecture evolution, technology selection, roadmap planning
 
-### 2. **BackZilla** (Backend Engineering)
+### 2. **Backend** (Backend Engineering)
 - **Status**: Already completed in prior session (template example)
 - **Profiles**: Dev, ReleaseMgr, Auditor, Ops, PM
 
-### 3. **FrontZilla** (Frontend/Design)
+### 3. **Frontend** (Frontend/Design)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Profiles**:
   - **Dev**: Component development, design system adherence, local testing
@@ -45,7 +45,7 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Performance optimization, bundle size, monitoring
   - **PM**: User experience, wireframes, journey mapping, feature prioritization
 
-### 4. **OpsZilla** (DevOps/Infrastructure)
+### 4. **DevOps** (DevOps/Infrastructure)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Build Status**: ✅ Passes (expected db error unrelated to FASE 4)
 - **Profiles**:
@@ -55,7 +55,7 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Kubernetes, Terraform, monitoring, incident response
   - **PM**: Capacity planning, cost efficiency, technology selection, SLA targets
 
-### 5. **ProductZilla** (Product Strategy)
+### 5. **Product-Manager** (Product Strategy)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Build Status**: ✅ Passes (zero errors)
 - **Profiles**:
@@ -65,7 +65,7 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Metrics setup, feature adoption, feedback collection
   - **PM**: Vision/strategy, prioritization, roadmap, metrics
 
-### 6. **POZilla** (Project/Execution)
+### 6. **Product-Owner** (Project/Execution)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Build Status**: ✅ Passes (zero errors)
 - **Profiles**:
@@ -75,7 +75,7 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Project health metrics, velocity tracking, issue resolution
   - **PM**: Roadmap execution, prioritization, scope/resource planning
 
-### 7. **QAZilla** (Quality Assurance)
+### 7. **QA-Engineer** (Quality Assurance)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Profiles**:
   - **Dev**: Local testing, coverage improvement, unit tests
@@ -84,7 +84,7 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
   - **Ops**: Performance testing, production monitoring
   - **PM**: Quality requirements, risk-based testing, KPIs
 
-### 8. **SecZilla** (Security)
+### 8. **Security** (Security)
 - **File**: `src/prompts/profilePrompts.ts` + `src/server.ts` updated
 - **Profiles**:
   - **Dev**: Secure coding, local SAST, CWE prevention
@@ -127,11 +127,11 @@ Response: Base prompt + Dev-specific goals/focus/tools/examples
 ## URI Query Parameter Format
 
 ```
-prompt://archzilla_system_prompt?profile=Dev
-prompt://archzilla_system_prompt?profile=ReleaseMgr
-prompt://archzilla_system_prompt?profile=Auditor
-prompt://archzilla_system_prompt?profile=Ops
-prompt://archzilla_system_prompt?profile=PM
+prompt://architecture_system_prompt?profile=Dev
+prompt://architecture_system_prompt?profile=ReleaseMgr
+prompt://architecture_system_prompt?profile=Auditor
+prompt://architecture_system_prompt?profile=Ops
+prompt://architecture_system_prompt?profile=PM
 ```
 
 Default profile (if not specified): **Dev**
@@ -167,7 +167,7 @@ import { getProfilePrompt, getProfileContext, getProfileExamples, Profile }
 server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
   const uri = request.params.uri;
   
-  if (uri.startsWith('prompt://zilla_system_prompt')) {
+  if (uri.startsWith('prompt://devteam_system_prompt')) {
     const profileMatch = uri.match(/profile=(\w+)/);
     const profile = (profileMatch ? profileMatch[1] : 'Dev') as Profile;
     
@@ -202,16 +202,16 @@ Apply the above guidance based on the ${profile} profile when responding to user
 
 ## Verified Builds
 
-| Zilla | Build Status | Notes |
+| DevTeam | Build Status | Notes |
 |-------|---|---|
-| ArchZilla | ✅ | Zero TypeScript errors |
-| BackZilla | ✅ | Template from prior session |
-| FrontZilla | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
-| OpsZilla | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
-| ProductZilla | ✅ | Zero TypeScript errors |
-| POZilla | ✅ | Zero TypeScript errors |
-| QAZilla | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
-| SecZilla | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
+| Architecture | ✅ | Zero TypeScript errors |
+| Backend | ✅ | Template from prior session |
+| Frontend | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
+| DevOps | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
+| Product-Manager | ✅ | Zero TypeScript errors |
+| Product-Owner | ✅ | Zero TypeScript errors |
+| QA-Engineer | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
+| Security | ⚠️ | Pre-existing db/store.ts errors (unrelated to FASE 4) |
 
 **Note**: FASE 4 changes (profilePrompts.ts + server.ts) compile cleanly. Pre-existing errors in db/store.ts are unrelated to this phase.
 
@@ -222,17 +222,17 @@ Apply the above guidance based on the ${profile} profile when responding to user
 1. **Context-Aware Responses**: Each profile gets tailored guidance
 2. **Reduced Cognitive Load**: Users see only relevant tools/workflows
 3. **Faster Onboarding**: Example tasks match user role
-4. **Consistent UX**: Same pattern across all 8 Zillas
+4. **Consistent UX**: Same pattern across all 8 DevTeam
 5. **Extensible**: Easy to add new profiles or customize prompts
 
 ---
 
 ## Next Steps (Recommended)
 
-1. **Pipeline Integration** — Register Zillas in pipeline-mcp with FASE 4 quality gates
+1. **Pipeline Integration** — Register DevTeam in pipeline-mcp with FASE 4 quality gates
 2. **E2E Workflows** — Test complete user journeys with profile switching
-3. **Monitoring** — Use zilla-observatory to track profile usage patterns
-4. **Documentation** — Create user guides for each profile + Zilla combo
+3. **Monitoring** — Use devteam-observatory to track profile usage patterns
+4. **Documentation** — Create user guides for each profile + DevTeam combo
 5. **A/B Testing** — Measure impact on developer productivity (if applicable)
 
 ---
@@ -240,29 +240,29 @@ Apply the above guidance based on the ${profile} profile when responding to user
 ## Files Modified
 
 ```
-seczilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-seczilla-mcp-server/src/server.ts (MODIFIED)
+security-mcp-server/src/prompts/profilePrompts.ts (NEW)
+security-mcp-server/src/server.ts (MODIFIED)
 
-archzilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-archzilla-mcp-server/src/server.ts (MODIFIED)
+architecture-mcp-server/src/prompts/profilePrompts.ts (NEW)
+architecture-mcp-server/src/server.ts (MODIFIED)
 
-frontzilla-pixelfera-mcp-server/src/prompts/profilePrompts.ts (NEW)
-frontzilla-pixelfera-mcp-server/src/server.ts (MODIFIED)
+frontend-pixelfera-mcp-server/src/prompts/profilePrompts.ts (NEW)
+frontend-pixelfera-mcp-server/src/server.ts (MODIFIED)
 
-opszilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-opszilla-mcp-server/src/server.ts (MODIFIED)
+devops-mcp-server/src/prompts/profilePrompts.ts (NEW)
+devops-mcp-server/src/server.ts (MODIFIED)
 
-productzilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-productzilla-mcp-server/src/server.ts (MODIFIED)
+product-manager-mcp-server/src/prompts/profilePrompts.ts (NEW)
+product-manager-mcp-server/src/server.ts (MODIFIED)
 
-pozilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-pozilla-mcp-server/src/server.ts (MODIFIED)
+product-owner-mcp-server/src/prompts/profilePrompts.ts (NEW)
+product-owner-mcp-server/src/server.ts (MODIFIED)
 
-qazilla-mcp-server/src/prompts/profilePrompts.ts (NEW)
-qazilla-mcp-server/src/server.ts (MODIFIED)
+qa-engineer-mcp-server/src/prompts/profilePrompts.ts (NEW)
+qa-engineer-mcp-server/src/server.ts (MODIFIED)
 ```
 
-**backzilla-mcp-server** — Already completed in prior phase.
+**backend-mcp-server** — Already completed in prior phase.
 
 ---
 
@@ -270,9 +270,9 @@ qazilla-mcp-server/src/server.ts (MODIFIED)
 
 ```bash
 # Test profile-based prompt extraction
-for zilla in archzilla productzilla pozilla; do
-  echo "Testing $zilla..."
-  cd ${zilla}-mcp-server
+for devteam in architecture product-manager product-owner; do
+  echo "Testing $devteam..."
+  cd ${devteam}-mcp-server
   npm run build
   cd ..
 done

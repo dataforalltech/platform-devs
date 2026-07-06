@@ -15,11 +15,9 @@ Tools:
 
 from __future__ import annotations
 
-import os
-
-import asyncio
 import json
 import logging
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -387,6 +385,40 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
+# Escopo mínimo por ferramenta (least privilege).                              #
+#   pipeline:read  → status/consulta (não altera estado)                        #
+#   pipeline:write → trigger/gate/promote/rollback/mutação (altera estado)      #
+# ─────────────────────────────────────────────────────────────────────────── #
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # ── read: consulta/status ────────────────────────────────────────────── #
+    "get_pipeline": "pipeline:read",
+    "list_pipeline": "pipeline:read",
+    "get_gate_status": "pipeline:read",
+    "get_promotion_history": "pipeline:read",
+    "get_pipeline_overview": "pipeline:read",
+    # ── write: trigger/gate/promoção/rollback/mutação ────────────────────── #
+    "register_pipeline": "pipeline:write",
+    "watch_prs": "pipeline:write",  # trigger de auto-merge/scan em repos
+    "block_service": "pipeline:write",
+    "add_gate_result": "pipeline:write",  # gate: escreve resultado
+    "clear_gates": "pipeline:write",  # gate: apaga resultados
+    "set_pipeline_config": "pipeline:write",
+    # ── write SENSÍVEL: promoção/rollback mudam ambiente de execução ─────── #
+    "promote_service": "pipeline:write",  # sensível: promove entre ambientes (cria/mergia PR)
+    "approve_promotion": "pipeline:write",  # sensível: executa merge da PR e muda o env do serviço
+    "rollback": "pipeline:write",  # sensível: reverte versão em produção/ambiente
+}
+SCOPES_SUPPORTED = ["pipeline:read", "pipeline:write"]
+
+# Garante que TODAS as tools declaradas têm escopo mínimo mapeado (least privilege).
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL deve cobrir exatamente as tools de _TOOL_SCHEMAS: "
+    f"faltam={set(_TOOL_SCHEMAS) - set(SCOPE_FOR_TOOL)}; "
+    f"sobram={set(SCOPE_FOR_TOOL) - set(_TOOL_SCHEMAS)}"
+)
+
+
+# ─────────────────────────────────────────────────────────────────────────── #
 # HTTP App                                                                      #
 # ─────────────────────────────────────────────────────────────────────────── #
 def _build_http_app(store: PipelineStore) -> FastAPI:
@@ -405,6 +437,7 @@ def _build_http_app(store: PipelineStore) -> FastAPI:
         pipeline = store.get_pipeline(service)
         if pipeline is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail=f"Service '{service}' not found")
         return pipeline
 
@@ -562,30 +595,36 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, _store, _settings, http_app = build_server()
+    Preserva build_server() (Server de baixo nível + _dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware
+    com escopo mínimo por ferramenta (least privilege).
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _store, _settings, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("PIPELINE_RESOURCE", "http://localhost:7108/mcp"),
+        prm_url=os.getenv(
+            "PIPELINE_PRM_URL",
+            "http://localhost:7108/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7108")))
 
 
 if __name__ == "__main__":

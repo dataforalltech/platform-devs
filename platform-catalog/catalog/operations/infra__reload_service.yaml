@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/reload_service
+  uid: infra.reload_service
+  domain: infra
+  title: reload service
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - service-registry
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: service-registry
+  resource:
+    type: service
+    parent: null
+    namespace: null
+  operation: reload
+  authz: write
+  risk:
+    effects:
+    - restart
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:service

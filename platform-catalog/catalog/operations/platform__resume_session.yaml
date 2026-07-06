@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: platform/resume_session
+  uid: platform.resume_session
+  domain: platform
+  title: resume session
+  description: ''
+  owner: platform
+  tags:
+  - platform
+  - session
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: platform
+  capability: session
+  resource:
+    type: session
+    parent: null
+    namespace: null
+  operation: resume
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:session

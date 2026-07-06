@@ -63,15 +63,29 @@ def test_store_create_persists_json(tmp_path):
 def test_store_id_format_is_sortable(tmp_path):
     store = SuggestionStore(tmp_path)
     a = store.create(
-        source_agent="a", target_repo="r", category="bug", severity="low",
-        title="t1", description="d",
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="t1",
+        description="d",
     )
     # ID tem prefixo timestamp; segundo create gera timestamp >= primeiro.
     b = store.create(
-        source_agent="a", target_repo="r", category="bug", severity="low",
-        title="t2", description="d",
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="t2",
+        description="d",
     )
-    assert a.id <= b.id
+    # A ordenação é garantida pelo prefixo de timestamp (até microssegundos). O
+    # sufixo UUID existe só para desempate de colisão e NÃO é ordenável — se os
+    # dois creates caírem no mesmo microssegundo, comparar o ID inteiro seria
+    # flaky (o sufixo aleatório inverte ~50% das vezes). Comparamos o prefixo.
+    prefix_a = a.id.split("-")[0]
+    prefix_b = b.id.split("-")[0]
+    assert prefix_a <= prefix_b
 
 
 def test_store_get_returns_none_for_missing(tmp_path):
@@ -93,8 +107,22 @@ def test_store_validates_id_format(tmp_path):
 
 def test_store_list_returns_newest_first(tmp_path):
     store = SuggestionStore(tmp_path)
-    s1 = store.create(source_agent="a", target_repo="r", category="bug", severity="low", title="primeira", description="d")
-    s2 = store.create(source_agent="a", target_repo="r", category="bug", severity="low", title="segunda", description="d")
+    s1 = store.create(
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="primeira",
+        description="d",
+    )
+    s2 = store.create(
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="segunda",
+        description="d",
+    )
     items = store.list()
     # Mais novos primeiro
     assert items[0].id == s2.id
@@ -103,9 +131,24 @@ def test_store_list_returns_newest_first(tmp_path):
 
 def test_store_list_filters_by_target_repo(tmp_path):
     from src.models.suggestion import SuggestionFilters
+
     store = SuggestionStore(tmp_path)
-    store.create(source_agent="a", target_repo="X", category="bug", severity="low", title="t", description="d")
-    store.create(source_agent="a", target_repo="Y", category="bug", severity="low", title="t", description="d")
+    store.create(
+        source_agent="a",
+        target_repo="X",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
+    )
+    store.create(
+        source_agent="a",
+        target_repo="Y",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
+    )
     res = store.list(SuggestionFilters(target_repo="X"))
     assert len(res) == 1
     assert res[0].target_repo == "X"
@@ -113,7 +156,14 @@ def test_store_list_filters_by_target_repo(tmp_path):
 
 def test_store_update_status_appends_history(tmp_path):
     store = SuggestionStore(tmp_path)
-    s = store.create(source_agent="a", target_repo="r", category="bug", severity="low", title="t", description="d")
+    s = store.create(
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
+    )
     assert len(s.status_history) == 1
     assert s.status_history[0].status == "pending"
     updated = store.update_status(s.id, "acknowledged", note="visto", by="caiog")
@@ -124,7 +174,14 @@ def test_store_update_status_appends_history(tmp_path):
 
 def test_store_update_status_idempotent_when_no_change(tmp_path):
     store = SuggestionStore(tmp_path)
-    s = store.create(source_agent="a", target_repo="r", category="bug", severity="low", title="t", description="d")
+    s = store.create(
+        source_agent="a",
+        target_repo="r",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
+    )
     updated = store.update_status(s.id, "pending")  # mesmo status, sem note
     assert len(updated.status_history) == 1  # sem nova entrada
 
@@ -137,9 +194,30 @@ def test_store_update_status_unknown_id(tmp_path):
 
 def test_store_stats_summarizes(tmp_path):
     store = SuggestionStore(tmp_path)
-    store.create(source_agent="a", target_repo="X", category="bug", severity="high", title="t", description="d")
-    store.create(source_agent="a", target_repo="X", category="bug", severity="low", title="t", description="d")
-    store.create(source_agent="a", target_repo="Y", category="docs", severity="low", title="t", description="d")
+    store.create(
+        source_agent="a",
+        target_repo="X",
+        category="bug",
+        severity="high",
+        title="t",
+        description="d",
+    )
+    store.create(
+        source_agent="a",
+        target_repo="X",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
+    )
+    store.create(
+        source_agent="a",
+        target_repo="Y",
+        category="docs",
+        severity="low",
+        title="t",
+        description="d",
+    )
     s = store.stats()
     assert s["total"] == 3
     assert s["by_target"]["X"] == 2
@@ -213,16 +291,26 @@ def test_submit_unknown_target_accepts_with_note(isolated_repo):
 def test_submit_validates_category(isolated_repo):
     with pytest.raises(ValueError, match="category"):
         submit_suggestion(
-            isolated_repo, source_agent="a", target_repo="x",
-            category="not-a-category", severity="low", title="t", description="d",
+            isolated_repo,
+            source_agent="a",
+            target_repo="x",
+            category="not-a-category",
+            severity="low",
+            title="t",
+            description="d",
         )
 
 
 def test_submit_validates_severity(isolated_repo):
     with pytest.raises(ValueError, match="severity"):
         submit_suggestion(
-            isolated_repo, source_agent="a", target_repo="x",
-            category="bug", severity="extreme", title="t", description="d",
+            isolated_repo,
+            source_agent="a",
+            target_repo="x",
+            category="bug",
+            severity="extreme",
+            title="t",
+            description="d",
         )
 
 
@@ -230,21 +318,36 @@ def test_submit_rejects_overlong_title(isolated_repo):
     long_title = "x" * 300
     with pytest.raises(ValueError, match="title"):
         submit_suggestion(
-            isolated_repo, source_agent="a", target_repo="x",
-            category="bug", severity="low", title=long_title, description="d",
+            isolated_repo,
+            source_agent="a",
+            target_repo="x",
+            category="bug",
+            severity="low",
+            title=long_title,
+            description="d",
         )
 
 
 def test_submit_rejects_empty_required_fields(isolated_repo):
     with pytest.raises(ValueError):
         submit_suggestion(
-            isolated_repo, source_agent="", target_repo="x",
-            category="bug", severity="low", title="t", description="d",
+            isolated_repo,
+            source_agent="",
+            target_repo="x",
+            category="bug",
+            severity="low",
+            title="t",
+            description="d",
         )
     with pytest.raises(ValueError):
         submit_suggestion(
-            isolated_repo, source_agent="a", target_repo="",
-            category="bug", severity="low", title="t", description="d",
+            isolated_repo,
+            source_agent="a",
+            target_repo="",
+            category="bug",
+            severity="low",
+            title="t",
+            description="d",
         )
 
 
@@ -257,12 +360,22 @@ def test_list_default_empty(isolated_repo):
 
 def test_list_filters_by_target(isolated_repo):
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="platform-cdc",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="platform-cdc",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="platform-ml",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="platform-ml",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     res = list_suggestions(isolated_repo, target_repo="platform-cdc")
     assert res["total"] == 1
@@ -271,12 +384,22 @@ def test_list_filters_by_target(isolated_repo):
 
 def test_list_filters_by_status(isolated_repo):
     r = submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t2", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t2",
+        description="d",
     )
     update_suggestion_status(isolated_repo, r["suggestion"]["id"], "accepted", by="caiog")
     res = list_suggestions(isolated_repo, status="accepted")
@@ -286,12 +409,22 @@ def test_list_filters_by_status(isolated_repo):
 
 def test_list_filters_by_severity(isolated_repo):
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="critical", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="critical",
+        title="t",
+        description="d",
     )
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     res = list_suggestions(isolated_repo, severity="critical")
     assert res["total"] == 1
@@ -301,8 +434,13 @@ def test_list_filters_by_severity(isolated_repo):
 def test_list_resolves_alias_target_filter(isolated_repo):
     """Filtro target_repo='rag-service' deve casar a sugestão registrada como dataforall-rag-service."""
     submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="rag-service",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="rag-service",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     res = list_suggestions(isolated_repo, target_repo="rag-service")
     assert res["total"] == 1
@@ -310,8 +448,13 @@ def test_list_resolves_alias_target_filter(isolated_repo):
 
 def test_get_returns_full_payload(isolated_repo):
     r = submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     res = get_suggestion(isolated_repo, suggestion_id=r["suggestion"]["id"])
     assert res["found"] is True
@@ -330,8 +473,13 @@ def test_get_validates_id_format(isolated_repo):
 
 def test_update_status_records_history(isolated_repo):
     r = submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     sid = r["suggestion"]["id"]
     update_suggestion_status(isolated_repo, sid, "acknowledged", note="visto", by="caiog")
@@ -345,8 +493,13 @@ def test_update_status_records_history(isolated_repo):
 
 def test_update_status_validates_status(isolated_repo):
     r = submit_suggestion(
-        isolated_repo, source_agent="a", target_repo="x",
-        category="bug", severity="low", title="t", description="d",
+        isolated_repo,
+        source_agent="a",
+        target_repo="x",
+        category="bug",
+        severity="low",
+        title="t",
+        description="d",
     )
     with pytest.raises(ValueError):
         update_suggestion_status(isolated_repo, r["suggestion"]["id"], "invalid-status")
@@ -357,11 +510,17 @@ def test_tools_raise_unavailable_when_store_missing():
     class _StubRepo:
         suggestions = None
         ecosystem = None
+
     stub = _StubRepo()
     with pytest.raises(SuggestionsUnavailable):
         submit_suggestion(
-            stub, source_agent="a", target_repo="x",
-            category="bug", severity="low", title="t", description="d",
+            stub,
+            source_agent="a",
+            target_repo="x",
+            category="bug",
+            severity="low",
+            title="t",
+            description="d",
         )
     with pytest.raises(SuggestionsUnavailable):
         list_suggestions(stub)

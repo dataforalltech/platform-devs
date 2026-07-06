@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: development/generate_github_actions_pipeline
+  uid: development.generate_github_actions_pipeline
+  domain: development
+  title: generate github actions pipeline
+  description: ''
+  owner: platform
+  tags:
+  - development
+  - devops
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: development
+  capability: devops
+  resource:
+    type: pipeline
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:pipeline

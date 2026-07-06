@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: ai-governance-mcp
+  uid: ai-governance-mcp
+  domain: governance
+  title: ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: ai-governance-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

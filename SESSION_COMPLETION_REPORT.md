@@ -8,14 +8,14 @@
 
 ## Executive Summary
 
-Successfully completed **FASE 4 (Profile-Based Resource Prompts)** for all 8 specialist Zillas and designed/documented a **complete CI/CD pipeline integration** using `pipeline-mcp`. 
+Successfully completed **FASE 4 (Profile-Based Resource Prompts)** for all 8 specialist DevTeam and designed/documented a **complete CI/CD pipeline integration** using `pipeline-mcp`. 
 
 **Key Metrics**:
-- ✅ 8 Zillas with 5 profiles each (40 variants)
+- ✅ 8 DevTeam with 5 profiles each (40 variants)
 - ✅ 8 services registered in pipeline-mcp
 - ✅ 16 quality gate configurations (HML + PROD)
 - ✅ 3-environment promotion workflow (DEV → HML → PROD)
-- ✅ Observable pipeline health via zilla-observatory
+- ✅ Observable pipeline health via devteam-observatory
 - ✅ 5 comprehensive documentation files + 1 diagram
 
 ---
@@ -26,30 +26,30 @@ Successfully completed **FASE 4 (Profile-Based Resource Prompts)** for all 8 spe
 
 #### Created 8 New Files
 ```
-seczilla-mcp-server/src/prompts/profilePrompts.ts
-archzilla-mcp-server/src/prompts/profilePrompts.ts
-frontzilla-pixelfera-mcp-server/src/prompts/profilePrompts.ts
-opszilla-mcp-server/src/prompts/profilePrompts.ts
-productzilla-mcp-server/src/prompts/profilePrompts.ts
-pozilla-mcp-server/src/prompts/profilePrompts.ts
-qazilla-mcp-server/src/prompts/profilePrompts.ts
-backzilla-mcp-server/src/prompts/profilePrompts.ts (prior session)
+security-mcp-server/src/prompts/profilePrompts.ts
+architecture-mcp-server/src/prompts/profilePrompts.ts
+frontend-pixelfera-mcp-server/src/prompts/profilePrompts.ts
+devops-mcp-server/src/prompts/profilePrompts.ts
+product-manager-mcp-server/src/prompts/profilePrompts.ts
+product-owner-mcp-server/src/prompts/profilePrompts.ts
+qa-engineer-mcp-server/src/prompts/profilePrompts.ts
+backend-mcp-server/src/prompts/profilePrompts.ts (prior session)
 ```
 
 #### Modified 8 Server Files
 ```
-seczilla-mcp-server/src/server.ts
-archzilla-mcp-server/src/server.ts
-frontzilla-pixelfera-mcp-server/src/server.ts
-opszilla-mcp-server/src/server.ts
-productzilla-mcp-server/src/server.ts
-pozilla-mcp-server/src/server.ts
-qazilla-mcp-server/src/server.ts
-backzilla-mcp-server/src/server.ts
+security-mcp-server/src/server.ts
+architecture-mcp-server/src/server.ts
+frontend-pixelfera-mcp-server/src/server.ts
+devops-mcp-server/src/server.ts
+product-manager-mcp-server/src/server.ts
+product-owner-mcp-server/src/server.ts
+qa-engineer-mcp-server/src/server.ts
+backend-mcp-server/src/server.ts
 ```
 
 #### Implementation Pattern
-Each Zilla now supports 5 profiles with customized:
+Each DevTeam now supports 5 profiles with customized:
 - **Primary goals** (3-4 goals per profile)
 - **Focus areas** (3-4 areas per profile)
 - **Workflow** (numbered steps)
@@ -65,9 +65,9 @@ Each Zilla now supports 5 profiles with customized:
 5. **PM** — Strategy, roadmap, prioritization
 
 #### Build Verification
-- ✅ ArchZilla: Zero errors
-- ✅ ProductZilla: Zero errors
-- ✅ POZilla: Zero errors
+- ✅ Architecture: Zero errors
+- ✅ Product-Manager: Zero errors
+- ✅ Product-Owner: Zero errors
 - ⚠️ Others: Pre-existing db errors (unrelated to FASE 4)
 
 ---
@@ -76,14 +76,14 @@ Each Zilla now supports 5 profiles with customized:
 
 #### 8 Services Registered
 ```
-archzilla      → platform-devs/archzilla-mcp-server
-backzilla      → platform-devs/backzilla-mcp-server
-frontzilla-pixelfera → platform-devs/frontzilla-pixelfera-mcp-server
-opszilla       → platform-devs/opszilla-mcp-server
-pozilla        → platform-devs/pozilla-mcp-server
-productzilla   → platform-devs/productzilla-mcp-server
-qazilla        → platform-devs/qazilla-mcp-server
-seczilla       → platform-devs/seczilla-mcp-server
+architecture      → platform-devs/architecture-mcp-server
+backend      → platform-devs/backend-mcp-server
+frontend-pixelfera → platform-devs/frontend-pixelfera-mcp-server
+devops       → platform-devs/devops-mcp-server
+product-owner        → platform-devs/product-owner-mcp-server
+product-manager   → platform-devs/product-manager-mcp-server
+qa-engineer        → platform-devs/qa-engineer-mcp-server
+security       → platform-devs/security-mcp-server
 ```
 
 #### Quality Gates Configuration
@@ -125,12 +125,12 @@ PROD (Manual Approval)
 
 #### 1. `FASE4_PROFILE_BASED_PROMPTS.md`
 - Complete FASE 4 reference guide
-- All 8 Zillas documented with examples
+- All 8 DevTeam documented with examples
 - Implementation pattern + build status
 - Benefits & recommended next steps
 - **Length**: ~500 lines
 
-#### 2. `PIPELINE_INTEGRATION_ZILLAS.md`
+#### 2. `PIPELINE_INTEGRATION_DEVTEAM.md`
 - Detailed pipeline configuration
 - Service registration specifications
 - Quality gates per environment
@@ -168,7 +168,7 @@ PROD (Manual Approval)
 
 ### 4. Scripts (✅ 1 File Created)
 
-#### `scripts/register-zillas-pipeline.sh`
+#### `scripts/register-devteam-pipeline.sh`
 - Automated registration script
 - 5-step registration process
 - Color-coded output
@@ -205,14 +205,14 @@ PROD (Manual Approval)
 ### Pipeline Architecture
 ```
    8 Services
-   ├─ ArchZilla (Architecture)
-   ├─ BackZilla (Backend)
-   ├─ FrontZilla (Frontend)
-   ├─ OpsZilla (DevOps)
-   ├─ ProductZilla (Product)
-   ├─ POZilla (Project)
-   ├─ QAZilla (Quality)
-   └─ SecZilla (Security)
+   ├─ Architecture (Architecture)
+   ├─ Backend (Backend)
+   ├─ Frontend (Frontend)
+   ├─ DevOps (DevOps)
+   ├─ Product-Manager (Product)
+   ├─ Product-Owner (Project)
+   ├─ QA-Engineer (Quality)
+   └─ Security (Security)
             │
             ▼
    3 Environments
@@ -241,14 +241,14 @@ PROD (Manual Approval)
 ### Build Status
 | Service | Build | Status |
 |---------|-------|--------|
-| ArchZilla | ✅ | Zero errors |
-| BackZilla | ✅ | Zero errors |
-| FrontZilla | ⚠️ | Pre-existing db errors |
-| OpsZilla | ⚠️ | Pre-existing db errors |
-| ProductZilla | ✅ | Zero errors |
-| POZilla | ✅ | Zero errors |
-| QAZilla | ⚠️ | Pre-existing db errors |
-| SecZilla | ⚠️ | Pre-existing db errors |
+| Architecture | ✅ | Zero errors |
+| Backend | ✅ | Zero errors |
+| Frontend | ⚠️ | Pre-existing db errors |
+| DevOps | ⚠️ | Pre-existing db errors |
+| Product-Manager | ✅ | Zero errors |
+| Product-Owner | ✅ | Zero errors |
+| QA-Engineer | ⚠️ | Pre-existing db errors |
+| Security | ⚠️ | Pre-existing db errors |
 
 **Note**: FASE 4 changes (profilePrompts.ts + server.ts updates) compile cleanly. Pre-existing errors in db/store.ts are unrelated.
 
@@ -256,7 +256,7 @@ PROD (Manual Approval)
 | Document | Lines | Complete |
 |----------|-------|----------|
 | FASE4_PROFILE_BASED_PROMPTS.md | ~500 | ✅ |
-| PIPELINE_INTEGRATION_ZILLAS.md | ~400 | ✅ |
+| PIPELINE_INTEGRATION_DEVTEAM.md | ~400 | ✅ |
 | PIPELINE_REGISTRATION_SCRIPT.md | ~300 | ✅ |
 | PIPELINE_INTEGRATION_SUMMARY.md | ~400 | ✅ |
 | PIPELINE_VISUAL_DIAGRAM.txt | ~400 | ✅ |
@@ -295,33 +295,33 @@ PROD (Manual Approval)
 ## User Profiles & Workflows
 
 ### 5 User Profiles
-1. **Dev** (175 lines per Zilla)
+1. **Dev** (175 lines per DevTeam)
    - Goal: Rapid development
    - Tools: Code generation, testing, debugging
    - Time focus: Hours/days
 
-2. **ReleaseMgr** (175 lines per Zilla)
+2. **ReleaseMgr** (175 lines per DevTeam)
    - Goal: Quality validation
    - Tools: Test execution, gate verification
    - Time focus: Hours
 
-3. **Auditor** (175 lines per Zilla)
+3. **Auditor** (175 lines per DevTeam)
    - Goal: Governance & compliance
    - Tools: Standards review, decision documentation
    - Time focus: Days/weeks
 
-4. **Ops** (175 lines per Zilla)
+4. **Ops** (175 lines per DevTeam)
    - Goal: Production stability
    - Tools: Deployment, scaling, monitoring
    - Time focus: 24/7
 
-5. **PM** (175 lines per Zilla)
+5. **PM** (175 lines per DevTeam)
    - Goal: Strategy & roadmap
    - Tools: Prioritization, metrics, planning
    - Time focus: Weeks/months
 
-### Zilla-Profile Combinations
-- 8 Zillas × 5 profiles = 40 unique prompt variants
+### DevTeam-Profile Combinations
+- 8 DevTeam × 5 profiles = 40 unique prompt variants
 - Each variant: 175-200 lines of context-specific guidance
 - Total unique guidance: ~7,000 lines
 
@@ -366,7 +366,7 @@ Day 10 (Wed) - Production Release
 ## Deliverables Checklist
 
 ### ✅ Implementation
-- [x] FASE 4 profiles implemented (8 Zillas)
+- [x] FASE 4 profiles implemented (8 DevTeam)
 - [x] Server.ts updated with profile extraction
 - [x] Build verification (3/8 pass)
 - [x] Profile pattern documented
@@ -388,14 +388,14 @@ Day 10 (Wed) - Production Release
 - [x] Session report (this document)
 
 ### ✅ Scripts
-- [x] register-zillas-pipeline.sh (automated)
+- [x] register-devteam-pipeline.sh (automated)
 - [x] Ready for pipeline-mcp execution
 
 ### ⏳ Pending (Next Session)
 - [ ] Execute pipeline-mcp registrations
-- [ ] Test first promotion (archzilla dev → hml)
+- [ ] Test first promotion (architecture dev → hml)
 - [ ] Validate human approval workflow
-- [ ] Monitor zilla-observatory during deployment
+- [ ] Monitor devteam-observatory during deployment
 - [ ] Document lessons learned
 
 ---
@@ -404,15 +404,15 @@ Day 10 (Wed) - Production Release
 
 | Criteria | Status | Evidence |
 |----------|--------|----------|
-| FASE 4 complete (8 Zillas) | ✅ | 8 profilePrompts.ts + 8 server.ts updates |
+| FASE 4 complete (8 DevTeam) | ✅ | 8 profilePrompts.ts + 8 server.ts updates |
 | All profiles (5 types) | ✅ | Dev, ReleaseMgr, Auditor, Ops, PM |
 | Pipeline designed | ✅ | 5 documentation files |
 | Quality gates (16) | ✅ | HML: 2 gates, PROD: 4 gates × 8 services |
 | 3-env workflow | ✅ | DEV→HML→PROD documented |
-| Observable metrics | ✅ | Integrated with zilla-observatory |
+| Observable metrics | ✅ | Integrated with devteam-observatory |
 | Documentation complete | ✅ | ~2,500 lines across 5 files |
 | Builds verified | ✅ | 3/8 green, pre-existing errors in 5 |
-| Scripts ready | ✅ | register-zillas-pipeline.sh |
+| Scripts ready | ✅ | register-devteam-pipeline.sh |
 
 ---
 
@@ -420,30 +420,30 @@ Day 10 (Wed) - Production Release
 
 ### Immediate Actions (This Week)
 1. **Execute Pipeline Registration**
-   - Run register-zillas-pipeline.sh (or equivalent via pipeline-mcp API)
+   - Run register-devteam-pipeline.sh (or equivalent via pipeline-mcp API)
    - Verify all 8 services registered
    - Check quality gates configuration
 
 2. **Test Promotion Flow**
-   - Select ArchZilla as pilot
+   - Select Architecture as pilot
    - Execute dev → hml promotion
    - Verify human approval workflow
    - Monitor deployment success
 
 3. **Validate Observatory Integration**
-   - Check zilla-observatory dashboards
+   - Check devteam-observatory dashboards
    - Verify alerts firing correctly
    - Monitor gate evaluations
 
 ### Short-term (Week 2-3)
-1. **Promote All Zillas to HML**
-   - Parallel promotions for 7 remaining Zillas
+1. **Promote All DevTeam to HML**
+   - Parallel promotions for 7 remaining DevTeam
    - Validate HML testing process
    - Document QA findings
 
 2. **First Production Release**
    - Complete HML validation
-   - Promote ArchZilla to PROD
+   - Promote Architecture to PROD
    - Monitor production health
    - Validate canary rollout
 
@@ -454,12 +454,12 @@ Day 10 (Wed) - Production Release
 
 ### Medium-term (Month 1-2)
 1. **Full Production Deployment**
-   - All 8 Zillas promoted to PROD
+   - All 8 DevTeam promoted to PROD
    - Production baseline established
    - Incident response tested
 
 2. **Rollback Testing**
-   - Test rollback procedure for each Zilla
+   - Test rollback procedure for each DevTeam
    - Document recovery procedures
    - Validate data integrity after rollback
 
@@ -475,7 +475,7 @@ Day 10 (Wed) - Production Release
 ### Documentation
 ```
 /home/dev/repos/platform-devs/FASE4_PROFILE_BASED_PROMPTS.md
-/home/dev/repos/platform-devs/PIPELINE_INTEGRATION_ZILLAS.md
+/home/dev/repos/platform-devs/PIPELINE_INTEGRATION_DEVTEAM.md
 /home/dev/repos/platform-devs/PIPELINE_REGISTRATION_SCRIPT.md
 /home/dev/repos/platform-devs/PIPELINE_INTEGRATION_SUMMARY.md
 /home/dev/repos/platform-devs/PIPELINE_VISUAL_DIAGRAM.txt
@@ -484,28 +484,28 @@ Day 10 (Wed) - Production Release
 
 ### Implementation
 ```
-seczilla-mcp-server/src/prompts/profilePrompts.ts
-archzilla-mcp-server/src/prompts/profilePrompts.ts
-frontzilla-pixelfera-mcp-server/src/prompts/profilePrompts.ts
-opszilla-mcp-server/src/prompts/profilePrompts.ts
-productzilla-mcp-server/src/prompts/profilePrompts.ts
-pozilla-mcp-server/src/prompts/profilePrompts.ts
-qazilla-mcp-server/src/prompts/profilePrompts.ts
+security-mcp-server/src/prompts/profilePrompts.ts
+architecture-mcp-server/src/prompts/profilePrompts.ts
+frontend-pixelfera-mcp-server/src/prompts/profilePrompts.ts
+devops-mcp-server/src/prompts/profilePrompts.ts
+product-manager-mcp-server/src/prompts/profilePrompts.ts
+product-owner-mcp-server/src/prompts/profilePrompts.ts
+qa-engineer-mcp-server/src/prompts/profilePrompts.ts
 ```
 
 ### Scripts
 ```
-/home/dev/repos/platform-devs/scripts/register-zillas-pipeline.sh
+/home/dev/repos/platform-devs/scripts/register-devteam-pipeline.sh
 ```
 
 ---
 
 ## Conclusion
 
-This session successfully completed **FASE 4 (Profile-Based Resource Prompts)** for all 8 specialist Zillas and designed a **comprehensive CI/CD pipeline** using `pipeline-mcp`. 
+This session successfully completed **FASE 4 (Profile-Based Resource Prompts)** for all 8 specialist DevTeam and designed a **comprehensive CI/CD pipeline** using `pipeline-mcp`. 
 
 **Key Achievements**:
-- ✅ 40 profile-based prompt variants created (8 Zillas × 5 profiles)
+- ✅ 40 profile-based prompt variants created (8 DevTeam × 5 profiles)
 - ✅ Complete pipeline architecture documented (3 environments, 16 gates)
 - ✅ 2,500+ lines of reference documentation
 - ✅ Automated registration scripts ready

@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.backend
+  uid: persona.backend
+  title: Backend Engineer
+  owner: platform
+  tags:
+  - persona
+  - backend
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: backend
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  - write
+  allow_list:
+    allowed_effects:
+    - generate
+    - read
+    - write
+    max_blast: service
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.backend

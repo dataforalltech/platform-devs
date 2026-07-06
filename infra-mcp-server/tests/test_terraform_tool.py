@@ -43,9 +43,7 @@ def test_validate_surfaces_diagnostics(monkeypatch, fake_settings):
             "diagnostics": [{"severity": "error", "summary": "missing required argument"}],
         }
     )
-    monkeypatch.setattr(
-        terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=output)
-    )
+    monkeypatch.setattr(terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=output))
     res = terraform_tool.terraform_validate(fake_settings)
     assert res["valid"] is False
     assert res["error_count"] == 1
@@ -75,9 +73,7 @@ def test_validate_returns_binary_not_found(monkeypatch, fake_settings):
 
 # --------------------------- terraform_fmt_check --------------------------- #
 def test_fmt_check_clean(monkeypatch, fake_settings):
-    monkeypatch.setattr(
-        terraform_tool, "run_command", lambda *a, **kw: _mock_result(exit_code=0)
-    )
+    monkeypatch.setattr(terraform_tool, "run_command", lambda *a, **kw: _mock_result(exit_code=0))
     res = terraform_tool.terraform_fmt_check(fake_settings)
     assert res["is_formatted"] is True
     assert res["files_needing_format"] == []
@@ -99,7 +95,9 @@ def test_plan_no_changes(monkeypatch, fake_settings):
     monkeypatch.setattr(
         terraform_tool,
         "run_command",
-        lambda *a, **kw: _mock_result(stdout="No changes. Your infrastructure matches.", exit_code=0),
+        lambda *a, **kw: _mock_result(
+            stdout="No changes. Your infrastructure matches.", exit_code=0
+        ),
     )
     res = terraform_tool.terraform_plan(fake_settings)
     assert res["has_changes"] is False
@@ -146,14 +144,20 @@ def test_show_plan_parses_json(monkeypatch, fake_settings, tmp_path):
             "format_version": "1.2",
             "terraform_version": "1.5.0",
             "resource_changes": [
-                {"address": "aws_s3_bucket.x", "type": "aws_s3_bucket", "change": {"actions": ["create"]}},
-                {"address": "aws_s3_bucket.y", "type": "aws_s3_bucket", "change": {"actions": ["update"]}},
+                {
+                    "address": "aws_s3_bucket.x",
+                    "type": "aws_s3_bucket",
+                    "change": {"actions": ["create"]},
+                },
+                {
+                    "address": "aws_s3_bucket.y",
+                    "type": "aws_s3_bucket",
+                    "change": {"actions": ["update"]},
+                },
             ],
         }
     )
-    monkeypatch.setattr(
-        terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=output)
-    )
+    monkeypatch.setattr(terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=output))
     res = terraform_tool.terraform_show_plan(fake_settings, plan_path=str(plan_file))
     assert res["resource_changes_count"] == 2
     assert res["changes_by_action"]["create"] == 1

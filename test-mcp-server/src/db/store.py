@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg2
@@ -28,7 +27,9 @@ class TestStore:
             maxconn=settings.pg_max_conn,
             dsn=settings.pg_dsn,
         )
-        logger.info(f"âœ… TestStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)")
+        logger.info(
+            f"âœ… TestStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)"
+        )
 
     @contextmanager
     def _get_conn(self):
@@ -55,7 +56,7 @@ class TestStore:
 
     def _now(self) -> str:
         """Retorna ISO timestamp com timezone."""
-        return datetime.now(timezone.utc).isoformat()
+        return datetime.now(UTC).isoformat()
 
     def _new_id(self, prefix: str = "plan") -> str:
         """Gera ID Ãºnico com prefixo (usado apenas para tabelas com PK TEXT)."""
@@ -263,7 +264,12 @@ class TestStore:
                     (now, pid),
                 )
 
-        return {"result_id": result_id, "scenario_id": scenario_id, "status": status, "executed_at": now}
+        return {
+            "result_id": result_id,
+            "scenario_id": scenario_id,
+            "status": status,
+            "executed_at": now,
+        }
 
     def get_scenarios(self, plan_id: str) -> list[dict[str, Any]]:
         """Lista cenÃ¡rios de um plano com status mais recente."""
@@ -319,10 +325,21 @@ class TestStore:
                         INSERT INTO checklist_items (checklist_id, order_num, description, required, category)
                         VALUES (%s, %s, %s, %s, %s)
                         """,
-                        (checklist_id, i + 1, item["description"], bool(item.get("required", True)), item.get("category")),
+                        (
+                            checklist_id,
+                            i + 1,
+                            item["description"],
+                            bool(item.get("required", True)),
+                            item.get("category"),
+                        ),
                     )
 
-        return {"checklist_id": checklist_id, "title": title, "type": checklist_type, "items_count": len(items)}
+        return {
+            "checklist_id": checklist_id,
+            "title": title,
+            "type": checklist_type,
+            "items_count": len(items),
+        }
 
     def start_run(self, checklist_id: str, executor: str | None = None) -> dict[str, Any]:
         """Inicia execuÃ§Ã£o de checklist."""
@@ -349,7 +366,9 @@ class TestStore:
 
         return {"run_id": run_id, "checklist_id": checklist_id, "items": [dict(i) for i in items]}
 
-    def check_item(self, run_id: str, item_id: int, status: str, notes: str | None = None) -> dict[str, Any]:
+    def check_item(
+        self, run_id: str, item_id: int, status: str, notes: str | None = None
+    ) -> dict[str, Any]:
         """Registra resultado de item da checklist."""
         now = self._now()
         with self._get_conn() as conn:
@@ -372,7 +391,12 @@ class TestStore:
                 )
                 run = cur.fetchone()
                 if not run:
-                    return {"run_id": run_id, "item_id": item_id, "status": status, "checked_at": now}
+                    return {
+                        "run_id": run_id,
+                        "item_id": item_id,
+                        "status": status,
+                        "checked_at": now,
+                    }
 
                 cur.execute(
                     """
@@ -530,7 +554,12 @@ class TestStore:
                 return {
                     "plan_id": plan_id,
                     "not_executed": [
-                        {"id": s["id"], "name": s["name"], "category": s["category"], "priority": s["priority"]}
+                        {
+                            "id": s["id"],
+                            "name": s["name"],
+                            "category": s["category"],
+                            "priority": s["priority"],
+                        }
                         for s in not_executed
                     ],
                     "failed_scenarios": [dict(f) for f in failed],
@@ -541,7 +570,9 @@ class TestStore:
                         "failed_count": len(failed),
                         "open_findings_count": len(open_findings),
                         "critical_findings": critical_count,
-                        "ready_to_ship": len(not_executed) == 0 and len(failed) == 0 and critical_count == 0,
+                        "ready_to_ship": len(not_executed) == 0
+                        and len(failed) == 0
+                        and critical_count == 0,
                     },
                 }
 
@@ -623,7 +654,9 @@ class TestStore:
                     "pass_rate": pass_rate,
                     "findings_by_severity": findings_by_severity,
                     "grade": grade,
-                    "ready_to_ship": coverage_pct >= 80 and pass_rate >= 90 and not findings_by_severity.get("critical"),
+                    "ready_to_ship": coverage_pct >= 80
+                    and pass_rate >= 90
+                    and not findings_by_severity.get("critical"),
                 }
 
     @staticmethod

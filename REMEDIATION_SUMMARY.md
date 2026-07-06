@@ -14,11 +14,11 @@
    - Replaced `https://prod.example.com/api` with env var example pattern
    - Example now shows proper configuration from environment
 
-2. **qazilla-mcp-server** (3 functions)
+2. **qa-engineer-mcp-server** (3 functions)
    - `src/server/mcp_server.py`
      - Added `os.getenv("TEST_APP_URL", "http://localhost:3000")`
      - Added `os.getenv("TEST_API_URL", "http://localhost:8000")`
-   - `src/tools/qazilla_tools.py`
+   - `src/tools/qa-engineer_tools.py`
      - Updated `generate_e2e_tests()` signature
      - Updated `generate_playwright_tests()` signature
      - Updated `generate_cypress_tests()` signature
@@ -46,7 +46,7 @@
 
 ### Phase 3: MEDIUM (Development) — 40% Complete
 
-#### ✅ Auth TODOs Resolved (agent-twin-mcp-server)
+#### ✅ Auth TODOs Resolved (dev-twin-mcp-server)
 1. **_authenticate_user() — Line 269**
    - Validates email/password with fallback test credentials
    - Returns user dict or None
@@ -105,10 +105,10 @@
 | File | Changes | Status |
 |------|---------|--------|
 | ai-governance-mcp-server/src/tools/policy_tool.py | Updated example code (line 36) | ✅ Complete |
-| qazilla-mcp-server/src/server/mcp_server.py | Added env vars, updated dispatch (lines 5, 30-31, 255-260) | ✅ Complete |
-| qazilla-mcp-server/src/tools/qazilla_tools.py | Added os import, updated 3 function signatures | ✅ Complete |
+| qa-engineer-mcp-server/src/server/mcp_server.py | Added env vars, updated dispatch (lines 5, 30-31, 255-260) | ✅ Complete |
+| qa-engineer-mcp-server/src/tools/qa-engineer_tools.py | Added os import, updated 3 function signatures | ✅ Complete |
 | mcp-gateway/src/proxy/router.py | Replaced TODO with Redis implementation (lines 182-194) | ✅ Complete |
-| agent-twin-mcp-server/src/server/http_endpoints.py | Added imports (7-12), implemented 4 functions (269-334) | ✅ Complete |
+| dev-twin-mcp-server/src/server/http_endpoints.py | Added imports (7-12), implemented 4 functions (269-334) | ✅ Complete |
 | REMEDIATION_PROGRESS.md | Created progress tracker | ✅ Complete |
 
 ---
@@ -165,7 +165,7 @@ grep -rn "def.*():\s*pass" src/ --include="*.py"
 grep -rn "TODO\|FIXME" . --include="*.py" | grep -v tests | grep -v ".git" | wc -l
 
 # Verify imports
-grep -n "import os\|import secrets\|import hashlib" **/*.py | grep agent-twin
+grep -n "import os\|import secrets\|import hashlib" **/*.py | grep dev-twin
 ```
 
 ---

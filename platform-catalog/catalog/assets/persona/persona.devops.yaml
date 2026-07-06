@@ -1,0 +1,33 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.devops
+  uid: persona.devops
+  title: DevOps Engineer
+  owner: platform
+  tags:
+  - persona
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: devops
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  - write
+  allow_list:
+    allowed_effects:
+    - build
+    - deploy
+    - execute
+    - generate
+    - read
+    - restart
+    - rollback
+    - write
+    max_blast: environment
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.devops

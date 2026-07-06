@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-manager-mcp/define_product_vision
+  uid: product-manager-mcp:define_product_vision
+  domain: product
+  title: define_product_vision @ product-manager-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-manager-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.define_product_vision
+  provider_id: product-manager-mcp
+  provider_version: 1.0.0
+  tool: define_product_vision
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.define_product_vision
+- verb: provided-by
+  target: product-manager-mcp

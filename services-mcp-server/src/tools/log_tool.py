@@ -22,14 +22,16 @@ Formato de ``since``
 Aceita: '30m', '1h', '2h30m', '5s', ou timestamp ISO 8601.
 Docker aceita diretamente: '10m', '1h', ISO timestamp.
 """
+
 from __future__ import annotations
 
 import asyncio
 import re
 import subprocess
 import time
+from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any, AsyncIterator
+from typing import Any
 
 from ..db.store import ServiceStore
 
@@ -41,6 +43,7 @@ _SINCE_RE = re.compile(r"^\d+[smhd]$")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _resolve_log_source(svc: dict) -> dict[str, Any]:
     """Determina a fonte de log a partir do registro do servico.
 
@@ -49,6 +52,7 @@ def _resolve_log_source(svc: dict) -> dict[str, Any]:
       target: container_name | file_path | unit_name
     """
     import json
+
     meta = svc.get("metadata") or {}
     if isinstance(meta, str):
         try:
@@ -68,6 +72,7 @@ def _resolve_log_source(svc: dict) -> dict[str, Any]:
 
     # 3. Systemd (Linux, type=process)
     import platform
+
     if svc.get("type") == "process" and platform.system().lower() == "linux":
         name = svc.get("name", "")
         return {"source": "journald", "target": name}
@@ -101,7 +106,7 @@ def _docker_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 
@@ -124,7 +129,7 @@ def _file_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 
@@ -148,12 +153,13 @@ def _journald_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 
 
 # ── Async generator para streaming SSE ───────────────────────────────────────
+
 
 async def _stream_docker_logs(
     container: str,
@@ -177,7 +183,7 @@ async def _stream_docker_logs(
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError:
-        yield "data: {\"error\": \"docker not found\"}\n\n"
+        yield 'data: {"error": "docker not found"}\n\n'
         return
 
     async def read_stream(stream):
@@ -225,7 +231,7 @@ async def _stream_file_logs(
             stderr=asyncio.subprocess.PIPE,
         )
     except FileNotFoundError:
-        yield "data: {\"error\": \"tail not found\"}\n\n"
+        yield 'data: {"error": "tail not found"}\n\n'
         return
 
     try:
@@ -237,8 +243,8 @@ async def _stream_file_logs(
             if pattern and not pattern.search(line):
                 continue
             yield f"data: {line}\n\n"
-    except asyncio.TimeoutError:
-        yield "data: {\"keepalive\": true}\n\n"
+    except TimeoutError:
+        yield 'data: {"keepalive": true}\n\n'
     finally:
         try:
             proc.kill()
@@ -247,6 +253,7 @@ async def _stream_file_logs(
 
 
 # ── MCP Tools ─────────────────────────────────────────────────────────────────
+
 
 def get_service_logs(
     store: ServiceStore,

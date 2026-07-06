@@ -50,9 +50,7 @@ _CREATE_DESTRUCTIVE_RE = re.compile(
     re.IGNORECASE,
 )
 _DOWNGRADE_DEF_RE = re.compile(r"def\s+downgrade\s*\(")
-_UPGRADE_BODY_RE = re.compile(
-    r"def\s+upgrade\s*\([^)]*\)\s*:(.*?)(?=\ndef\s|\Z)", re.DOTALL
-)
+_UPGRADE_BODY_RE = re.compile(r"def\s+upgrade\s*\([^)]*\)\s*:(.*?)(?=\ndef\s|\Z)", re.DOTALL)
 
 
 def _line_of(content: str, pos: int) -> int:
@@ -62,6 +60,7 @@ def _line_of(content: str, pos: int) -> int:
 # ---------------------------------------------------------------------- #
 # validate_migration                                                      #
 # ---------------------------------------------------------------------- #
+
 
 def validate_migration(repo: GovernanceRepository, content: str) -> dict:
     """Valida o conteúdo de um arquivo de migration Alembic contra §29 AGENTS.md.

@@ -59,10 +59,10 @@ from ..utils.logger import get_logger
 _log = get_logger(__name__)
 
 # Callbacks de provision
-OnReady = Callable[[str], None]   # on_ready(connection_hint)
+OnReady = Callable[[str], None]  # on_ready(connection_hint)
 OnFailed = Callable[[str], None]  # on_failed(error_msg)
 # Callback de destroy
-OnDone = Callable[[], None]       # on_done()
+OnDone = Callable[[], None]  # on_done()
 
 _BACKEND_TEMPLATE = """\
 # _backend_override.tf — auto-gerado por infra-mcp-server TerraformProvisioner.
@@ -316,8 +316,10 @@ class TerraformProvisioner:
 
             # terraform init -reconfigure com -backend-config flags
             init_cmd = [
-                self._terraform_bin, "init",
-                "-no-color", "-input=false",
+                self._terraform_bin,
+                "init",
+                "-no-color",
+                "-input=false",
                 "-reconfigure",
             ]
             for k, v in self._backend_config.items():
@@ -375,9 +377,7 @@ class TerraformProvisioner:
             )
             if r2.returncode == 0:
                 return True
-            on_failed(
-                f"terraform workspace select {vm_id!r} falhou:\n{r2.stderr[:1000]}"
-            )
+            on_failed(f"terraform workspace select {vm_id!r} falhou:\n{r2.stderr[:1000]}")
             return False
         on_failed(f"terraform workspace new {vm_id!r} falhou:\n{r.stderr[:1000]}")
         return False
@@ -411,18 +411,23 @@ class TerraformProvisioner:
 
         _log.info(
             "infracost_check_start",
-            extra={"extras": {
-                "plan_file": str(plan_file),
-                "cap_usd_month": self._cost_cap_usd_month,
-            }},
+            extra={
+                "extras": {
+                    "plan_file": str(plan_file),
+                    "cap_usd_month": self._cost_cap_usd_month,
+                }
+            },
         )
 
         try:
             r = subprocess.run(
                 [
-                    self._infracost_bin, "diff",
-                    "--path", str(plan_file),
-                    "--format", "json",
+                    self._infracost_bin,
+                    "diff",
+                    "--path",
+                    str(plan_file),
+                    "--format",
+                    "json",
                 ],
                 cwd=str(module_dir),
                 capture_output=True,
@@ -467,11 +472,13 @@ class TerraformProvisioner:
 
         _log.info(
             "infracost_check_result",
-            extra={"extras": {
-                "monthly_cost_usd": monthly_cost,
-                "cap_usd_month": self._cost_cap_usd_month,
-                "within_cap": monthly_cost <= self._cost_cap_usd_month,
-            }},
+            extra={
+                "extras": {
+                    "monthly_cost_usd": monthly_cost,
+                    "cap_usd_month": self._cost_cap_usd_month,
+                    "within_cap": monthly_cost <= self._cost_cap_usd_month,
+                }
+            },
         )
 
         if monthly_cost > self._cost_cap_usd_month:
@@ -518,8 +525,10 @@ class TerraformProvisioner:
                 )
                 r = subprocess.run(
                     [
-                        tf, "plan",
-                        "-no-color", "-input=false",
+                        tf,
+                        "plan",
+                        "-no-color",
+                        "-input=false",
                         f"-out={plan_file}",
                         f"-var=vm_id={vm_id}",
                         f"-var=spec={spec}",
@@ -532,9 +541,7 @@ class TerraformProvisioner:
                     env=env,
                 )
                 if r.returncode != 0:
-                    on_failed(
-                        f"terraform plan falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                    )
+                    on_failed(f"terraform plan falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                     return
 
                 # COST CHECK
@@ -548,8 +555,10 @@ class TerraformProvisioner:
                 )
                 r = subprocess.run(
                     [
-                        tf, "apply",
-                        "-no-color", "-input=false",
+                        tf,
+                        "apply",
+                        "-no-color",
+                        "-input=false",
                         f"-state={state_file}",
                         f"-state-out={state_file}",
                         str(plan_file),
@@ -561,9 +570,7 @@ class TerraformProvisioner:
                     env=env,
                 )
                 if r.returncode != 0:
-                    on_failed(
-                        f"terraform apply falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                    )
+                    on_failed(f"terraform apply falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                     return
 
                 # OUTPUT
@@ -590,8 +597,10 @@ class TerraformProvisioner:
                 )
                 r = subprocess.run(
                     [
-                        tf, "plan",
-                        "-no-color", "-input=false",
+                        tf,
+                        "plan",
+                        "-no-color",
+                        "-input=false",
                         f"-out={plan_file}",
                         f"-var=vm_id={vm_id}",
                         f"-var=spec={spec}",
@@ -603,9 +612,7 @@ class TerraformProvisioner:
                     env=env,
                 )
                 if r.returncode != 0:
-                    on_failed(
-                        f"terraform plan falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                    )
+                    on_failed(f"terraform plan falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                     return
 
                 # COST CHECK
@@ -619,8 +626,10 @@ class TerraformProvisioner:
                 )
                 r = subprocess.run(
                     [
-                        tf, "apply",
-                        "-no-color", "-input=false",
+                        tf,
+                        "apply",
+                        "-no-color",
+                        "-input=false",
                         str(plan_file),
                     ],
                     cwd=cwd,
@@ -630,9 +639,7 @@ class TerraformProvisioner:
                     env=env,
                 )
                 if r.returncode != 0:
-                    on_failed(
-                        f"terraform apply falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                    )
+                    on_failed(f"terraform apply falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                     return
 
                 # OUTPUT (workspace ativo)
@@ -743,7 +750,9 @@ class TerraformProvisioner:
         on_failed: OnFailed,
     ) -> None:
         if self._backend_type == "local":
-            self._run_destroy_local(spec, vm_id, module_dir, state_file, timeout_sec, on_done, on_failed)
+            self._run_destroy_local(
+                spec, vm_id, module_dir, state_file, timeout_sec, on_done, on_failed
+            )
         else:
             self._run_destroy_remote(spec, vm_id, module_dir, timeout_sec, on_done, on_failed)
 
@@ -768,8 +777,11 @@ class TerraformProvisioner:
             )
             r = subprocess.run(
                 [
-                    tf, "destroy", "-auto-approve",
-                    "-no-color", "-input=false",
+                    tf,
+                    "destroy",
+                    "-auto-approve",
+                    "-no-color",
+                    "-input=false",
                     f"-var=vm_id={vm_id}",
                     f"-var=spec={spec}",
                     f"-state={state_str}",
@@ -781,9 +793,7 @@ class TerraformProvisioner:
                 timeout=timeout_sec,
             )
             if r.returncode != 0:
-                on_failed(
-                    f"terraform destroy falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                )
+                on_failed(f"terraform destroy falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                 return
 
             state_file.unlink(missing_ok=True)
@@ -839,9 +849,7 @@ class TerraformProvisioner:
                 timeout=30,
             )
             if r_sel.returncode != 0:
-                on_failed(
-                    f"terraform workspace select {vm_id!r} falhou:\n{r_sel.stderr[:1000]}"
-                )
+                on_failed(f"terraform workspace select {vm_id!r} falhou:\n{r_sel.stderr[:1000]}")
                 return
 
             _log.info(
@@ -850,8 +858,11 @@ class TerraformProvisioner:
             )
             r = subprocess.run(
                 [
-                    tf, "destroy", "-auto-approve",
-                    "-no-color", "-input=false",
+                    tf,
+                    "destroy",
+                    "-auto-approve",
+                    "-no-color",
+                    "-input=false",
                     f"-var=vm_id={vm_id}",
                     f"-var=spec={spec}",
                 ],
@@ -861,9 +872,7 @@ class TerraformProvisioner:
                 timeout=timeout_sec,
             )
             if r.returncode != 0:
-                on_failed(
-                    f"terraform destroy falhou (vm_id={vm_id}):\n{r.stderr[:2000]}"
-                )
+                on_failed(f"terraform destroy falhou (vm_id={vm_id}):\n{r.stderr[:2000]}")
                 return
 
             # Volta para default e deleta workspace

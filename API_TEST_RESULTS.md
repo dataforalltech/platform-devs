@@ -2,7 +2,7 @@
 
 **Date:** 2026-05-12  
 **Environment:** Local Docker (staging)  
-**Platform:** PostgreSQL 16 + Redis 7 + 8 Zillas + Gateway  
+**Platform:** PostgreSQL 16 + Redis 7 + 8 DevTeam + Gateway  
 **Status:** 🟢 **OPERATIONAL**
 
 ---
@@ -34,15 +34,15 @@ All critical API functionality has been tested and **validated as working**:
 **Findings:**
 - Health endpoint responds with proper JSON
 - MCP listing is public (no auth required)
-- All 8 Zillas discovered successfully:
-  - qazilla-mcp (19 tools)
-  - backzilla-mcp (13 tools)
-  - archzilla-mcp (1 tool)
-  - seczilla-mcp
-  - opszilla-mcp
-  - productzilla-mcp
-  - frontzilla-mcp
-  - pozilla-mcp
+- All 8 DevTeam discovered successfully:
+  - qa-engineer-mcp (19 tools)
+  - backend-mcp (13 tools)
+  - architecture-mcp (1 tool)
+  - security-mcp
+  - devops-mcp
+  - product-manager-mcp
+  - frontend-mcp
+  - product-owner-mcp
 
 ---
 
@@ -64,7 +64,7 @@ All critical API functionality has been tested and **validated as working**:
 **Token Types:**
 ```
 Admin:     test-admin-token    → Full access ("*" scope)
-Developer: test-developer-token → Limited access (qazilla, backzilla, archzilla)
+Developer: test-developer-token → Limited access (qa-engineer, backend, architecture)
 Readonly:  test-readonly-token → Status-only access
 ```
 
@@ -74,14 +74,14 @@ Readonly:  test-readonly-token → Status-only access
 
 #### Admin (Full Access)
 ```
-✅ Can list tools on: qazilla-mcp (19), backzilla-mcp (13), archzilla-mcp (1)
+✅ Can list tools on: qa-engineer-mcp (19), backend-mcp (13), architecture-mcp (1)
 ✅ Can call: analyze_quality_requirement → success
 ✅ All MCPs accessible
 ```
 
 #### Developer (Limited Access)
 ```
-✅ Can list tools on: qazilla-mcp (19), backzilla-mcp (13), archzilla-mcp (1)
+✅ Can list tools on: qa-engineer-mcp (19), backend-mcp (13), architecture-mcp (1)
 ❌ Cannot call: analyze_quality_requirement → forbidden (403)
 ✅ Access matches defined scopes
 ```
@@ -98,9 +98,9 @@ Readonly:  test-readonly-token → Status-only access
 RBAC_MAP = {
     "admin": {"*": ["*"]},  # All access
     "developer": {
-        "qazilla-mcp": ["generate_unit_tests", ...],
-        "backzilla-mcp": ["*"],
-        "archzilla-mcp": ["*"],
+        "qa-engineer-mcp": ["generate_unit_tests", ...],
+        "backend-mcp": ["*"],
+        "architecture-mcp": ["*"],
     },
     "readonly": {"*": ["status"]},  # Status only
 }
@@ -112,7 +112,7 @@ RBAC_MAP = {
 
 #### Successful Tool Call
 ```
-POST /mcp/qazilla-mcp/tools/call
+POST /mcp/qa-engineer-mcp/tools/call
 {
   "name": "analyze_quality_requirement",
   "arguments": {"requirement": "Test my API endpoint"}
@@ -133,7 +133,7 @@ Audit Log:
 
 #### Failed Tool Call (Invalid Tool)
 ```
-POST /mcp/qazilla-mcp/tools/call
+POST /mcp/qa-engineer-mcp/tools/call
 {
   "name": "run_unit_tests",
   "arguments": {"test_type": "unit"}
@@ -150,10 +150,10 @@ Audit Log:
 
 #### Forbidden Tool Call (Authorization)
 ```
-POST /mcp/qazilla-mcp/tools/call
+POST /mcp/qa-engineer-mcp/tools/call
 Headers: Authorization: Bearer test-developer-token
 
-Response: {"detail": "Not authorized to call analyze_quality_requirement on qazilla-mcp"}
+Response: {"detail": "Not authorized to call analyze_quality_requirement on qa-engineer-mcp"}
 
 Audit Log:
   user_id: dev1
@@ -177,10 +177,10 @@ ORDER BY ts DESC;
 ```
 user_id │   role    │     mcp     │            tool             │  status   │ duration_ms
 ─────────────────────────────────────────────────────────────────────────────────────────
-dev1    │ developer │ qazilla-mcp │ analyze_quality_requirement │ forbidden │ 24
-admin   │ admin     │ qazilla-mcp │ analyze_quality_requirement │ success   │ 36
-admin   │ admin     │ qazilla-mcp │ analyze_quality_requirement │ success   │ 35
-admin   │ admin     │ qazilla-mcp │ run_unit_tests              │ error     │ 24
+dev1    │ developer │ qa-engineer-mcp │ analyze_quality_requirement │ forbidden │ 24
+admin   │ admin     │ qa-engineer-mcp │ analyze_quality_requirement │ success   │ 36
+admin   │ admin     │ qa-engineer-mcp │ analyze_quality_requirement │ success   │ 35
+admin   │ admin     │ qa-engineer-mcp │ run_unit_tests              │ error     │ 24
 ```
 
 **Breakdown by Status:**
@@ -282,14 +282,14 @@ TTL Management:    Correct ✅
 mcp-gateway:        ✅ Running (port 8080)
 postgres:           ✅ Running (port 5432)
 redis:              ✅ Running (port 6379)
-qazilla-mcp:        ✅ Running (port 7100)
-backzilla-mcp:      ✅ Running (port 7100)
-archzilla-mcp:      ✅ Running (port 7100)
-seczilla-mcp:       ✅ Running (port 7100)
-opszilla-mcp:       ✅ Running (port 7100)
-productzilla-mcp:   ✅ Running (port 7100)
-frontzilla-mcp:     ✅ Running (port 7100)
-pozilla-mcp:        ✅ Running (port 7100)
+qa-engineer-mcp:        ✅ Running (port 7100)
+backend-mcp:      ✅ Running (port 7100)
+architecture-mcp:      ✅ Running (port 7100)
+security-mcp:       ✅ Running (port 7100)
+devops-mcp:       ✅ Running (port 7100)
+product-manager-mcp:   ✅ Running (port 7100)
+frontend-mcp:     ✅ Running (port 7100)
+product-owner-mcp:        ✅ Running (port 7100)
 ```
 
 ### Database Schema

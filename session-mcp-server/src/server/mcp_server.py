@@ -1,26 +1,15 @@
 """Servidor MCP Session — gerenciamento de sessões e tarefas de trabalho Claude Code.
 
-Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP) na porta 7100.
+Transporte: Streamable HTTP (SDK oficial) + auth Bearer (shared.mcp_auth) na porta 7102.
 """
+
 from __future__ import annotations
 
-import os
-
-import asyncio
 import json
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
-
-
-class _JSONEncoder(json.JSONEncoder):
-    """Serializa tipos extras: datetime, date, Decimal."""
-    def default(self, o: Any) -> Any:
-        if isinstance(o, (datetime, date)):
-            return o.isoformat()
-        if isinstance(o, Decimal):
-            return float(o)
-        return super().default(o)
 
 from fastapi import FastAPI
 from mcp.server import Server
@@ -66,6 +55,18 @@ from ..tools.session_tool import (
     supersede_suggestion,
     update_session,
 )
+
+
+class _JSONEncoder(json.JSONEncoder):
+    """Serializa tipos extras: datetime, date, Decimal."""
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
+
 
 _ACTOR_SCHEMA = {
     "type": "object",
@@ -156,8 +157,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_session": {
         "description": (
-            "Atualiza o status e/ou progresso de uma sessão. "
-            "Status: active | paused | completed."
+            "Atualiza o status e/ou progresso de uma sessão. Status: active | paused | completed."
         ),
         "schema": {
             "type": "object",
@@ -603,9 +603,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "defer_suggestion": {
-        "description": (
-            "Difere uma sugestão pendente. actor obrigatório, reason opcional."
-        ),
+        "description": ("Difere uma sugestão pendente. actor obrigatório, reason opcional."),
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -672,6 +670,48 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # ---------------------------------------------------------------------- #
+# Escopo por ferramenta (least privilege)                                 #
+# ---------------------------------------------------------------------- #
+# read  = consulta (get_*/list_*);  write = ação/mutação (tudo o mais).
+SCOPE_FOR_TOOL: dict[str, str] = {
+    # leitura
+    "get_session": "session:read",
+    "list_sessions": "session:read",
+    "get_task": "session:read",
+    "list_tasks": "session:read",
+    "get_suggestion": "session:read",
+    "list_suggestions": "session:read",
+    "get_decision": "session:read",
+    "list_decisions": "session:read",
+    "list_service_dependencies": "session:read",
+    # escrita
+    "start_session": "session:write",
+    "confirm_branch_created": "session:write",
+    "save_checkpoint": "session:write",
+    "update_session": "session:write",
+    "add_artifact": "session:write",
+    "resume_session": "session:write",
+    "end_session": "session:write",
+    "add_task": "session:write",
+    "approve_task": "session:write",
+    "start_task": "session:write",
+    "complete_task": "session:write",
+    "fail_task": "session:write",
+    "cancel_task": "session:write",
+    "add_service_dependency": "session:write",
+    "remove_service_dependency": "session:write",
+    "submit_suggestion": "session:write",
+    "accept_suggestion": "session:write",
+    "reject_suggestion": "session:write",
+    "defer_suggestion": "session:write",
+    "supersede_suggestion": "session:write",
+}
+SCOPES_SUPPORTED = ["session:read", "session:write"]
+
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), "SCOPE_FOR_TOOL mismatch"
+
+
+# ---------------------------------------------------------------------- #
 # HTTP API                                                                #
 # ---------------------------------------------------------------------- #
 def _build_http_app() -> FastAPI:
@@ -709,9 +749,7 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
         ]
 
     @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict[str, Any] | None
-    ) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
         try:
             payload = _dispatch(name, args, store, settings.default_base_branch)
@@ -720,7 +758,12 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
         except Exception as exc:  # noqa: BLE001
             payload = {"error": "internal_error", "details": str(exc), "tool": name}
 
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder),
+            )
+        ]
 
     # ── HTTP MCP endpoints (for wrapper compatibility) ─────────────────── #
 
@@ -936,30 +979,35 @@ def _dispatch(
     raise KeyError(name)
 
 
-async def _run() -> None:
-    import uvicorn
-    from mcp.server.stdio import stdio_server
+def build_app(validators: Any = None):
+    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
 
-    server, _settings, _store, http_app = build_server()
+    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
+    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware.
+    """
+    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    cfg = uvicorn.Config(
-        http_app, host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")),
-        log_level="warning", access_log=False,
+    server, _settings, _store, _http = build_server()
+    return mount_lowlevel_streamable_http(
+        server,
+        resource=os.getenv("SESSION_RESOURCE", "http://localhost:7102/mcp"),
+        prm_url=os.getenv(
+            "SESSION_PRM_URL",
+            "http://localhost:7102/.well-known/oauth-protected-resource",
+        ),
+        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
+        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
+        scopes_supported=SCOPES_SUPPORTED,
+        scope_for_tool=SCOPE_FOR_TOOL,
+        validators=validators,
     )
-    server_http = uvicorn.Server(cfg)
-
-    try:
-        async with stdio_server() as (read_stream, write_stream):
-            await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
-                server_http.serve(),
-            )
-    except (EOFError, BrokenPipeError):
-        pass
 
 
 def main() -> None:
-    asyncio.run(_run())
+    """Entry point — Streamable HTTP + auth."""
+    import uvicorn
+
+    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7102")))
 
 
 if __name__ == "__main__":

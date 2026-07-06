@@ -1,16 +1,16 @@
 # 📊 Persistence Layer Audit Report
 **Date:** 2026-05-12  
-**Scope:** All 20 MCPs + 8 Zillas (28 total)  
+**Scope:** All 20 MCPs + 8 DevTeam (28 total)  
 **Status:** MOSTLY PRODUCTION-READY
 
 ---
 
 ## Executive Summary
 
-- ✅ **PostgreSQL (Production):** 2 MCPs (agent-twin, session)
+- ✅ **PostgreSQL (Production):** 2 MCPs (dev-twin, session)
 - ⚠️ **File-Based (Acceptable):** 1 MCP (ai-governance: JSON suggestions)
 - ⚠️ **SQLite (Development/Temporary):** 1 MCP (infra: VM lease state)
-- 🟢 **Stateless/In-Memory:** 15 MCPs (Zillas + tools)
+- 🟢 **Stateless/In-Memory:** 15 MCPs (DevTeam + tools)
 - ❌ **Stubs/Unimplemented:** 0
 - ❌ **Mocks in Production:** 0
 
@@ -20,7 +20,7 @@
 
 ### ✅ POSTGRES (Production-Ready)
 
-#### 1. agent-twin-mcp-server
+#### 1. dev-twin-mcp-server
 **File:** `src/db/token_store.py`
 ```
 Status: ✅ PRODUCTION-READY
@@ -114,15 +114,15 @@ Rationale:
 
 ### 🟢 STATELESS/IN-MEMORY
 
-#### Zillas (8)
-- archzilla-mcp
-- backzilla-mcp
-- frontzilla-mcp
-- opszilla-mcp
-- pozilla-mcp
-- productzilla-mcp
-- qazilla-mcp
-- seczilla-mcp
+#### DevTeam (8)
+- architecture-mcp
+- backend-mcp
+- frontend-mcp
+- devops-mcp
+- product-owner-mcp
+- product-manager-mcp
+- qa-engineer-mcp
+- security-mcp
 
 **Status:** Stateless (no persistence needed)
 - Pure generation/analysis tools
@@ -150,7 +150,7 @@ Rationale:
 
 ### Tier 1: Critical (User Identity & Sessions) ✅
 ```
-User → agent-twin-mcp ──[psycopg2]──→ PostgreSQL (tokens, credentials)
+User → dev-twin-mcp ──[psycopg2]──→ PostgreSQL (tokens, credentials)
 User → session-mcp    ──[psycopg2]──→ PostgreSQL (sessions, checkpoints, tasks)
 ```
 **Status:** ✅ PRODUCTION-READY
@@ -171,7 +171,7 @@ Cross-repo suggestions → ai-governance-mcp ──[JSON files]──→ Filesys
 
 ### Tier 4: Stateless (Tools/Analysis)
 ```
-User input → Zillas/Tools ──[in-memory]──→ Output to client
+User input → DevTeam/Tools ──[in-memory]──→ Output to client
   └─ No persistence needed
 ```
 **Status:** ✅ FINE
@@ -184,7 +184,7 @@ If scaling requires database consolidation:
 
 ```
 Phase 1 (Now): ✅ COMPLETE
-  • agent-twin + session-mcp on PostgreSQL
+  • dev-twin + session-mcp on PostgreSQL
   • ai-governance suggestions in JSON files
   • infra-mcp state in SQLite
 
@@ -192,7 +192,7 @@ Phase 2 (Optional): Consolidate to Single DB
   • Create shared `platform_mcp` PostgreSQL database
   • Migrate ai-governance suggestions to PG `suggestions` table
   • Migrate infra-mcp to PG `vm_leases` table (with periodic purge)
-  • Zillas remain stateless
+  • DevTeam remain stateless
 
 Phase 3 (Optional): Add Caching Layer
   • Add Redis for session caching (L1 cache)
@@ -211,11 +211,11 @@ postgresql://user:password@host:5432/database_name
 
 Environment variables:
 ```bash
-# agent-twin-mcp
-AGENT_TWIN_PG_HOST=localhost
-AGENT_TWIN_PG_DB=agent_twin
-AGENT_TWIN_PG_USER=postgres
-AGENT_TWIN_PG_PASSWORD=***
+# dev-twin-mcp
+DEV_TWIN_PG_HOST=localhost
+DEV_TWIN_PG_DB=dev_twin
+DEV_TWIN_PG_USER=postgres
+DEV_TWIN_PG_PASSWORD=***
 
 # session-mcp
 SESSION_PG_HOST=localhost
@@ -236,7 +236,7 @@ export PG_DSN="postgresql://postgres:password@localhost:5432/mcp_platform"
 ### Health Check Commands
 
 ```bash
-# Test agent-twin PostgreSQL connection
+# Test dev-twin PostgreSQL connection
 curl -X GET http://localhost:7101/auth/validate \
   -H "Authorization: Bearer test-admin-token"
 
@@ -258,10 +258,10 @@ curl -X POST http://localhost:7112/suggestions/create \
 
 ```bash
 # PostgreSQL - List tables
-psql -h localhost -U postgres -d agent_twin -c "\dt"
+psql -h localhost -U postgres -d dev_twin -c "\dt"
 
 # PostgreSQL - Check token count
-psql -h localhost -U postgres -d agent_twin -c "SELECT COUNT(*) FROM agent_tokens;"
+psql -h localhost -U postgres -d dev_twin -c "SELECT COUNT(*) FROM agent_tokens;"
 
 # SQLite - Check VM leases
 sqlite3 /path/to/infra-mcp/allocator.db "SELECT COUNT(*) FROM vm_leases;"
@@ -276,7 +276,7 @@ ls -la /path/to/ai-governance/suggestions/
 
 Before Production Deployment:
 
-- [ ] PostgreSQL instance running (agent-twin + session databases)
+- [ ] PostgreSQL instance running (dev-twin + session databases)
 - [ ] Database credentials configured via environment
 - [ ] Connection pool sizes tuned (min/max connections)
 - [ ] PostgreSQL backups configured
@@ -293,18 +293,18 @@ Before Production Deployment:
 
 | MCP | Database | Type | Status | Notes |
 |-----|----------|------|--------|-------|
-| agent-twin | PostgreSQL | Production | ✅ | Tokens, credentials |
+| dev-twin | PostgreSQL | Production | ✅ | Tokens, credentials |
 | session | PostgreSQL | Production | ✅ | Sessions, tasks |
 | ai-governance | Filesystem (JSON) | Development | ⚠️ | Suggestions, git-auditable |
 | infra | SQLite | Development | ⚠️ | VM leases (temporary) |
-| archzilla | None | Stateless | ✅ | Tool output only |
-| backzilla | None | Stateless | ✅ | Tool output only |
-| frontzilla | None | Stateless | ✅ | Tool output only |
-| opszilla | None | Stateless | ✅ | Tool output only |
-| pozilla | None | Stateless | ✅ | Tool output only |
-| productzilla | None | Stateless | ✅ | Tool output only |
-| qazilla | None | Stateless | ✅ | Tool output only |
-| seczilla | None | Stateless | ✅ | Tool output only |
+| architecture | None | Stateless | ✅ | Tool output only |
+| backend | None | Stateless | ✅ | Tool output only |
+| frontend | None | Stateless | ✅ | Tool output only |
+| devops | None | Stateless | ✅ | Tool output only |
+| product-owner | None | Stateless | ✅ | Tool output only |
+| product-manager | None | Stateless | ✅ | Tool output only |
+| qa-engineer | None | Stateless | ✅ | Tool output only |
+| security | None | Stateless | ✅ | Tool output only |
 | audit | None | Stateless | ✅ | Reads from systems |
 | config | None | Stateless | ✅ | Reads from filesystem |
 | deploy | None | Stateless | ✅ | Reads from GitHub |

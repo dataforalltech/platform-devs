@@ -17,7 +17,7 @@ This document summarizes the completion of Phase 4d: comprehensive staging valid
 **File**: `/docker-compose.staging.yml` (492 lines)
 
 **Contents**:
-- 18 MCP servers (agent-twin, config, docs, session, services, deploy, qa, test, infra, pipeline, ai-governance, audit)
+- 18 MCP servers (dev-twin, config, docs, session, services, deploy, qa, test, infra, pipeline, ai-governance, audit)
 - 5 REST APIs (auth, admin, governance, scheduler, connectors)
 - 3 infrastructure services (PostgreSQL, Redis, Kafka + Zookeeper)
 - Complete networking and volume management
@@ -39,7 +39,7 @@ This document summarizes the completion of Phase 4d: comprehensive staging valid
 **File**: `/tests/e2e/staging-validation.py` (420 lines)
 
 **Test Coverage** (6 critical paths):
-1. Agent Twin Authentication — Creates test agent via agent-twin-mcp
+1. Dev Twin Authentication — Creates test agent via dev-twin-mcp
 2. Auth API Login — Validates auth-api endpoint
 3. Admin API Users — Tests admin-api list users endpoint
 4. Scheduler API Task — Creates task via scheduler-api
@@ -174,7 +174,7 @@ python3 tests/e2e/staging-validation.py
 
 | # | MCP | Port | Dependencies | Status |
 |----|-----|------|--------------|--------|
-| 1 | agent-twin-mcp | 7098 | config-mcp | ✅ Core |
+| 1 | dev-twin-mcp | 7098 | config-mcp | ✅ Core |
 | 2 | config-mcp | 7099 | PostgreSQL | ✅ Core |
 | 3 | docs-mcp | 7090 | config-mcp | ✅ Optional |
 | 4 | session-mcp | 7100 | PostgreSQL, Redis | ✅ Core |
@@ -191,7 +191,7 @@ python3 tests/e2e/staging-validation.py
 
 | # | API | Port | Dependencies | Status |
 |----|-----|------|--------------|--------|
-| 1 | auth-api | 8001 | PostgreSQL, Redis, agent-twin-mcp | ✅ Core |
+| 1 | auth-api | 8001 | PostgreSQL, Redis, dev-twin-mcp | ✅ Core |
 | 2 | admin-api | 8002 | PostgreSQL, auth-api | ✅ Core |
 | 3 | governance-api | 8003 | PostgreSQL, auth-api, admin-api | ✅ Core |
 | 4 | scheduler-api | 8005 | PostgreSQL, Kafka, auth-api | ✅ Core |
@@ -266,7 +266,7 @@ Target Go-Live: May 20, 2026
 
 3. **Token Expiry**
    - Risk: Inconsistent token policies across services
-   - Mitigation: Unified token management via agent-twin-mcp
+   - Mitigation: Unified token management via dev-twin-mcp
 
 4. **Load Spikes**
    - Risk: P95 latency exceeds 500ms under load

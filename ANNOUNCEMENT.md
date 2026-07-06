@@ -67,9 +67,9 @@ python install-mcp-wrapper.py # Windows/Mac/Linux
     "session-mcp": "http://localhost:7102",
     ... 18 MCPs no total
   },
-  "zilla-mcps": {
-    "archzilla-mcp": "http://localhost:7118",
-    "backzilla-mcp": "http://localhost:7119",
+  "devteam-mcps": {
+    "architecture-mcp": "http://localhost:7118",
+    "backend-mcp": "http://localhost:7119",
     ... 8 MCPs no total
   }
 }
@@ -98,7 +98,7 @@ Execute smoke tests
 │                                         │
 │  Docker Network                         │
 │  ├─ System MCPs (7100-7116) - Python   │
-│  ├─ Zilla MCPs (7118-7125) - Node.js   │
+│  ├─ DevTeam MCPs (7118-7125) - Node.js   │
 │  └─ Registry (8000) - Discovery        │
 └─────────────────────────────────────────┘
        ↑ HTTP (shared)
@@ -136,7 +136,7 @@ Claude Code → usa config-mcp:7100 → retorna config JSON
 
 ```
 Pergunta: "Create a test file for auth module"
-Claude Code → usa frontzilla-mcp:7120 (frontend) + qazilla-mcp:7124 (QA)
+Claude Code → usa frontend-mcp:7120 (frontend) + qa-engineer-mcp:7124 (QA)
 → Gera teste com cobertura automática
 ```
 
@@ -218,7 +218,7 @@ docker compose -f docker-compose-system.yml ps
 
 | Métrica | Valor |
 |---------|-------|
-| MCPs | 26 (18 system + 8 zilla) |
+| MCPs | 26 (18 system + 8 devteam) |
 | Ferramentas | 170+ |
 | Latência | <100ms |
 | Simultaneous Users | Ilimitado |
@@ -241,8 +241,8 @@ docker compose -f docker-compose-system.yml ps
 **De agora em diante, você tem um assistente AI que:**
 
 - ✅ Conhece toda sua arquitetura (infra-mcp)
-- ✅ Pode criar código (frontzilla, backzilla)
-- ✅ Pode testar código (qazilla)
+- ✅ Pode criar código (frontend, backend)
+- ✅ Pode testar código (qa-engineer)
 - ✅ Pode fazer deploy (deploy-mcp)
 - ✅ Pode auditar decisões (audit-mcp)
 - ✅ Pode otimizar performance (qa-mcp)

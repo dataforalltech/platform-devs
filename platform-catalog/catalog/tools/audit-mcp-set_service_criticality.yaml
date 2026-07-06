@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: audit-mcp/set_service_criticality
+  uid: audit-mcp:set_service_criticality
+  domain: governance
+  title: set_service_criticality @ audit-mcp
+  description: ''
+  owner: platform
+  tags:
+  - audit-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.set_service_criticality
+  provider_id: audit-mcp
+  provider_version: 1.0.0
+  tool: set_service_criticality
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.set_service_criticality
+- verb: provided-by
+  target: audit-mcp

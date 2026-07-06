@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 
 from ..checkers.docs_checker import DocsChecker
@@ -146,5 +145,5 @@ def _load_policy(policies_path: str, env: str) -> dict:
     if not policy_file.exists():
         return {"min_score": 0.5, "required_checkers": {}, "ideal_checkers": {}}
 
-    with open(policy_file) as f:
+    with open(policy_file, encoding="utf-8") as f:
         return yaml.safe_load(f) or {}

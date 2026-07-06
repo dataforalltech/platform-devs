@@ -13,8 +13,12 @@ from .conftest import make_service
 
 # ── scan_docker ───────────────────────────────────────────────────────────── #
 
-_DOCKER_LINE_1 = '{"ID":"abc123","Names":"api-gateway","Image":"myimage:1.0","Ports":"0.0.0.0:8080->80/tcp"}'
-_DOCKER_LINE_2 = '{"ID":"def456","Names":"worker","Image":"worker:2.0","Ports":"0.0.0.0:9000->9000/tcp"}'
+_DOCKER_LINE_1 = (
+    '{"ID":"abc123","Names":"api-gateway","Image":"myimage:1.0","Ports":"0.0.0.0:8080->80/tcp"}'
+)
+_DOCKER_LINE_2 = (
+    '{"ID":"def456","Names":"worker","Image":"worker:2.0","Ports":"0.0.0.0:9000->9000/tcp"}'
+)
 
 
 def test_scan_docker_success(store):
@@ -125,7 +129,9 @@ def test_scan_processes_filters_below_min_port(store):
     mock_proc.cmdline.return_value = ["server"]
 
     with (
-        patch("src.tools.discovery_tool.psutil.net_connections", return_value=[conn_low, conn_high]),
+        patch(
+            "src.tools.discovery_tool.psutil.net_connections", return_value=[conn_low, conn_high]
+        ),
         patch("src.tools.discovery_tool.psutil.Process", return_value=mock_proc),
     ):
         result = scan_processes(store, min_port=1024)
@@ -213,8 +219,20 @@ def test_check_all_health_mixed(store):
         nonlocal call_count
         call_count += 1
         if name == "svc-healthy":
-            return {"name": name, "healthy": True, "status_code": 200, "url_checked": "http://localhost:8080/health", "response_ms": 10.0}
-        return {"name": name, "healthy": False, "status_code": 503, "url_checked": "http://localhost:9090/health", "response_ms": 5.0}
+            return {
+                "name": name,
+                "healthy": True,
+                "status_code": 200,
+                "url_checked": "http://localhost:8080/health",
+                "response_ms": 10.0,
+            }
+        return {
+            "name": name,
+            "healthy": False,
+            "status_code": 503,
+            "url_checked": "http://localhost:9090/health",
+            "response_ms": 5.0,
+        }
 
     with patch("src.tools.discovery_tool.check_health", side_effect=fake_check_health):
         result = check_all_health(store, timeout=2.0)

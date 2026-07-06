@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/register_token
+  uid: dev-twin-mcp:register_token
+  domain: platform
+  title: register_token @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.register_token
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: register_token
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.register_token
+- verb: provided-by
+  target: dev-twin-mcp

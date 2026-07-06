@@ -40,7 +40,7 @@ curl -H "Authorization: Bearer test-admin-token" \
 ### List Tools for an MCP
 ```bash
 curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:28080/mcp/qazilla-mcp/tools | jq .
+  http://localhost:28080/mcp/qa-engineer-mcp/tools | jq .
 ```
 
 ### Call a Tool
@@ -49,7 +49,7 @@ curl -X POST \
   -H "Authorization: Bearer test-admin-token" \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_test_cases", "arguments": {"scenario": "login flow"}}' \
-  http://localhost:28080/mcp/qazilla-mcp/tools/call | jq .
+  http://localhost:28080/mcp/qa-engineer-mcp/tools/call | jq .
 ```
 
 ### Check Rate Limit Usage (Admin Only)
@@ -91,7 +91,7 @@ ORDER BY ts DESC;
 | Role | Access |
 |------|--------|
 | `admin` | All MCPs, all tools |
-| `developer` | qazilla-mcp, backzilla-mcp (specific tools) |
+| `developer` | qa-engineer-mcp, backend-mcp (specific tools) |
 | `readonly` | All MCPs, `status` tool only |
 
 ## Testing Rate Limiting & Audit Logging
@@ -165,7 +165,7 @@ docker exec staging-postgres psql -U platform -d platform_staging -c "\di idx_au
 
 ## Next Steps
 
-1. **Add Production Tokens**: Replace test tokens with bcrypt validation from agent-twin-mcp
+1. **Add Production Tokens**: Replace test tokens with bcrypt validation from dev-twin-mcp
 2. **Enable Multi-tenancy**: Use tenant_id for data isolation
 3. **Setup Monitoring**: Add Prometheus metrics and Grafana dashboards
 4. **Configure HTTPS**: Add TLS for production deployment

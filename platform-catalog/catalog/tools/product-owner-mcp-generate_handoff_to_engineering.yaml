@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/generate_handoff_to_engineering
+  uid: product-owner-mcp:generate_handoff_to_engineering
+  domain: product
+  title: generate_handoff_to_engineering @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.generate_handoff_to_engineering
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: generate_handoff_to_engineering
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.generate_handoff_to_engineering
+- verb: provided-by
+  target: product-owner-mcp

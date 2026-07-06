@@ -1,0 +1,21 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: admin
+  uid: admin
+  domain: platform
+  title: admin
+  description: ''
+  owner: platform-admin
+  tags:
+  - platform
+  - external
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: admin (federated)
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+  external: true
+relations: []

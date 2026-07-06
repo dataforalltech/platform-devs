@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/add_service_dependency
+  uid: session-mcp:add_service_dependency
+  domain: platform
+  title: add_service_dependency @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.add_service_dependency
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: add_service_dependency
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.add_service_dependency
+- verb: provided-by
+  target: session-mcp

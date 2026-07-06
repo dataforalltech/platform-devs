@@ -1,9 +1,8 @@
 """Testes do ConfigStore."""
+
 from __future__ import annotations
 
-import pytest
-
-from src.knowledge.store import ConfigStore, StoreError
+from src.knowledge.store import ConfigStore
 from src.tools.credential_tool import (
     delete_credential,
     get_credential,
@@ -87,6 +86,7 @@ class TestCredentialTools:
     def test_set_credential_secure_via_mock(self, store, monkeypatch):
         """set_credential_secure nunca recebe o valor pelo canal MCP — usa getpass."""
         import getpass
+
         monkeypatch.setattr(getpass, "getpass", lambda prompt="": "super_secret_password")
         result = set_credential_secure(store, "credentials.e2e", "E2E_USER_PASSWORD")
         assert result["success"] is True
@@ -98,6 +98,7 @@ class TestCredentialTools:
     def test_set_credential_secure_empty_value(self, store, monkeypatch):
         """Valor vazio não deve ser armazenado."""
         import getpass
+
         monkeypatch.setattr(getpass, "getpass", lambda prompt="": "")
         result = set_credential_secure(store, "credentials.e2e", "E2E_USER_PASSWORD")
         assert result["success"] is False
@@ -145,8 +146,9 @@ class TestTenantTools:
 
 class TestSessionTenantTool:
     def test_no_twin_returns_error(self, store, monkeypatch):
-        """Sem agent-twin disponível, retorna erro descritivo."""
+        """Sem dev-twin disponível, retorna erro descritivo."""
         import src.tools.tenant_tool as tt
+
         monkeypatch.setattr(tt, "_get_twin_tenant_id", lambda: None)
         result = get_session_tenant_config(store)
         assert result["found"] is False
@@ -156,6 +158,7 @@ class TestSessionTenantTool:
     def test_resolves_tenant_from_twin(self, store, monkeypatch):
         """Com twin disponível, retorna config do tenant da sessão."""
         import src.tools.tenant_tool as tt
+
         set_tenant_config(store, "tenant_session_01", "DB_URL", "postgres://session/db")
         monkeypatch.setattr(tt, "_get_twin_tenant_id", lambda: "tenant_session_01")
         result = get_session_tenant_config(store)
@@ -166,6 +169,7 @@ class TestSessionTenantTool:
     def test_twin_tenant_not_configured_in_store(self, store, monkeypatch):
         """Twin retorna tenant_id mas não há config no store."""
         import src.tools.tenant_tool as tt
+
         monkeypatch.setattr(tt, "_get_twin_tenant_id", lambda: "tenant_nonexistent")
         result = get_session_tenant_config(store)
         assert result["found"] is False

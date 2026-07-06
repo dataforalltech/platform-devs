@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/generate_handoff_to_architecture
+  uid: product-owner-mcp:generate_handoff_to_architecture
+  domain: product
+  title: generate_handoff_to_architecture @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.generate_handoff_to_architecture
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: generate_handoff_to_architecture
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.generate_handoff_to_architecture
+- verb: provided-by
+  target: product-owner-mcp

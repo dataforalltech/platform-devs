@@ -2,11 +2,11 @@
 
 Este pacote consolida código compartilhado entre os 11 MCP servers
 do platform-devs, eliminando duplicação de base_client, twin_client,
-e config_client entre agent-twin e config servers.
+e config_client entre dev-twin e config servers.
 
 Módulos:
 - base_client: BaseHTTPClient com cache TTL
-- twin_client: TwinClient para interagir com agent-twin-mcp
+- twin_client: TwinClient para interagir com dev-twin-mcp
 - config_client: ConfigClient para interagir com config-mcp
 
 Uso típico:

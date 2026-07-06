@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/calculate_rice_score
+  uid: product-owner-mcp:calculate_rice_score
+  domain: product
+  title: calculate_rice_score @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.calculate_rice_score
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: calculate_rice_score
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.calculate_rice_score
+- verb: provided-by
+  target: product-owner-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/generate_openapi_spec
+  uid: backend-mcp:generate_openapi_spec
+  domain: development
+  title: generate_openapi_spec @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_openapi_spec
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: generate_openapi_spec
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_openapi_spec
+- verb: provided-by
+  target: backend-mcp

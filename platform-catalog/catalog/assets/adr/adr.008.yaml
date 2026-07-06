@@ -1,0 +1,16 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.008
+  uid: adr.008
+  title: 'ADR-008 — North-Star: Plataforma MCP de referência'
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: 008
+  status: Proposed (North-Star, não-V1)
+  path: ADR-008-MCP-NORTH-STAR.md
+relations: []

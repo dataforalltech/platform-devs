@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: docs-mcp/search_docs
+  uid: docs-mcp:search_docs
+  domain: documentation
+  title: search_docs @ docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - docs-mcp
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: documentation.search_docs
+  provider_id: docs-mcp
+  provider_version: 1.0.0
+  tool: search_docs
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: documentation.search_docs
+- verb: provided-by
+  target: docs-mcp

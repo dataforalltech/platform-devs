@@ -1,0 +1,98 @@
+# platform-admin (API + MCP) — ambiente enxuto.
+# IAM/usuarios: valida credenciais (USERS, Argon2id) e mina JWT no login. O auth
+# chama o admin DIRETAMENTE (URL_ADMIN), nunca pelo gateway (F6). Assina JWT com
+# a MESMA chave RSA do auth (kid=platform-auth-1) p/ o JWKS do auth validar.
+name: dataforall-admin
+
+networks:
+  platform-local:
+    external: true
+
+services:
+  platform-admin:
+    image: d4all.azurecr.io/dataforall/3.0/platform-admin:${IMAGE_TAG:-latest}
+    container_name: platform-admin
+    restart: unless-stopped
+    networks: [platform-local]
+    volumes:
+      - /opt/dataforall/deploy/secrets/jwt-auth.pem:/run/secrets/jwt_key.pem:ro
+    environment:
+      APP_NAME: platform-admin
+      SERVICE_ID: platform-admin
+      APP_ENV: hml
+      RUNTIME_ENV: local
+      ENVIRONMENT: staging
+      ENV_PROFILE: local-hml
+      NETWORK_TOPOLOGY: docker
+      TZ: UTC
+      DOCS_ENABLED: "false"
+      UVICORN_WORKERS: "1"
+      # Registry admin (ADMIN_DATAFORALL)
+      ADMIN_DB_HOST: admin-mysql
+      ADMIN_DB_PORT: "3306"
+      ADMIN_DB_NAME: ADMIN_DATAFORALL
+      ADMIN_DB_USER: root
+      ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      ADMIN_DB_SSLMODE: disable
+      # DB do tenant (schema = tenant_id em runtime)
+      DB_ENGINE: mysql
+      DB_HOST: tenant-mysql
+      DB_PORT: "3306"
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      DB_SSLMODE: disable
+      # JWT RS256 — assina com a MESMA chave do auth; audience/issuer casam
+      JWT_ALGORITHM: RS256
+      JWT_ISSUER: platform-auth
+      JWT_AUDIENCE: platform-services
+      JWT_KEY_ID: platform-auth-1
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_key.pem
+      JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina em .env}
+      # tokens/segredos
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?defina em .env}
+      # S2S DIRETO (nao pelo gateway — F6)
+      URL_AUTH: http://platform-auth:8000/api/v1/auth
+      URL_IAM: http://platform-admin:8000/api/v1
+      # CORS + observabilidade
+      CORS_ALLOWED_ORIGINS: '["https://app.dataforall.tech"]'
+      OTEL_TRACES_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9090/health/ready',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  platform-admin-mcp:
+    image: d4all.azurecr.io/dataforall/3.0/platform-admin-mcp:${IMAGE_TAG:-latest}
+    container_name: platform-admin-mcp
+    restart: unless-stopped
+    networks: [platform-local]
+    # sem publish no host (o platform-mcp central alcanca via nome:7100; evita
+    # conflito com outros MCPs que tambem usam 7100). Health e interno.
+    environment:
+      # prefixo do pydantic-settings e ADMIN_MCP_ (nao MCP_ADMIN_)
+      ADMIN_MCP_ADMIN_URL: http://platform-admin:8000
+      ADMIN_MCP_INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      ADMIN_MCP_MCP_PORT: "7100"
+      ADMIN_MCP_TWIN_AUDIENCE: mcp:admin
+      # ADMIN_MCP_TWIN_JWKS_URI vazio => tools guarded negadas; health/liveness OK
+    healthcheck:
+      # a imagem baka um healthcheck errado (:9090/health/ready); o MCP serve /v1/health na :7100
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7100/v1/health',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    depends_on:
+      platform-admin:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: architecture-mcp/generate_c4_diagram
+  uid: architecture-mcp:generate_c4_diagram
+  domain: architecture
+  title: generate_c4_diagram @ architecture-mcp
+  description: ''
+  owner: platform
+  tags:
+  - architecture-mcp
+  - architecture
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: architecture.generate_c4_diagram
+  provider_id: architecture-mcp
+  provider_version: 1.0.0
+  tool: generate_c4_diagram
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: architecture.generate_c4_diagram
+- verb: provided-by
+  target: architecture-mcp

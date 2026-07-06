@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/status
+  uid: security-mcp:status
+  domain: security
+  title: status @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.status
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.status
+- verb: provided-by
+  target: security-mcp

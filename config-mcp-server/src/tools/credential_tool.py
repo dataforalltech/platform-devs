@@ -6,6 +6,7 @@ Namespaces convencionais:
   credentials.portainer → PORTAINER_WEBHOOK_<service>
   credentials.internal → INTERNAL_API_TOKEN, etc.
 """
+
 from __future__ import annotations
 
 from typing import Any

@@ -23,7 +23,7 @@
   - Workflow A: Feature Development (parallel teams, 2-4 weeks)
   - Workflow B: Threat Modeling & Security Review
   - Workflow C: Deployment Pipeline (dev→homol→prod)
-  - Workflow D: Cross-Zilla Validation (ecosystem health)
+  - Workflow D: Cross-DevTeam Validation (ecosystem health)
   - Workflow E: Release Management (version bumps & go-live)
   - Workflow F: Governance & Audit Trail
 
@@ -47,15 +47,15 @@
 
 **Contains**:
 - **Consolidation 1: Testing** (P1 priority)
-  - Current: qazilla (20) + qa-mcp (15) + test-mcp (10) = 45 tools / 3 MCPs
-  - Target: qazilla (45) = 45 tools / 1 MCP
+  - Current: qa-engineer (20) + qa-mcp (15) + test-mcp (10) = 45 tools / 3 MCPs
+  - Target: qa-engineer (45) = 45 tools / 1 MCP
   - Implementation: Week-by-week tasks for 4 weeks
   - Budget: 45 hours, 6 person-days
   - Success criteria: All tools functional, <10ms overhead, 150+ tests
 
 - **Consolidation 2: Security** (P1 priority)
-  - Current: seczilla (20) + qa-mcp security (3)
-  - Target: seczilla (25) with unified threat→control→scan flow
+  - Current: security (20) + qa-mcp security (3)
+  - Target: security (25) with unified threat→control→scan flow
   - Implementation: Week-by-week tasks for 4 weeks
   - Budget: 42 hours, 5 person-days
 
@@ -87,27 +87,27 @@
 
 - **5 Profile-Specific Guides**
   1. **Development Engineer**
-     - When calling QAZilla: "Quick test generation tool"
-     - When calling SecZilla: "Add security to your code"
-     - When calling OpsZilla: "Local dev environment setup"
+     - When calling QA-Engineer: "Quick test generation tool"
+     - When calling Security: "Add security to your code"
+     - When calling DevOps: "Local dev environment setup"
 
   2. **QA/Release Manager**
-     - When calling QAZilla: "Complete QA workflow"
+     - When calling QA-Engineer: "Complete QA workflow"
      - When calling Pipeline MCP: "Environment promotion & release gates"
-     - When calling SecZilla: "Security testing before release"
+     - When calling Security: "Security testing before release"
 
   3. **Security/Compliance Officer**
-     - When calling SecZilla: "Complete threat & control management"
+     - When calling Security: "Complete threat & control management"
      - When calling ai-governance: "Ecosystem validation & contract review"
 
   4. **DevOps/SRE Engineer**
-     - When calling OpsZilla: "Infrastructure design & deployment"
+     - When calling DevOps: "Infrastructure design & deployment"
      - When calling infra-mcp: "Terraform execution & policy validation"
-     - When calling zilla-observatory: "Real-time monitoring & dashboards"
+     - When calling devteam-observatory: "Real-time monitoring & dashboards"
 
   5. **Product Manager**
-     - When calling ProductZilla: "Complete product strategy"
-     - When calling POZilla: "Sprint planning & backlog management"
+     - When calling Product-Manager: "Complete product strategy"
+     - When calling Product-Owner: "Sprint planning & backlog management"
 
 - **Implementation Details** — MCP resource prompt endpoint, integration with Claude Code
 - **Example Workflow** — Feature development with profile-based prompts across 3 days
@@ -123,7 +123,7 @@
 
 **Contains**:
 - **Tool Name** — Each tool cataloged
-- **MCP Owner** — Which MCP owns the tool (qazilla, archzilla, seczilla, etc.)
+- **MCP Owner** — Which MCP owns the tool (qa-engineer, architecture, security, etc.)
 - **Tier** — 1 (specialist), 2 (infrastructure), 3 (specialized), 4 (services)
 - **Tool Count** — Total tools per MCP
 - **Callers (MCPs)** — Which MCPs call this tool
@@ -147,14 +147,14 @@
 ## Key Findings Summary
 
 ### Finding 1: Testing Fragmentation
-- **Problem**: 3 MCPs (qazilla + qa-mcp + test-mcp) with 45 overlapping tools
-- **Solution**: Consolidate into QAZilla
+- **Problem**: 3 MCPs (qa-engineer + qa-mcp + test-mcp) with 45 overlapping tools
+- **Solution**: Consolidate into QA-Engineer
 - **Impact**: -2 MCPs, unified QA context, -37% context switching
 - **Priority**: P1 (High)
 
 ### Finding 2: Security Integration Gap
-- **Problem**: Threat modeling (seczilla) separate from scanning (qa-mcp)
-- **Solution**: Move security scanning to seczilla
+- **Problem**: Threat modeling (security) separate from scanning (qa-mcp)
+- **Solution**: Move security scanning to security
 - **Result**: threat_model → controls → scans unified flow
 - **Priority**: P1 (High)
 
@@ -179,8 +179,8 @@
 
 | Phase | Timeline | MCPs Affected | Tools Before | Tools After | Benefit | Effort |
 |-------|----------|---------------|--------------|-------------|---------|--------|
-| Phase 1: Testing | Week 1-4 (May 13-Jun 7) | qazilla ← qa-mcp + test-mcp | 45 / 3 MCPs | 45 / 1 MCP | -2 MCPs, unified QA | 4 weeks, 11 PD |
-| Phase 2: Security | Week 2-4 (May 20-Jun 7) | seczilla ← qa-mcp | 23 / 2 MCPs | 25 / 1 MCP | Unified flow | Included above |
+| Phase 1: Testing | Week 1-4 (May 13-Jun 7) | qa-engineer ← qa-mcp + test-mcp | 45 / 3 MCPs | 45 / 1 MCP | -2 MCPs, unified QA | 4 weeks, 11 PD |
+| Phase 2: Security | Week 2-4 (May 20-Jun 7) | security ← qa-mcp | 23 / 2 MCPs | 25 / 1 MCP | Unified flow | Included above |
 | Phase 3: Integration | Ongoing | All MCPs | - | - | Profile-based prompts | T.B.D. |
 | Phase 4: Optimization | Post-consolidation | All MCPs | - | - | Performance tuning | T.B.D. |
 
@@ -256,7 +256,7 @@
 
 ### Post-Implementation
 - [ ] Measure: Verify all success criteria passing
-- [ ] Migrate: 3+ teams from qa-mcp to qazilla
+- [ ] Migrate: 3+ teams from qa-mcp to qa-engineer
 - [ ] Monitor: Track adoption and gather feedback
 - [ ] Optimize: Performance tuning if needed
 
@@ -268,10 +268,10 @@
 A: Reduces context switching from 8 to <5 MCPs per session, unifies QA workflow, -37% context switching overhead.
 
 **Q: Will there be breaking changes?**
-A: No. Wrappers are additive. Both old (qa-mcp) and new (qazilla) MCPs coexist. Migration is gradual over 3 months.
+A: No. Wrappers are additive. Both old (qa-mcp) and new (qa-engineer) MCPs coexist. Migration is gradual over 3 months.
 
 **Q: Can we rollback if issues arise?**
-A: Yes. Revert qazilla commit, teams continue using qa-mcp + test-mcp. No breaking changes, easy rollback.
+A: Yes. Revert qa-engineer commit, teams continue using qa-mcp + test-mcp. No breaking changes, easy rollback.
 
 **Q: How long does implementation take?**
 A: 4 weeks, 87 hours, 11 person-days total for both consolidations.

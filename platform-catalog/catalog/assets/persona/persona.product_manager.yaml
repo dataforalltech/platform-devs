@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.product_manager
+  uid: persona.product_manager
+  title: Product Manager
+  owner: platform
+  tags:
+  - persona
+  - product_manager
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: product_manager
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  allow_list:
+    allowed_effects:
+    - generate
+    - read
+    - write
+    max_blast: service
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.product_manager

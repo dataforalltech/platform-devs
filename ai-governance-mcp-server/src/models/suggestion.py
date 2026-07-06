@@ -27,12 +27,12 @@ SuggestionCategory = Literal[
 SuggestionSeverity = Literal["low", "medium", "high", "critical"]
 
 SuggestionStatus = Literal[
-    "pending",       # acabou de chegar
+    "pending",  # acabou de chegar
     "acknowledged",  # alguém viu, ainda não decidiu
-    "accepted",      # vai virar trabalho
-    "rejected",      # não vai acontecer (com motivo)
-    "done",          # implementada
-    "duplicate",     # já existe outra sugestão com mesmo conteúdo
+    "accepted",  # vai virar trabalho
+    "rejected",  # não vai acontecer (com motivo)
+    "done",  # implementada
+    "duplicate",  # já existe outra sugestão com mesmo conteúdo
 ]
 
 
@@ -42,9 +42,7 @@ class StatusChange(BaseModel):
     ts: str = Field(description="ISO 8601 UTC do momento da mudança.")
     status: SuggestionStatus
     note: str | None = None
-    by: str | None = Field(
-        default=None, description="Quem mudou — agent id, user, etc."
-    )
+    by: str | None = Field(default=None, description="Quem mudou — agent id, user, etc.")
 
 
 class Suggestion(BaseModel):
@@ -64,7 +62,9 @@ class Suggestion(BaseModel):
         default=None,
         description="Repositório onde o agente estava trabalhando quando teve a percepção.",
     )
-    target_repo: str = Field(description="Repositório destinatário da sugestão (id canônico do grafo).")
+    target_repo: str = Field(
+        description="Repositório destinatário da sugestão (id canônico do grafo)."
+    )
     target_repo_canonical: str | None = Field(
         default=None,
         description="Se o target_repo informado era alias/deprecated, este é o canônico resolvido.",

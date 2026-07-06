@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/update_suggestion_status
+  uid: ai-governance-mcp:update_suggestion_status
+  domain: governance
+  title: update_suggestion_status @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.update_suggestion_status
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: update_suggestion_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.update_suggestion_status
+- verb: provided-by
+  target: ai-governance-mcp

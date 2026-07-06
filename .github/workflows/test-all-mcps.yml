@@ -27,7 +27,7 @@ jobs:
           - config-mcp-server
           - services-mcp-server
           - deploy-mcp-server
-          - agent-twin-mcp-server
+          - dev-twin-mcp-server
           - docs-mcp-server
           - pipeline-mcp-server
           - qa-mcp-server
@@ -92,11 +92,6 @@ jobs:
       matrix:
         mcp:
           - auth-mcp-server
-          - admin-mcp-server
-          - governance-mcp-server
-          - scheduler-mcp-server
-          - connectors-mcp-server
-          - cache-mcp-server
 
     steps:
       - uses: actions/checkout@v4

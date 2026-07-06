@@ -20,7 +20,7 @@ Successfully completed migration of all 20 MCP servers to hybrid mode (stdio + H
 ## ✅ Migrations Completed
 
 ### System MCPs (12) - All Converted
-1. ✅ **agent-twin-mcp** — Auth & identity  
+1. ✅ **dev-twin-mcp** — Auth & identity  
 2. ✅ **config-mcp** — Credentials & environment  
 3. ✅ **session-mcp** — Session & task mgmt  
 4. ✅ **audit-mcp** — Audit logging  
@@ -33,15 +33,15 @@ Successfully completed migration of all 20 MCP servers to hybrid mode (stdio + H
 11. ✅ **test-mcp** — Test planning  
 12. ✅ **ai-governance-mcp** — AI governance  
 
-### Zilla MCPs (8) - All Converted
-1. ✅ **archzilla-mcp** — Software architecture  
-2. ✅ **backzilla-mcp** — Backend  
-3. ✅ **frontzilla-mcp** — Frontend  
-4. ✅ **opszilla-mcp** — Operations  
-5. ✅ **pozilla-mcp** — Product mgmt  
-6. ✅ **productzilla-mcp** — Product strategy  
-7. ✅ **qazilla-mcp** — QA  
-8. ✅ **seczilla-mcp** — Security  
+### DevTeam MCPs (8) - All Converted
+1. ✅ **architecture-mcp** — Software architecture  
+2. ✅ **backend-mcp** — Backend  
+3. ✅ **frontend-mcp** — Frontend  
+4. ✅ **devops-mcp** — Operations  
+5. ✅ **product-owner-mcp** — Product mgmt  
+6. ✅ **product-manager-mcp** — Product strategy  
+7. ✅ **qa-engineer-mcp** — QA  
+8. ✅ **security-mcp** — Security  
 
 ---
 
@@ -81,7 +81,7 @@ Successfully completed migration of all 20 MCP servers to hybrid mode (stdio + H
 ┌─────────────────────────────────────────┐
 │  20 MCPs (stdio + HTTP hybrid)           │
 │  ├─ 12 System MCPs (ports 7101-7112)   │
-│  └─ 8 Zilla MCPs (ports 7118-7125)     │
+│  └─ 8 DevTeam MCPs (ports 7118-7125)     │
 └─────────────────────────────────────────┘
 ```
 
@@ -125,7 +125,7 @@ async def _run() -> None:
 
 All 20 MCPs **successfully build**:
 - ✅ 12 System MCPs compiled without errors
-- ✅ 8 Zilla MCPs compiled without errors  
+- ✅ 8 DevTeam MCPs compiled without errors  
 - ✅ mcp-gateway ready
 
 ---
@@ -137,7 +137,7 @@ All 20 MCPs **successfully build**:
 ```
 Services:
 ├── System MCPs (12)
-│   ├── agent-twin-mcp (7101:7100)
+│   ├── dev-twin-mcp (7101:7100)
 │   ├── config-mcp (7102:7100)
 │   ├── session-mcp (7103:7100)
 │   ├── audit-mcp (7104:7100)
@@ -149,15 +149,15 @@ Services:
 │   ├── services-mcp (7110:7100)
 │   ├── test-mcp (7111:7100)
 │   └── ai-governance-mcp (7112:7100)
-├── Zilla MCPs (8)
-│   ├── archzilla-mcp (7118:7100)
-│   ├── backzilla-mcp (7119:7100)
-│   ├── frontzilla-mcp (7120:7100)
-│   ├── opszilla-mcp (7121:7100)
-│   ├── pozilla-mcp (7122:7100)
-│   ├── productzilla-mcp (7123:7100)
-│   ├── qazilla-mcp (7124:7100)
-│   └── seczilla-mcp (7125:7100)
+├── DevTeam MCPs (8)
+│   ├── architecture-mcp (7118:7100)
+│   ├── backend-mcp (7119:7100)
+│   ├── frontend-mcp (7120:7100)
+│   ├── devops-mcp (7121:7100)
+│   ├── product-owner-mcp (7122:7100)
+│   ├── product-manager-mcp (7123:7100)
+│   ├── qa-engineer-mcp (7124:7100)
+│   └── security-mcp (7125:7100)
 ├── Gateway
 │   ├── mcp-gateway (8080:8080)
 │   └── mcp-registry (8000:8000)

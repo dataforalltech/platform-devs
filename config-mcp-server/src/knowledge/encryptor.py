@@ -1,4 +1,5 @@
 """Encriptação Fernet para valores em repouso no ConfigStore."""
+
 from __future__ import annotations
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -17,7 +18,7 @@ class Encryptor:
         except (ValueError, Exception) as exc:
             raise EncryptionError(
                 f"Chave Fernet inválida: {exc}. "
-                "Gere uma com: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+                'Gere uma com: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
             ) from exc
 
     def encrypt(self, value: str) -> str:

@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.product_owner
+  uid: prompt.product_owner
+  title: system prompt · product_owner
+  owner: platform
+  tags:
+  - prompt
+  - product_owner
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: product_owner
+  content_ref: knowledge/profiles/product_owner.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.product_owner

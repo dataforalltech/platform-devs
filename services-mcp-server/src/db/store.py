@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import json
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
-from contextlib import contextmanager
-import threading
-import os
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
+import os
+import threading
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from typing import Any
+
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
 _log = logging.getLogger(__name__)
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class ServiceStore:
@@ -83,9 +83,7 @@ class ServiceStore:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT name FROM services WHERE name=%s", (name,)
-                    )
+                    cur.execute("SELECT name FROM services WHERE name=%s", (name,))
                     existing = cur.fetchone()
                     if existing is None:
                         fields.setdefault("registered_at", _now())

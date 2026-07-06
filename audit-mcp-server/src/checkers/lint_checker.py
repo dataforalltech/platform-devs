@@ -7,7 +7,7 @@ class LintChecker:
     """Verifica lint (ruff) passando."""
 
     @staticmethod
-    def run(repo_path: str) -> dict[str, Any]:
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]:
         """Retorna resultado de checagens de lint."""
         repo = Path(repo_path)
         items = []
@@ -21,7 +21,9 @@ class LintChecker:
                 "name": "ruff_passing",
                 "required": True,
                 "passed": passed,
-                "details": "ruff check passed" if passed else f"ruff violations found:\n{output[:200]}",
+                "details": "ruff check passed"
+                if passed
+                else f"ruff violations found:\n{output[:200]}",
             }
         )
 

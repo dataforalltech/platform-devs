@@ -1,0 +1,20 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.006
+  uid: adr.006
+  title: ADR-006 — Transportes MCP
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '006'
+  status: Proposed (V1)
+  path: ADR-006-MCP-TRANSPORTS.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.005

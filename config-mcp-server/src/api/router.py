@@ -12,13 +12,14 @@ Endpoints:
 
 Auth: Bearer token no header Authorization (opcional se api_token vazio).
 """
+
 from __future__ import annotations
 
 import logging
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..knowledge.store import ConfigStore
@@ -26,13 +27,16 @@ from ..knowledge.sysinfo import collect_physical_info
 
 _log = logging.getLogger(__name__)
 _bearer = HTTPBearer(auto_error=False)
+# Module-level singleton so the Depends() call is not evaluated in an argument
+# default (avoids ruff B008).
+_bearer_dep = Depends(_bearer)
 
 
 def make_router(store: ConfigStore, api_token: str) -> APIRouter:
     router = APIRouter(prefix="/v1")
 
     # ── Auth ──────────────────────────────────────────────────────────────── #
-    def _check_auth(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> None:
+    def _check_auth(creds: HTTPAuthorizationCredentials | None = _bearer_dep) -> None:
         if not api_token:
             return  # auth desabilitada
         if not creds or not secrets.compare_digest(creds.credentials, api_token):

@@ -132,7 +132,7 @@ def _is_negated(text: str, match_start: int, window: int = 40) -> bool:
     # Não atravessar fim de sentença anterior.
     boundary = max(snippet.rfind("."), snippet.rfind(";"), snippet.rfind("\n"))
     if boundary >= 0:
-        snippet = snippet[boundary + 1:]
+        snippet = snippet[boundary + 1 :]
     return bool(_NEGATION_RE.search(snippet))
 
 
@@ -241,16 +241,12 @@ def validate_agent_decision(
         violations.append(
             "Mock/Fake/Stub aparentemente em código produtivo. Proibido pelo AGENTS.md §2."
         )
-        required_actions.append(
-            "Remover mock de código produtivo. Mocks só em código de teste."
-        )
+        required_actions.append("Remover mock de código produtivo. Mocks só em código de teste.")
         approved = False
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _DELETE_TEST_PATTERNS):
-        violations.append(
-            "Indicação de remoção/skip de teste para resolver problema. Proibido."
-        )
+        violations.append("Indicação de remoção/skip de teste para resolver problema. Proibido.")
         required_actions.append(
             "Restaurar o teste. Se o teste estava errado, abrir PR explicando a correção do teste."
         )
@@ -296,9 +292,7 @@ def validate_agent_decision(
             re.IGNORECASE,
         )
         if not justification:
-            violations.append(
-                "Nova dependência sem justificativa explícita."
-            )
+            violations.append("Nova dependência sem justificativa explícita.")
             required_actions.append(
                 "Justificar a dependência: por que ela? alternativas avaliadas? supply chain ok?"
             )
@@ -339,9 +333,7 @@ def validate_agent_decision(
             violations.append(
                 "Camada 'integrations' afetada sem observabilidade declarada (log/métrica)."
             )
-            required_actions.append(
-                "Adicionar log estruturado e métrica. Ver observability.md."
-            )
+            required_actions.append("Adicionar log estruturado e métrica. Ver observability.md.")
             risk = _bump_risk(risk, "high")
 
     if "database" in layers:
@@ -362,9 +354,7 @@ def validate_agent_decision(
             risk = _bump_risk(risk, "medium")
 
     if "security" in layers and flag_security:
-        recommendations.append(
-            "Mudanças de segurança exigem revisão humana (security.md)."
-        )
+        recommendations.append("Mudanças de segurança exigem revisão humana (security.md).")
         risk = _bump_risk(risk, "high")
 
     # ------------------------------------------------------------------ #

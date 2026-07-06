@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/get_coverage_report
+  uid: testing.get_coverage_report
+  domain: testing
+  title: get coverage report
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - quality
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: quality
+  resource:
+    type: repository
+    parent: null
+    namespace: null
+  operation: get
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:repository

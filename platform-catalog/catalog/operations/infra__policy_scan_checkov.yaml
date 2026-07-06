@@ -1,0 +1,47 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/policy_scan_checkov
+  uid: infra.policy_scan_checkov
+  domain: infra
+  title: policy scan checkov
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - provisioning
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: provisioning
+  resource:
+    type: policy
+    parent: null
+    namespace: null
+  operation: policy
+  authz: read
+  risk:
+    effects:
+    - read
+    requires:
+    - terraform
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:policy

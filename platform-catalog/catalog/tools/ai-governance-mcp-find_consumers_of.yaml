@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/find_consumers_of
+  uid: ai-governance-mcp:find_consumers_of
+  domain: governance
+  title: find_consumers_of @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.find_consumers_of
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: find_consumers_of
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.find_consumers_of
+- verb: provided-by
+  target: ai-governance-mcp

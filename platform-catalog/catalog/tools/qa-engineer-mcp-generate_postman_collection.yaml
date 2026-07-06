@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/generate_postman_collection
+  uid: qa-engineer-mcp:generate_postman_collection
+  domain: testing
+  title: generate_postman_collection @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_postman_collection
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: generate_postman_collection
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_postman_collection
+- verb: provided-by
+  target: qa-engineer-mcp

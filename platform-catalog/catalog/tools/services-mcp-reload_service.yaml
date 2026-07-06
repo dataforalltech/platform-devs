@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/reload_service
+  uid: services-mcp:reload_service
+  domain: infra
+  title: reload_service @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.reload_service
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: reload_service
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.reload_service
+- verb: provided-by
+  target: services-mcp

@@ -20,7 +20,7 @@ import string
 # Configuration
 STAGING_CONFIG = {
     "mcps": {
-        "agent_twin": "http://localhost:7098",
+        "dev_twin": "http://localhost:7098",
         "config": "http://localhost:7099",
         "docs": "http://localhost:7090",
         "session": "http://localhost:7100",
@@ -84,10 +84,10 @@ class StagingValidator:
             print(f"Health check failed for {url}: {e}")
             return False
 
-    async def test_agent_twin_authentication(self) -> TestResult:
-        """Test agent-twin-mcp authentication flow"""
-        test_name = "agent_twin_authentication"
-        endpoint = f"{STAGING_CONFIG['mcps']['agent_twin']}/authenticate"
+    async def test_dev_twin_authentication(self) -> TestResult:
+        """Test dev-twin-mcp authentication flow"""
+        test_name = "dev_twin_authentication"
+        endpoint = f"{STAGING_CONFIG['mcps']['dev_twin']}/authenticate"
         start = time.time()
 
         try:
@@ -404,7 +404,7 @@ class StagingValidator:
         print("[2/2] Running integration tests...")
 
         tests = [
-            ("Agent Twin Auth", self.test_agent_twin_authentication()),
+            ("Dev Twin Auth", self.test_dev_twin_authentication()),
             ("Auth API Login", self.test_auth_api_login()),
             ("Admin API Users", self.test_admin_api_list_users()),
             ("Scheduler API Task", self.test_scheduler_api_create_task()),

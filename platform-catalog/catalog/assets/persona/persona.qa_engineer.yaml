@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.qa_engineer
+  uid: persona.qa_engineer
+  title: QA Engineer
+  owner: platform
+  tags:
+  - persona
+  - qa_engineer
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: qa_engineer
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  allow_list:
+    allowed_effects:
+    - read
+    max_blast: none
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.qa_engineer

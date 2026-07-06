@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: audit-mcp/run_audit
+  uid: audit-mcp:run_audit
+  domain: governance
+  title: run_audit @ audit-mcp
+  description: ''
+  owner: platform
+  tags:
+  - audit-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.run_audit
+  provider_id: audit-mcp
+  provider_version: 1.0.0
+  tool: run_audit
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.run_audit
+- verb: provided-by
+  target: audit-mcp

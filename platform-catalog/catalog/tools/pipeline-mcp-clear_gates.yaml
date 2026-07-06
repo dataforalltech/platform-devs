@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/clear_gates
+  uid: pipeline-mcp:clear_gates
+  domain: delivery
+  title: clear_gates @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.clear_gates
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: clear_gates
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.clear_gates
+- verb: provided-by
+  target: pipeline-mcp

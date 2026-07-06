@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/analyze_product_problem
+  uid: product-owner-mcp:analyze_product_problem
+  domain: product
+  title: analyze_product_problem @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.analyze_product_problem
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: analyze_product_problem
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.analyze_product_problem
+- verb: provided-by
+  target: product-owner-mcp

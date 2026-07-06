@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/cancel_task
+  uid: session-mcp:cancel_task
+  domain: platform
+  title: cancel_task @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.cancel_task
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: cancel_task
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.cancel_task
+- verb: provided-by
+  target: session-mcp

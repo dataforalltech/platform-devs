@@ -1,0 +1,30 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.014
+  uid: adr.014
+  title: ADR-014 — Platform Asset Model
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '014'
+  status: Proposed (V1)
+  path: ADR-014-ASSET-MODEL.md
+relations:
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.007
+- verb: derivedFrom
+  target: adr.009
+- verb: derivedFrom
+  target: adr.010
+- verb: derivedFrom
+  target: adr.011
+- verb: derivedFrom
+  target: adr.012
+- verb: derivedFrom
+  target: adr.013

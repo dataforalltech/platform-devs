@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/get_coverage_report
+  uid: qa-mcp:get_coverage_report
+  domain: testing
+  title: get_coverage_report @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.get_coverage_report
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: get_coverage_report
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.get_coverage_report
+- verb: provided-by
+  target: qa-mcp

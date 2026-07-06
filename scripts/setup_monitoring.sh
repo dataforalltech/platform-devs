@@ -1,5 +1,5 @@
 #!/bin/bash
-# Setup monitoring and log aggregation for all 10 Zilla MCPs
+# Setup monitoring and log aggregation for all 10 DevTeam MCPs
 
 set -e
 
@@ -7,16 +7,16 @@ LOG_DIR="$HOME/.platform/logs"
 MONITORING_DIR="$HOME/.platform/monitoring"
 mkdir -p "$LOG_DIR" "$MONITORING_DIR"
 
-echo "🔧 Setting up Zilla Monitoring & Log Aggregation"
+echo "🔧 Setting up DevTeam Monitoring & Log Aggregation"
 echo "=================================================="
 echo ""
 
 # 1. Configure log rotation with logrotate
 echo "1️⃣  Configuring log rotation..."
 
-LOGROTATE_CONFIG="/tmp/zillas-logrotate"
+LOGROTATE_CONFIG="/tmp/devteam-logrotate"
 cat > "$LOGROTATE_CONFIG" << 'EOF'
-# Zilla MCP logs rotation
+# DevTeam MCP logs rotation
 ~/.platform/logs/*.log {
     daily
     rotate 7
@@ -27,14 +27,14 @@ cat > "$LOGROTATE_CONFIG" << 'EOF'
     sharedscripts
     postrotate
         # Restart services if needed
-        # sudo systemctl reload zillas
+        # sudo systemctl reload devteam
     endscript
 }
 EOF
 
 if [ -d "/etc/logrotate.d" ]; then
   echo "  📝 logrotate configuration template created"
-  echo "  ℹ️  To install: sudo cp $LOGROTATE_CONFIG /etc/logrotate.d/zillas"
+  echo "  ℹ️  To install: sudo cp $LOGROTATE_CONFIG /etc/logrotate.d/devteam"
 else
   echo "  ⚠️  logrotate not available (advanced feature)"
 fi
@@ -69,7 +69,7 @@ echo "3️⃣  Creating health monitoring dashboard..."
 cat > "$MONITORING_DIR/monitor_health.py" << 'EOF'
 #!/usr/bin/env python3
 """
-Continuous health monitoring for all 10 Zilla MCPs
+Continuous health monitoring for all 10 DevTeam MCPs
 Polls /health endpoint every 30 seconds and alerts on failures
 """
 import os
@@ -78,17 +78,17 @@ import time
 from urllib import request, error
 from datetime import datetime
 
-ZILLAS = [
-    ("qazilla", 7201),
-    ("seczilla", 7202),
-    ("archzilla", 7203),
-    ("backzilla", 7204),
-    ("frontzilla", 7205),
-    ("opszilla", 7206),
-    ("pozilla", 7207),
-    ("productzilla", 7208),
-    ("cross-zilla-validators", 7209),
-    ("zilla-observatory", 7210),
+DEVTEAM = [
+    ("qa-engineer", 7201),
+    ("security", 7202),
+    ("architecture", 7203),
+    ("backend", 7204),
+    ("frontend", 7205),
+    ("devops", 7206),
+    ("product-owner", 7207),
+    ("product-manager", 7208),
+    ("cross-devteam-validators", 7209),
+    ("devteam-observatory", 7210),
 ]
 
 LOG_DIR = os.path.expanduser("~/.platform/logs")
@@ -103,22 +103,22 @@ def log_message(level, message):
         f.write(log_entry + "\n")
 
 def check_health():
-    """Check health of all Zillas"""
+    """Check health of all DevTeam"""
     healthy = []
     unhealthy = []
 
-    for zilla_name, port in ZILLAS:
+    for devteam_name, port in DEVTEAM:
         url = f"http://localhost:{port}/health"
         try:
             with request.urlopen(url, timeout=2) as response:
                 if response.status == 200:
-                    healthy.append(zilla_name)
+                    healthy.append(devteam_name)
                 else:
-                    unhealthy.append((zilla_name, f"HTTP {response.status}"))
+                    unhealthy.append((devteam_name, f"HTTP {response.status}"))
         except error.URLError as e:
-            unhealthy.append((zilla_name, f"Connection refused"))
+            unhealthy.append((devteam_name, f"Connection refused"))
         except Exception as e:
-            unhealthy.append((zilla_name, str(e)))
+            unhealthy.append((devteam_name, str(e)))
 
     return healthy, unhealthy
 
@@ -141,7 +141,7 @@ def run_monitor(interval=30, duration=None):
     alert_count = 0
 
     log_message("INFO", "Monitoring started")
-    print(f"🔍 Monitoring {len(ZILLAS)} Zillas every {interval}s")
+    print(f"🔍 Monitoring {len(DEVTEAM)} DevTeam every {interval}s")
     print("Press Ctrl+C to stop\n")
 
     try:
@@ -199,7 +199,7 @@ echo "4️⃣  Creating metrics collector..."
 
 cat > "$MONITORING_DIR/collect_metrics.sh" << 'EOF'
 #!/bin/bash
-# Collect performance metrics for all Zillas
+# Collect performance metrics for all DevTeam
 
 METRICS_FILE="$HOME/.platform/logs/metrics.log"
 
@@ -287,11 +287,11 @@ echo "6️⃣  Creating monitoring dashboard..."
 
 cat > "$MONITORING_DIR/show_status.sh" << 'EOF'
 #!/bin/bash
-# Show current status of all Zillas
+# Show current status of all DevTeam
 
 LOG_DIR="$HOME/.platform/logs"
 
-echo "📊 Zilla MCPs Status Dashboard"
+echo "📊 DevTeam MCPs Status Dashboard"
 echo "=============================="
 echo ""
 

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: devops-mcp/generate_helm_chart
+  uid: devops-mcp:generate_helm_chart
+  domain: development
+  title: generate_helm_chart @ devops-mcp
+  description: ''
+  owner: platform
+  tags:
+  - devops-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_helm_chart
+  provider_id: devops-mcp
+  provider_version: 1.0.0
+  tool: generate_helm_chart
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_helm_chart
+- verb: provided-by
+  target: devops-mcp

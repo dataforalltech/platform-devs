@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/map_integration_flow
+  uid: backend-mcp:map_integration_flow
+  domain: development
+  title: map_integration_flow @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.map_integration_flow
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: map_integration_flow
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.map_integration_flow
+- verb: provided-by
+  target: backend-mcp

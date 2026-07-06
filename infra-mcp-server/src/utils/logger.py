@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 
@@ -36,9 +36,7 @@ def setup_logging(level: str = "INFO", fmt: str = "json") -> None:
     if fmt == "json":
         handler.setFormatter(_JsonFormatter())
     else:
-        handler.setFormatter(
-            logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-        )
+        handler.setFormatter(logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s"))
     root = logging.getLogger()
     root.handlers.clear()
     root.addHandler(handler)

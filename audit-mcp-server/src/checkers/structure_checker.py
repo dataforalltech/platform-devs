@@ -15,7 +15,7 @@ class StructureChecker:
     }
 
     @staticmethod
-    def run(repo_path: str) -> dict[str, Any]:
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]:
         """Retorna resultado de checagens estruturais."""
         repo = Path(repo_path)
         items = []

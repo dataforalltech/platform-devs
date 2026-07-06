@@ -47,9 +47,7 @@ def normalize_layer(value: object | None) -> str | None:
     if lowered is None:
         return None
     if lowered not in VALID_LAYERS:
-        raise ValueError(
-            f"layer inválida: {value!r}. Opções: {sorted(VALID_LAYERS)}"
-        )
+        raise ValueError(f"layer inválida: {value!r}. Opções: {sorted(VALID_LAYERS)}")
     return lowered
 
 

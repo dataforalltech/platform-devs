@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/search_governance_knowledge
+  uid: ai-governance-mcp:search_governance_knowledge
+  domain: governance
+  title: search_governance_knowledge @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.search_governance_knowledge
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: search_governance_knowledge
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.search_governance_knowledge
+- verb: provided-by
+  target: ai-governance-mcp

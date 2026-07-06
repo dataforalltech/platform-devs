@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: frontend-mcp/generate_react_component
+  uid: frontend-mcp:generate_react_component
+  domain: development
+  title: generate_react_component @ frontend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - frontend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_react_component
+  provider_id: frontend-mcp
+  provider_version: 1.0.0
+  tool: generate_react_component
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_react_component
+- verb: provided-by
+  target: frontend-mcp

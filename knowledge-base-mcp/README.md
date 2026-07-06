@@ -1,6 +1,6 @@
 # Knowledge Base MCP — Central Documentation Repository
 
-Centraliza toda a documentação, padrões e referências que os Zillas consultam.
+Centraliza toda a documentação, padrões e referências que os DevTeam consultam.
 
 ## Propósito
 
@@ -8,7 +8,7 @@ Centraliza toda a documentação, padrões e referências que os Zillas consulta
 - **Versionado** com git (history de mudanças)
 - **Consultável** via MCP (query API)
 - **Estruturado** por domínio (API, Security, Infrastructure, etc.)
-- **Atualizado** em real-time pelos Zillas
+- **Atualizado** em real-time pelos DevTeam
 
 ## Estrutura
 
@@ -64,7 +64,7 @@ knowledge-base-mcp/
 
 ## Integration
 
-**Each Zilla calls before starting:**
+**Each DevTeam calls before starting:**
 ```typescript
 // Get domain-specific knowledge
 const apiStandards = kbMcp.get_api_standards();
@@ -78,7 +78,7 @@ const isValid = kbMcp.validate_against_standard(myCode, 'backend/code-style');
 ## Updates Flow
 
 ```
-Zilla discovers new pattern/standard
+DevTeam discovers new pattern/standard
     ↓
 Creates PR to knowledge-base-mcp
     ↓
@@ -86,7 +86,7 @@ Documentation review gate
     ↓
 Merged to main branch
     ↓
-All Zillas notified (via subscription)
+All DevTeam notified (via subscription)
     ↓
 New standard available for next features
 ```

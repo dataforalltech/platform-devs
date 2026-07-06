@@ -2,6 +2,7 @@
 
 Namespace: tenants.<tenant_id>
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -10,9 +11,10 @@ from ..knowledge.store import ConfigStore
 
 
 def _get_twin_tenant_id() -> str | None:
-    """Tenta resolver o tenant_id da sessão atual via agent-twin-mcp HTTP API."""
+    """Tenta resolver o tenant_id da sessão atual via dev-twin-mcp HTTP API."""
     try:
         from shared.twin_client import TwinClient
+
         return TwinClient.from_env().get_tenant_id()
     except Exception:  # noqa: BLE001
         return None
@@ -54,9 +56,9 @@ def set_tenant_config(
 
 
 def get_session_tenant_config(store: ConfigStore) -> dict[str, Any]:
-    """Retorna a config do tenant associado à sessão autenticada no agent-twin-mcp.
+    """Retorna a config do tenant associado à sessão autenticada no dev-twin-mcp.
 
-    Resolve automaticamente o tenant_id via HTTP API do agent-twin (:7098).
+    Resolve automaticamente o tenant_id via HTTP API do dev-twin (:7098).
     Não requer que o chamador saiba o tenant_id.
     """
     tenant_id = _get_twin_tenant_id()
@@ -65,7 +67,7 @@ def get_session_tenant_config(store: ConfigStore) -> dict[str, Any]:
             "found": False,
             "error": "no_tenant_in_session",
             "hint": (
-                "Nenhum tenant_id na sessão. Verifique: (1) agent-twin-mcp em :7098, "
+                "Nenhum tenant_id na sessão. Verifique: (1) dev-twin-mcp em :7098, "
                 "(2) authenticate() chamado, (3) tenant_id configurado no perfil."
             ),
         }

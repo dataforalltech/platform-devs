@@ -17,7 +17,7 @@ from datetime import timedelta
 
 import pytest
 
-from src.knowledge.allocator_store import (
+from src.db.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,

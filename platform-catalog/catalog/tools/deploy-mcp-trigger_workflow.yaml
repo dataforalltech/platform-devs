@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/trigger_workflow
+  uid: deploy-mcp:trigger_workflow
+  domain: delivery
+  title: trigger_workflow @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.trigger_workflow
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: trigger_workflow
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.trigger_workflow
+- verb: provided-by
+  target: deploy-mcp

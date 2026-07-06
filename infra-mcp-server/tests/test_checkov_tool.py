@@ -10,8 +10,13 @@ from src.utils.subprocess_runner import CommandResult
 
 def _mock_result(stdout: str = "", stderr: str = "", exit_code: int = 0) -> CommandResult:
     return CommandResult(
-        cmd=["fake"], cwd="/fake", exit_code=exit_code,
-        stdout=stdout, stderr=stderr, duration_ms=10, truncated=False,
+        cmd=["fake"],
+        cwd="/fake",
+        exit_code=exit_code,
+        stdout=stdout,
+        stderr=stderr,
+        duration_ms=10,
+        truncated=False,
     )
 
 
@@ -71,7 +76,12 @@ def test_checkov_medium_only_does_not_trigger_hard_stop(monkeypatch, fake_settin
 def test_checkov_handles_list_output_for_all_framework(monkeypatch, fake_settings, tmp_path):
     output = json.dumps(
         [
-            {"results": {"failed_checks": [{"check_id": "X", "severity": "CRITICAL", "resource": "r"}], "passed_checks": []}},
+            {
+                "results": {
+                    "failed_checks": [{"check_id": "X", "severity": "CRITICAL", "resource": "r"}],
+                    "passed_checks": [],
+                }
+            },
             {"results": {"failed_checks": [], "passed_checks": [{"check_id": "Y"}]}},
         ]
     )
@@ -83,9 +93,7 @@ def test_checkov_handles_list_output_for_all_framework(monkeypatch, fake_setting
 
 
 def test_checkov_invalid_framework(fake_settings, tmp_path):
-    res = checkov_tool.policy_scan_checkov(
-        fake_settings, path=str(tmp_path), framework="rust"
-    )
+    res = checkov_tool.policy_scan_checkov(fake_settings, path=str(tmp_path), framework="rust")
     assert res["error"] == "validation_error"
 
 

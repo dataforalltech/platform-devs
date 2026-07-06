@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/get_pipeline
+  uid: pipeline-mcp:get_pipeline
+  domain: delivery
+  title: get_pipeline @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.get_pipeline
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: get_pipeline
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.get_pipeline
+- verb: provided-by
+  target: pipeline-mcp

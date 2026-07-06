@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/get_test_plan
+  uid: test-mcp:get_test_plan
+  domain: testing
+  title: get_test_plan @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.get_test_plan
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: get_test_plan
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.get_test_plan
+- verb: provided-by
+  target: test-mcp

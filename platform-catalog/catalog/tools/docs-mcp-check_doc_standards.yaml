@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: docs-mcp/check_doc_standards
+  uid: docs-mcp:check_doc_standards
+  domain: documentation
+  title: check_doc_standards @ docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - docs-mcp
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: documentation.check_doc_standards
+  provider_id: docs-mcp
+  provider_version: 1.0.0
+  tool: check_doc_standards
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: documentation.check_doc_standards
+- verb: provided-by
+  target: docs-mcp

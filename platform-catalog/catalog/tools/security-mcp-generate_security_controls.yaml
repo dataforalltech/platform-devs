@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/generate_security_controls
+  uid: security-mcp:generate_security_controls
+  domain: security
+  title: generate_security_controls @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.generate_security_controls
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: generate_security_controls
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.generate_security_controls
+- verb: provided-by
+  target: security-mcp

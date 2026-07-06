@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/audit_env_files
+  uid: services-mcp:audit_env_files
+  domain: infra
+  title: audit_env_files @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.audit_env_files
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: audit_env_files
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.audit_env_files
+- verb: provided-by
+  target: services-mcp

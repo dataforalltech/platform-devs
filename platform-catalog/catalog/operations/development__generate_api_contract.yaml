@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: development/generate_api_contract
+  uid: development.generate_api_contract
+  domain: development
+  title: generate api contract
+  description: ''
+  owner: platform
+  tags:
+  - development
+  - backend
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: development
+  capability: backend
+  resource:
+    type: backend_artifact
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:backend_artifact

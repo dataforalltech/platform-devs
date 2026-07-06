@@ -1,4 +1,5 @@
 """Fixtures para testes do config-mcp-server."""
+
 from __future__ import annotations
 
 import pytest
@@ -10,6 +11,7 @@ from src.knowledge.store import ConfigStore
 @pytest.fixture()
 def encryptor() -> Encryptor:
     from cryptography.fernet import Fernet
+
     return Encryptor(Fernet.generate_key().decode())
 
 

@@ -60,7 +60,7 @@ def query_ecosystem_graph(
         neighbors = g.neighbors(node_id, relation=relation, direction=direction_norm)
         # Paginação em vizinhos
         total = len(neighbors)
-        page = neighbors[offset: offset + limit]
+        page = neighbors[offset : offset + limit]
         node = g.get_node(node_id)
         return {
             "query": "neighbors",
@@ -79,7 +79,7 @@ def query_ecosystem_graph(
         ft = filter_text.lower()
         nodes = [n for n in nodes if ft in str(n).lower()]
     total = len(nodes)
-    page = nodes[offset: offset + limit]
+    page = nodes[offset : offset + limit]
     return {
         "query": "list",
         "filters": {"kind": kind, "status": status, "filter_text": filter_text},
@@ -193,9 +193,7 @@ def get_service_metadata(repo: GovernanceRepository, node_id: str) -> dict:
 
     notes: list[str] = []
     if canonical_redirect:
-        notes.append(
-            f"⚠ Este nó está deprecado. Use '{canonical_redirect}' (canônico)."
-        )
+        notes.append(f"⚠ Este nó está deprecado. Use '{canonical_redirect}' (canônico).")
 
     return {
         "node_id": node_id,

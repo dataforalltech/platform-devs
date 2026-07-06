@@ -22,8 +22,8 @@ cd /home/dev/repos/platform-devs/test-mcp-server && \
 cd /home/dev/repos/platform-devs/config-mcp-server && \
   claude mcp add config-mcp -- python3 -m src.server.mcp_server
 
-cd /home/dev/repos/platform-devs/agent-twin-mcp-server && \
-  claude mcp add agent-twin-mcp -- python3 -m src.server.mcp_server
+cd /home/dev/repos/platform-devs/dev-twin-mcp-server && \
+  claude mcp add dev-twin-mcp -- python3 -m src.server.mcp_server
 
 cd /home/dev/repos/platform-devs/deploy-mcp-server && \
   claude mcp add deploy-mcp -- python3 -m src.server.mcp_server
@@ -81,6 +81,6 @@ All 11 servers are stateless stdio processes that wrap HTTP calls to their respe
 - Verify `claude mcp list` shows the servers
 
 **Authentication failures**
-- Some MCPs require tokens (e.g., TWIN_TOKEN for agent-twin-mcp)
+- Some MCPs require tokens (e.g., TWIN_TOKEN for dev-twin-mcp)
 - Set env vars before starting Claude Code or via `claude mcp add -e KEY=value`
 - See individual server README.md for auth requirements

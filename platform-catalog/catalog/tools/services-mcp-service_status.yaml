@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/service_status
+  uid: services-mcp:service_status
+  domain: infra
+  title: service_status @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.service_status
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: service_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.service_status
+- verb: provided-by
+  target: services-mcp

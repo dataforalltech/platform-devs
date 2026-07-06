@@ -4,9 +4,9 @@ Config-MCP HTTP Endpoints — PostgreSQL Integration.
 Endpoints para listar e gerenciar credenciais com segurança.
 """
 
-from typing import Dict, Any, List, Optional
 import logging
-from datetime import datetime
+from datetime import UTC, datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +27,9 @@ class ConfigHTTPEndpoints:
 
     # ========== GET /credentials/list ==========
 
-    def get_credentials_list(self, namespace: Optional[str] = None,
-                            include_metadata: bool = True) -> Dict[str, Any]:
+    def get_credentials_list(
+        self, namespace: str | None = None, include_metadata: bool = True
+    ) -> dict[str, Any]:
         """
         GET /credentials/list
 
@@ -63,38 +64,32 @@ class ConfigHTTPEndpoints:
         """
         try:
             # Credentials are namespaced by tenant
-            namespace_filter = namespace or f"credentials.*"
+            namespace_filter = namespace or "credentials.*"
 
             credentials = self.postgres_sync.list_credentials_for_namespace(
                 namespace=namespace_filter
             )
 
             if credentials is None:
-                return {
-                    'status': 500,
-                    'error': 'database_error'
-                }
+                return {"status": 500, "error": "database_error"}
 
             # Filter by tenant if not already in namespace
             # (depends on how tenants are encoded in PostgreSQL)
 
             return {
-                'status': 200,
-                'credentials': [dict(c) for c in credentials],
-                'total': len(credentials),
-                'tenant_id': self.tenant_id
+                "status": 200,
+                "credentials": [dict(c) for c in credentials],
+                "total": len(credentials),
+                "tenant_id": self.tenant_id,
             }
 
         except Exception as e:
             logger.error(f"Error in GET /credentials/list: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /credentials/metadata ==========
 
-    def get_credentials_metadata(self, namespace: str, key: str) -> Dict[str, Any]:
+    def get_credentials_metadata(self, namespace: str, key: str) -> dict[str, Any]:
         """
         GET /credentials/metadata
 
@@ -124,26 +119,20 @@ class ConfigHTTPEndpoints:
             metadata = self.postgres_sync.get_credential_metadata(namespace, key)
 
             if metadata is None:
-                return {
-                    'status': 404,
-                    'error': 'credential_not_found'
-                }
+                return {"status": 404, "error": "credential_not_found"}
 
             return {
-                'status': 200,
-                **metadata  # Spread the metadata dict
+                "status": 200,
+                **metadata,  # Spread the metadata dict
             }
 
         except Exception as e:
             logger.error(f"Error in GET /credentials/metadata: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /credentials/validate ==========
 
-    def post_credentials_validate(self, namespace: str, key: str) -> Dict[str, Any]:
+    def post_credentials_validate(self, namespace: str, key: str) -> dict[str, Any]:
         """
         POST /credentials/validate
 
@@ -172,37 +161,30 @@ class ConfigHTTPEndpoints:
             metadata = self.postgres_sync.get_credential_metadata(namespace, key)
 
             if metadata is None:
-                return {
-                    'status': 404,
-                    'valid': False,
-                    'error': 'credential_not_found'
-                }
+                return {"status": 404, "valid": False, "error": "credential_not_found"}
 
             is_expired = False
-            if metadata.get('expires_at'):
+            if metadata.get("expires_at"):
                 from datetime import datetime as dt
-                expires = dt.fromisoformat(metadata['expires_at'].replace('Z', '+00:00'))
-                is_expired = expires < dt.now(dt.UTC)
+
+                expires = dt.fromisoformat(metadata["expires_at"].replace("Z", "+00:00"))
+                is_expired = expires < dt.now(UTC)
 
             return {
-                'status': 200,
-                'valid': metadata.get('active', False) and not is_expired,
-                'active': metadata.get('active', False),
-                'expires_at': metadata.get('expires_at'),
-                'is_expired': is_expired
+                "status": 200,
+                "valid": metadata.get("active", False) and not is_expired,
+                "active": metadata.get("active", False),
+                "expires_at": metadata.get("expires_at"),
+                "is_expired": is_expired,
             }
 
         except Exception as e:
             logger.error(f"Error in POST /credentials/validate: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /credentials/rotate ==========
 
-    def post_credentials_rotate(self, namespace: str, key: str,
-                               new_value: str) -> Dict[str, Any]:
+    def post_credentials_rotate(self, namespace: str, key: str, new_value: str) -> dict[str, Any]:
         """
         POST /credentials/rotate
 
@@ -234,35 +216,29 @@ class ConfigHTTPEndpoints:
             self.postgres_sync.sync_credential_expires(
                 namespace=namespace,
                 key=key,
-                expires_at=None  # Reset expiry on rotation
+                expires_at=None,  # Reset expiry on rotation
             )
 
             # Step 3: Log audit trail
             self.postgres_sync.log_action(
-                action='rotate',
-                namespace=namespace,
-                key=key,
-                details={'rotated': True}
+                action="rotate", namespace=namespace, key=key, details={"rotated": True}
             )
 
             logger.info(f"✅ Credential rotated: {namespace}.{key}")
 
             return {
-                'status': 200,
-                'rotated': True,
-                'updated_at': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "rotated": True,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /credentials/rotate: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== DELETE /credentials ==========
 
-    def delete_credentials(self, namespace: str, key: str) -> Dict[str, Any]:
+    def delete_credentials(self, namespace: str, key: str) -> dict[str, Any]:
         """
         DELETE /credentials
 
@@ -290,40 +266,31 @@ class ConfigHTTPEndpoints:
             # Step 1: Check if exists
             metadata = self.postgres_sync.get_credential_metadata(namespace, key)
             if metadata is None:
-                return {
-                    'status': 404,
-                    'error': 'credential_not_found'
-                }
+                return {"status": 404, "error": "credential_not_found"}
 
             # Step 2: Mark as deleted in PostgreSQL
             self.postgres_sync.sync_credential_deleted(namespace, key)
 
             # Step 3: Log audit trail
             self.postgres_sync.log_action(
-                action='delete',
-                namespace=namespace,
-                key=key,
-                details={'soft_delete': True}
+                action="delete", namespace=namespace, key=key, details={"soft_delete": True}
             )
 
             logger.info(f"✅ Credential deleted: {namespace}.{key}")
 
             return {
-                'status': 200,
-                'deleted': True,
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "deleted": True,
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in DELETE /credentials: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /credentials/namespaces ==========
 
-    def get_credentials_namespaces(self) -> Dict[str, Any]:
+    def get_credentials_namespaces(self) -> dict[str, Any]:
         """
         GET /credentials/namespaces
 
@@ -343,18 +310,11 @@ class ConfigHTTPEndpoints:
         try:
             namespaces = self.postgres_sync.list_credential_namespaces()
 
-            return {
-                'status': 200,
-                'namespaces': namespaces,
-                'total': len(namespaces)
-            }
+            return {"status": 200, "namespaces": namespaces, "total": len(namespaces)}
 
         except Exception as e:
             logger.error(f"Error in GET /credentials/namespaces: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== Private Helpers ==========
 

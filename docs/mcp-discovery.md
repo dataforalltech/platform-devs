@@ -70,7 +70,7 @@ Agent calls tools as: mcp__<service>__<tool>
 | `config-mcp` | `config-mcp-server` | Config and credentials | `get_env_config`, `set_credential`, `get_tenant_config` |
 | `services-mcp` | `services-mcp-server` | Service registry | `register_service`, `check_health`, `list_services` |
 | `deploy-mcp` | `deploy-mcp-server` | GitHub, ACR, CI/CD | `create_pr`, `trigger_workflow`, `acr_build` |
-| `agent-twin-mcp` | `agent-twin-mcp-server` | Agent auth and context | `authenticate`, `whoami`, `get_twin_context` |
+| `dev-twin-mcp` | `dev-twin-mcp-server` | Agent auth and context | `authenticate`, `whoami`, `get_twin_context` |
 | `docs-mcp` | `docs-mcp-server` | Docs validation | `check_required_docs`, `audit_repo`, `lint_markdown` |
 | `pipeline-mcp` | `pipeline-mcp-server` | Service pipeline gates | `promote_service`, `add_gate_result`, `get_pipeline` |
 | `qa-mcp` | `qa-mcp-server` | QA: test, lint, security | `run_unit_tests`, `run_linter`, `run_security_scan` |

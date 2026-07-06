@@ -1,0 +1,47 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: delivery/get_promotion_history
+  uid: delivery.get_promotion_history
+  domain: delivery
+  title: get promotion history
+  description: ''
+  owner: platform
+  tags:
+  - delivery
+  - promotion
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: delivery
+  capability: promotion
+  resource:
+    type: pull_request
+    parent: null
+    namespace: null
+  operation: get
+  authz: read
+  risk:
+    effects:
+    - read
+    requires:
+    - github
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:pull_request

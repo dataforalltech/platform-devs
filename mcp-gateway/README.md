@@ -15,8 +15,8 @@ Claude / Codex / Apps
     │   └─ Proxy: Routes to internal MCPs (:7100)
     ↓
 Internal MCPs (stdio + HTTP hybrid)
-    ├─ qazilla-mcp:7100
-    ├─ backzilla-mcp:7100
+    ├─ qa-engineer-mcp:7100
+    ├─ backend-mcp:7100
     ├─ infra-mcp:7100
     └─ ... (26+ MCPs total)
 ```
@@ -99,29 +99,51 @@ Headers:
 
 ## Authentication
 
-### Test Tokens (Development)
+Autenticação REAL (sem tokens de teste hardcoded). O gateway aceita duas formas,
+tentadas nesta ordem: **JWT (produção)** → **static token (bootstrap)**. Sem token
+válido → `403`. Ver `src/auth/token_validator.py`.
+
+### Static tokens (bootstrap) — Bearer opaco com bcrypt
+
+Gere um token opaco e seu hash bcrypt (guarde só o hash):
 ```bash
-# Admin token (full access)
-export AUTH_TOKEN="test-admin-token"
-
-# Developer token (limited access)
-export AUTH_TOKEN="test-developer-token"
-
-# Readonly token (status only)
-export AUTH_TOKEN="test-readonly-token"
+python -c "import bcrypt, secrets; \
+raw = secrets.token_urlsafe(32); \
+print('TOKEN =', raw); \
+print('HASH  =', bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode())"
 ```
 
-### Production Tokens
-In production, tokens are validated against `agent-twin-mcp` PostgreSQL:
-```sql
-SELECT * FROM agent_tokens 
-WHERE token_prefix = <first_8_chars_of_token>
-  AND active = TRUE;
+O `TOKEN` vai para o cliente (`Authorization: Bearer <TOKEN>`); o `HASH` vai para a
+env `GATEWAY_STATIC_TOKENS_JSON` (equivalente à tabela `agent_tokens` do Postgres):
+```bash
+export GATEWAY_STATIC_TOKENS_JSON='[
+  {
+    "token_hash": "<hash bcrypt>",
+    "user_id": "admin",
+    "role": "admin",
+    "scopes": ["*"],
+    "tenant_id": "acme",
+    "expires_at": null,
+    "revoked": false
+  }
+]'
 ```
+Também aceita a forma de mapa `{"<hash>": {"user_id": ..., "role": ..., ...}}`.
+`expires_at` (epoch ou `null`) e `revoked` são respeitados na validação.
 
-**Token Format:** Opaque bearer token (64+ chars)  
-**Hashing:** bcrypt (10 rounds)  
-**Validation:** PostgreSQL query with prefix lookup (prevents full table scan)
+### JWT (produção) — OAuth 2.1 / RS256
+
+Se o Bearer for um JWT (3 segmentos) e as envs abaixo estiverem setadas, o gateway
+valida assinatura (JWKS ou PEM), `aud`, `iss` e `exp`:
+```bash
+export GATEWAY_AS_ISSUER="https://auth.suaempresa.com"     # claim iss esperado
+export GATEWAY_RESOURCE="https://mcp.suaempresa.com"       # claim aud esperado
+export GATEWAY_AS_JWKS_URL="https://auth.suaempresa.com/.well-known/jwks.json"
+# alternativa ao JWKS (testes/sem HTTP): chave pública RSA em PEM
+# export GATEWAY_AS_PUBLIC_KEY_PEM="-----BEGIN PUBLIC KEY----- ..."
+# export GATEWAY_JWT_LEEWAY=30   # folga para exp/nbf (default 30s)
+```
+Claims mapeados: `sub`→`user_id`, `scope`→`scopes`, `role`, `tenant_id`.
 
 ---
 
@@ -132,9 +154,9 @@ Each role has scopes defining which MCPs and tools are accessible:
 | Role | Scopes | Access |
 |------|--------|--------|
 | **admin** | `["*"]` | All MCPs, all tools |
-| **developer** | `["qazilla-mcp", "backzilla-mcp", "archzilla-mcp"]` | Quality & architecture tools |
-| **data-scientist** | `["qazilla-mcp", "pozilla-mcp"]` | Testing & product analytics |
-| **product-owner** | `["pozilla-mcp", "productzilla-mcp"]` | Product & requirements |
+| **developer** | `["qa-engineer-mcp", "backend-mcp", "architecture-mcp"]` | Quality & architecture tools |
+| **data-scientist** | `["qa-engineer-mcp", "product-owner-mcp"]` | Testing & product analytics |
+| **product-owner** | `["product-owner-mcp", "product-manager-mcp"]` | Product & requirements |
 | **readonly** | `["*"]` (status only) | List operations only |
 
 Enforcement:
@@ -230,18 +252,29 @@ pytest tests/ -v --cov=src
 ```
 
 ### Manual Testing
+
+Os tokens de teste hardcoded foram **removidos**. Use um token real:
+
+- **Static token (bootstrap):** gere um token opaco e seu hash bcrypt, coloque o hash em
+  `GATEWAY_STATIC_TOKENS_JSON` e use o token cru no header. Gerar:
+  ```bash
+  python -c "import bcrypt, secrets; raw=secrets.token_urlsafe(32); print('TOKEN=', raw); print('HASH=', bcrypt.hashpw(raw.encode(), bcrypt.gensalt()).decode())"
+  ```
+- **JWT (produção):** obtenha um access token do auth-mcp (Authorization Server) com `aud` =
+  `GATEWAY_RESOURCE` e configure `GATEWAY_AS_ISSUER` + `GATEWAY_AS_JWKS_URL` no gateway.
+
 ```bash
-# Test as admin
-curl -H "Authorization: Bearer test-admin-token" \
-  http://localhost:8080/mcp
+export TOKEN=<seu-token-static-ou-jwt>
 
-# Test as developer
-curl -H "Authorization: Bearer test-developer-token" \
-  http://localhost:8080/mcp/qazilla-mcp/tools
+# Chamada autenticada
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/mcp/qa-engineer-mcp/tools
 
-# Test unauthorized access (should get 403)
-curl -H "Authorization: Bearer test-readonly-token" \
-  -X POST http://localhost:8080/mcp/backzilla-mcp/tools/call \
+# Sem token → 403
+curl http://localhost:8080/mcp/qa-engineer-mcp/tools
+
+# Sem escopo/role para a ferramenta → 403 (RBAC)
+curl -H "Authorization: Bearer $TOKEN" \
+  -X POST http://localhost:8080/mcp/backend-mcp/tools/call \
   -H "Content-Type: application/json" \
   -d '{"name": "generate_service_layer", "arguments": {}}'
 ```

@@ -15,16 +15,16 @@ Resolucao de REPOS_ROOT (ordem de prioridade)
 4. config-mcp namespace workspace, chave REPOS_ROOT (via ConfigClient HTTP)
 5. Auto-deteccao: diretorios comuns (~/repos, ~/repositorios, ~/projects, ~/code)
 """
+
 from __future__ import annotations
 
 import logging
-import os
 import subprocess
 from pathlib import Path
 from typing import Any
 
 from ..config.settings import DeploySettings
-from ..knowledge.github_client import GitHubClient, GitHubClientError
+from ..knowledge.github_client import GitHubClient
 
 _log = logging.getLogger(__name__)
 
@@ -41,12 +41,16 @@ _AUTO_DETECT_CANDIDATES = [
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+
 def _run_git(args: list[str], cwd: Path, timeout: int = 10) -> tuple[bool, str]:
     """Executa um comando git em cwd. Retorna (sucesso, output)."""
     try:
         r = subprocess.run(
             ["git", *args],
-            capture_output=True, text=True, timeout=timeout, cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            cwd=str(cwd),
         )
         return r.returncode == 0, (r.stdout.strip() or r.stderr.strip())
     except (FileNotFoundError, subprocess.TimeoutExpired) as exc:
@@ -61,9 +65,7 @@ def _git_info(repo_path: Path) -> dict[str, Any]:
     ok, remote = _run_git(["remote", "get-url", "origin"], repo_path)
     remote = remote if ok else None
 
-    ok, last_commit = _run_git(
-        ["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path
-    )
+    ok, last_commit = _run_git(["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path)
     last_commit = last_commit if ok else None
 
     ok, status_out = _run_git(["status", "--porcelain"], repo_path)
@@ -98,9 +100,12 @@ def _resolve_repos_root(
     # 4. config-mcp via HTTP
     try:
         from shared.config_client import ConfigClient
+
         client = ConfigClient.from_env()
         ws = client.get_workspace_config()
-        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get("REPOS_ROOT", {}).get("value")
+        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get("REPOS_ROOT", {}).get(
+            "value"
+        )
         if repos_root_val:
             return Path(repos_root_val).expanduser().resolve()
     except Exception as exc:
@@ -118,8 +123,9 @@ def _resolve_repos_root(
 def _push_repos_root_to_config_mcp(path: str) -> bool:
     """Persiste REPOS_ROOT no config-mcp. Retorna True se ok."""
     try:
-        from shared.config_client import ConfigClient
         import httpx
+        from shared.config_client import ConfigClient
+
         client = ConfigClient.from_env()
         # Chama set_workspace_config via HTTP
         resp = httpx.post(
@@ -134,6 +140,7 @@ def _push_repos_root_to_config_mcp(path: str) -> bool:
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 def get_repos_root(
     settings: DeploySettings,
@@ -163,7 +170,9 @@ def get_repos_root(
         source = "auto_detected_or_config_mcp"
 
     exists = resolved.exists()
-    repo_count = sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists()) if exists else 0
+    repo_count = (
+        sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists()) if exists else 0
+    )
 
     return {
         "repos_root": str(resolved),
@@ -211,8 +220,9 @@ def set_repos_root(
         "persisted_to_config_mcp": persisted,
         "action": "set",
         "tip": (
-            None if persisted else
-            "config-mcp nao disponivel — defina DEPLOY_REPOS_ROOT no shell para persistir localmente."
+            None
+            if persisted
+            else "config-mcp nao disponivel — defina DEPLOY_REPOS_ROOT no shell para persistir localmente."
         ),
     }
 
@@ -337,7 +347,9 @@ def clone_repo(
     try:
         result = subprocess.run(
             git_cmd,
-            capture_output=True, text=True, timeout=120,
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
     except subprocess.TimeoutExpired:
         return {"error": "git clone timeout (120s)", "repo": full_repo}

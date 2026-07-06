@@ -10,7 +10,7 @@ from pathlib import Path
 
 MCP_MAPPING = {
     "config-mcp": ("config_mcp.py", 7100),
-    "agent-twin-mcp": ("agent_twin_mcp.py", 7101),
+    "dev-twin-mcp": ("dev_twin_mcp.py", 7101),
     "session-mcp": ("session_mcp.py", 7102),
     "auth-mcp": ("auth_mcp.py", 7103),
     "admin-mcp": ("admin_mcp.py", 7104),

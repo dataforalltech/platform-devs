@@ -1,4 +1,4 @@
-# ✅ Load Testing Report — All 10 Zilla MCPs
+# ✅ Load Testing Report — All 10 DevTeam MCPs
 
 **Status**: 🟢 **ALL TESTS PASSED**  
 **Date**: 2026-05-11  
@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-All 10 Zilla MCPs successfully handled concurrent load testing with **0 failures**. Performance metrics demonstrate production-ready architecture.
+All 10 DevTeam MCPs successfully handled concurrent load testing with **0 failures**. Performance metrics demonstrate production-ready architecture.
 
 ### Key Results
 
@@ -38,16 +38,16 @@ All 10 Zilla MCPs successfully handled concurrent load testing with **0 failures
 ```
 Server                    Sequential   Concurrent(5)  Concurrent(10)  Status
 ─────────────────────────────────────────────────────────────────────────────
-qazilla                    483 req/s      181 req/s      229 req/s     ✅
-seczilla                   495 req/s      241 req/s      267 req/s     ✅
-archzilla                  531 req/s      315 req/s      151 req/s     ✅
-backzilla                  506 req/s      282 req/s      245 req/s     ✅
-frontzilla                 524 req/s      325 req/s      115 req/s     ✅
-opszilla                   508 req/s      258 req/s      252 req/s     ✅
-pozilla                    481 req/s      290 req/s      181 req/s     ✅
-productzilla               450 req/s      289 req/s      195 req/s     ✅
-cross-zilla-validators     507 req/s      354 req/s      200 req/s     ✅
-zilla-observatory          507 req/s      229 req/s      219 req/s     ✅
+qa-engineer                    483 req/s      181 req/s      229 req/s     ✅
+security                   495 req/s      241 req/s      267 req/s     ✅
+architecture                  531 req/s      315 req/s      151 req/s     ✅
+backend                  506 req/s      282 req/s      245 req/s     ✅
+frontend                 524 req/s      325 req/s      115 req/s     ✅
+devops                   508 req/s      258 req/s      252 req/s     ✅
+product-owner                    481 req/s      290 req/s      181 req/s     ✅
+product-manager               450 req/s      289 req/s      195 req/s     ✅
+cross-devteam-validators     507 req/s      354 req/s      200 req/s     ✅
+devteam-observatory          507 req/s      229 req/s      219 req/s     ✅
 ─────────────────────────────────────────────────────────────────────────────
 Average (sequential)       498.8 req/s    ← Excellent baseline
 Average (concurrent-5)     276.5 req/s    ← Stable concurrent
@@ -77,7 +77,7 @@ Average (concurrent-10)    204.5 req/s    ← Safe concurrency limit
 
 ### Methodology
 - **Endpoint**: `POST /mcp/tools/call`
-- **Tool**: `create_test_plan` on qazilla
+- **Tool**: `create_test_plan` on qa-engineer
 - **Sequential**: 10 requests (c=1)
 - **Concurrent**: 10 requests (c=5)
 
@@ -122,16 +122,16 @@ Concurrent(c=5)   12.04    10/10     0        ~83 ms
 ```
 Server                    RPS        Failed   Status
 ─────────────────────────────────────────────────────
-qazilla                   224.94 req/s  0      ✅
-seczilla                  253.50 req/s  0      ✅
-archzilla                 233.24 req/s  0      ✅
-backzilla                 236.16 req/s  0      ✅
-frontzilla                203.64 req/s  0      ✅
-opszilla                  152.60 req/s  0      ✅
-pozilla                   144.55 req/s  0      ✅
-productzilla              209.69 req/s  0      ✅
-cross-zilla-validators    135.01 req/s  0      ✅
-zilla-observatory         235.02 req/s  0      ✅
+qa-engineer                   224.94 req/s  0      ✅
+security                  253.50 req/s  0      ✅
+architecture                 233.24 req/s  0      ✅
+backend                 236.16 req/s  0      ✅
+frontend                203.64 req/s  0      ✅
+devops                  152.60 req/s  0      ✅
+product-owner                   144.55 req/s  0      ✅
+product-manager              209.69 req/s  0      ✅
+cross-devteam-validators    135.01 req/s  0      ✅
+devteam-observatory         235.02 req/s  0      ✅
 ─────────────────────────────────────────────────────
 Total                     500 requests / 0 failed  ✅
 ```
@@ -282,7 +282,7 @@ Failures: 0
 
 **Status**: ✅ **PRODUCTION READY**
 
-The Zilla MCPs can handle:
+The DevTeam MCPs can handle:
 - Moderate to high traffic (200+ req/s per server)
 - Concurrent connections (safely up to c=10)
 - Sustained load (no memory leaks, stable performance)
@@ -298,7 +298,7 @@ The Zilla MCPs can handle:
 - **Framework**: FastAPI + Uvicorn
 - **Database**: PostgreSQL (claude-dev:5432)
 - **Test Tool**: Python threading + urllib
-- **Servers Tested**: 10 Zillas (qazilla through zilla-observatory)
+- **Servers Tested**: 10 DevTeam (qa-engineer through devteam-observatory)
 
 ---
 
