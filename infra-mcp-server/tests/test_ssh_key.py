@@ -20,15 +20,15 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-from src.knowledge.allocator_store import (
+
+from src.db.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
     LeaseNotFound,
 )
-
-from src.knowledge.provisioner import TerraformProvisioner
-from src.knowledge.ssh_key import (
+from src.db.provisioner import TerraformProvisioner
+from src.db.ssh_key import (
     decrypt_private_key,
     encrypt_private_key,
     generate_fernet_key,
@@ -219,8 +219,7 @@ class TestAllocatorSSHKeys:
         """GC de leases expirados → VM órfã terminada → vm_keys deletado."""
         from datetime import timedelta
 
-        from src.knowledge.allocator_store import _dt_to_str
-
+        from src.db.allocator_store import _dt_to_str
         from src.models.allocator import now_utc
 
         store = self._make_store()

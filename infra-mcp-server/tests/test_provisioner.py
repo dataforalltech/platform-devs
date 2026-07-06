@@ -17,9 +17,8 @@ import time
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
-
-from src.knowledge.provisioner import (
+from src.db.allocator_store import AllocatorPolicy, AllocatorStore
+from src.db.provisioner import (
     ImmediateProvisioner,
     OnDone,
     OnFailed,
@@ -735,8 +734,7 @@ class TestAllocatorDestroyIntegration:
         """Lease expirado por GC → VM órfã terminada → destroy chamado."""
         from datetime import timedelta
 
-        from src.knowledge.allocator_store import _dt_to_str
-
+        from src.db.allocator_store import _dt_to_str
         from src.models.allocator import now_utc
 
         prov = RecordingProvisioner()

@@ -392,20 +392,21 @@ def build_server() -> tuple[Any, ...]:
         provisioner = ImmediateProvisioner()
         _log.info("provisioner_immediate", extra={"extras": {}})
 
-    # AllocatorStore PostgreSQL-backed (Phase 2b+ → PostgreSQL migration).
+    # AllocatorStore SQLite-backed (db_path configurável via INFRA_DB_PATH).
     # Phase 2f: lease_secret para cifrar chaves SSH por VM.
     allocator = AllocatorStore(
-        settings=settings,
+        db_path=settings.db_path,
         policy=AllocatorPolicy(),
         provisioner=provisioner,
+        tf_modules_root=settings.tf_modules_root,
+        provision_timeout_sec=settings.provision_timeout_sec,
         lease_secret=settings.lease_secret,
     )
     _log.info(
         "allocator_ready",
         extra={
             "extras": {
-                "pg_host": settings.pg_host,
-                "pg_db": settings.pg_db,
+                "db_path": settings.db_path,
                 "tf_modules_root": str(settings.tf_modules_root)
                 if settings.tf_modules_root
                 else None,

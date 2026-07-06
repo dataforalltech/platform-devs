@@ -18,12 +18,12 @@ Cobre:
 from __future__ import annotations
 
 import pytest
-from src.knowledge.allocator_store import (
+
+from src.db.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
 )
-
 from src.models.allocator import VMRequest
 
 # ------------------------------------------------------------------ #
@@ -283,7 +283,7 @@ class TestQueueFulfillment:
         segundo request a cair na fila (cost cap). Depois on_ready é disparado
         manualmente → _try_fulfill_queued_inside_lock encontra VM READY para share.
         """
-        from src.knowledge.provisioner import ImmediateProvisioner
+        from src.db.provisioner import ImmediateProvisioner
 
         class _SlowProvisioner(ImmediateProvisioner):
             """Provisioner que adia on_ready até flush() ser chamado."""

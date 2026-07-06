@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
 
+from src.db.allocator_store import AllocatorPolicy, AllocatorStore
 from src.tools.allocator_tool import (
     extend_lease,
     get_lease,

@@ -21,7 +21,7 @@ chegarmos em Phase 2c, `provision_vm()` chama terraform_apply via Phase 1.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator

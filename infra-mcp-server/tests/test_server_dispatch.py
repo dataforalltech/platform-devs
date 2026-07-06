@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 
 import pytest
-from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
 
 from src.config.settings import Settings
+from src.db.allocator_store import AllocatorPolicy, AllocatorStore
 from src.server.mcp_server import _TOOL_SCHEMAS, _dispatch
 from src.tools import checkov_tool, infracost_tool, terraform_tool
 from src.utils.subprocess_runner import CommandResult
