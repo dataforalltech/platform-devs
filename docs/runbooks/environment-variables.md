@@ -99,7 +99,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-admin | ✅ | mysql | develop | Dockerfile.admin-mcp (derivado) | IAM/usuários |
 | platform-governance | ✅ | mysql | develop | mcp | ENV_PROFILE=hml; gov-mcp build defeito |
 | platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
-| platform-cdc | ⬜ img✅ | mysql | develop | cdc_mcp | |
+| platform-cdc | ✅ | mysql | develop | mcp/Dockerfile (raiz), 28000 | ENV_PROFILE=local-hml; Kafka/coord OFF; MCP 9 tools |
 | platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
 | platform-analytics | ✅ | mysql | develop | Dockerfile.mcp (raiz), 7100 | BI; NOTIFICATION_INTERNAL_TOKEN+TRUSTED_PROXIES; MCP 117 tools |
 | platform-communication | ⬜ img✅ | mysql | develop | mcp | |
@@ -216,6 +216,15 @@ MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-con
 `NOTIFICATION_SERVICE_URL=http://platform-notification:8000`.
 MCP (porta 7100, 117 tools): `ANALYTICS_MCP_ANALYTICS_URL=http://platform-analytics:8000`,
 `ANALYTICS_MCP_INTERNAL_API_TOKEN=••••`, `ANALYTICS_MCP_DEFAULT_TENANT_ID=dataforall`, `ANALYTICS_MCP_TWIN_ENFORCE=false`.
+
+### platform-cdc — específicos
+`ENV_PROFILE=local-hml` (**{runtime}-{app}**, como o core — difere de governance/connectors/analytics),
+health `:8000/api/health/ready`, `INTERNAL_API_TOKEN=••••`, `URL_AUTH=http://platform-auth:8000/internal`,
+`CONNECTORS_SERVICE_URL=http://platform-connectors:8000`, `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`.
+CDC standalone (sem streaming ativo): `KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENABLED=false`,
+`CDC_COORDINATOR_ENABLED=false` (senão exige `TENANT_ID`), `CDC_WORKER_STANDALONE=true`, `MONITOR_EVENTS_ENABLED=false`.
+MCP (porta 28000, 9 tools, `/mcp/tools/list`): `MCP_HTTP_PORT=28000`, `CDC_INTERNAL_URL=http://platform-cdc:8000/api/v1`,
+`CDC_INTERNAL_TOKEN=••••`, `CDC_MCP_TWIN_ENFORCE=false` (senão exige twin JWKS no boot).
 
 ---
 
