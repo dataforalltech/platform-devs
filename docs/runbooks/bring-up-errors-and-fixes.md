@@ -299,6 +299,36 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Causa:** o compose referencia `platform-ml-mcp` cuja imagem ainda não fora buildada; o `up` tenta puxar todos os serviços.
 - **Correção:** subir **por serviço** enquanto o MCP não existe (`docker compose ... up -d platform-ml`), buildar o `-mcp` (leve, `mcp/Dockerfile`) e só então `up -d platform-ml-mcp`. **Status:** 📌 gotcha (ordem de bring-up).
 
+## M. platform-iceberg — lakehouse completo (MinIO + Polaris + Trino)
+
+> O `platform-iceberg` é um **control-plane fino** (FastAPI, auth por `API_TOKEN` estático,
+> `ENVIRONMENT=homologacao`) sobre um data-stack: **MinIO** (S3) → **Polaris** (Iceberg REST
+> Catalog, JVM) → **Trino** (SQL, JVM). Sobe numa **rede dedicada `iceberg-net`** (os configs do
+> Trino/hml_init HARDCODAM `minio`/`polaris`/`trino`), com a API também no `platform-local`.
+> Referência: o próprio repo tem `docker-compose.hml.yml` + `trino/` + `scripts/hml_init.py`
+> (bundlados em `deploy/services/platform-iceberg/`). Validado: `SELECT` real via Trino → Polaris → MinIO.
+
+### M1. Polaris `relational-jdbc` → 500 no token endpoint (falta bootstrap)
+- **Evidência:** `POST /api/catalog/v1/oauth/tokens → 500 Internal Server Error`; hml-init não obtém token.
+- **Causa:** com `POLARIS_PERSISTENCE_TYPE=relational-jdbc` o schema/realm precisa de um **bootstrap explícito** (via polaris-admin-tool) — o env `POLARIS_BOOTSTRAP_CREDENTIALS` sozinho não inicializa o Postgres.
+- **Correção:** usar `POLARIS_PERSISTENCE_TYPE=in-memory` (auto-bootstrap do realm/root a cada start; o hml-init recria o catalog — idempotente). Dispensa o Postgres do Polaris. **Status:** ✅ bakado. **Trade-off:** metadata do catalog recriada a cada `up`; os dados dos arquivos ficam no MinIO. Persistência real exige bootstrap do jdbc (futuro).
+
+### M2. Trino vs props OAuth do Polaris (versão importa MUITO)
+- **Evidência:** (446) startup falha: `Configuration property 'iceberg.rest-catalog.oauth2.scope/server-uri/token-refresh-enabled' was not used` → Trino **sai** (prop não-usada = erro fatal). Removendo-as, o Trino sobe mas as queries falham com `invalid_scope: The scope is invalid`. (465) só `token-refresh-enabled` é rejeitada.
+- **Causa:** o **Polaris EXIGE o scope `PRINCIPAL_ROLE:ALL`** no OAuth; mas o **Trino 446 não suporta** `oauth2.scope` (nem server-uri/token-refresh). O **465 suporta scope + server-uri**, mas **não** `token-refresh-enabled` (renomeada/removida).
+- **Correção:** imagem **`trinodb/trino:465`** + no catalog `.properties`: manter `oauth2.scope=PRINCIPAL_ROLE:ALL` e `oauth2.server-uri=...`, **remover `oauth2.token-refresh-enabled`**. **Status:** ✅ bakado (`trino/catalog/tenant_lab_s3.properties`).
+
+### M3. Trino 465 restart-loop (exit 0) — jvm.config incompleto ao montar `/etc/trino`
+- **Evidência:** `ExitCode=0 OOMKilled=false Restarts=N` subindo; `SERVER_STARTING_UP`/connection-refused nas queries.
+- **Causa (dupla):** (a) o mount `./trino/etc:/etc/trino` **substitui** o dir inteiro, incluindo o `jvm.config` default da imagem → um `jvm.config` minimalista **sem** as flags que o JDK 23/Trino 465 exigem (especialmente **`-Djava.security.manager=allow`** e `-agentpath libjvmkill.so`) faz o server sair. (b) o restart-loop **real** aqui foi a config-error do M2 (prop não-usada), não o JVM — mas o jvm.config errado também derruba.
+- **Correção:** `jvm.config` do bundle = o **default da imagem 465** (`docker run --rm --entrypoint cat trinodb/trino:465 /etc/trino/jvm.config`) com **`-Xmx2G` fixo** no lugar do `MaxRAMPercentage=80` (senão, sem `mem_limit`, pega 80% dos 15G do host) + `mem_limit: 3g` no serviço. **Status:** ✅ bakado.
+- **Nota timing:** o healthcheck do Trino (`/v1/info`) fica 200 **antes** do engine aceitar SQL (`SERVER_STARTING_UP`) — o hml-init tem retry; se esgotar, re-rodar `up -d --force-recreate hml-init`.
+
+### M4. iceberg MCP — ADIADO (código não está em develop + imagem sem deps)
+- **Evidência:** `ModuleNotFoundError: No module named 'iceberg_mcp'` (imagem) e, com bind-mount, `No module named 'mcp'`/`'fastmcp'`.
+- **Causa:** `app/iceberg_mcp/` existe só **local** (não em `origin/develop`, de onde o build clona) e a imagem da API **não tem** as deps `mcp`/`fastmcp`.
+- **Correção:** MCP **adiado**; bundle `./iceberg_mcp/` mantido. **Raiz (repo):** shipar `iceberg_mcp` no develop + incluir no build (deps + Dockerfile de MCP ou COPY na imagem). → tarefa aberta. **Status:** ⏳ pendente.
+
 ## J. Build / rebuild de imagens (na EC2)
 
 ### J1. SSM `AWS-RunShellScript` roda com `/bin/sh` (dash)

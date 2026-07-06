@@ -9,7 +9,8 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 12 APIs + 9 MCP no ar; front-door agregando **705 tools / 21 serviços**; login e2e 200.
+> **Estado (2026-07-06):** 13 APIs + 9 MCP no ar (inclui o **lakehouse iceberg**: MinIO+Polaris+Trino, SQL validado);
+> front-door agregando **705 tools / 21 serviços**; login e2e 200.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
 ---
@@ -33,6 +34,10 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `OAUTH_STATE_SECRET` | `••••` (hex 32) | on-box | connectors (assina state OAuth) |
 | `WEBHOOK_SECRET` | `••••` (hex 32) | on-box | connectors (assina tokens de webhook PIX/PSP) |
 | `FILE_PROXY_SECRET` | `••••` (hex 32) | on-box | connectors (assina URLs do file proxy) |
+| `ICEBERG_MINIO_USER` / `ICEBERG_MINIO_PASSWORD` | `••••` | on-box | MinIO root + s3 keys do Trino/Polaris (iceberg) |
+| `ICEBERG_POLARIS_SECRET` | `••••` (32) | on-box | Polaris bootstrap root + OAuth (API/Trino/hml-init) |
+| `ICEBERG_API_TOKEN` | `••••` (hex 24) | on-box | iceberg API (auth estática) + token interno do MCP |
+| `ICEBERG_MCP_SERVICE_TOKEN` / `ICEBERG_SECRET_KEY` | `••••` | on-box | iceberg MCP (HMAC, adiado) / Fernet do registry |
 
 ---
 
@@ -110,7 +115,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou (sem git no Dockerfile — tarefa de repo) |
 | platform-flow | ⬜ img✗ | mysql | develop | — | build falhou (git+ssh — tarefa de repo) |
 | platform-dai | ⬜ | mysql | fix/ci-oasdiff-baseline | mcp | branch de fix |
-| platform-iceberg | ⬜ | mysql | develop | — | |
+| platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; MCP adiado (M4) |
 | platform-pipeline | ⬜ | mysql | develop | mcp | |
 | platform-db-vector | ⬜ | mysql | develop | — | dívida: migrar p/ postgres+pgvector |
 | platform-security | ⬜ | mysql | (repo não clonado local) | ? | |
@@ -271,6 +276,18 @@ Migrations são **SQL puro** (não alembic): `docker exec platform-monitor bash 
 MCP (porta 28000, 23 tools, `mcp/Dockerfile` **ctx=`mcp/`** — J6): `MONITOR_MCP_SERVICE_BASE_URL=http://platform-monitor:8000`,
 `MONITOR_MCP_HEALTH_BASE_URL=http://platform-monitor:9090`, `MONITOR_MCP_TWIN_ENFORCE=false`, e **`ADMIN_DB_*`**
 (o MCP resolve `X-Internal-Token` por-tenant do `ADMIN_DATAFORALL.PLATFORMS`).
+
+### platform-iceberg — LAKEHOUSE (MinIO + Polaris + Trino) — ver runbook M
+**Não segue o padrão comum** — é um control-plane num data-stack próprio (rede `iceberg-net`; API+MCP também no `platform-local`).
+`ENVIRONMENT=homologacao` (relaxa validações de prod/staging), **auth por `API_TOKEN` estático** (não JWT/JWKS), registry **JsonStore**
+(volume, sem DATABASE_URL). API (porta 8018, health `:8018/api/health/live`): `API_TOKEN=••••` (=`ICEBERG_API_TOKEN`),
+`SECRET_KEY=••••` (Fernet), `TRINO_HOST=trino`/`TRINO_PORT=8080`/`TRINO_HTTP_SCHEME=http`, `POLARIS_BASE_URL=http://polaris:8181`,
+`POLARIS_HEALTH_URL=http://polaris:8182/q/health/live`, `POLARIS_CLIENT_ID=root`, `POLARIS_CLIENT_SECRET=••••`, `POLARIS_OAUTH_SCOPE=PRINCIPAL_ROLE:ALL`.
+Data-stack: **minio** (`RELEASE.2024-10-02`, `MINIO_ROOT_USER/PASSWORD=••••`, bucket `warehouse`); **polaris** (`apache/polaris:1.4.0`,
+`POLARIS_PERSISTENCE_TYPE=in-memory` — M1, `POLARIS_BOOTSTRAP_CREDENTIALS=POLARIS,root,••••`, `AWS_*`/`QUARKUS_S3_*`→minio); **trino**
+(`trinodb/trino:465` — M2, `mem_limit 3g` + jvm.config `-Xmx2G` — M3, catalog `tenant_lab_s3` OAUTH2 scope `PRINCIPAL_ROLE:ALL`,
+s3/oauth creds via `${ENV:...}` = `S3_ACCESS_KEY`/`S3_SECRET_KEY`/`POLARIS_CLIENT_SECRET`). **hml-init** cria o catalog+schema+seed (idempotente).
+**MCP adiado** (M4). Segredos: `ICEBERG_*` no `.env`.
 
 ---
 

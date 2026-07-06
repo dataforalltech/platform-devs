@@ -179,8 +179,8 @@ Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward 
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)
 
 ## Estado atual (2026-07-06)
-**12 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
-analytics, communication, ml, monitor, agents-factory. **9 MCP sidecars healthy**
+**13 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
+analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado). **9 MCP sidecars healthy**
 (gateway/admin/connectors/analytics/cdc/communication/ml/monitor/agents-factory + auth via SSE); o
 **platform-mcp (front-door) agrega 705 tools / 21 serviços**. **Login e2e 200.**
 Pendências: `notification-mcp` (path de agregação, K3), e os ainda-não-subidos
@@ -194,3 +194,5 @@ Ver roster completo em [environment-variables.md](environment-variables.md) §5.
 >   health em **porta separada 9090**, e **não** usa `ENV_PROFILE`.
 > - **Build de MCP:** rode API e MCP do mesmo repo **em sequência** (paralelo colide no clone — J5);
 >   confira o **contexto** que o `mcp/Dockerfile` espera (`mcp/` vs raiz — J6).
+> - **`platform-iceberg` é um lakehouse** (MinIO+Polaris+Trino numa rede dedicada) — não segue o padrão comum.
+>   Cuidado com o pareamento de versões Trino↔Polaris (props OAuth) e o `jvm.config` do Trino ao montar `/etc/trino` (ver **M1–M4**).

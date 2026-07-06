@@ -37,6 +37,7 @@ reg platform-communication-mcp mcp_http http://platform-communication-mcp:7100 /
 reg platform-ml-mcp          mcp_http http://platform-ml-mcp:7104          /mcp/tools/list  /mcp/tools/call  mcp
 reg platform-agents-factory-mcp mcp_http http://platform-agents-factory-mcp:7130 /mcp/tools/list /mcp/tools/call mcp
 reg platform-monitor-mcp     mcp_http http://platform-monitor-mcp:28000     /mcp/tools/list  /mcp/tools/call  mcp
+# iceberg-mcp: ADIADO — iceberg_mcp nao esta em origin/develop e a imagem nao tem mcp/fastmcp (tarefa)
 # notification-mcp: /mcp/tools/list deu 404 (path a confirmar) — pendente
 
 echo "== recarrega o registry do platform-mcp =="

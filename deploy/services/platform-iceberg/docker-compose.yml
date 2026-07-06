@@ -1,0 +1,205 @@
+# platform-iceberg (lakehouse COMPLETO) — ambiente enxuto.
+# Control-plane fino (FastAPI) sobre um data-stack Apache Iceberg:
+#   minio (object store S3) -> polaris (REST catalog, JVM) -> trino (SQL engine, JVM)
+#   + postgres dedicado (persistencia do Polaris) + a API + o MCP (mesma imagem).
+#
+# Rede: os configs do Trino/hml_init HARDCODAM os nomes minio/polaris/trino/postgres,
+# entao o data-stack roda numa rede DEDICADA `iceberg-net` com esses nomes. A API e o MCP
+# tambem entram no `platform-local` (o MCP p/ ser alcancado pelo platform-mcp; OTEL).
+# Auth da API: API_TOKEN estatico (nao JWT/JWKS). MCP: MCP_SERVICE_TOKEN (HMAC).
+# ENVIRONMENT=homologacao (relaxa validacoes de prod/staging; JsonStore no volume, sem DATABASE_URL).
+# Segredos em /opt/dataforall/deploy/.env (ICEBERG_*), gerados on-box (ver bring-up).
+name: dataforall-iceberg
+
+networks:
+  iceberg-net:
+    driver: bridge
+  platform-local:
+    external: true
+
+volumes:
+  iceberg-minio:
+  iceberg-registry:
+
+services:
+  # ---- Object store S3 ------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2024-10-02T17-50-41Z
+    container_name: platform-iceberg-minio
+    command: server /data --console-address ":9001"
+    networks: [iceberg-net]
+    environment:
+      MINIO_ROOT_USER: ${ICEBERG_MINIO_USER:?defina em .env}
+      MINIO_ROOT_PASSWORD: ${ICEBERG_MINIO_PASSWORD:?defina em .env}
+    volumes:
+      - iceberg-minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  minio-init:
+    image: minio/mc:latest
+    container_name: platform-iceberg-minio-init
+    networks: [iceberg-net]
+    environment:
+      MINIO_ROOT_USER: ${ICEBERG_MINIO_USER:?defina em .env}
+      MINIO_ROOT_PASSWORD: ${ICEBERG_MINIO_PASSWORD:?defina em .env}
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD
+        mc mb --ignore-existing local/warehouse
+        echo "=== [minio-init] bucket 'warehouse' pronto ==="
+
+  # (postgres dedicado removido: Polaris roda in-memory, nao precisa de backend jdbc.)
+
+  # ---- Polaris (Iceberg REST Catalog) ---------------------------------------
+  polaris:
+    image: apache/polaris:1.4.0
+    container_name: platform-iceberg-polaris
+    networks: [iceberg-net]
+    environment:
+      # in-memory: auto-bootstrap do realm/root a partir de POLARIS_BOOTSTRAP_CREDENTIALS a cada start.
+      # (relational-jdbc exige um bootstrap explicito do schema via polaris-admin-tool -> 500 no token
+      # endpoint sem ele. Trade-off: metadata do catalog e recriada pelo hml-init a cada up — idempotente.
+      # Dados dos arquivos ficam no MinIO; so os ponteiros do catalog sao recriados.)
+      POLARIS_PERSISTENCE_TYPE: in-memory
+      POLARIS_BOOTSTRAP_CREDENTIALS: POLARIS,root,${ICEBERG_POLARIS_SECRET:?defina em .env}
+      # S3/MinIO — sem isso o Polaris tenta chamar a AWS real
+      AWS_ACCESS_KEY_ID: ${ICEBERG_MINIO_USER:?defina em .env}
+      AWS_SECRET_ACCESS_KEY: ${ICEBERG_MINIO_PASSWORD:?defina em .env}
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://minio:9000
+      AWS_ENDPOINT_URL_S3: http://minio:9000
+      AWS_ENDPOINT_URL_STS: http://minio:9000
+      AWS_S3_PATH_STYLE_ACCESS: "true"
+      QUARKUS_S3_ENDPOINT_OVERRIDE: http://minio:9000
+      QUARKUS_S3_PATH_STYLE_ACCESS: "true"
+      QUARKUS_STS_ENDPOINT_OVERRIDE: http://minio:9000
+    depends_on:
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8182/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  # ---- Trino (SQL engine) — heap limitado a 1500m (jvm.config no bundle) -----
+  trino:
+    image: trinodb/trino:465  # >=458 p/ suportar iceberg.rest-catalog.oauth2.scope/server-uri (Polaris)
+    container_name: platform-iceberg-trino
+    networks: [iceberg-net]
+    mem_limit: 3g  # cap de seguranca (jvm.config fixa -Xmx2G)
+    environment:
+      # substituidos nos *.properties via ${ENV:...}
+      POLARIS_CLIENT_SECRET: ${ICEBERG_POLARIS_SECRET:?defina em .env}
+      S3_ACCESS_KEY: ${ICEBERG_MINIO_USER:?defina em .env}
+      S3_SECRET_KEY: ${ICEBERG_MINIO_PASSWORD:?defina em .env}
+    volumes:
+      - ./trino/etc:/etc/trino
+      - ./trino/catalog:/etc/trino/catalog
+      - iceberg-registry:/var/trino-registry:ro
+    depends_on:
+      polaris:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/v1/info"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  # ---- API FastAPI ----------------------------------------------------------
+  platform-iceberg:
+    image: d4all.azurecr.io/dataforall/3.0/platform-iceberg:${IMAGE_TAG:-latest}
+    container_name: platform-iceberg
+    networks: [iceberg-net, platform-local]
+    environment:
+      APP_NAME: platform-iceberg
+      SERVICE_ID: platform-iceberg
+      ENVIRONMENT: homologacao
+      NETWORK_TOPOLOGY: docker
+      TZ: UTC
+      LOG_LEVEL: INFO
+      UVICORN_WORKERS: "1"
+      API_TOKEN: ${ICEBERG_API_TOKEN:?defina em .env}
+      SECRET_KEY: ${ICEBERG_SECRET_KEY:?defina em .env}
+      DATA_FILE: /data/platform_iceberg_registry.json
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+      TRINO_HTTP_SCHEME: http
+      TRINO_VERIFY: "false"
+      POLARIS_BASE_URL: http://polaris:8181
+      POLARIS_HEALTH_URL: http://polaris:8182/q/health/live
+      POLARIS_MANAGEMENT_ENABLED: "true"
+      POLARIS_CLIENT_ID: root
+      POLARIS_CLIENT_SECRET: ${ICEBERG_POLARIS_SECRET:?defina em .env}
+      POLARIS_OAUTH_SCOPE: PRINCIPAL_ROLE:ALL
+      OTEL_TRACES_ENABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    volumes:
+      - iceberg-registry:/data
+    depends_on:
+      trino:
+        condition: service_healthy
+      polaris:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8018/api/health/live',timeout=4).status==200 else 1)\" 2>/dev/null || curl -f http://localhost:8018/api/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  # ---- MCP sidecar: ADIADO ---------------------------------------------------
+  # O codigo `app/iceberg_mcp/` NAO esta em origin/develop (so local) e a imagem da API
+  # NAO tem as deps `mcp`/`fastmcp` -> nao roda desta imagem. Fix de raiz no repo platform-iceberg:
+  # shipar o iceberg_mcp no develop + incluir no build (deps + Dockerfile de MCP ou COPY no image).
+  # Bundle `./iceberg_mcp/` mantido para quando houver imagem. Ver tarefa aberta.
+
+  # ---- hml-init — cria o catalog no Polaris + schema/tabelas via Trino (1x) --
+  hml-init:
+    image: python:3.11-slim
+    container_name: platform-iceberg-hml-init
+    networks: [iceberg-net]
+    environment:
+      POLARIS_CLIENT_ID: root
+      POLARIS_CLIENT_SECRET: ${ICEBERG_POLARIS_SECRET:?defina em .env}
+      TRINO_HOST: trino
+      TRINO_PORT: "8080"
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+      polaris:
+        condition: service_healthy
+      trino:
+        condition: service_healthy
+    restart: "no"
+    entrypoint:
+      - bash
+      - -c
+      - |
+        pip install --quiet --no-cache-dir requests trino
+        python3 /tmp/hml_init.py
+    volumes:
+      - ./scripts/hml_init.py:/tmp/hml_init.py:ro
