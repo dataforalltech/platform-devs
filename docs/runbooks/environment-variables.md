@@ -9,8 +9,9 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 16 APIs + 12 MCP no ar (inclui o **lakehouse iceberg**, o **scheduler**, o **dai** e o **db-vector**+pgvector);
-> front-door agregando **772 tools / 24 serviços**; login e2e 200.
+> **Estado (2026-07-06):** ~18 APIs + 12 MCP no ar (inclui **lakehouse iceberg**, **scheduler**, **dai**, **db-vector**+pgvector,
+> e do product-sales: **crm** + **sales-partners** no tenant `sales`); front-door **772 tools / 24 serviços**; login e2e 200.
+> **Visão completa + handoff:** [HANDOFF.md](HANDOFF.md). Frontends/subdomínios na §7 abaixo.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
 ---
@@ -122,10 +123,11 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-pipeline | ⏳ aguardar | mysql | develop | mcp | **pending** (decisão do usuário — não subir agora) |
 | platform-db-vector | ✅ | postgres+**pgvector dedicado** | develop | — (só em feat/mcp-server) | RAG/vetores; porta 5004; `dbvec-postgres` (pgvector/pgvector:pg16); embeddings OpenAI; develop tinha 5 bugs (K9) |
 | platform-security | ⏳ aguardar | mysql | (repo não clonado local) | ? | **pending** (decisão do usuário — não subir agora) |
-| platform-crm-agent | ⬜ | mysql | (não clonado) | ? | |
-| platform-crm | ⬜ | postgres | (não clonado) | ? | |
-| platform-marketing | ⬜ | postgres | (não clonado) | ? | |
-| platform-marketing-agent | ⬜ | postgres | (não clonado) | ? | |
+| platform-crm | ✅ | mysql (**tenant sales**) | develop | mcp/ (:7100 v1) | product-sales; 75 tabelas `crm*` no tenant sales; MCP a subir |
+| platform-sales-partners | ✅ | mysql (**tenant sales**) | develop | Dockerfile.mcp (:7107) | product-sales; comissões; **migrations no tenant sales pendentes**; MCP a subir |
+| platform-crm-agent | ⏳ build falha | mysql | develop | mesma imagem (stdio) | product-sales; build `pip install` falhou — investigar |
+| platform-marketing | ⏳ TLS-blocked | mysql | develop | mcp/ (markai-mcp, 16 servers) | product-sales; boot pendura no TLS obrigatório (https S2S + DB_SSLMODE=require em hml) |
+| platform-marketing-agent | ⏳ build falha | mysql | develop | mesma imagem (stdio) | product-sales; Dockerfile `COPY /tests` inexistente (bug de repo) |
 | platform-finance | ⬜ | postgres | (não clonado) | ? | |
 | platform-finance-agent | ⬜ | postgres | (não clonado) | ? | |
 | platform-sales | ⏳ aguardar | **postgres-only** | develop | src/*_mcp (stdio) | **pending**: força DB_ENGINE=postgresql (RuntimeError se ≠), asyncpg + SQL postgres-only (ON CONFLICT/BIGSERIAL/$1) — não roda em MySQL sem reescrita |
@@ -337,3 +339,23 @@ Referenciam do `.env`: `MYSQL_ROOT_PASSWORD`, `POSTGRES_PASSWORD`, `REDIS_PASSWO
 > **Manutenção:** ao setar uma variável nova em qualquer serviço, adicione-a aqui (mascarando
 > se for segredo). Relaciona-se a [bring-up-errors-and-fixes.md](bring-up-errors-and-fixes.md) e
 > [bring-up-from-scratch.md](bring-up-from-scratch.md).
+
+---
+
+## 7. Frontends & subdomínios (arquitetura multi-frontend)
+
+**Decisão do usuário (2026-07-06):** múltiplos frontends, cada um num subdomínio próprio, todos
+atrás do wildcard `*.dataforall.tech` (Cloudflare Tunnel → nginx roteando por `Host`). **Manter o
+atual + o de sales; +2 novos.** Cada subdomínio → um tenant no `PLATFORMS` (o gateway resolve por Host).
+
+| Subdomínio | Frontend (repo) | Backends principais | Tenant | Status |
+|---|---|---|---|---|
+| `app.dataforall.tech` (atual) | `platform-dataforall-frontend` | plataforma toda | `dataforall` | ✅ no ar |
+| `sales.dataforall.tech` | `dataforall-sales-frontend` (product-sales) | platform-crm, platform-sales-partners | `sales` | frontend clonado; backend crm+sales-partners no ar; **borda a subir** |
+| `partner.dataforall.tech` | 2º frontend novo (a definir) | platform-sales-partners | a definir | ⏳ planejado |
+| `admin.dataforall.tech` | 3º frontend novo (a definir) | platform-admin | a definir | ⏳ planejado |
+| `platform.dataforall.tech` | provável = o "atual" (a confirmar) | plataforma toda | `dataforall` | ⏳ planejado |
+
+> ⚠️ **A confirmar:** mapa exato subdomínio↔frontend↔tenant. Subir um frontend = (1) linha no
+> `PLATFORMS` (`domain`→`tenant_id`), (2) `server_block` no nginx da borda (SPA + `/api`→gateway,
+> preservando Host), (3) build do SPA (Vite). Detalhe e passos em [HANDOFF.md](HANDOFF.md) §3.
