@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.devops
+  uid: prompt.devops
+  title: system prompt · devops
+  owner: platform
+  tags:
+  - prompt
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: devops
+  content_ref: knowledge/profiles/devops.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.devops

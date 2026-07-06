@@ -62,6 +62,13 @@ class EventType(str, Enum):
     RISK_REJECTED = "com.dataforall.risk.rejected"
     RUNBOOK_COMPLETED = "com.dataforall.runbook.completed"
     DEPLOYMENT_COMPLETED = "com.dataforall.deployment.completed"
+    # Bloco de lifecycle de asset (ADR-014 é dona da semântica; envelope/tópico aqui).
+    ASSET_PUBLISHED = "com.dataforall.asset.published"
+    ASSET_PROMOTED = "com.dataforall.asset.promoted"
+    ASSET_DEPRECATED = "com.dataforall.asset.deprecated"
+    ASSET_SUNSET = "com.dataforall.asset.sunset"
+    ASSET_DEPRECATED_USED = "com.dataforall.asset.deprecated_used"
+    ASSET_VALIDATION_FAILED = "com.dataforall.asset.validation_failed"
 
 
 # type -> tópico por aggregate (D12.5). Um tópico por aggregate, não por type.
@@ -79,6 +86,12 @@ TOPIC_BY_TYPE: dict[EventType, str] = {
     EventType.POLICY_DENIED: "platform.policy.v1",
     EventType.RISK_REJECTED: "platform.policy.v1",
     EventType.DEPLOYMENT_COMPLETED: "platform.delivery.v1",
+    EventType.ASSET_PUBLISHED: "platform.asset.v1",
+    EventType.ASSET_PROMOTED: "platform.asset.v1",
+    EventType.ASSET_DEPRECATED: "platform.asset.v1",
+    EventType.ASSET_SUNSET: "platform.asset.v1",
+    EventType.ASSET_DEPRECATED_USED: "platform.asset.v1",
+    EventType.ASSET_VALIDATION_FAILED: "platform.asset.v1",
 }
 
 

@@ -1,0 +1,16 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.002
+  uid: adr.002
+  title: ADR-002 — Repository Automation Governance
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '002'
+  status: Accepted
+  path: ADR-002-REPO-AUTOMATION-GOVERNANCE.md
+relations: []

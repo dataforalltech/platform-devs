@@ -1,0 +1,42 @@
+apiVersion: catalog.platform.dev/v1
+kind: Runbook
+metadata:
+  name: runbook.platform_health
+  uid: runbook.platform_health
+  title: Platform health smoke test (admin -> auth -> tenants)
+  owner: platform
+  tags:
+  - runbook
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  runbook_id: platform_health
+  description: Platform health smoke test (admin -> auth -> tenants)
+  responsible_profile: devops
+  tasks:
+  - task_id: admin_health
+    operation_id: null
+    tool: admin.admin_health_check
+    responsible: devops
+    required: true
+    depends_on: []
+    resolved: false
+  - task_id: auth_health
+    operation_id: null
+    tool: auth.auth_health_check
+    responsible: devops
+    required: true
+    depends_on:
+    - admin_health
+    resolved: false
+  - task_id: list_tenants
+    operation_id: null
+    tool: auth.auth_list_tenants
+    responsible: qa-engineer
+    required: false
+    depends_on:
+    - auth_health
+    resolved: false
+  unresolved_tools: 3
+relations: []

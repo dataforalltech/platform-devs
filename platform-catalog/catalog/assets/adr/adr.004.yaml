@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.004
+  uid: adr.004
+  title: ADR-004 — Twin Token & Token Exchange (RFC 8693)
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '004'
+  status: Proposed (V1)
+  path: ADR-004-MCP-TWIN-TOKEN-EXCHANGE.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.007

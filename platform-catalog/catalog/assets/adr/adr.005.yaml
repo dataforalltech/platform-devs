@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.005
+  uid: adr.005
+  title: 'ADR-005 — Autorização MCP: PEP / PDP / Output Policy'
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '005'
+  status: Proposed (V1)
+  path: ADR-005-MCP-PEP-PDP.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.004
+- verb: derivedFrom
+  target: adr.007

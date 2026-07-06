@@ -25,6 +25,7 @@ class CatalogStore:
         self.operations: dict[str, dict] = {}
         self.tools: list[dict] = []
         self.providers: dict[str, dict] = {}
+        self.assets: dict[str, dict] = {}                # Fase 5 (ADR-014)
         self._tools_by_op: dict[str, list[dict]] = {}
 
     def load(self) -> "CatalogStore":
@@ -34,6 +35,13 @@ class CatalogStore:
         self._tools_by_op = {}
         for t in self.tools:
             self._tools_by_op.setdefault(t["spec"]["operation_id"], []).append(t)
+        # assets são aninhados por kind: assets/<kind>/<uid>.yaml
+        self.assets = {}
+        adir = self.dir / "assets"
+        if adir.exists():
+            for f in sorted(adir.glob("*/*.yaml")):
+                e = yaml.safe_load(f.read_text(encoding="utf-8"))
+                self.assets[e["metadata"]["uid"]] = e
         return self
 
     def _read(self, sub: str) -> list[dict]:
@@ -76,6 +84,25 @@ class CatalogStore:
     def providers_for(self, uid: str) -> list[str]:
         """Providers que implementam a Operation (rastreabilidade — checklist §6)."""
         return sorted({t["spec"]["provider_id"] for t in self._tools_by_op.get(uid, [])})
+
+    # --- assets (Fase 5, ADR-014) -------------------------------------------
+    def assets_of(self, kind: str) -> list[dict]:
+        return [a for a in self.assets.values() if a["kind"] == kind]
+
+    def get_asset(self, uid: str) -> dict | None:
+        return self.assets.get(uid)
+
+    def ref_exists(self, ref: str) -> bool:
+        """Um alvo de relação existe como Operation OU como outro asset."""
+        return ref in self.operations or ref in self.assets
+
+    def assets_for_operation(self, operation_id: str) -> list[str]:
+        """Quais assets (runbooks/adrs/…) referenciam uma Operation — consulta reversa."""
+        out = []
+        for uid, a in self.assets.items():
+            if any(r.get("target") == operation_id for r in a.get("relations", [])):
+                out.append(uid)
+        return sorted(out)
 
     def search(self, q: str) -> list[dict]:
         ql = q.lower()

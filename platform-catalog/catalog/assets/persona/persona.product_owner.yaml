@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.product_owner
+  uid: persona.product_owner
+  title: Product Owner
+  owner: platform
+  tags:
+  - persona
+  - product_owner
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: product_owner
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  allow_list:
+    allowed_effects:
+    - generate
+    - read
+    - write
+    max_blast: service
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.product_owner

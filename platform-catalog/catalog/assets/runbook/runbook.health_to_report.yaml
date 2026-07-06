@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Runbook
+metadata:
+  name: runbook.health_to_report
+  uid: runbook.health_to_report
+  title: Health check -> tests -> report
+  owner: platform
+  tags:
+  - runbook
+  - qa-engineer
+  lifecycle: active
+  version: 1.0.0
+spec:
+  runbook_id: health_to_report
+  description: Health check -> tests -> report
+  responsible_profile: qa-engineer
+  tasks:
+  - task_id: check_health
+    operation_id: infra.check_health
+    tool: services-mcp.check_health
+    responsible: devops
+    required: true
+    depends_on: []
+    resolved: true
+  - task_id: run_tests
+    operation_id: testing.run_unit_tests
+    tool: qa-mcp.run_unit_tests
+    responsible: qa-engineer
+    required: true
+    depends_on:
+    - check_health
+    resolved: true
+  - task_id: generate_report
+    operation_id: testing.generate_qa_report
+    tool: qa-mcp.generate_qa_report
+    responsible: qa-engineer
+    required: false
+    depends_on:
+    - run_tests
+    resolved: true
+  unresolved_tools: 0
+relations:
+- verb: uses
+  target: infra.check_health
+- verb: uses
+  target: testing.run_unit_tests
+- verb: uses
+  target: testing.generate_qa_report

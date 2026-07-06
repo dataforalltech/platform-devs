@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.architecture
+  uid: persona.architecture
+  title: Software Architect
+  owner: platform
+  tags:
+  - persona
+  - architecture
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: architecture
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  allow_list:
+    allowed_effects:
+    - generate
+    - read
+    - write
+    max_blast: service
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.architecture

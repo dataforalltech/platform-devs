@@ -1,0 +1,23 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.architecture
+  uid: policy.architecture
+  title: policy · architecture
+  owner: platform
+  tags:
+  - policy
+  - architecture
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: architecture
+  allowed_effects:
+  - generate
+  - read
+  - write
+  max_blast: service
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.architecture

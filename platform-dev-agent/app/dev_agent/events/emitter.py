@@ -90,3 +90,16 @@ class EventEmitter:
         return self._emit(EventType.POLICY_DENIED, f"capability/{operation_id or 'unknown'}",
                           {"run_id": run_id, "operation_id": operation_id, "actor": actor,
                            "reason": reason})
+
+    # --- asset lifecycle (ADR-014 emite; envelope/tópico ADR-012) -----------
+    def asset_published(self, *, asset_ref: str, kind: str, version: str,
+                        owner: str) -> Event:
+        return self._emit(EventType.ASSET_PUBLISHED, f"asset/{asset_ref}",
+                          {"asset_ref": asset_ref, "kind": kind, "version": version,
+                           "owner": owner})
+
+    def asset_promoted(self, *, asset_ref: str, kind: str, version: str,
+                       from_: str, to: str, approver: str) -> Event:
+        return self._emit(EventType.ASSET_PROMOTED, f"asset/{asset_ref}",
+                          {"asset_ref": asset_ref, "kind": kind, "version": version,
+                           "from": from_, "to": to, "approver": approver})

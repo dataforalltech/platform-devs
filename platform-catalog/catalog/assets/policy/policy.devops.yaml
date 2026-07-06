@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: Policy
+metadata:
+  name: policy.devops
+  uid: policy.devops
+  title: policy · devops
+  owner: platform
+  tags:
+  - policy
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  subject: devops
+  allowed_effects:
+  - build
+  - deploy
+  - execute
+  - generate
+  - read
+  - restart
+  - rollback
+  - write
+  max_blast: environment
+  allowed_domains: []
+relations:
+- verb: governs
+  target: persona.devops

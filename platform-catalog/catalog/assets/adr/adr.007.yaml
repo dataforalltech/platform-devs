@@ -1,0 +1,24 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.007
+  uid: adr.007
+  title: ADR-007 — Capability Model
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '007'
+  status: Proposed (V1)
+  path: ADR-007-MCP-CAPABILITY-MODEL.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.004
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.008

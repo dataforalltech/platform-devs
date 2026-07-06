@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.frontend
+  uid: persona.frontend
+  title: Frontend Engineer
+  owner: platform
+  tags:
+  - persona
+  - frontend
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: frontend
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  - write
+  allow_list:
+    allowed_effects:
+    - generate
+    - read
+    - write
+    max_blast: service
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.frontend

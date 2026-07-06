@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Persona
+metadata:
+  name: persona.security
+  uid: persona.security
+  title: Security Engineer
+  owner: platform
+  tags:
+  - persona
+  - security
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: security
+  model: claude-sonnet-4-6
+  capabilities:
+  - read
+  allow_list:
+    allowed_effects:
+    - read
+    max_blast: none
+    allowed_domains: []
+relations:
+- verb: uses
+  target: prompt.security

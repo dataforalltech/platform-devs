@@ -1,0 +1,30 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.011
+  uid: adr.011
+  title: ADR-011 — Discovery
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '011'
+  status: Proposed (V1)
+  path: ADR-011-DISCOVERY.md
+relations:
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.006
+- verb: derivedFrom
+  target: adr.008
+- verb: derivedFrom
+  target: adr.009
+- verb: derivedFrom
+  target: adr.010
+- verb: derivedFrom
+  target: adr.012
+- verb: derivedFrom
+  target: adr.013

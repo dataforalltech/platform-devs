@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.009
+  uid: adr.009
+  title: ADR-009 — Capability Registry (Platform Catalog · Fase 1)
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: 009
+  status: Proposed (V2)
+  path: ADR-009-CAPABILITY-REGISTRY.md
+relations:
+- verb: derivedFrom
+  target: adr.003
+- verb: derivedFrom
+  target: adr.004
+- verb: derivedFrom
+  target: adr.005
+- verb: derivedFrom
+  target: adr.006
+- verb: derivedFrom
+  target: adr.007
+- verb: derivedFrom
+  target: adr.008

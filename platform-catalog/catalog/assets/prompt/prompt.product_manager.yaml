@@ -1,0 +1,25 @@
+apiVersion: catalog.platform.dev/v1
+kind: Prompt
+metadata:
+  name: prompt.product_manager
+  uid: prompt.product_manager
+  title: system prompt · product_manager
+  owner: platform
+  tags:
+  - prompt
+  - product_manager
+  lifecycle: active
+  version: 1.0.0
+spec:
+  persona_id: product_manager
+  content_ref: knowledge/profiles/product_manager.md
+  front_matter_keys:
+  - capabilities
+  - description
+  - display_name
+  - id
+  - max_iterations
+  - model
+relations:
+- verb: part-of
+  target: persona.product_manager

@@ -106,6 +106,33 @@ def get_provider(pid: str):
     return p
 
 
+@app.get("/v1/assets")
+def list_assets(kind: str | None = None):
+    """Assets do catálogo (Fase 5, ADR-014). Filtro opcional por kind."""
+    s = store()
+    items = s.assets_of(kind) if kind else list(s.assets.values())
+    return {"count": len(items),
+            "assets": [{"uid": a["metadata"]["uid"], "kind": a["kind"],
+                        "title": a["metadata"]["title"], "version": a["metadata"]["version"],
+                        "lifecycle": a["metadata"]["lifecycle"]} for a in items]}
+
+
+@app.get("/v1/assets/{uid}")
+def get_asset(uid: str):
+    a = store().get_asset(uid)
+    if a is None:
+        raise HTTPException(status_code=404, detail=f"asset {uid!r} não existe")
+    return a
+
+
+@app.get("/v1/operations/{uid}/assets")
+def operation_assets(uid: str):
+    """Consulta reversa: quais assets (runbooks/adrs/…) referenciam esta Operation."""
+    if store().get(uid) is None:
+        raise HTTPException(status_code=404, detail=f"operation {uid!r} não existe")
+    return {"operation_id": uid, "assets": store().assets_for_operation(uid)}
+
+
 @app.get("/v1/stats")
 def stats():
     return store().stats()

@@ -74,6 +74,23 @@ def validate_catalog(store: CatalogStore) -> list[str]:
         if o["spec"]["authz"] != "write":
             v.append(f"§7 impacto-produção mas authz!=write: {o['metadata']['uid']}")
 
+    # §8 — assets (Fase 5, ADR-014): relações resolvem; Runbook referencia Operation.
+    for uid, a in store.assets.items():
+        kind = a["kind"]
+        # Runbook: toda task com operation_id (resolvida) tem de existir como Operation.
+        if kind == "Runbook":
+            for t in a["spec"].get("tasks", []):
+                op = t.get("operation_id")
+                if op is not None and op not in store.operations:
+                    v.append(f"§8 Runbook {uid} task {t.get('task_id')} → operation inexistente: {op}")
+        # Relações estruturais (Persona/Prompt/Policy) devem resolver a op/asset.
+        # ADR: relações são parse best-effort → não bloqueiam.
+        if kind != "ADR":
+            for r in a.get("relations", []):
+                tgt = r.get("target")
+                if tgt and not store.ref_exists(tgt):
+                    v.append(f"§8 asset {uid} relação {r.get('verb')} → alvo inexistente: {tgt}")
+
     return v
 
 
@@ -85,8 +102,8 @@ def main() -> int:
         for x in violations:
             print(f"  - {x}")
         return 1
-    print(f"CATALOG OK — {len(store.operations)} operations, 0 violações "
-          f"(§1-§7). Produção-impactante: {len(store.find_production_impacting())} ops.")
+    print(f"CATALOG OK — {len(store.operations)} operations + {len(store.assets)} assets, "
+          f"0 violações (§1-§8). Produção-impactante: {len(store.find_production_impacting())} ops.")
     return 0
 
 
