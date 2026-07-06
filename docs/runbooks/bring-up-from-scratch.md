@@ -132,7 +132,8 @@ ENV_PROFILE conforme o validador do serviço) → migrations no tenant (se tiver
 ---
 
 ## Referências
-- **Erros** (32 itens, A–K): [bring-up-errors-and-fixes.md](bring-up-errors-and-fixes.md)
+- **Erros** (A–K): [bring-up-errors-and-fixes.md](bring-up-errors-and-fixes.md)
+- **Variáveis de ambiente** (inventário, senhas mascaradas): [environment-variables.md](environment-variables.md)
 - **Acesso local aos DBs** (SSM port-forward): [local-db-access-ssm.md](local-db-access-ssm.md)
 - **Arquitetura definitiva** (D1–D7): [../architecture/official-stack-and-architecture.md](../architecture/official-stack-and-architecture.md)
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)

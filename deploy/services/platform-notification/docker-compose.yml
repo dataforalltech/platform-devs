@@ -1,0 +1,86 @@
+# platform-notification (API + MCP) — ambiente enxuto.
+# Servico de dominio: notificacoes/email/SMS/inbox. Kafka OFF (opcional). Valida JWT
+# via JWKS do auth. DB do tenant (mysql). MCP na 7100 (SSE + bridge /mcp/tools/list).
+name: dataforall-notification
+
+networks:
+  platform-local:
+    external: true
+
+services:
+  platform-notification:
+    image: d4all.azurecr.io/dataforall/3.0/platform-notification:${IMAGE_TAG:-latest}
+    container_name: platform-notification
+    restart: unless-stopped
+    networks: [platform-local]
+    environment:
+      APP_NAME: platform-notification
+      SERVICE_ID: platform-notification
+      APP_ENV: hml
+      RUNTIME_ENV: local
+      ENVIRONMENT: staging
+      ENV_PROFILE: local-hml
+      NETWORK_TOPOLOGY: docker
+      TZ: UTC
+      DOCS_ENABLED: "false"
+      UVICORN_WORKERS: "1"
+      # Registry admin
+      ADMIN_DB_HOST: admin-mysql
+      ADMIN_DB_PORT: "3306"
+      ADMIN_DB_NAME: ADMIN_DATAFORALL
+      ADMIN_DB_USER: root
+      ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      ADMIN_DB_SSLMODE: disable
+      # DB do tenant (mysql; nome = tenant_id)
+      DB_ENGINE: mysql
+      DB_HOST: tenant-mysql
+      DB_PORT: "3306"
+      DB_NAME: dataforall
+      DB_USER: root
+      DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
+      DB_SSLMODE: disable
+      # JWT — SO valida (audience casa com o que o auth assina)
+      JWT_ALGORITHM: RS256
+      JWT_ISSUER: platform-auth
+      JWT_AUDIENCE: platform-services
+      JWT_EXPECTED_ISSUER: platform-auth
+      JWT_EXPECTED_AUDIENCE: platform-services
+      JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina em .env}
+      # tokens/segredos
+      INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?defina em .env}
+      RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
+      # Kafka OFF (evita dependencia no boot)
+      KAFKA_ENABLED: "false"
+      KAFKA_CONSUMER_ENABLED: "false"
+      # observabilidade
+      OTEL_TRACES_ENABLED: "true"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      CORS_ALLOWED_ORIGINS: '["https://app.dataforall.tech"]'
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health/ready',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
+
+  platform-notification-mcp:
+    image: d4all.azurecr.io/dataforall/3.0/platform-notification-mcp:${IMAGE_TAG:-latest}
+    container_name: platform-notification-mcp
+    restart: unless-stopped
+    networks: [platform-local]
+    environment:
+      NOTIFICATION_MCP_NOTIFICATION_URL: http://platform-notification:8000
+      NOTIFICATION_MCP_INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      NOTIFICATION_MCP_DEFAULT_TENANT_ID: dataforall
+      NOTIFICATION_MCP_MCP_PORT: "7100"
+    depends_on:
+      platform-notification:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }
