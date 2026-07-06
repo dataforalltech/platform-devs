@@ -1,14 +1,18 @@
 version: '3.9'
 
 # Build context is the REPO ROOT for every server: the per-server Dockerfiles
-# COPY <name>-mcp-server/... and shared/ relative to the repo root. Each migrated
-# service builds and runs the REAL Streamable-HTTP MCP server (src.server.mcp_server
-# via its Dockerfile CMD/console-script), NOT the legacy <name>_mcp.py FastAPI shim
-# (which was dead code: SyntaxError at line 35). The server reads MCP_PORT.
+# COPY <name>-mcp-server/... and shared/ relative to the repo root. Each service
+# builds and runs the REAL Streamable-HTTP MCP server (src.server.mcp_server via
+# its Dockerfile CMD/console-script). The server reads MCP_PORT.
+#
+# The old <name>_mcp.py FastAPI shims (broken: SyntaxError line 35) were removed.
+# The former legacy services auth/admin/governance/scheduler/connectors/cache were
+# dropped from this compose: admin & governance are owned by separate repos
+# (platform-admin / platform-governance, running as platform-*-mcp sidecars); the
+# platform OAuth AS is served from auth-mcp-server/Dockerfile.as via docker-compose.pilot.yml;
+# cache is infra (dataforall-redis); scheduler/connectors had no real server.
 
 services:
-  # --- Migrated: real src/server/mcp_server.py built from each Dockerfile ---
-
   config-mcp:
     build:
       context: .
@@ -125,99 +129,6 @@ services:
       - "7112:7112"
     environment:
       MCP_PORT: "7112"
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  # --- LEGACY / UNMIGRATED ---------------------------------------------------
-  # These dirs contain ONLY the old <name>_mcp.py FastAPI shim (broken: SyntaxError
-  # at line 35) and NO src/server/mcp_server.py real server in this repo, so there is
-  # nothing to repoint them to here. They will crash on startup until a real MCP
-  # server is built for each. Left as-is intentionally — see the MCP catalog
-  # validation report. TODO: build real servers for auth/admin/governance/
-  # scheduler/connectors/cache, then migrate these blocks to the build: pattern above.
-  # ---------------------------------------------------------------------------
-
-  auth-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./auth-mcp-server/auth_mcp.py:/app/auth_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python auth_mcp.py"
-    ports:
-      - "7103:7103"
-    environment:
-      PORT: 7103
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  admin-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./admin-mcp-server/admin_mcp.py:/app/admin_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python admin_mcp.py"
-    ports:
-      - "7104:7104"
-    environment:
-      PORT: 7104
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  governance-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./governance-mcp-server/governance_mcp.py:/app/governance_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python governance_mcp.py"
-    ports:
-      - "7113:7113"
-    environment:
-      PORT: 7113
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  scheduler-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./scheduler-mcp-server/scheduler_mcp.py:/app/scheduler_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python scheduler_mcp.py"
-    ports:
-      - "7114:7114"
-    environment:
-      PORT: 7114
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  connectors-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./connectors-mcp-server/connectors_mcp.py:/app/connectors_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python connectors_mcp.py"
-    ports:
-      - "7115:7115"
-    environment:
-      PORT: 7115
-    networks:
-      - mcp-network
-    restart: unless-stopped
-
-  cache-mcp:
-    image: python:3.11-slim
-    working_dir: /app
-    volumes:
-      - ./cache-mcp-server/cache_mcp.py:/app/cache_mcp.py
-    command: bash -c "pip install -q fastapi uvicorn pydantic && python cache_mcp.py"
-    ports:
-      - "7116:7116"
-    environment:
-      PORT: 7116
     networks:
       - mcp-network
     restart: unless-stopped

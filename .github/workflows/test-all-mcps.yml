@@ -92,11 +92,6 @@ jobs:
       matrix:
         mcp:
           - auth-mcp-server
-          - admin-mcp-server
-          - governance-mcp-server
-          - scheduler-mcp-server
-          - connectors-mcp-server
-          - cache-mcp-server
 
     steps:
       - uses: actions/checkout@v4
