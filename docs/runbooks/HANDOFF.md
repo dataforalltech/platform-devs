@@ -17,7 +17,7 @@
 
 ## 1. Estado atual (2026-07-06)
 
-- **50 containers no ar** (2026-07-06: +2 sidecars do produto sales, +governance-mcp, +iceberg-mcp). ~24 serviços de aplicação healthy + data tier + observabilidade.
+- **52 containers no ar** (2026-07-06: +crm/sales-partners-mcp, +governance-mcp, +iceberg-mcp, +sales/partner-frontend). ~24 serviços de aplicação healthy + data tier + observabilidade.
 - **Front-door `platform-mcp`: 1043 tools / 27 serviços** (era 772/24; +crm/sales-partners/iceberg/governance-mcp). **platform-mcp foi patchado** (auth-por-backend via `additional_info.apiKey` — governance passou de 401→200). Login e2e **200**.
 - **2 tenants** no `ADMIN_DATAFORALL.PLATFORMS`: `dataforall` (app.dataforall.tech) e `sales` (sales.dataforall.tech).
 - **Recursos:** RAM 15Gi (≈8.3Gi usados, 6.7Gi disp.); disco root 18%, `/data` (EBS 100G) **76%** — **monitorar** (builds futuros + Trino/JVM apertam).
@@ -102,8 +102,8 @@
 | Subdomínio | Frontend (repo) | Backends principais | Tenant | Status |
 |---|---|---|---|---|
 | `app.dataforall.tech` (atual) | `platform-dataforall-frontend` (product-dataforall) | plataforma toda | `dataforall` | ✅ no ar |
-| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (branch **`main`**) | platform-crm, platform-sales-partners | **`sales`** | backend crm+sales-partners MCP no ar; borda **NÃO** dedicada (catch-all vaza o SPA do app); repo é **Vite puro SEM Dockerfile** — falta scaffolding+build+rota |
-| `partner.dataforall.tech` | **`platform-sales-partners-frontend`** (branch **`develop`**) | platform-sales-partners | a definir (tenant) | idem: Vite puro sem Dockerfile; precisa scaffolding+build+rota + linha no PLATFORMS |
+| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (branch **`main`**) | platform-crm, platform-sales-partners | **`sales`** | 🟡 imagem `platform-sales-frontend` buildada + roteada, MAS o repo é **TanStack Start + Nitro (SSR)** — nao SPA estatico; nginx serve o index default. Deploy correto exige rodar o **servidor Nitro (Node)**. PENDENTE. (lock estava dessincronizado → build usou `npm install`) |
+| `partner.dataforall.tech` | **`platform-sales-partners-frontend`** (branch **`develop`**) | platform-sales-partners | **novo: `partner`** (a provisionar) | ✅ **NO AR** — `platform-partner-frontend` (SPA estatico) roteado por Host, serve `Console do Parceiro`. Falta: **provisionar o tenant `partner`** no PLATFORMS + DB (senao `/api` nao resolve o tenant) |
 | `admin.dataforall.tech` | (3º frontend novo — a definir/clonar) | platform-admin | a definir | ⏳ planejado |
 | `platform.dataforall.tech` | (provável = o "atual" renomeado, a confirmar) | plataforma toda | `dataforall` | ⏳ planejado |
 

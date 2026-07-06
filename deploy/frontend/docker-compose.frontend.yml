@@ -7,10 +7,20 @@
 #   docker login d4all.azurecr.io
 #   docker compose -f docker-compose.frontend.yml pull
 #   docker compose -f docker-compose.frontend.yml up -d
+#
+# 2026-07-06: o nginx.conf ganhou server-blocks por Host (sales./partner.) que fazem
+# proxy_pass p/ os containers platform-sales-frontend / platform-partner-frontend
+# (frontends distintos). Por isso a borda PRECISA estar na `platform-local` — senao o
+# nginx nao resolve os upstreams no boot e entra em crash-loop (derruba TUDO).
+networks:
+  platform-local:
+    external: true
+
 services:
   frontend:
     image: d4all.azurecr.io/dataforall/3.0/platform-dataforall-frontend:${FRONTEND_TAG:-latest}
     container_name: dataforall-frontend
+    networks: [platform-local]
     ports:
       - "127.0.0.1:8080:8080" # alvo do Cloudflare Tunnel (cloudflared roda no host)
     volumes:
