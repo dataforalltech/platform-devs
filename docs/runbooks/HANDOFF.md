@@ -61,9 +61,9 @@
 
 ### 1.3 Anomalias de MCP a resolver
 
-- **platform-governance-mcp**: `Exited(1)` — build quebrado (hatchling não empacota `src/`). Tarefa spawnada anteriormente.
-- **platform-notification-mcp**: `unhealthy` — `/mcp/tools/list` deu 404 (path de agregação a confirmar — K3). Não registrado.
-- **platform-iceberg-mcp**: repo corrigido pela sessão paralela (`task_e2851af5`), mas o container **não está no ar** — refazer deploy + registro (:7104, 13 tools).
+- **platform-governance-mcp**: `Exited(1)` (restart-loop) — CMD `python -c "from src.server.mcp_server import main; main()"` mas o módulo `src.server` **não existe na imagem** (build do contexto raiz copia `app/`+`src/platform_governance`, não o server do MCP). **Mesmo tipo do crm-mcp (K10)**: o MCP mora num dir próprio (achar o `mcp/`/`*_mcp/` do repo governance e buildar com o contexto certo). Não registrado.
+- **platform-notification-mcp**: `unhealthy` — `/mcp/tools/list` 404 **e** `/openapi.json` 404 (docs off); grep de rotas em `/app` não achou o handler → **path de tools desconhecido**; precisa inspecionar a fonte do server. Registrado no gateway mas 404 no refresh.
+- **platform-iceberg-mcp**: confirmado **SEM imagem e SEM container** na box (nunca buildado aqui, apesar do §1.1 dizer "repo corrigido"). Precisa **clone + build + deploy + registro** (:7104). A linha de registro já existe no `register-mcp-backends.sh`.
 
 ---
 
@@ -164,7 +164,7 @@
 ### A. Fechar o produto sales (escolha atual do usuário: "completar os 2 + frontend")
 1. ✅ **FEITO — crm-mcp e sales-partners-mcp** buildados, no ar (healthy) e registrados no front-door (1022 tools/26 services). sales-partners-mcp limpo; crm-mcp exigiu **4 correções de Dockerfile/pyproject + config** — ver runbook **K10**. ⚠️ crm-mcp foi buildado da **box** (correções ainda não commitadas no repo `platform-crm`) — ver **§7.D item 11b** (PR pendente) p/ reprodutibilidade.
 2. ✅ **FEITO — sales-partners migrado no tenant `sales`** (`alembic upgrade head`, rev 001→008; schema `sales` foi p/ 89 tabelas).
-3. **Subir a borda `sales.dataforall.tech`** com o `dataforall-sales-frontend` (§3.1). ← **próximo passo do produto sales**.
+3. **Borda `sales.dataforall.tech`:** ⚠️ **já responde HTTP 200** — o nginx é `server_name _` (catch-all), então o Tunnel wildcard + a linha `sales` no PLATFORMS + o gateway (resolve tenant por Host) já servem a borda com o **SPA genérico** (dataforall-frontend) apontado pro tenant `sales`. O que falta é o **frontend DEDICADO** (`product-sales` / `dataforall-sales-frontend`) — o repo **não está clonado na box**; para o SPA próprio: clonar + `npm ci && npm run build` + server_block no nginx da borda (§3.1). ← **decidir se o SPA genérico basta ou se quer o dedicado**.
 
 ### B. Frontends adicionais
 4. Confirmar com o usuário o mapa subdomínio↔frontend↔tenant (§3). Subir `partner.`, `admin.`, `platform.` conforme (§3.1), criando tenants/PLATFORMS se necessário.
@@ -179,7 +179,7 @@
 9. **iceberg-mcp:** redeploy + registro (repo já corrigido pela sessão paralela).
 10. **governance-mcp** (build quebrado) e **notification-mcp** (path 404) — resolver e registrar.
 11. **Tarefas de repo em background** (verificar se fecharam com diff pronto): `task_d614b502` (4 Dockerfiles), `task_75f06d5a` (ml), `task_0a535f1a` (scheduler COPY mcp/), `task_e2851af5` (iceberg-mcp, encerrada).
-11b. **PR no repo `platform-crm`** (produto sales): commitar as correções do crm-mcp feitas na box — `mcp/Dockerfile` (contexto `mcp`, `COPY src/`, `git`, secret `github_token`, `platform-core-lib@v0.3.0`) e `mcp/pyproject.toml` (`[tool.hatch.metadata] allow-direct-references=true`). Sem isso, `build-service.sh` reproduz a imagem quebrada do develop. Detalhe completo no runbook **K10**.
+11b. ✅ **FEITO — PR no repo `platform-crm`:** [PR #22](https://github.com/dataforalltech/platform-crm/pull/22) (branch `fix/crm-mcp-sidecar-build` → `develop`) com as correções do crm-mcp — `mcp/Dockerfile` (contexto `mcp`, `COPY src/`, `git`, secret `github_token`, `platform-core-lib@v0.3.0`) e `mcp/pyproject.toml` (`[tool.hatch.metadata] allow-direct-references=true`). Após merge: `build-service.sh platform-crm-mcp platform-crm develop mcp/Dockerfile mcp`. Detalhe: runbook **K10**.
 
 ### E. Reprodutibilidade / infra
 12. Bakar o fix do containerd/fstab (B9) no **user_data do Terraform** (`compute.tf`), além do `bringup-infra.sh`.
