@@ -274,6 +274,13 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **MCP não está na imagem (Dockerfile não faz `COPY mcp/`)** — igual ao iceberg. `python -m mcp.server` → `ModuleNotFoundError: No module named 'mcp'`. O código `mcp/` **está em origin/develop** e é self-contained (deps fastapi/httpx/uvicorn já na imagem; `get_twin_pep` é lazy). **Correção:** bind-mount `./mcp:/app/mcp:ro` + `working_dir: /app` + `command: python -m mcp.server` (21 tools, porta 7106, `/v1/health`+`/mcp/tools/list`). **Raiz (repo):** adicionar `COPY mcp/` no Dockerfile do scheduler. → tarefa. **Status:** ✅ bakado (bind-mount); ⏳ Dockerfile no repo.
 - Health server em **porta separada 9090** (`/health/live`); `UVICORN_WORKERS=1`. CMD já usa `--limit-max-requests` (sem o bug K6).
 
+### K8. platform-dai — orquestrador de agentes IA (porta 5003)
+- **DB MySQL** (default do config; migrations dialect-aware — `RENAME TABLE` no branch mysql, zero postgres-only; `aiomysql` presente). 13 tabelas `dai_` via `alembic upgrade head` (tenant dataforall). Health `/api/health/ready` faz `SELECT 1` real → precisa do DB. **Nenhuma env obrigatória** no boot; LLM keys (OpenAI/Anthropic) são **lazy** (só no chat).
+- **`ENVIRONMENT=staging` é tratado como prod-like** → o validador bloqueia `AUTH_DEV_BYPASS=true`, `LAB_MODE=true` e `INTERNAL_SERVICE_TOKEN=TOKEN_DEV`. Usar o `INTERNAL_API_TOKEN` real. Porta **5003** (não 8000); `ROOT_PATH` default é `/ai` → setei `""` (o MCP lê `/openapi.json` direto). Buildar de **develop** (a branch `fix/ci-oasdiff-baseline` só mexe em CI/env.py).
+- **`DOCS_ENABLED=false` quebra o MCP.** O `dai-mcp` monta as tools lendo o **`/openapi.json` da API**; com `DOCS_ENABLED=false` esse endpoint vira **404** → `tools/list` HTTP 500. **Correção:** `DOCS_ENABLED=true` na API (interno, sem exposição externa). Resultado: 46 tools.
+- **`requirements.mcp.txt` esqueceu o PyJWT.** O `mcp/auth.py` faz `import jwt`, mas o requirements do MCP (`Dockerfile.mcp`) não instala PyJWT → `ModuleNotFoundError: No module named 'jwt'`, crash-loop. **Correção (workaround):** override de `command` com `pip install --user 'PyJWT[crypto]'` antes do uvicorn. **Raiz (repo):** `PyJWT[crypto]` no `requirements.mcp.txt`. → tarefa. **Status:** ✅ bakado (workaround); ⏳ requirements no repo.
+- **MCP tem imagem própria** (`Dockerfile.mcp`, copia `mcp/`, porta 7120, env_prefix `DAI_MCP_`) — buildar sequencial com a API (mesmo repo, J5).
+
 ## L. platform-ml — imagem enxuta (pull) + migrations MySQL
 
 > O `platform-ml` sobe da **imagem enxuta do ACR (pull, CPU-only, 14.5GB)** — sem rebuild.

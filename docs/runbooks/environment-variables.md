@@ -9,8 +9,8 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 14 APIs + 11 MCP no ar (inclui o **lakehouse iceberg** e o **scheduler**);
-> front-door agregando **726 tools / 23 serviços**; login e2e 200.
+> **Estado (2026-07-06):** 15 APIs + 12 MCP no ar (inclui o **lakehouse iceberg**, o **scheduler** e o **dai**);
+> front-door agregando **772 tools / 24 serviços**; login e2e 200.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
 ---
@@ -114,7 +114,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou (git+ssh — tarefa de repo) |
 | platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou (sem git no Dockerfile — tarefa de repo) |
 | platform-flow | ⬜ img✗ | mysql | develop | — | build falhou (git+ssh — tarefa de repo) |
-| platform-dai | ⬜ | mysql | fix/ci-oasdiff-baseline | mcp | branch de fix |
+| platform-dai | ✅ | mysql | develop | Dockerfile.mcp (7120) | orquestrador de agentes IA; porta 5003; DOCS_ENABLED=true (MCP lê openapi); LLM keys lazy; 13 tabelas `dai_`; MCP 46 tools (PyJWT via workaround — K8) |
 | platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; MCP adiado (M4) |
 | platform-pipeline | ⬜ | mysql | develop | mcp | |
 | platform-db-vector | ⬜ | mysql | develop | — | dívida: migrar p/ postgres+pgvector |
@@ -301,6 +301,18 @@ DB do tenant **resolvido de `PLATFORMS.dataforall` = mysql/tenant-mysql** (fallb
 MCP (porta 7106, 21 tools, `python -m mcp.server` da MESMA imagem via **bind-mount `./mcp:/app/mcp`** — K7):
 `MCP_PORT=7106`, `SCHEDULER_MCP_SERVICE_BASE_URL=http://platform-scheduler:8000`,
 `SCHEDULER_MCP_INTERNAL_API_TOKEN=••••`, `SCHEDULER_MCP_REQUEST_TIMEOUT=15`.
+
+### platform-dai — específicos (orquestrador de agentes IA — ver runbook K8)
+Porta **5003**, health `/api/health/ready` (SELECT 1). `ENVIRONMENT=staging` (prod-like → não setar AUTH_DEV_BYPASS/LAB_MODE),
+`ENV_PROFILE=hml`, `ROOT_PATH=""` (default é `/ai`), **`DOCS_ENABLED=true`** (o MCP lê o `/openapi.json`; false→404).
+DB tenant mysql (`DB_ENGINE=mysql`, `DB_HOST=tenant-mysql`, `DB_NAME=dataforall`, root) + `ADMIN_DB_*`=admin-mysql +
+`AGENTS_DB_*`=tenant-mysql (agents-lib, lazy). JWT RS256/JWKS (issuer platform-auth, aud platform-services).
+**`INTERNAL_SERVICE_TOKEN`**=`••••` (=INTERNAL_API_TOKEN; ≠TOKEN_DEV senão bloqueia), `CREDENTIAL_ENCRYPTION_KEY=••••`,
+`RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false`. LLM keys (`OPENAI_API_KEY`/`ANTHROPIC_API_KEY`)
+omitidas (lazy — chat exige, health não). 13 tabelas `dai_` (alembic). MCP (porta 7120, 46 tools, imagem própria `Dockerfile.mcp`,
+env_prefix `DAI_MCP_`): `DAI_MCP_DAI_URL=http://platform-dai:5003`, `DAI_MCP_OPENAPI_PATH=/openapi.json`,
+`DAI_MCP_INTERNAL_API_TOKEN=••••`, `DAI_MCP_DEFAULT_TENANT_ID=dataforall`, `DAI_MCP_ENFORCE_PERMISSIONS=false`.
+**Workaround:** `command` do MCP faz `pip install --user 'PyJWT[crypto]'` (o `requirements.mcp.txt` esqueceu — K8).
 
 ---
 
