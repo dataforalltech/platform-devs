@@ -26,6 +26,11 @@ echo "== 2. migrations do platform-admin =="
 docker exec -w /app platform-admin sh -c "alembic $XARGS upgrade head" 2>&1 | grep -iE 'running upgrade|error|already' | tail -6
 echo "== 3. migrations do platform-auth =="
 docker exec -w /app platform-auth sh -c "alembic $XARGS upgrade head" 2>&1 | grep -iE 'running upgrade|error|already' | tail -6
+# governance (best-effort: so se o container existir)
+if docker ps --format '{{.Names}}' | grep -q '^platform-governance$'; then
+  echo "== 3b. migrations do platform-governance =="
+  docker exec -w /app platform-governance sh -c "alembic $XARGS upgrade head" 2>&1 | grep -iE 'running upgrade|error|already' | tail -6
+fi
 
 echo "== 4. seed superadmin ($EMAIL) =="
 EXISTS=$(docker exec dataforall-tenant-mysql mysql -uroot -p"$PW" -N -e "SELECT COUNT(*) FROM \`$TENANT\`.adm_users WHERE email='$EMAIL';" 2>/dev/null)

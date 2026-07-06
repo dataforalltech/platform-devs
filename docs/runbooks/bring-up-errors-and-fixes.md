@@ -228,6 +228,13 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 
 > Mitigação de config sobrescreve o sintoma; o rebuild corrige a origem.
 
+## K. Especificidades por serviço (config que varia)
+
+- **`ENV_PROFILE`**: gateway/auth/admin exigem `{RUNTIME_ENV}-{APP_ENV}` (ex.: `local-hml`). **platform-governance** exige `ENV_PROFILE == APP_ENV` (ex.: `hml`) — validador diferente. Ler o `_enforce_profile_invariants` de cada serviço.
+- **Dockerfile do MCP varia por repo:** `gateway_mcp/Dockerfile` (contexto=raiz), `mcp/Dockerfile` do auth (contexto=subdir), `Dockerfile.admin-mcp` na raiz — e é **derivado** (`FROM platform-admin:dtr-local`, precisa taggear a imagem da API antes), `mcp/Dockerfile` do governance (contexto=raiz, COPY de `src/platform_governance/policy/`).
+- **K1. gov-mcp — `executable "platform-governance-mcp" not found in $PATH`:** a imagem buildou mas o entry-point do `pyproject` não ficou instalado (empacotamento). ⏳ pendente — investigar o `mcp/Dockerfile`/`pyproject` do governance. Não bloqueia (a API do governance funciona).
+- **Migrations por serviço no tenant:** cada serviço com estado tem suas migrations Alembic no DB do tenant — admin (`adm_*`), auth (`auth_*`), governance (`gov_*`). `onboard-tenant.sh` roda os três.
+
 ## J. Build / rebuild de imagens (na EC2)
 
 ### J1. SSM `AWS-RunShellScript` roda com `/bin/sh` (dash)
