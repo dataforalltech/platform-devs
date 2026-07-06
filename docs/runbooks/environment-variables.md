@@ -9,6 +9,9 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
+> **Estado (2026-07-06):** 9 APIs + 6 MCP no ar; front-door com 592 tools; login e2e 200.
+> Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
+
 ---
 
 ## 1. Segredos do `.env` on-box (`/opt/dataforall/deploy/.env`, chmod 600)

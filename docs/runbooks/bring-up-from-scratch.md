@@ -123,11 +123,34 @@ curl -s -X POST https://app.dataforall.tech/api/v1/auth/login \
 
 ---
 
-## 7. Demais serviços
+## 7. Demais serviços — receita por-serviço (1 a 1)
 
-Mesmo padrão do passo 3–5: rebuild da imagem → compose por serviço (RUNTIME_ENV=local +
-ENV_PROFILE conforme o validador do serviço) → migrations no tenant (se tiver estado) →
-`fix-gateway-route`. Cada serviço tem seu MCP (dockerfile/porta/prefixo de env variam — K).
+Padrão validado (auth/admin/governance/mcp/notification/connectors/analytics). Para cada `<svc>`:
+
+1. **Mapear** os requisitos do repo antes: `ENV_PROFILE` que o validador exige
+   (`local-hml` OU `hml==APP_ENV` — ver K), `DB_ENGINE` (mysql/postgres), health (porta+path),
+   e **TODOS os segredos obrigatórios** — `grep -nE 'must be set|raise ValueError' app/core/config.py`
+   no repo lista tudo de uma vez (evita restart-loop iterando; ver K4).
+2. **Imagem** no ACR: `build-service.sh <svc> <svc> <branch> Dockerfile .` (API) e o MCP com o
+   dockerfile/contexto do repo (varia: `mcp/Dockerfile` ctx `mcp`, `Dockerfile.mcp` ctx `.`, etc. — K).
+3. **Compose** em `deploy/services/<svc>/docker-compose.yml` (copie um par pronto — connectors/analytics
+   são bons modelos): tabela comum de env + os específicos/segredos do serviço.
+4. **Subir + migrations + rota:**
+   ```bash
+   docker compose --env-file /opt/dataforall/deploy/.env up -d --no-build <svc>
+   # migrations (se tiver estado): reusa o padrao do onboard
+   docker exec -w /app <svc> sh -c "alembic -x tenant_id=dataforall -x db_host=tenant-mysql \
+     -x db_port=3306 -x db_user=root -x db_password=<pw> -x db_name=dataforall upgrade head"
+   bash deploy/seed/fix-gateway-route.sh <svc> 8000
+   ```
+   > Segredos novos obrigatórios → adicione ao `/opt/dataforall/deploy/.env` (gerar `openssl rand -hex 32`)
+   > e documente em `environment-variables.md`.
+5. **MCP:** suba o sidecar e registre no front-door: `deploy/seed/register-mcp-backends.sh` (ou um
+   `INSERT` no `GATEWAY_MAPPING` com `kind=mcp_http`, `mcp_url`, o `tools_list_path` do sidecar) +
+   `docker restart platform-mcp`. Confirme `catalog: N tools` crescer.
+
+> **Engine postgres** (crm/finance/marketing/sales/scheduler): `DB_ENGINE=postgresql`,
+> `DB_HOST=tenant-postgres`, `DB_PORT=5432`, `DB_USER=platform`, `DB_PASSWORD=${POSTGRES_PASSWORD}`.
 
 ---
 
@@ -151,6 +174,8 @@ Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward 
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)
 
 ## Estado atual (2026-07-06)
-Core no ar e validado: **frontend + gateway + auth + admin + governance** (APIs healthy) +
-**gateway-mcp/auth-mcp/admin-mcp** (healthy). **Login e2e 200**. Pendências: `governance-mcp`
-(defeito de build no repo — K1), demais ~22 serviços (rebuild em andamento).
+**9 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, connectors, analytics.
+**6 MCP sidecars healthy** (gateway/auth/admin/notification/connectors/analytics); o **platform-mcp
+(front-door) agrega 592 tools**. **Login e2e 200.** Pendências: `governance-mcp` (defeito de build no
+repo — K1), `notification-mcp`/`auth-mcp` (agregação de tools — path/SSE, K3), e os demais ~20 serviços
+(rebuild + subida 1 a 1). Ver roster completo em [environment-variables.md](environment-variables.md) §5.0.
