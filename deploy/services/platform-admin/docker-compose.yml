@@ -74,12 +74,22 @@ services:
     container_name: platform-admin-mcp
     restart: unless-stopped
     networks: [platform-local]
-    ports:
-      - "127.0.0.1:28802:28000"
+    # sem publish no host (o platform-mcp central alcanca via nome:7100; evita
+    # conflito com outros MCPs que tambem usam 7100). Health e interno.
     environment:
-      MCP_ADMIN_BASE_URL: http://platform-admin:8000
-      MCP_ADMIN_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
-      MCP_ADMIN_LOG_LEVEL: INFO
+      # prefixo do pydantic-settings e ADMIN_MCP_ (nao MCP_ADMIN_)
+      ADMIN_MCP_ADMIN_URL: http://platform-admin:8000
+      ADMIN_MCP_INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      ADMIN_MCP_MCP_PORT: "7100"
+      ADMIN_MCP_TWIN_AUDIENCE: mcp:admin
+      # ADMIN_MCP_TWIN_JWKS_URI vazio => tools guarded negadas; health/liveness OK
+    healthcheck:
+      # a imagem baka um healthcheck errado (:9090/health/ready); o MCP serve /v1/health na :7100
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7100/v1/health',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     depends_on:
       platform-admin:
         condition: service_healthy

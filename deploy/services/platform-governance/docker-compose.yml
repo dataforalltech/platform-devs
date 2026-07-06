@@ -67,14 +67,17 @@ services:
     container_name: platform-governance-mcp
     restart: unless-stopped
     networks: [platform-local]
-    ports:
-      - "127.0.0.1:7103:7103"
+    # DIVIDA (K1): o entry-point 'platform-governance-mcp' nao foi instalado na imagem
+    # (pyproject/hatchling nao empacota o dir src/). Workaround: chamar main() direto.
+    # Fix de raiz: corrigir mcp/pyproject.toml no repo platform-governance + rebuild.
+    command: ["python", "-c", "from src.server.mcp_server import main; main()"]
     environment:
       MCP_GOVERNANCE_SERVICE_BASE_URL: http://platform-governance:8000
       MCP_GOVERNANCE_SERVICE_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       MCP_GOVERNANCE_LOG_LEVEL: INFO
       MCP_HTTP_ONLY: "1"
       MCP_PORT: "7103"
+      PYTHONPATH: /app
     depends_on:
       platform-governance:
         condition: service_healthy
