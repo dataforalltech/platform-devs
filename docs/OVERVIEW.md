@@ -71,6 +71,12 @@ bloqueio de rotas internas, ECR (29 repos), S3. **152 recursos**. `terraform pla
 **Playbook operacional de deploy em produção:**
 [aws-production-deployment-playbook.md](runbooks/aws-production-deployment-playbook.md).
 
+**▶ Subir o ambiente enxuto DO ZERO (caminho feliz + links pros scripts):**
+[runbooks/bring-up-from-scratch.md](runbooks/bring-up-from-scratch.md) — Terraform → infra →
+rebuild de imagens → frontend → core (login e2e) → demais serviços.
+**Erros conhecidos** (32 itens, evidência/causa/correção):
+[runbooks/bring-up-errors-and-fixes.md](runbooks/bring-up-errors-and-fixes.md).
+
 ---
 
 ## 5. Segurança — pontos verificados / abertos
