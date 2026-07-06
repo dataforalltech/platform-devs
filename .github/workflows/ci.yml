@@ -17,6 +17,7 @@ jobs:
     name: Test all servers
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         server: [
           session-mcp-server,
