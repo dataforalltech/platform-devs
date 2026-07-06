@@ -78,7 +78,49 @@ tunnel `17ea08ca-...`, KMS `alias/dataforall-hml`.
 
 ## 5. Env por serviço (composes em `deploy/services/<svc>/`)
 
-### Comuns a (quase) todos os serviços de app
+### 5.0 Roster completo (todos os serviços — subidos e pendentes)
+
+Status: ✅ no ar · ⬜ pendente · img✅/img✗ = imagem `:latest` rebuildada no ACR (ou falhou).
+Engine define `DB_HOST`/`DB_PORT`/`DB_USER` (mysql→`tenant-mysql:3306` root; postgres→`tenant-postgres:5432` platform).
+Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics documentados na subida.
+
+| Serviço | Status | Engine (tenant DB) | Branch | Dir MCP | Notas |
+|---|---|---|---|---|---|
+| platform-dataforall-frontend | ✅ | — (SPA) | (product-dataforall) | — | borda do Tunnel |
+| platform-api-gateway | ✅ | — (lê ADMIN) | develop | gateway_mcp | resolve tenant por Host |
+| platform-mcp | ✅ | — (lê ADMIN) | develop | app (é o front-door) | 113 tools agregadas |
+| platform-auth | ✅ | mysql | release/1.4.0 | mcp | assina JWT; JWKS |
+| platform-admin | ✅ | mysql | develop | Dockerfile.admin-mcp (derivado) | IAM/usuários |
+| platform-governance | ✅ | mysql | develop | mcp | ENV_PROFILE=hml; gov-mcp build defeito |
+| platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
+| platform-cdc | ⬜ img✅ | mysql | develop | cdc_mcp | |
+| platform-connectors | ⬜ img✅ | mysql | develop | connectors_mcp | usa CREDENTIAL_ENCRYPTION_KEY |
+| platform-analytics | ⬜ img✅ | mysql | develop | analytics_mcp | |
+| platform-communication | ⬜ img✅ | mysql | develop | mcp | |
+| platform-ml | ⬜ img✗ | mysql | develop | mcp | build falhou |
+| platform-monitor | ⬜ img✗ | mysql | develop | mcp | build falhou |
+| platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou |
+| platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou |
+| platform-flow | ⬜ img✗ | mysql | develop | — | build falhou |
+| platform-dai | ⬜ | mysql | fix/ci-oasdiff-baseline | mcp | branch de fix |
+| platform-iceberg | ⬜ | mysql | develop | — | |
+| platform-pipeline | ⬜ | mysql | develop | mcp | |
+| platform-db-vector | ⬜ | mysql | develop | — | dívida: migrar p/ postgres+pgvector |
+| platform-agents-factory | ⬜ | mysql | develop | mcp | |
+| platform-security | ⬜ | mysql | (repo não clonado local) | ? | |
+| platform-crm-agent | ⬜ | mysql | (não clonado) | ? | |
+| platform-crm | ⬜ | postgres | (não clonado) | ? | |
+| platform-marketing | ⬜ | postgres | (não clonado) | ? | |
+| platform-marketing-agent | ⬜ | postgres | (não clonado) | ? | |
+| platform-finance | ⬜ | postgres | (não clonado) | ? | |
+| platform-finance-agent | ⬜ | postgres | (não clonado) | ? | |
+| platform-sales | ⬜ | postgres | (não clonado) | ? | |
+| platform-scheduler | ⬜ | postgres | (não clonado) | ? | |
+
+> Para engine **postgres**: `DB_ENGINE=postgresql`, `DB_HOST=tenant-postgres`, `DB_PORT=5432`,
+> `DB_USER=platform`, `DB_PASSWORD=••••` (=`POSTGRES_PASSWORD`).
+
+### 5.1 Comuns a (quase) todos os serviços de app
 | Variável | Valor | Notas |
 |---|---|---|
 | `APP_ENV` | `hml` | |
