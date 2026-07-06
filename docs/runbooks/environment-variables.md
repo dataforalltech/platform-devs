@@ -9,7 +9,7 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 15 APIs + 12 MCP no ar (inclui o **lakehouse iceberg**, o **scheduler** e o **dai**);
+> **Estado (2026-07-06):** 16 APIs + 12 MCP no ar (inclui o **lakehouse iceberg**, o **scheduler**, o **dai** e o **db-vector**+pgvector);
 > front-door agregando **772 tools / 24 serviços**; login e2e 200.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
@@ -38,6 +38,8 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `ICEBERG_POLARIS_SECRET` | `••••` (32) | on-box | Polaris bootstrap root + OAuth (API/Trino/hml-init) |
 | `ICEBERG_API_TOKEN` | `••••` (hex 24) | on-box | iceberg API (auth estática) + token interno do MCP |
 | `ICEBERG_MCP_SERVICE_TOKEN` / `ICEBERG_SECRET_KEY` | `••••` | on-box | iceberg MCP (HMAC, adiado) / Fernet do registry |
+| `DBVEC_PG_PASSWORD` | `••••` (24) | on-box | Postgres pgvector dedicado do db-vector (`dbvec-postgres`) |
+| `OPENAI_API_KEY` | `••••` (sk-proj) | SSM → .env | db-vector (embeddings OpenAI); origem SSM `/dataforall-hml/openai/api-key` |
 
 ---
 
@@ -51,6 +53,7 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `/dataforall-hml/github/org` | `dataforalltech` | String | local (`DEPLOY_GITHUB_ORG`) |
 | `/dataforall-hml/platform-auth/jwt-private-key` | `••••` (RSA PEM) | SecureString | on-box (gerada; backup em S3) |
 | `/dataforall-hml/cloudflare-tunnel-token` | `••••` | SecureString | terraform (tunnel) |
+| `/dataforall-hml/openai/api-key` | `••••` (sk-proj) | SecureString | local (env Windows Machine) → db-vector embeddings |
 
 Chave RSA também em `s3://dataforall-hml-backups-011756140303/secrets/platform-auth-jwt.pem`
 e no Vault `kv/dataforall/platform-auth/jwt_private_key`. Montada nos containers auth/admin
@@ -117,7 +120,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-dai | ✅ | mysql | develop | Dockerfile.mcp (7120) | orquestrador de agentes IA; porta 5003; DOCS_ENABLED=true (MCP lê openapi); LLM keys lazy; 13 tabelas `dai_`; MCP 46 tools (PyJWT via workaround — K8) |
 | platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; MCP adiado (M4) |
 | platform-pipeline | ⬜ | mysql | develop | mcp | |
-| platform-db-vector | ⬜ | mysql | develop | — | dívida: migrar p/ postgres+pgvector |
+| platform-db-vector | ✅ | postgres+**pgvector dedicado** | develop | — (só em feat/mcp-server) | RAG/vetores; porta 5004; `dbvec-postgres` (pgvector/pgvector:pg16); embeddings OpenAI; develop tinha 5 bugs (K9) |
 | platform-security | ⬜ | mysql | (repo não clonado local) | ? | |
 | platform-crm-agent | ⬜ | mysql | (não clonado) | ? | |
 | platform-crm | ⬜ | postgres | (não clonado) | ? | |
@@ -313,6 +316,15 @@ omitidas (lazy — chat exige, health não). 13 tabelas `dai_` (alembic). MCP (p
 env_prefix `DAI_MCP_`): `DAI_MCP_DAI_URL=http://platform-dai:5003`, `DAI_MCP_OPENAPI_PATH=/openapi.json`,
 `DAI_MCP_INTERNAL_API_TOKEN=••••`, `DAI_MCP_DEFAULT_TENANT_ID=dataforall`, `DAI_MCP_ENFORCE_PERMISSIONS=false`.
 **Workaround:** `command` do MCP faz `pip install --user 'PyJWT[crypto]'` (o `requirements.mcp.txt` esqueceu — K8).
+
+### platform-db-vector — específicos (pgvector dedicado — ver runbook K9)
+Porta **5004**, health `/api/health/live` (não checa DB). `ENV_PROFILE=local-hml`, `ROOT_PATH=""`, `command` override p/ `--workers 1`.
+**Postgres DEDICADO** `dbvec-postgres` (`pgvector/pgvector:pg16`, `POSTGRES_USER=postgres`, `POSTGRES_PASSWORD=${DBVEC_PG_PASSWORD}`).
+API: `DB_ENGINE=postgresql`, `DB_HOST=dbvec-postgres`, `DB_PORT=5432`, `DB_USER=postgres`, `DB_PASSWORD=${DBVEC_PG_PASSWORD}`,
+`DB_SCHEMA=rag_service`. Embeddings: `EMBEDDING_MODEL=text-embedding-3-small`, `EMBEDDING_DIMENSION=1536`,
+**`OPENAI_API_KEY=••••`** (do SSM `/dataforall-hml/openai/api-key`), `VECTOR_STORE_PROVIDER=pgvector`. `STORAGE_PROVIDER=local`
+(`STORAGE_LOCAL_BASE_PATH=/app/data/storage`, volume). JWT RS256/JWKS. **`RATE_LIMIT_STORAGE_URI=memory://`** (K9 — evita dep redis).
+`KAFKA_ENABLED=false`. Sem MCP (não está em develop). Segredos: `DBVEC_PG_PASSWORD` (on-box), `OPENAI_API_KEY` (SSM).
 
 ---
 

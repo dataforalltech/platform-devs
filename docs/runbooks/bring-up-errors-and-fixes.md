@@ -281,6 +281,16 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **`requirements.mcp.txt` esqueceu o PyJWT.** O `mcp/auth.py` faz `import jwt` (assina Twin JWT RS256), mas o requirements do MCP (`Dockerfile.mcp`) não instalava PyJWT → `ModuleNotFoundError: No module named 'jwt'`, crash-loop. **Correção de RAIZ (aplicada):** `PyJWT[crypto]>=2.8.0` adicionado ao `requirements.mcp.txt` no repo (develop, commit `b5475ff`) + imagem `platform-dai-mcp` rebuildada. O workaround de `pip install` no `command` do compose **foi removido** (usa o CMD default). **Status:** ✅ resolvido (repo + imagem).
 - **MCP tem imagem própria** (`Dockerfile.mcp`, copia `mcp/`, porta 7120, env_prefix `DAI_MCP_`) — buildar sequencial com a API (mesmo repo, J5).
 
+### K9. platform-db-vector — pgvector dedicado + develop quebrado (5 bugs de repo)
+- **Backend 100% pgvector (Postgres), hardcoded** — coluna `VECTOR`, índice HNSW, operador `<=>`, `CREATE EXTENSION vector`. O `tenant-postgres` (`postgres:16-alpine`) **não tem pgvector** → roda um Postgres **DEDICADO** `dbvec-postgres` (`pgvector/pgvector:pg16`, extensão `vector 0.8.4`). Porta **5004**, health `/api/health/live` (não checa DB; boota healthy sem tenant provisionado). Embeddings: OpenAI `text-embedding-3-small` (`OPENAI_API_KEY` no SSM `/dataforall-hml/openai/api-key` → `.env`). ENV_PROFILE=`local-hml`. Sem MCP (só em `feat/mcp-server`, não em develop).
+- **O `develop` do db-vector estava quebrado — 5 correções (4 no repo + 1 no compose):**
+  1. `requirements.txt` fixava `platform-docextract-lib@v0.1.1` — **tag inexistente** (`pathspec did not match`); só há `v0.1.0`. → `v0.1.0`.
+  2. `requirements.txt` **faltava** `slowapi`, `pydantic-settings` e `platform-core-lib` (o app importa os três; o docextract-lib não os traz transitivamente). → adicionados (`platform-core-lib@v0.3.2`).
+  3. `app/api/health/health_control.py` e `app/integrations/db/base_table.py` importavam `from platform_core.logging import get_logger` — **`get_logger` nunca existiu** no core-lib (confirmado em todas as tags v0.1.0→v0.3.2). O db-vector tem o próprio `app/config/logger.py::get_logger` (os outros 8 arquivos usam esse). → 2 imports corrigidos p/ `from app.config.logger import get_logger`.
+  4. `app/core/limiter.py` usava a estratégia `fixed-window-elastic-expiry`, **removida na `limits` 3.0** (`Invalid rate limiting strategy`). → `fixed-window`.
+  5. `RATE_LIMIT_STORAGE_URI=redis://...` exige o pacote python `redis` (que a `limits` reclama faltar); e a `limits` 2.x exige `pkg_resources`/setuptools (ausente no slim). → `RATE_LIMIT_STORAGE_URI=memory://` (in-memory) no compose.
+- **Status:** ✅ API + pgvector healthy. Correções 1-4 são no **repo `platform-db-vector`** (diff pronto/validado; commit sob aprovação). Correção 5 é no compose (bakada). **Nota:** o `connection_factory` valida `tenant_id` como **UUID** → provisionar KB exige tenant UUID (não `dataforall`).
+
 ## L. platform-ml — imagem enxuta (pull) + migrations MySQL
 
 > O `platform-ml` sobe da **imagem enxuta do ACR (pull, CPU-only, 14.5GB)** — sem rebuild.

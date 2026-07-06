@@ -179,11 +179,11 @@ Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward 
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)
 
 ## Estado atual (2026-07-06)
-**15 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
-analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado), **scheduler** (MySQL via PLATFORMS), **dai** (orquestrador de agentes IA). **12 MCP sidecars healthy**; o
+**16 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
+analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado), **scheduler** (MySQL via PLATFORMS), **dai** (orquestrador de agentes IA), **db-vector** (+ pgvector dedicado). **12 MCP sidecars healthy**; o
 **platform-mcp (front-door) agrega 772 tools / 24 serviços**. **Login e2e 200.**
 Pendências: `notification-mcp` (path de agregação, K3), e os ainda-não-subidos
-(datalake/docextract/flow — build falha por bug de Dockerfile no repo, tarefa aberta; pipeline/db-vector).
+(datalake/docextract/flow — build falha por bug de Dockerfile no repo, tarefa aberta; pipeline).
 Ver roster completo em [environment-variables.md](environment-variables.md) §5.0.
 
 > **Aprendizados das últimas subidas (ml/agents-factory/monitor):**
