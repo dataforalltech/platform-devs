@@ -64,7 +64,8 @@ services:
       driver: json-file
       options: { max-size: "10m", max-file: "3" }
 
-  # Sidecar MCP — imagem propria (mcp/Dockerfile, contexto raiz). Porta 7100, /v1/health + /v1/tools.
+  # Sidecar MCP — imagem propria. Build: mcp/Dockerfile com CONTEXTO = mcp/ (NAO raiz — senao
+  # copia o pyproject/src da API e gera wheel vazio). Porta 7100, /v1/health + /mcp/tools/{list,call}. Ver runbook K10.
   platform-crm-mcp:
     image: d4all.azurecr.io/dataforall/3.0/platform-crm-mcp:${IMAGE_TAG:-latest}
     container_name: platform-crm-mcp
@@ -72,8 +73,12 @@ services:
     networks: [platform-local]
     environment:
       TZ: UTC
-      MCP_SERVICE_CRM_URL: http://platform-crm:8000
-      MCP_SERVICE_INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      # Settings (mcp/src/config/settings.py) usa env_prefix MCP_SERVICE_ + nome do campo
+      # (service_base_url / service_token) -> os env REALMENTE lidos sao MCP_SERVICE_SERVICE_*.
+      # A docstring do campo diz "MCP_SERVICE_TOKEN", mas o codigo le MCP_SERVICE_SERVICE_TOKEN
+      # (confirmado empiricamente). Bug de nomenclatura no repo — ver runbook K10.
+      MCP_SERVICE_SERVICE_BASE_URL: http://platform-crm:8000
+      MCP_SERVICE_SERVICE_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       MCP_SERVICE_DEFAULT_TENANT_ID: sales
     depends_on:
       platform-crm:

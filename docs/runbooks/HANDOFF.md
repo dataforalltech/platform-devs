@@ -17,8 +17,8 @@
 
 ## 1. Estado atual (2026-07-06)
 
-- **46 containers no ar.** ~20 serviços de aplicação healthy + data tier + observabilidade.
-- **Front-door `platform-mcp`: 772 tools / 24 serviços.** Login e2e **200**.
+- **48 containers no ar** (2026-07-06: +2 sidecars do produto sales). ~22 serviços de aplicação healthy + data tier + observabilidade.
+- **Front-door `platform-mcp`: 1022 tools / 26 serviços** (era 772/24; +240 crm-mcp + sales-partners-mcp). Login e2e **200**.
 - **2 tenants** no `ADMIN_DATAFORALL.PLATFORMS`: `dataforall` (app.dataforall.tech) e `sales` (sales.dataforall.tech).
 - **Recursos:** RAM 15Gi (≈8.3Gi usados, 6.7Gi disp.); disco root 18%, `/data` (EBS 100G) **76%** — **monitorar** (builds futuros + Trino/JVM apertam).
 
@@ -44,8 +44,8 @@
 | 16 | platform-scheduler | :8000 | ✅ :7106 (21 tools) | **mysql via PLATFORMS** | JWT expire<=30; MCP bind-mount (K7) |
 | 17 | platform-dai | :5003 | ✅ :7120 (46 tools) | mysql | orquestrador de agentes IA; DOCS_ENABLED=true p/ MCP (K8) |
 | 18 | platform-db-vector | :5004 | ✗ (não em develop) | **pgvector dedicado** | RAG; `dbvec-postgres`; embeddings OpenAI (K9) |
-| 19 | **platform-crm** | :8000 | ✗ pendente (build) | **tenant `sales`** | 75 tabelas `crm*` migradas (mysql) |
-| 20 | **platform-sales-partners** | :8000 | ✗ pendente (build) | tenant `sales` | comissões/parceiros |
+| 19 | **platform-crm** | :8000 | ✅ :7100 (240 tools, mcp) | **tenant `sales`** | 75 tabelas `crm*`; MCP mora em `mcp/` (contexto `mcp`, 4 bugs — K10) |
+| 20 | **platform-sales-partners** | :8000 | ✅ :7107 (mcp) | tenant `sales` | comissões/parceiros; **migrado** (rev 001→008, schema `sales`=89 tbls) |
 
 ### 1.2 Serviços BLOQUEADOS / PENDENTES
 
@@ -162,9 +162,9 @@
 ## 7. PRÓXIMOS PASSOS (ordenados, acionáveis)
 
 ### A. Fechar o produto sales (escolha atual do usuário: "completar os 2 + frontend")
-1. **crm-mcp** e **sales-partners-mcp**: buildar as imagens (`build-service.sh platform-crm-mcp platform-crm develop mcp/Dockerfile .` e `... platform-sales-partners-mcp platform-sales-partners develop Dockerfile.mcp .`), subir (composes já têm o serviço) e **registrar** (`register-mcp-backends.sh` — adicionar `platform-crm-mcp :7100` estilo v1 e `platform-sales-partners-mcp :7107` estilo mcp).
-2. **Migrar o sales-partners no tenant `sales`** (as tabelas dele ainda não existem lá): `docker exec platform-sales-partners alembic -x tenant_id=sales -x db_engine=mysql -x db_host=tenant-mysql -x db_port=3306 -x db_user=root -x db_password=<pw> -x db_name=sales upgrade head`.
-3. **Subir a borda `sales.dataforall.tech`** com o `dataforall-sales-frontend` (§3.1).
+1. ✅ **FEITO — crm-mcp e sales-partners-mcp** buildados, no ar (healthy) e registrados no front-door (1022 tools/26 services). sales-partners-mcp limpo; crm-mcp exigiu **4 correções de Dockerfile/pyproject + config** — ver runbook **K10**. ⚠️ crm-mcp foi buildado da **box** (correções ainda não commitadas no repo `platform-crm`) — ver **§7.D item 11b** (PR pendente) p/ reprodutibilidade.
+2. ✅ **FEITO — sales-partners migrado no tenant `sales`** (`alembic upgrade head`, rev 001→008; schema `sales` foi p/ 89 tabelas).
+3. **Subir a borda `sales.dataforall.tech`** com o `dataforall-sales-frontend` (§3.1). ← **próximo passo do produto sales**.
 
 ### B. Frontends adicionais
 4. Confirmar com o usuário o mapa subdomínio↔frontend↔tenant (§3). Subir `partner.`, `admin.`, `platform.` conforme (§3.1), criando tenants/PLATFORMS se necessário.
@@ -179,6 +179,7 @@
 9. **iceberg-mcp:** redeploy + registro (repo já corrigido pela sessão paralela).
 10. **governance-mcp** (build quebrado) e **notification-mcp** (path 404) — resolver e registrar.
 11. **Tarefas de repo em background** (verificar se fecharam com diff pronto): `task_d614b502` (4 Dockerfiles), `task_75f06d5a` (ml), `task_0a535f1a` (scheduler COPY mcp/), `task_e2851af5` (iceberg-mcp, encerrada).
+11b. **PR no repo `platform-crm`** (produto sales): commitar as correções do crm-mcp feitas na box — `mcp/Dockerfile` (contexto `mcp`, `COPY src/`, `git`, secret `github_token`, `platform-core-lib@v0.3.0`) e `mcp/pyproject.toml` (`[tool.hatch.metadata] allow-direct-references=true`). Sem isso, `build-service.sh` reproduz a imagem quebrada do develop. Detalhe completo no runbook **K10**.
 
 ### E. Reprodutibilidade / infra
 12. Bakar o fix do containerd/fstab (B9) no **user_data do Terraform** (`compute.tf`), além do `bringup-infra.sh`.
@@ -190,4 +191,4 @@
 - **Papel:** nesta sessão foi autorizado **executar** (build/deploy) e **corrigir na raiz** os repos de serviço (ex.: dai, db-vector), commitando/pushando **sob aprovação por lote**. Segredos gerados on-box, nunca no git.
 - **Branch:** buildar sempre de **`develop` atualizado** (`git checkout develop && git pull`); reset --hard pro origin quando divergente (com aprovação).
 - **Documentar todo erro** com evidência/causa/correção no runbook de erros (para a VM subir limpa nas próximas).
-- **platform-devs branch de trabalho:** `feat/terraform-lean-and-docs` (o `develop` do platform-devs está atrás). ⚠️ Sessões paralelas compartilharam o mesmo working tree e já causaram troca de branch/bagunça — preferir **worktrees isolados** ou uma sessão por vez.
+- **platform-devs branch de trabalho:** `feat/terraform-lean-and-docs` **já foi mergeado no `develop`** (commit `141e318`); o `develop` está atualizado (não está mais atrás). Novo ciclo = **nova branch** a partir de `develop`. ⚠️ Sessões paralelas compartilharam o mesmo working tree e já causaram troca de branch/bagunça — preferir **worktrees isolados** ou uma sessão por vez.

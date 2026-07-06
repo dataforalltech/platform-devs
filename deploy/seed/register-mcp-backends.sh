@@ -40,6 +40,8 @@ reg platform-monitor-mcp     mcp_http http://platform-monitor-mcp:28000     /mcp
 reg platform-iceberg-mcp     mcp_http http://platform-iceberg-mcp:7104      /mcp/tools/list  /mcp/tools/call  mcp  # 13 tools (tenants/warehouses/sql-users/permissions)
 reg platform-scheduler-mcp   mcp_http http://platform-scheduler-mcp:7106     /mcp/tools/list  /mcp/tools/call  mcp
 reg platform-dai-mcp         mcp_http http://platform-dai-mcp:7120          /mcp/tools/list  /mcp/tools/call  mcp  # 46 tools (le o OpenAPI da API)
+reg platform-crm-mcp         mcp_http http://platform-crm-mcp:7100          /mcp/tools/list  /mcp/tools/call  mcp  # 240 tools (crm-domain, tenant sales) — estilo mcp; openapi expoe /mcp/tools/{list,call} (NAO /v1/tools)
+reg platform-sales-partners-mcp mcp_http http://platform-sales-partners-mcp:7107 /mcp/tools/list /mcp/tools/call mcp  # comissoes/parceiros (tenant sales)
 # notification-mcp: /mcp/tools/list deu 404 (path a confirmar) — pendente
 
 echo "== recarrega o registry do platform-mcp =="
