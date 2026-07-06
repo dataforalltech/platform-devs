@@ -1,0 +1,40 @@
+# platform-iceberg-mcp — sidecar MCP do lakehouse iceberg (13 tools no front-door).
+# Separado do stack iceberg (docker-compose.yml) porque so precisa da rede platform-local:
+# alcanca a API `platform-iceberg:8018` (que tambem esta na platform-local) e e alcancado
+# pelo front-door platform-mcp. NAO precisa da iceberg-net (fala com a API, nao com polaris/trino).
+#
+# Build (contexto RAIZ — o mcp/Dockerfile faz COPY mcp/requirements.txt + COPY app/iceberg_mcp/):
+#   build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .
+# Subir: docker compose -f docker-compose.mcp.yml --env-file /opt/dataforall/deploy/.env up -d
+# Registro: linha platform-iceberg-mcp :7104 ja existe no register-mcp-backends.sh.
+name: dataforall-iceberg-mcp
+
+networks:
+  platform-local:
+    external: true
+
+services:
+  platform-iceberg-mcp:
+    image: d4all.azurecr.io/dataforall/3.0/platform-iceberg-mcp:${IMAGE_TAG:-latest}
+    container_name: platform-iceberg-mcp
+    restart: unless-stopped
+    networks: [platform-local]
+    environment:
+      TZ: UTC
+      MCP_HTTP_PORT: "7104"
+      # A imagem le ICEBERG_* e MCP_SERVICE_TOKEN via os.environ (sem settings.py).
+      ICEBERG_BASE_URL: http://platform-iceberg:8018
+      ICEBERG_INTERNAL_URL: http://platform-iceberg:8018
+      ICEBERG_HEALTH_URL: http://platform-iceberg:8018/health
+      ICEBERG_INTERNAL_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      MCP_SERVICE_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      ICEBERG_MCP_TWIN_ENFORCE: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7104/health',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "3" }

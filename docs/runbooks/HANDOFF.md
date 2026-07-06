@@ -17,8 +17,8 @@
 
 ## 1. Estado atual (2026-07-06)
 
-- **48 containers no ar** (2026-07-06: +2 sidecars do produto sales). ~22 serviços de aplicação healthy + data tier + observabilidade.
-- **Front-door `platform-mcp`: 1022 tools / 26 serviços** (era 772/24; +240 crm-mcp + sales-partners-mcp). Login e2e **200**.
+- **50 containers no ar** (2026-07-06: +2 sidecars do produto sales, +governance-mcp, +iceberg-mcp). ~24 serviços de aplicação healthy + data tier + observabilidade.
+- **Front-door `platform-mcp`: 1035 tools / 27 serviços** (era 772/24; +240 crm-mcp + sales-partners-mcp + 13 iceberg-mcp). governance-mcp healthy mas 401 no list (Twin PEP). Login e2e **200**.
 - **2 tenants** no `ADMIN_DATAFORALL.PLATFORMS`: `dataforall` (app.dataforall.tech) e `sales` (sales.dataforall.tech).
 - **Recursos:** RAM 15Gi (≈8.3Gi usados, 6.7Gi disp.); disco root 18%, `/data` (EBS 100G) **76%** — **monitorar** (builds futuros + Trino/JVM apertam).
 
@@ -61,9 +61,9 @@
 
 ### 1.3 Anomalias de MCP a resolver
 
-- **platform-governance-mcp**: `Exited(1)` (parado manualmente). **Progresso parcial:** o bug de contexto (era o mesmo do crm/K10 — o MCP mora em `mcp/src/server/mcp_server.py`, porta **7103**, compose faz `command` override `python -c "from src.server.mcp_server import main"` + `PYTHONPATH=/app`) **foi corrigido**: rebuild com `build-service.sh platform-governance-mcp platform-governance develop mcp/Dockerfile mcp` (contexto `mcp`) → a imagem agora tem `/app/src/server/`. **MAS falha um passo adiante:** `mcp_server.py` faz `from platform_governance.policy import ...` e a lib de política do repo (`src/platform_governance`, na RAIZ) **não entra** no build de contexto `mcp/`. → **dep cross-package**: o build precisa empacotar TAMBÉM o `src/platform_governance` da raiz (design de build do repo governance). Não é rebuild simples. Não registrado.
+- **platform-governance-mcp**: ✅ **BOOT CORRIGIDO** — `Up (healthy)`, **8 tools**, :7103. Foram 2 bugs: (1) contexto de build (MCP em `mcp/src/server/`); (2) **dep cross-package** — `mcp_server.py` importa `platform_governance.policy` (policy lib na RAIZ). Fix: build **contexto RAIZ** com Dockerfile custom que instala OS 2 pacotes (`pip install .` = policy lib + `pip install ./mcp` = server; deps leves, sem git privado). Imagem no ACR (build manual). ⚠️ **Registrado mas 401 no front-door**: `mcp_server.py:252` faz `@http_app.get("/mcp/tools/list", dependencies=[Depends(_verify_token)])` → exige **Bearer** (`MCP_GOVERNANCE_SERVICE_TOKEN`=INTERNAL_API_TOKEN; Twin PEP). O aggregator do platform-mcp não manda auth por backend → não agrega os 8 tools até o front-door suportar isso (ou governance liberar o list). **PR pendente** no repo governance (mesmo padrão do PR #22 do crm).
 - **platform-notification-mcp**: **é um MCP de transporte SSE**, não HTTP — `CMD uvicorn notification_mcp.server.mcp_server:app :7100`, e o server é um **Starlette** com `Route("/sse", handle_sse)` + `Mount("/messages/", sse.handle_post_message)`. Por isso `/mcp/tools/list` dá 404 (não existe). Registrar como `sse` (path `/sse`) como o `auth-mcp` — MAS a **agregação SSE no front-door está pendente** (mesma nota do auth-mcp), então não agrega tools até o platform-mcp suportar SSE. Bloqueio = capability do front-door, não path.
-- **platform-iceberg-mcp**: ✅ **imagem BUILDADA** nesta sessão (`build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .` — contexto **RAIZ**, não `mcp`; o Dockerfile faz `COPY mcp/requirements.txt`+`COPY app/iceberg_mcp/`). CMD `python -m iceberg_mcp.server` :7104, `PYTHONPATH=/app`. **Falta deployar:** o compose `deploy/services/platform-iceberg/` **NÃO tem o service `platform-iceberg-mcp`** (só minio/polaris/trino/iceberg) — precisa autorar o service (redes `iceberg-net`+`platform-local`, :7104) + descobrir o env de conexão ao backend iceberg. Linha de registro já existe (:7104).
+- **platform-iceberg-mcp**: ✅ **NO AR + AGREGANDO 13 tools**. Buildado (`build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .` — contexto **RAIZ**; o Dockerfile faz `COPY mcp/requirements.txt`+`COPY app/iceberg_mcp/`). CMD `python -m iceberg_mcp.server` :7104. Env (lido via `os.environ`, sem settings.py): `ICEBERG_BASE_URL=http://platform-iceberg:8018`, `ICEBERG_INTERNAL_URL`, `ICEBERG_HEALTH_URL`, `ICEBERG_INTERNAL_TOKEN`/`MCP_SERVICE_TOKEN`=INTERNAL_API_TOKEN, `ICEBERG_MCP_TWIN_ENFORCE=false`. Só precisa da `platform-local`. Subido via `docker run` (teste) — compose reproduzível em **`deploy/services/platform-iceberg/docker-compose.mcp.yml`** (novo). Registro já existia (:7104).
 
 ---
 
@@ -179,8 +179,8 @@
 8. **pipeline / security:** aguardando decisão do usuário.
 
 ### D. Higiene do que já subiu
-9. **iceberg-mcp:** redeploy + registro (repo já corrigido pela sessão paralela).
-10. **governance-mcp** (build quebrado) e **notification-mcp** (path 404) — resolver e registrar.
+9. ✅ **FEITO — iceberg-mcp** no ar + agregando **13 tools** (compose `docker-compose.mcp.yml`).
+10. **governance-mcp** ✅ boot-fixed (healthy, 8 tools) mas **401 no list** (Twin PEP) — falta o front-door mandar auth por backend (capability). **notification-mcp** = MCP **SSE**, falta agregação SSE no front-door. Os dois = **capability do platform-mcp** (destravam vários MCPs juntos), não build. (Novo item: **PR governance-mcp** — mesmo padrão do #22, levar o Dockerfile custom pro repo.)
 11. **Tarefas de repo em background** (verificar se fecharam com diff pronto): `task_d614b502` (4 Dockerfiles), `task_75f06d5a` (ml), `task_0a535f1a` (scheduler COPY mcp/), `task_e2851af5` (iceberg-mcp, encerrada).
 11b. ✅ **FEITO — PR no repo `platform-crm`:** [PR #22](https://github.com/dataforalltech/platform-crm/pull/22) (branch `fix/crm-mcp-sidecar-build` → `develop`) com as correções do crm-mcp — `mcp/Dockerfile` (contexto `mcp`, `COPY src/`, `git`, secret `github_token`, `platform-core-lib@v0.3.0`) e `mcp/pyproject.toml` (`[tool.hatch.metadata] allow-direct-references=true`). Após merge: `build-service.sh platform-crm-mcp platform-crm develop mcp/Dockerfile mcp`. Detalhe: runbook **K10**.
 
