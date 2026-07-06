@@ -242,6 +242,16 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Causa:** além do padrão (JWT_SECRET_KEY, CREDENTIAL_ENCRYPTION_KEY), o connectors exige mais 3 segredos fora de dev (assinam OAuth state, webhooks PIX/PSP e URLs do file proxy) — validados 1 a 1 no boot.
 - **Correção:** gerar e setar `OAUTH_STATE_SECRET`, `WEBHOOK_SECRET`, `FILE_PROXY_SECRET` no `.env` (hex 32). **Dica:** ao subir um serviço novo, `grep -nE 'must be set' app/core/config.py` no repo lista TODOS os obrigatórios de uma vez (evita iterar). **Status:** ✅ bakado (compose do connectors).
 
+### K5. platform-communication-mcp — sem Dockerfile no repo
+- **Evidência:** `ModuleNotFoundError: No module named 'src.server'` ao rodar `python -m src.server.mcp_server` da imagem da API.
+- **Causa:** o código do MCP está em `mcp/src/server/mcp_server.py`, mas o repo **não tem Dockerfile de MCP** e a imagem da API copia só `app/` + `src/` (não `mcp/`). Não dá p/ rodar da mesma imagem.
+- **Correção (dev no repo):** adicionar `mcp/Dockerfile` (FROM python, COPY mcp/, pip install, `WORKDIR /app/mcp`, CMD `MCP_HTTP_MODE=1 python -m src.server.mcp_server`) e rebuildar como `platform-communication-mcp`. **Status:** ⏳ pendente (repo; tarefa criada). A API funciona.
+
+### K6. `uvicorn: No such option '--max-requests'` (CMD bakado inválido)
+- **Evidência:** restart-loop com `Error: No such option '--max-requests'. (Did you mean '--limit-max-requests'...)`.
+- **Causa:** o CMD do Dockerfile usa `uvicorn --max-requests 1000 --max-requests-jitter 100`, flags que **não existem nesta versão do uvicorn** (é `--limit-max-requests`).
+- **Correção:** override do `command:` no compose com `--limit-max-requests 1000` (sem `--max-requests-jitter`). **Status:** ✅ bakado (compose do communication). **Raiz:** corrigir o CMD no Dockerfile do repo.
+
 ## J. Build / rebuild de imagens (na EC2)
 
 ### J1. SSM `AWS-RunShellScript` roda com `/bin/sh` (dash)

@@ -102,7 +102,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-cdc | ✅ | mysql | develop | mcp/Dockerfile (raiz), 28000 | ENV_PROFILE=local-hml; Kafka/coord OFF; MCP 9 tools |
 | platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
 | platform-analytics | ✅ | mysql | develop | Dockerfile.mcp (raiz), 7100 | BI; NOTIFICATION_INTERNAL_TOKEN+TRUSTED_PROXIES; MCP 117 tools |
-| platform-communication | ⬜ img✅ | mysql | develop | mcp | |
+| platform-communication | ✅ (API) | mysql | develop | mcp (sem Dockerfile — K5) | ENV_PROFILE=local-hml; CMD override (--limit-max-requests, K6); MCP pendente |
 | platform-ml | ⬜ img✗ | mysql | develop | mcp | build falhou |
 | platform-monitor | ⬜ img✗ | mysql | develop | mcp | build falhou |
 | platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou |
