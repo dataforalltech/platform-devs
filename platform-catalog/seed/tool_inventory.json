@@ -1,0 +1,1496 @@
+{
+  "generated_from": "static audit (workflow wruyvblag)",
+  "count": 298,
+  "tools": [
+    {
+      "server": "audit-mcp-server",
+      "tool": "run_audit",
+      "capability": "write"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "get_audit_status",
+      "capability": "read"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "get_compliance_policy",
+      "capability": "read"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "get_compliance_checklist",
+      "capability": "read"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "submit_audit_approval",
+      "capability": "write"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "get_audit_report",
+      "capability": "read"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "list_audits",
+      "capability": "read"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "set_service_criticality",
+      "capability": "write"
+    },
+    {
+      "server": "audit-mcp-server",
+      "tool": "get_audit_gate_result",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_repos",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "create_branch",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_branches",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "commit_files",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "create_pr",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "get_pr",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "merge_pr",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_prs",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "trigger_workflow",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_workflow_runs",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "get_workflow_run",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "cancel_workflow_run",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "deploy",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "get_deploy_status",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "scaffold_pipeline",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "get_pipeline_templates",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "setup_repo",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "acr_build",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_acr_images",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "ensure_all_repos_healthy",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "get_repos_root",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "set_repos_root",
+      "capability": "write"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "list_local_repos",
+      "capability": "read"
+    },
+    {
+      "server": "deploy-mcp-server",
+      "tool": "clone_repo",
+      "capability": "write"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "scan_docs",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "search_docs",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "get_doc_tree",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "validate_doc",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "check_links",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "check_required_docs",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "lint_markdown",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "list_templates",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "generate_doc",
+      "capability": "write"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "check_doc_standards",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "audit_repo",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "find_stale_docs",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "get_audit_history",
+      "capability": "read"
+    },
+    {
+      "server": "docs-mcp-server",
+      "tool": "generate_doc_report",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "terraform_validate",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "terraform_fmt_check",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "terraform_plan",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "terraform_show_plan",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "policy_scan_checkov",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "cost_estimate_infracost",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "request_vm",
+      "capability": "write"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "get_lease",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "release_lease",
+      "capability": "write"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "extend_lease",
+      "capability": "write"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "list_my_leases",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "list_pool",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "query_capacity",
+      "capability": "read"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "get_lease_ssh_key",
+      "capability": "write"
+    },
+    {
+      "server": "infra-mcp-server",
+      "tool": "cancel_queued_request",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "register_pipeline",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "get_pipeline",
+      "capability": "read"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "list_pipeline",
+      "capability": "read"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "promote_service",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "approve_promotion",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "watch_prs",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "block_service",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "rollback",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "add_gate_result",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "get_gate_status",
+      "capability": "read"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "clear_gates",
+      "capability": "write"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "get_promotion_history",
+      "capability": "read"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "get_pipeline_overview",
+      "capability": "read"
+    },
+    {
+      "server": "pipeline-mcp-server",
+      "tool": "set_pipeline_config",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_unit_tests",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_e2e_tests",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_api_tests",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "generate_test_matrix",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "screenshot_page",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "check_accessibility",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "visual_regression",
+      "capability": "write"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_linter",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_security_scan",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "check_dependencies",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "run_type_check",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "analyze_complexity",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "get_coverage_report",
+      "capability": "read"
+    },
+    {
+      "server": "qa-mcp-server",
+      "tool": "generate_qa_report",
+      "capability": "read"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "create_test_plan",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "get_test_plan",
+      "capability": "read"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "list_test_plans",
+      "capability": "read"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "generate_scenarios",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "add_scenario",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "record_result",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "create_checklist",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "run_checklist",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "check_item",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "add_bug",
+      "capability": "write"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "double_check",
+      "capability": "read"
+    },
+    {
+      "server": "test-mcp-server",
+      "tool": "get_validation_status",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_agent_guidelines",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_layer_policy",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_forbidden_actions",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "validate_agent_decision",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_fallback_policy",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_contract_change_policy",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_final_response_template",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_pre_execution_checklist",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "search_governance_knowledge",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "query_ecosystem_graph",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "find_consumers_of",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "find_dependencies_of",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_service_metadata",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "submit_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "list_suggestions",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_suggestion",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "update_suggestion_status",
+      "capability": "write"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_service_ownership",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_service_dependencies",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_port_map",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "check_scope",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "validate_lib_change",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "validate_migration",
+      "capability": "read"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "create_adr",
+      "capability": "write"
+    },
+    {
+      "server": "ai-governance-mcp-server",
+      "tool": "get_audit_log",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "start_session",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "confirm_branch_created",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "save_checkpoint",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "update_session",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "add_artifact",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "list_sessions",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "get_session",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "resume_session",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "end_session",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "add_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "approve_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "start_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "complete_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "fail_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "cancel_task",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "list_tasks",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "get_task",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "add_service_dependency",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "list_service_dependencies",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "remove_service_dependency",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "submit_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "list_suggestions",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "get_suggestion",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "accept_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "reject_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "defer_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "supersede_suggestion",
+      "capability": "write"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "list_decisions",
+      "capability": "read"
+    },
+    {
+      "server": "session-mcp-server",
+      "tool": "get_decision",
+      "capability": "read"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "authenticate",
+      "capability": "write"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "whoami",
+      "capability": "read"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "get_twin_context",
+      "capability": "read"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "refresh_context",
+      "capability": "write"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "context_status",
+      "capability": "read"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "register_token",
+      "capability": "write"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "revoke_token",
+      "capability": "write"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "rotate_token",
+      "capability": "write"
+    },
+    {
+      "server": "dev-twin-mcp-server",
+      "tool": "list_tokens",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_credential",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "set_credential",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "set_credential_secure",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "list_credentials",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "delete_credential",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_env_config",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "set_env_var",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "list_environments",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "sync_env_file",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "read_env_file",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "audit_env_files",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "redact_env_secrets",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "push_env_to_store",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_workspace_config",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "set_workspace_config",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "list_workspace_config",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_physical_info",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_tenant_config",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "set_tenant_config",
+      "capability": "write"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "list_tenants",
+      "capability": "read"
+    },
+    {
+      "server": "config-mcp-server",
+      "tool": "get_session_tenant_config",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "register_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "get_service",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "list_services",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "update_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "unregister_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "get_port_map",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "find_by_port",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "scan_docker",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "scan_processes",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "check_health",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "check_all_health",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "service_status",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "list_environments",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "reload_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "get_gateway_map",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "update_service_gateway",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "sync_registry",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "launch_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "stop_service",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "read_env_file",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "set_env_var",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "sync_service_urls",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "audit_env_files",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "redact_env_secrets",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "register_infra",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "scan_infra",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "sync_infra_env",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "kafka_status",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "redis_status",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "sync_broker_urls",
+      "capability": "write"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "get_service_logs",
+      "capability": "read"
+    },
+    {
+      "server": "services-mcp-server",
+      "tool": "search_logs",
+      "capability": "read"
+    },
+    {
+      "server": "architecture-mcp-server",
+      "tool": "generate_solution_blueprint",
+      "capability": "write"
+    },
+    {
+      "server": "architecture-mcp-server",
+      "tool": "generate_c4_diagram",
+      "capability": "write"
+    },
+    {
+      "server": "architecture-mcp-server",
+      "tool": "generate_architecture",
+      "capability": "write"
+    },
+    {
+      "server": "architecture-mcp-server",
+      "tool": "status",
+      "capability": "read"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "analyze_backend_requirement",
+      "capability": "read"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "review_backend_code",
+      "capability": "read"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "optimize_query",
+      "capability": "read"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_api_contract",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_auth_policy",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_database_schema",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_fastapi_router",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_nestjs_controller",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_migration",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_repository_layer",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_service_layer",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "generate_openapi_spec",
+      "capability": "write"
+    },
+    {
+      "server": "backend-mcp-server",
+      "tool": "map_integration_flow",
+      "capability": "write"
+    },
+    {
+      "server": "devops-mcp-server",
+      "tool": "status",
+      "capability": "read"
+    },
+    {
+      "server": "devops-mcp-server",
+      "tool": "generate_kubernetes_manifest",
+      "capability": "write"
+    },
+    {
+      "server": "devops-mcp-server",
+      "tool": "generate_dockerfile",
+      "capability": "write"
+    },
+    {
+      "server": "devops-mcp-server",
+      "tool": "generate_github_actions_pipeline",
+      "capability": "write"
+    },
+    {
+      "server": "devops-mcp-server",
+      "tool": "generate_helm_chart",
+      "capability": "write"
+    },
+    {
+      "server": "frontend-mcp-server",
+      "tool": "generate_react_component",
+      "capability": "write"
+    },
+    {
+      "server": "frontend-mcp-server",
+      "tool": "generate_nextjs_page",
+      "capability": "write"
+    },
+    {
+      "server": "frontend-mcp-server",
+      "tool": "generate_storybook_story",
+      "capability": "write"
+    },
+    {
+      "server": "frontend-mcp-server",
+      "tool": "generate_form_with_validation",
+      "capability": "write"
+    },
+    {
+      "server": "frontend-mcp-server",
+      "tool": "status",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "review_secure_code",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "scan_secrets",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "scan_dependency_risks",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "calculate_cvss",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "harden_headers",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "check_password_policy",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "analyze_compliance",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "map_attack_surface",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "generate_threat_model",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "generate_security_controls",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "generate_incident_response_plan",
+      "capability": "read"
+    },
+    {
+      "server": "security-mcp-server",
+      "tool": "status",
+      "capability": "read"
+    },
+    {
+      "server": "product-manager-mcp-server",
+      "tool": "generate_feature_spec",
+      "capability": "write"
+    },
+    {
+      "server": "product-manager-mcp-server",
+      "tool": "generate_go_to_market_brief",
+      "capability": "write"
+    },
+    {
+      "server": "product-manager-mcp-server",
+      "tool": "define_product_vision",
+      "capability": "write"
+    },
+    {
+      "server": "product-manager-mcp-server",
+      "tool": "generate_release_plan",
+      "capability": "write"
+    },
+    {
+      "server": "product-manager-mcp-server",
+      "tool": "status",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "analyze_product_problem",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "calculate_rice_score",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "prioritize_backlog",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "map_product_risks",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "map_user_journey",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "map_user_personas",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_discovery_questions",
+      "capability": "read"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "define_mvp_scope",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "define_product_metrics",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "define_product_vision",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_feature_spec",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_go_to_market_brief",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_handoff_to_architecture",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_handoff_to_design",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_handoff_to_engineering",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_release_plan",
+      "capability": "write"
+    },
+    {
+      "server": "product-owner-mcp-server",
+      "tool": "generate_user_stories",
+      "capability": "write"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "analyze_quality_requirement",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "classify_bug_severity",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "validate_story_testability",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "review_test_coverage",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_test_plan",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_test_cases",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_gherkin_scenarios",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_e2e_tests",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_api_tests",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_unit_tests",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_playwright_tests",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_cypress_tests",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_postman_collection",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_bug_report",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_quality_gate",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_uat_checklist",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_k6_performance_test",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_regression_suite",
+      "capability": "read"
+    },
+    {
+      "server": "qa-engineer-mcp-server",
+      "tool": "generate_smoke_test_suite",
+      "capability": "read"
+    }
+  ]
+}

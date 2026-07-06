@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: config-mcp/list_environments
+  uid: config-mcp:list_environments
+  domain: infra
+  title: list_environments @ config-mcp
+  description: ''
+  owner: platform
+  tags:
+  - config-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.list_environments
+  provider_id: config-mcp
+  provider_version: 1.0.0
+  tool: list_environments
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.list_environments
+- verb: provided-by
+  target: config-mcp

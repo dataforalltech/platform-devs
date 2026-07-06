@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/run_type_check
+  uid: qa-mcp:run_type_check
+  domain: testing
+  title: run_type_check @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_type_check
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: run_type_check
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_type_check
+- verb: provided-by
+  target: qa-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/commit_files
+  uid: deploy-mcp:commit_files
+  domain: delivery
+  title: commit_files @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.commit_files
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: commit_files
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.commit_files
+- verb: provided-by
+  target: deploy-mcp

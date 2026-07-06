@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/set_repos_root
+  uid: deploy-mcp:set_repos_root
+  domain: delivery
+  title: set_repos_root @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.set_repos_root
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: set_repos_root
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.set_repos_root
+- verb: provided-by
+  target: deploy-mcp

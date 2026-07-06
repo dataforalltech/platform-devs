@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: docs-mcp/get_doc_tree
+  uid: docs-mcp:get_doc_tree
+  domain: documentation
+  title: get_doc_tree @ docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - docs-mcp
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: documentation.get_doc_tree
+  provider_id: docs-mcp
+  provider_version: 1.0.0
+  tool: get_doc_tree
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: documentation.get_doc_tree
+- verb: provided-by
+  target: docs-mcp

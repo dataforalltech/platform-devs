@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/run_linter
+  uid: qa-mcp:run_linter
+  domain: testing
+  title: run_linter @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_linter
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: run_linter
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_linter
+- verb: provided-by
+  target: qa-mcp

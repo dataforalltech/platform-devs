@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/visual_regression
+  uid: qa-mcp:visual_regression
+  domain: testing
+  title: visual_regression @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.visual_regression
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: visual_regression
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.visual_regression
+- verb: provided-by
+  target: qa-mcp

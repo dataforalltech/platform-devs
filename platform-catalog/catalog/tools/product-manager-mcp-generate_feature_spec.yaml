@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-manager-mcp/generate_feature_spec
+  uid: product-manager-mcp:generate_feature_spec
+  domain: product
+  title: generate_feature_spec @ product-manager-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-manager-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.generate_feature_spec
+  provider_id: product-manager-mcp
+  provider_version: 1.0.0
+  tool: generate_feature_spec
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.generate_feature_spec
+- verb: provided-by
+  target: product-manager-mcp

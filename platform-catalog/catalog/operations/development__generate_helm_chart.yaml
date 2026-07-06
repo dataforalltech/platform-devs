@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: development/generate_helm_chart
+  uid: development.generate_helm_chart
+  domain: development
+  title: generate helm chart
+  description: ''
+  owner: platform
+  tags:
+  - development
+  - devops
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: development
+  capability: devops
+  resource:
+    type: devops_artifact
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:devops_artifact

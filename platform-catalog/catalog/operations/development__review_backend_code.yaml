@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: development/review_backend_code
+  uid: development.review_backend_code
+  domain: development
+  title: review backend code
+  description: ''
+  owner: platform
+  tags:
+  - development
+  - backend
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: development
+  capability: backend
+  resource:
+    type: backend_artifact
+    parent: null
+    namespace: null
+  operation: review
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:backend_artifact

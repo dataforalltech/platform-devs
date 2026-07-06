@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/set_env_var
+  uid: infra.set_env_var
+  domain: infra
+  title: set env var
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - configuration
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: configuration
+  resource:
+    type: environment
+    parent: null
+    namespace: null
+  operation: set
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:environment

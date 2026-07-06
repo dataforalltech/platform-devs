@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: services-mcp
+  uid: services-mcp
+  domain: infra
+  title: services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: services-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/check_item
+  uid: test-mcp:check_item
+  domain: testing
+  title: check_item @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.check_item
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: check_item
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.check_item
+- verb: provided-by
+  target: test-mcp

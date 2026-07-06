@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: product/map_product_risks
+  uid: product.map_product_risks
+  domain: product
+  title: map product risks
+  description: ''
+  owner: platform
+  tags:
+  - product
+  - product-ownership
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: product
+  capability: product-ownership
+  resource:
+    type: pull_request
+    parent: null
+    namespace: null
+  operation: map
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:pull_request

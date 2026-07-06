@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "platform-catalog"
+version = "0.1.0"
+description = "Capability Registry — source of truth do domínio (ADR-009/010/011)."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2",
+    "pyyaml>=6",
+    "fastapi>=0.104",
+    "uvicorn>=0.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+platform-catalog-seed = "platform_catalog.generate_seed:main"
+platform-catalog = "platform_catalog.app:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["platform_catalog*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

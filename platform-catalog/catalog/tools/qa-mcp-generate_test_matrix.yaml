@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/generate_test_matrix
+  uid: qa-mcp:generate_test_matrix
+  domain: testing
+  title: generate_test_matrix @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_test_matrix
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: generate_test_matrix
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_test_matrix
+- verb: provided-by
+  target: qa-mcp

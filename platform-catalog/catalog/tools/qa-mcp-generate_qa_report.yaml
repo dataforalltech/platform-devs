@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/generate_qa_report
+  uid: qa-mcp:generate_qa_report
+  domain: testing
+  title: generate_qa_report @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_qa_report
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: generate_qa_report
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_qa_report
+- verb: provided-by
+  target: qa-mcp

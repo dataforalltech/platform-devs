@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/run_unit_tests
+  uid: qa-mcp:run_unit_tests
+  domain: testing
+  title: run_unit_tests @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_unit_tests
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: run_unit_tests
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_unit_tests
+- verb: provided-by
+  target: qa-mcp

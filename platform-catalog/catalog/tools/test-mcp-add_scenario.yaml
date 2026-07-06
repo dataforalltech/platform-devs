@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/add_scenario
+  uid: test-mcp:add_scenario
+  domain: testing
+  title: add_scenario @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.add_scenario
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: add_scenario
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.add_scenario
+- verb: provided-by
+  target: test-mcp

@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: infra/sync_infra_env
+  uid: infra.sync_infra_env
+  domain: infra
+  title: sync infra env
+  description: ''
+  owner: platform
+  tags:
+  - infra
+  - service-registry
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: infra
+  capability: service-registry
+  resource:
+    type: environment
+    parent: null
+    namespace: null
+  operation: sync
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:environment

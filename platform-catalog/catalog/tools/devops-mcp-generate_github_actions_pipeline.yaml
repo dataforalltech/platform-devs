@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: devops-mcp/generate_github_actions_pipeline
+  uid: devops-mcp:generate_github_actions_pipeline
+  domain: development
+  title: generate_github_actions_pipeline @ devops-mcp
+  description: ''
+  owner: platform
+  tags:
+  - devops-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_github_actions_pipeline
+  provider_id: devops-mcp
+  provider_version: 1.0.0
+  tool: generate_github_actions_pipeline
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_github_actions_pipeline
+- verb: provided-by
+  target: devops-mcp

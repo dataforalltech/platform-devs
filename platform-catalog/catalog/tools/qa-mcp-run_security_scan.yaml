@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/run_security_scan
+  uid: qa-mcp:run_security_scan
+  domain: testing
+  title: run_security_scan @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_security_scan
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: run_security_scan
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_security_scan
+- verb: provided-by
+  target: qa-mcp

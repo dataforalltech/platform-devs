@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/sync_service_urls
+  uid: services-mcp:sync_service_urls
+  domain: infra
+  title: sync_service_urls @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.sync_service_urls
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: sync_service_urls
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.sync_service_urls
+- verb: provided-by
+  target: services-mcp

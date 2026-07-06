@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/scan_infra
+  uid: services-mcp:scan_infra
+  domain: infra
+  title: scan_infra @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.scan_infra
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: scan_infra
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.scan_infra
+- verb: provided-by
+  target: services-mcp

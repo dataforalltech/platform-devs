@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/validate_lib_change
+  uid: ai-governance-mcp:validate_lib_change
+  domain: governance
+  title: validate_lib_change @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.validate_lib_change
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: validate_lib_change
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.validate_lib_change
+- verb: provided-by
+  target: ai-governance-mcp

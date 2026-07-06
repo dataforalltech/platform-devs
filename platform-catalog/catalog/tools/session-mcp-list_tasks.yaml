@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/list_tasks
+  uid: session-mcp:list_tasks
+  domain: platform
+  title: list_tasks @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.list_tasks
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: list_tasks
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.list_tasks
+- verb: provided-by
+  target: session-mcp

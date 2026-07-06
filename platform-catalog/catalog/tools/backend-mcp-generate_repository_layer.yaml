@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/generate_repository_layer
+  uid: backend-mcp:generate_repository_layer
+  domain: development
+  title: generate_repository_layer @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_repository_layer
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: generate_repository_layer
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_repository_layer
+- verb: provided-by
+  target: backend-mcp

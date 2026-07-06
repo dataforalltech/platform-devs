@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: infra-mcp/cancel_queued_request
+  uid: infra-mcp:cancel_queued_request
+  domain: infra
+  title: cancel_queued_request @ infra-mcp
+  description: ''
+  owner: platform
+  tags:
+  - infra-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.cancel_queued_request
+  provider_id: infra-mcp
+  provider_version: 1.0.0
+  tool: cancel_queued_request
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.cancel_queued_request
+- verb: provided-by
+  target: infra-mcp

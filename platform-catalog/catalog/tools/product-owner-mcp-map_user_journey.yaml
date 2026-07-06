@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/map_user_journey
+  uid: product-owner-mcp:map_user_journey
+  domain: product
+  title: map_user_journey @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.map_user_journey
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: map_user_journey
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.map_user_journey
+- verb: provided-by
+  target: product-owner-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: audit-mcp/submit_audit_approval
+  uid: audit-mcp:submit_audit_approval
+  domain: governance
+  title: submit_audit_approval @ audit-mcp
+  description: ''
+  owner: platform
+  tags:
+  - audit-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.submit_audit_approval
+  provider_id: audit-mcp
+  provider_version: 1.0.0
+  tool: submit_audit_approval
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.submit_audit_approval
+- verb: provided-by
+  target: audit-mcp

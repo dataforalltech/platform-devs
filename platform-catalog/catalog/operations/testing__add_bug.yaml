@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/add_bug
+  uid: testing.add_bug
+  domain: testing
+  title: add bug
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - test-planning
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: test-planning
+  resource:
+    type: bug
+    parent: null
+    namespace: null
+  operation: add
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:bug

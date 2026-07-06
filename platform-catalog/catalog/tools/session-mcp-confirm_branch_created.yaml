@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/confirm_branch_created
+  uid: session-mcp:confirm_branch_created
+  domain: platform
+  title: confirm_branch_created @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.confirm_branch_created
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: confirm_branch_created
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.confirm_branch_created
+- verb: provided-by
+  target: session-mcp

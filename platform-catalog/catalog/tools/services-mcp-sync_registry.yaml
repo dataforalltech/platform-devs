@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/sync_registry
+  uid: services-mcp:sync_registry
+  domain: infra
+  title: sync_registry @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.sync_registry
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: sync_registry
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.sync_registry
+- verb: provided-by
+  target: services-mcp

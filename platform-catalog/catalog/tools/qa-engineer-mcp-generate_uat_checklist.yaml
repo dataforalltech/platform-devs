@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/generate_uat_checklist
+  uid: qa-engineer-mcp:generate_uat_checklist
+  domain: testing
+  title: generate_uat_checklist @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_uat_checklist
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: generate_uat_checklist
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_uat_checklist
+- verb: provided-by
+  target: qa-engineer-mcp

@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/run_e2e_tests
+  uid: testing.run_e2e_tests
+  domain: testing
+  title: run e2e tests
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - quality
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: quality
+  resource:
+    type: test
+    parent: null
+    namespace: null
+  operation: run
+  authz: write
+  risk:
+    effects:
+    - execute
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: true
+      streaming: false
+      timeout_s: 900
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:test

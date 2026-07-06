@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: frontend-mcp
+  uid: frontend-mcp
+  domain: development
+  title: frontend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: frontend-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

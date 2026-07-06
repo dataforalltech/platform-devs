@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/submit_suggestion
+  uid: session-mcp:submit_suggestion
+  domain: platform
+  title: submit_suggestion @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.submit_suggestion
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: submit_suggestion
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.submit_suggestion
+- verb: provided-by
+  target: session-mcp

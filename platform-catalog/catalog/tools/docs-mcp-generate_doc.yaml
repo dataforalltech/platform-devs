@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: docs-mcp/generate_doc
+  uid: docs-mcp:generate_doc
+  domain: documentation
+  title: generate_doc @ docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - docs-mcp
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: documentation.generate_doc
+  provider_id: docs-mcp
+  provider_version: 1.0.0
+  tool: generate_doc
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: documentation.generate_doc
+- verb: provided-by
+  target: docs-mcp

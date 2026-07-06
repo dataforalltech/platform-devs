@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/double_check
+  uid: test-mcp:double_check
+  domain: testing
+  title: double_check @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.double_check
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: double_check
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.double_check
+- verb: provided-by
+  target: test-mcp

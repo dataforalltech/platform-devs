@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: infra-mcp/list_pool
+  uid: infra-mcp:list_pool
+  domain: infra
+  title: list_pool @ infra-mcp
+  description: ''
+  owner: platform
+  tags:
+  - infra-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.list_pool
+  provider_id: infra-mcp
+  provider_version: 1.0.0
+  tool: list_pool
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.list_pool
+- verb: provided-by
+  target: infra-mcp

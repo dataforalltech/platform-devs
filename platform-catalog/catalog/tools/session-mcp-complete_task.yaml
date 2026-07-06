@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/complete_task
+  uid: session-mcp:complete_task
+  domain: platform
+  title: complete_task @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.complete_task
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: complete_task
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.complete_task
+- verb: provided-by
+  target: session-mcp

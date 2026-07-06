@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/generate_incident_response_plan
+  uid: security-mcp:generate_incident_response_plan
+  domain: security
+  title: generate_incident_response_plan @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.generate_incident_response_plan
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: generate_incident_response_plan
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.generate_incident_response_plan
+- verb: provided-by
+  target: security-mcp

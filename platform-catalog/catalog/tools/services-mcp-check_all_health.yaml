@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/check_all_health
+  uid: services-mcp:check_all_health
+  domain: infra
+  title: check_all_health @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.check_all_health
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: check_all_health
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.check_all_health
+- verb: provided-by
+  target: services-mcp

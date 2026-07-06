@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/approve_promotion
+  uid: pipeline-mcp:approve_promotion
+  domain: delivery
+  title: approve_promotion @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.approve_promotion
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: approve_promotion
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.approve_promotion
+- verb: provided-by
+  target: pipeline-mcp

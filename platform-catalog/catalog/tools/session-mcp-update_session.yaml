@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/update_session
+  uid: session-mcp:update_session
+  domain: platform
+  title: update_session @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.update_session
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: update_session
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.update_session
+- verb: provided-by
+  target: session-mcp

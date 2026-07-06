@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: docs-mcp
+  uid: docs-mcp
+  domain: documentation
+  title: docs-mcp
+  description: ''
+  owner: platform
+  tags:
+  - documentation
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: docs-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

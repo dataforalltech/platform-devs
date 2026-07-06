@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/get_final_response_template
+  uid: ai-governance-mcp:get_final_response_template
+  domain: governance
+  title: get_final_response_template @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.get_final_response_template
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: get_final_response_template
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.get_final_response_template
+- verb: provided-by
+  target: ai-governance-mcp

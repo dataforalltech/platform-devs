@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: governance/create_adr
+  uid: governance.create_adr
+  domain: governance
+  title: create adr
+  description: ''
+  owner: platform
+  tags:
+  - governance
+  - ai-governance
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: governance
+  capability: ai-governance
+  resource:
+    type: adr
+    parent: null
+    namespace: null
+  operation: create
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:adr

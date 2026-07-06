@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: deploy-mcp/create_branch
+  uid: deploy-mcp:create_branch
+  domain: delivery
+  title: create_branch @ deploy-mcp
+  description: ''
+  owner: platform
+  tags:
+  - deploy-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.create_branch
+  provider_id: deploy-mcp
+  provider_version: 1.0.0
+  tool: create_branch
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.create_branch
+- verb: provided-by
+  target: deploy-mcp

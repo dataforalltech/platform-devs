@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: product/prioritize_backlog
+  uid: product.prioritize_backlog
+  domain: product
+  title: prioritize backlog
+  description: ''
+  owner: platform
+  tags:
+  - product
+  - product-ownership
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: product
+  capability: product-ownership
+  resource:
+    type: backlog
+    parent: null
+    namespace: null
+  operation: prioritize
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:backlog

@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: delivery/list_acr_images
+  uid: delivery.list_acr_images
+  domain: delivery
+  title: list acr images
+  description: ''
+  owner: platform
+  tags:
+  - delivery
+  - deployment
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: delivery
+  capability: deployment
+  resource:
+    type: deployment
+    parent: null
+    namespace: null
+  operation: list
+  authz: read
+  risk:
+    effects:
+    - read
+    requires:
+    - github
+    - acr
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:deployment

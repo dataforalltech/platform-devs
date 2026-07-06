@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/screenshot_page
+  uid: qa-mcp:screenshot_page
+  domain: testing
+  title: screenshot_page @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.screenshot_page
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: screenshot_page
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.screenshot_page
+- verb: provided-by
+  target: qa-mcp

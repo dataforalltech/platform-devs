@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/review_test_coverage
+  uid: qa-engineer-mcp:review_test_coverage
+  domain: testing
+  title: review_test_coverage @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.review_test_coverage
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: review_test_coverage
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.review_test_coverage
+- verb: provided-by
+  target: qa-engineer-mcp

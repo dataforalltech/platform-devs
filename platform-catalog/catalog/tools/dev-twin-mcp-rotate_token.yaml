@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/rotate_token
+  uid: dev-twin-mcp:rotate_token
+  domain: platform
+  title: rotate_token @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.rotate_token
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: rotate_token
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.rotate_token
+- verb: provided-by
+  target: dev-twin-mcp

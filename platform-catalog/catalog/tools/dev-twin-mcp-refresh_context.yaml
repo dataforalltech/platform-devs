@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: dev-twin-mcp/refresh_context
+  uid: dev-twin-mcp:refresh_context
+  domain: platform
+  title: refresh_context @ dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - dev-twin-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.refresh_context
+  provider_id: dev-twin-mcp
+  provider_version: 1.0.0
+  tool: refresh_context
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.refresh_context
+- verb: provided-by
+  target: dev-twin-mcp

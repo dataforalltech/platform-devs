@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: documentation/check_required_docs
+  uid: documentation.check_required_docs
+  domain: documentation
+  title: check required docs
+  description: ''
+  owner: platform
+  tags:
+  - documentation
+  - docs
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: documentation
+  capability: docs
+  resource:
+    type: document
+    parent: null
+    namespace: null
+  operation: check
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:document

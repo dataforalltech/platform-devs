@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/analyze_complexity
+  uid: qa-mcp:analyze_complexity
+  domain: testing
+  title: analyze_complexity @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.analyze_complexity
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: analyze_complexity
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.analyze_complexity
+- verb: provided-by
+  target: qa-mcp

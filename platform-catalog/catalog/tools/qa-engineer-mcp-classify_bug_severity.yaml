@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/classify_bug_severity
+  uid: qa-engineer-mcp:classify_bug_severity
+  domain: testing
+  title: classify_bug_severity @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.classify_bug_severity
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: classify_bug_severity
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.classify_bug_severity
+- verb: provided-by
+  target: qa-engineer-mcp

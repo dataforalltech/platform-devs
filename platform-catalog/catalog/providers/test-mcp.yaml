@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: test-mcp
+  uid: test-mcp
+  domain: testing
+  title: test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: test-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

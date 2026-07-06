@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/promote_service
+  uid: pipeline-mcp:promote_service
+  domain: delivery
+  title: promote_service @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.promote_service
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: promote_service
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.promote_service
+- verb: provided-by
+  target: pipeline-mcp

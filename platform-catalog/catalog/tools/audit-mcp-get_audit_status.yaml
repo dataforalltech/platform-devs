@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: audit-mcp/get_audit_status
+  uid: audit-mcp:get_audit_status
+  domain: governance
+  title: get_audit_status @ audit-mcp
+  description: ''
+  owner: platform
+  tags:
+  - audit-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.get_audit_status
+  provider_id: audit-mcp
+  provider_version: 1.0.0
+  tool: get_audit_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.get_audit_status
+- verb: provided-by
+  target: audit-mcp

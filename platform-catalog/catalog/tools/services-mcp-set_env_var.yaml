@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/set_env_var
+  uid: services-mcp:set_env_var
+  domain: infra
+  title: set_env_var @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.set_env_var
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: set_env_var
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.set_env_var
+- verb: provided-by
+  target: services-mcp

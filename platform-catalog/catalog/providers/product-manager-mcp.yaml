@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: product-manager-mcp
+  uid: product-manager-mcp
+  domain: product
+  title: product-manager-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: product-manager-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

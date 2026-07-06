@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: architecture-mcp/generate_solution_blueprint
+  uid: architecture-mcp:generate_solution_blueprint
+  domain: architecture
+  title: generate_solution_blueprint @ architecture-mcp
+  description: ''
+  owner: platform
+  tags:
+  - architecture-mcp
+  - architecture
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: architecture.generate_solution_blueprint
+  provider_id: architecture-mcp
+  provider_version: 1.0.0
+  tool: generate_solution_blueprint
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: architecture.generate_solution_blueprint
+- verb: provided-by
+  target: architecture-mcp

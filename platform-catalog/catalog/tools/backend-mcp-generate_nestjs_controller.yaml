@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: backend-mcp/generate_nestjs_controller
+  uid: backend-mcp:generate_nestjs_controller
+  domain: development
+  title: generate_nestjs_controller @ backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - backend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_nestjs_controller
+  provider_id: backend-mcp
+  provider_version: 1.0.0
+  tool: generate_nestjs_controller
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_nestjs_controller
+- verb: provided-by
+  target: backend-mcp

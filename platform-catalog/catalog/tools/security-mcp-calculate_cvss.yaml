@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: security-mcp/calculate_cvss
+  uid: security-mcp:calculate_cvss
+  domain: security
+  title: calculate_cvss @ security-mcp
+  description: ''
+  owner: platform
+  tags:
+  - security-mcp
+  - security
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: security.calculate_cvss
+  provider_id: security-mcp
+  provider_version: 1.0.0
+  tool: calculate_cvss
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: security.calculate_cvss
+- verb: provided-by
+  target: security-mcp

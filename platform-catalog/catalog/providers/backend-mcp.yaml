@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: backend-mcp
+  uid: backend-mcp
+  domain: development
+  title: backend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: backend-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

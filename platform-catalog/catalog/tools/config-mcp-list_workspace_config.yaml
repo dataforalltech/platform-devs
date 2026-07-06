@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: config-mcp/list_workspace_config
+  uid: config-mcp:list_workspace_config
+  domain: infra
+  title: list_workspace_config @ config-mcp
+  description: ''
+  owner: platform
+  tags:
+  - config-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.list_workspace_config
+  provider_id: config-mcp
+  provider_version: 1.0.0
+  tool: list_workspace_config
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.list_workspace_config
+- verb: provided-by
+  target: config-mcp

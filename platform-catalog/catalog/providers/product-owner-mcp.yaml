@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: product-owner-mcp
+  uid: product-owner-mcp
+  domain: product
+  title: product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: product-owner-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

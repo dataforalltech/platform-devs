@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: qa-engineer-mcp
+  uid: qa-engineer-mcp
+  domain: testing
+  title: qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: qa-engineer-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

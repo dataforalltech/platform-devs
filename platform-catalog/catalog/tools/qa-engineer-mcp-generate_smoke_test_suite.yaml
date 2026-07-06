@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-engineer-mcp/generate_smoke_test_suite
+  uid: qa-engineer-mcp:generate_smoke_test_suite
+  domain: testing
+  title: generate_smoke_test_suite @ qa-engineer-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-engineer-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.generate_smoke_test_suite
+  provider_id: qa-engineer-mcp
+  provider_version: 1.0.0
+  tool: generate_smoke_test_suite
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.generate_smoke_test_suite
+- verb: provided-by
+  target: qa-engineer-mcp

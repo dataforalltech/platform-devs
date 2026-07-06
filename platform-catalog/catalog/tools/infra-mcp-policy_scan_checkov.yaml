@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: infra-mcp/policy_scan_checkov
+  uid: infra-mcp:policy_scan_checkov
+  domain: infra
+  title: policy_scan_checkov @ infra-mcp
+  description: ''
+  owner: platform
+  tags:
+  - infra-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.policy_scan_checkov
+  provider_id: infra-mcp
+  provider_version: 1.0.0
+  tool: policy_scan_checkov
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.policy_scan_checkov
+- verb: provided-by
+  target: infra-mcp

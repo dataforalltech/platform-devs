@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: ai-governance-mcp/get_port_map
+  uid: ai-governance-mcp:get_port_map
+  domain: governance
+  title: get_port_map @ ai-governance-mcp
+  description: ''
+  owner: platform
+  tags:
+  - ai-governance-mcp
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: governance.get_port_map
+  provider_id: ai-governance-mcp
+  provider_version: 1.0.0
+  tool: get_port_map
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: governance.get_port_map
+- verb: provided-by
+  target: ai-governance-mcp

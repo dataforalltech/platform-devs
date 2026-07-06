@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/list_services
+  uid: services-mcp:list_services
+  domain: infra
+  title: list_services @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.list_services
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: list_services
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.list_services
+- verb: provided-by
+  target: services-mcp

@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: testing/generate_test_matrix
+  uid: testing.generate_test_matrix
+  domain: testing
+  title: generate test matrix
+  description: ''
+  owner: platform
+  tags:
+  - testing
+  - quality
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: testing
+  capability: quality
+  resource:
+    type: test
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:test

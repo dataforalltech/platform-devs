@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: audit-mcp
+  uid: audit-mcp
+  domain: governance
+  title: audit-mcp
+  description: ''
+  owner: platform
+  tags:
+  - governance
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: audit-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: pipeline-mcp/get_promotion_history
+  uid: pipeline-mcp:get_promotion_history
+  domain: delivery
+  title: get_promotion_history @ pipeline-mcp
+  description: ''
+  owner: platform
+  tags:
+  - pipeline-mcp
+  - delivery
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: delivery.get_promotion_history
+  provider_id: pipeline-mcp
+  provider_version: 1.0.0
+  tool: get_promotion_history
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: delivery.get_promotion_history
+- verb: provided-by
+  target: pipeline-mcp

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: architecture-mcp/generate_architecture
+  uid: architecture-mcp:generate_architecture
+  domain: architecture
+  title: generate_architecture @ architecture-mcp
+  description: ''
+  owner: platform
+  tags:
+  - architecture-mcp
+  - architecture
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: architecture.generate_architecture
+  provider_id: architecture-mcp
+  provider_version: 1.0.0
+  tool: generate_architecture
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: architecture.generate_architecture
+- verb: provided-by
+  target: architecture-mcp

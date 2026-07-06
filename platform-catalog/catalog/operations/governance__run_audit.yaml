@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: governance/run_audit
+  uid: governance.run_audit
+  domain: governance
+  title: run audit
+  description: ''
+  owner: platform
+  tags:
+  - governance
+  - audit
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: governance
+  capability: audit
+  resource:
+    type: audit
+    parent: null
+    namespace: null
+  operation: run
+  authz: write
+  risk:
+    effects:
+    - execute
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: true
+      streaming: false
+      timeout_s: 900
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:audit

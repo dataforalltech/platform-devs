@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: services-mcp/redis_status
+  uid: services-mcp:redis_status
+  domain: infra
+  title: redis_status @ services-mcp
+  description: ''
+  owner: platform
+  tags:
+  - services-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.redis_status
+  provider_id: services-mcp
+  provider_version: 1.0.0
+  tool: redis_status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.redis_status
+- verb: provided-by
+  target: services-mcp

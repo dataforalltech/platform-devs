@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: qa-mcp/run_e2e_tests
+  uid: qa-mcp:run_e2e_tests
+  domain: testing
+  title: run_e2e_tests @ qa-mcp
+  description: ''
+  owner: platform
+  tags:
+  - qa-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.run_e2e_tests
+  provider_id: qa-mcp
+  provider_version: 1.0.0
+  tool: run_e2e_tests
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.run_e2e_tests
+- verb: provided-by
+  target: qa-mcp

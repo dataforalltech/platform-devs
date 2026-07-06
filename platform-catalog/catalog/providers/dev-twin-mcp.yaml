@@ -1,0 +1,19 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: dev-twin-mcp
+  uid: dev-twin-mcp
+  domain: platform
+  title: dev-twin-mcp
+  description: ''
+  owner: platform
+  tags:
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: dev-twin-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

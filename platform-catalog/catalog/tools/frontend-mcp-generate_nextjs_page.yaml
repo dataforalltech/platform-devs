@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: frontend-mcp/generate_nextjs_page
+  uid: frontend-mcp:generate_nextjs_page
+  domain: development
+  title: generate_nextjs_page @ frontend-mcp
+  description: ''
+  owner: platform
+  tags:
+  - frontend-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.generate_nextjs_page
+  provider_id: frontend-mcp
+  provider_version: 1.0.0
+  tool: generate_nextjs_page
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.generate_nextjs_page
+- verb: provided-by
+  target: frontend-mcp

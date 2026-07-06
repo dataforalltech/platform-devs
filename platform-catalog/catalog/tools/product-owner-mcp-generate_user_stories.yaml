@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/generate_user_stories
+  uid: product-owner-mcp:generate_user_stories
+  domain: product
+  title: generate_user_stories @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.generate_user_stories
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: generate_user_stories
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.generate_user_stories
+- verb: provided-by
+  target: product-owner-mcp

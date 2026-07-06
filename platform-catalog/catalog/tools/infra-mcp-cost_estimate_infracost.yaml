@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: infra-mcp/cost_estimate_infracost
+  uid: infra-mcp:cost_estimate_infracost
+  domain: infra
+  title: cost_estimate_infracost @ infra-mcp
+  description: ''
+  owner: platform
+  tags:
+  - infra-mcp
+  - infra
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: infra.cost_estimate_infracost
+  provider_id: infra-mcp
+  provider_version: 1.0.0
+  tool: cost_estimate_infracost
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: infra.cost_estimate_infracost
+- verb: provided-by
+  target: infra-mcp

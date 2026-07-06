@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: product/define_product_metrics
+  uid: product.define_product_metrics
+  domain: product
+  title: define product metrics
+  description: ''
+  owner: platform
+  tags:
+  - product
+  - product-ownership
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: product
+  capability: product-ownership
+  resource:
+    type: pull_request
+    parent: null
+    namespace: null
+  operation: define
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:pull_request

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: devops-mcp/status
+  uid: devops-mcp:status
+  domain: development
+  title: status @ devops-mcp
+  description: ''
+  owner: platform
+  tags:
+  - devops-mcp
+  - development
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: development.status
+  provider_id: devops-mcp
+  provider_version: 1.0.0
+  tool: status
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: development.status
+- verb: provided-by
+  target: devops-mcp

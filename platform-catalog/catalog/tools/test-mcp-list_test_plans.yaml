@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: test-mcp/list_test_plans
+  uid: test-mcp:list_test_plans
+  domain: testing
+  title: list_test_plans @ test-mcp
+  description: ''
+  owner: platform
+  tags:
+  - test-mcp
+  - testing
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: testing.list_test_plans
+  provider_id: test-mcp
+  provider_version: 1.0.0
+  tool: list_test_plans
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: testing.list_test_plans
+- verb: provided-by
+  target: test-mcp

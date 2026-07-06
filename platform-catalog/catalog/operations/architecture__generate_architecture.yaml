@@ -1,0 +1,46 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: architecture/generate_architecture
+  uid: architecture.generate_architecture
+  domain: architecture
+  title: generate architecture
+  description: ''
+  owner: platform
+  tags:
+  - architecture
+  - architecture
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: architecture
+  capability: architecture
+  resource:
+    type: architecture
+    parent: null
+    namespace: null
+  operation: generate
+  authz: write
+  risk:
+    effects:
+    - generate
+    requires: []
+    blast_radius: service
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution:
+      idempotent: false
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: none
+relations:
+- verb: acts-on
+  target: resource:architecture

@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: session-mcp/get_decision
+  uid: session-mcp:get_decision
+  domain: platform
+  title: get_decision @ session-mcp
+  description: ''
+  owner: platform
+  tags:
+  - session-mcp
+  - platform
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: platform.get_decision
+  provider_id: session-mcp
+  provider_version: 1.0.0
+  tool: get_decision
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: platform.get_decision
+- verb: provided-by
+  target: session-mcp

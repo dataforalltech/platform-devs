@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: product-owner-mcp/map_product_risks
+  uid: product-owner-mcp:map_product_risks
+  domain: product
+  title: map_product_risks @ product-owner-mcp
+  description: ''
+  owner: platform
+  tags:
+  - product-owner-mcp
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: product.map_product_risks
+  provider_id: product-owner-mcp
+  provider_version: 1.0.0
+  tool: map_product_risks
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: product.map_product_risks
+- verb: provided-by
+  target: product-owner-mcp
