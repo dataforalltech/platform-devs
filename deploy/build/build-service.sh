@@ -6,10 +6,11 @@
 #   ./build-service.sh platform-auth      platform-auth release/1.4.0        # API (contexto raiz)
 #   ./build-service.sh platform-auth-mcp  platform-auth release/1.4.0 mcp    # MCP (contexto mcp/)
 set -uo pipefail
-IMAGE="${1:?uso: build-service.sh <image> <repo> <branch> [ctx]}"
+IMAGE="${1:?uso: build-service.sh <image> <repo> <branch> [dockerfile] [context]}"
 REPO="${2:?repo}"
 BRANCH="${3:?branch}"
-CTX="${4:-.}"
+DF="${4:-Dockerfile}"  # dockerfile relativo a raiz do repo (ex.: gateway_mcp/Dockerfile)
+CTX="${5:-.}"          # contexto de build relativo a raiz (alguns MCP COPY da raiz, outros do subdir)
 REGION=us-east-1; NAME=dataforall-hml; ACR=d4all.azurecr.io
 ORG=$(aws ssm get-parameter --region $REGION --name /$NAME/github/org --query Parameter.Value --output text)
 BUILDROOT=/data/build; mkdir -p "$BUILDROOT"
@@ -33,7 +34,7 @@ ACR_USER=$(aws ssm get-parameter --region $REGION --name /$NAME/acr/username --q
 aws ssm get-parameter --region $REGION --name /$NAME/acr/password --with-decryption --query Parameter.Value --output text | docker login $ACR -u "$ACR_USER" --password-stdin >/dev/null
 
 # build com BuildKit + secret, tags :latest e :<sha>
-DOCKER_BUILDKIT=1 docker build --secret id=github_token,src="$TF" \
+DOCKER_BUILDKIT=1 docker build --secret id=github_token,src="$TF" -f "$D/$DF" \
   -t "$ACR/dataforall/3.0/$IMAGE:latest" -t "$ACR/dataforall/3.0/$IMAGE:$SHA" \
   "$D/$CTX" || { echo "FALHA build $IMAGE"; exit 1; }
 

@@ -25,7 +25,10 @@ else
   openssl genrsa -out "$KEYFILE" 2048 2>/dev/null
   aws s3 cp "$KEYFILE" "$S3KEY" --region "$REGION" --only-show-errors && echo "chave salva no S3"
 fi
-chmod 644 "$KEYFILE" # F2: processo do auth (nao-root) precisa ler o arquivo montado
+# F2/F7: a imagem (release/1.4.0) EXIGE 0600 no arquivo da chave; e o processo roda
+# como appuser (uid 1000). chown p/ 1000 + 600 satisfaz os dois (dono le, e seguro).
+chown 1000:1000 "$KEYFILE"
+chmod 600 "$KEYFILE"
 # seed no Vault (kv v2) — best effort (dev mode; env vence de qualquer forma)
 docker exec -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN="$VT" dataforall-vault vault secrets enable -path=kv -version=2 kv 2>/dev/null || true
 cat "$KEYFILE" | docker exec -i -e VAULT_ADDR=http://127.0.0.1:8200 -e VAULT_TOKEN="$VT" dataforall-vault vault kv put -mount=kv dataforall/platform-auth/jwt_private_key pem=- >/dev/null 2>&1 && echo "chave seedada no Vault"

@@ -143,10 +143,11 @@
 - **Causa:** a integração Vault→config **não wireia** a chave neste build (o `vault_loader` existe, mas o JWKS lê `JWT_PRIVATE_KEY_CONTENT/PATH` do settings).
 - **Correção:** fornecer a chave via **arquivo montado** + `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem` (fonte durável: `s3://.../secrets/platform-auth-jwt.pem`, também seedada no Vault `kv/dataforall/platform-auth/jwt_private_key`). **Status:** ✅ bakado (compose do auth). **Dívida D5:** migrar p/ Vault quando houver Vault de produção.
 
-### F2. JWKS 500 — `PermissionError` na chave montada
-- **Evidência:** `PermissionError: [Errno 13] Permission denied: '/run/secrets/jwt_key.pem'`.
-- **Causa:** arquivo `chmod 600` dono root no host; o processo do auth roda como usuário **não-root** no container → não lê.
-- **Correção:** `chmod 644` no arquivo da chave (host single-tenant, SG fechado, acesso só via SSM). **Status:** ⚙️ seed — o script do auth deve gravar a chave com `chmod 644`.
+### F2 + F7. JWKS 500 — permissão da chave montada (0600 vs leitura pelo container)
+- **Evidência (imagem antiga):** `PermissionError: [Errno 13] Permission denied: '/run/secrets/jwt_key.pem'` com `chmod 600` (dono root) — o processo roda como não-root.
+- **Evidência (imagem fresh, release/1.4.0):** `JWT private key file ... has insecure permissions 0o644 — use JWT_PRIVATE_KEY_CONTENT or restrict file to 0600.` — a imagem nova **rejeita 0644**.
+- **Causa (raiz):** conflito de dois requisitos — o processo (appuser **uid 1000**) precisa LER o arquivo, e a imagem nova EXIGE 0600. `chmod 644` resolvia a leitura mas viola o check; `chmod 600` dono-root viola a leitura.
+- **Correção (satisfaz os dois):** `chown 1000:1000 <keyfile> && chmod 600` — o dono (appuser) lê e o modo é seguro. **Status:** ✅ bakado (`bringup.sh` do auth). **Atenção:** o `platform-admin` compartilha a mesma chave; o UID dele também precisa ler (validar; se diferir de 1000, ajustar).
 
 ### F3. Health server `:9090` — `address already in use`
 - **Evidência:** `[Errno 98] error while attempting to bind on address ('0.0.0.0', 9090): address already in use` repetido; "Child process died".
@@ -171,6 +172,21 @@
 - **⚠️ Implicação:** se o `:latest` do auth está velho, **outras imagens do ACR podem estar também** — auditar/rebuildar (ver §I).
 
 ---
+
+### F8. admin login 500 — `Table 'dataforall.adm_users' doesn't exist`
+- **Evidência:** `pymysql.err.ProgrammingError: (1146, "Table 'dataforall.adm_users' doesn't exist")` no platform-admin ao processar `/auth`.
+- **Causa:** as tabelas IAM do tenant (`adm_users`, `adm_users_profile`, `adm_users_login_config`, ...) não existem — as **migrations Alembic** não rodaram no DB do tenant. (Bootstrap NÃO cria as tabelas IAM.)
+- **Correção:** `docker exec -w /app platform-admin sh -c "alembic <XARGS> upgrade head"`. **Gotcha:** passar `-x db_host=tenant-mysql` EXPLÍCITO — sem isso o `env.py` cai no `ADMIN_DB_HOST` e dá `Unknown database 'dataforall'` (o DB do tenant vive no tenant-mysql, não no admin-mysql). Só funciona em imagem **fresh** (a antiga tinha `alembic/env.py` quebrando em `parents[3]`; o fix "running inside Docker container" está nas imagens novas). **Status:** ✅ bakado (`deploy/seed/onboard-tenant.sh`).
+
+### F9. auth login 500 — `Table 'dataforall.auth_mfa_secrets' doesn't exist`
+- **Evidência:** `(1146, "Table 'dataforall.auth_mfa_secrets' doesn't exist")` no platform-auth, DEPOIS de o admin validar o usuário.
+- **Causa:** as tabelas do próprio auth (`auth_refresh_tokens`, `auth_mfa_secrets`, `auth_service_accounts`) não existem no DB do tenant — as migrations do auth não rodaram.
+- **Correção:** rodar as migrations do auth no mesmo tenant (mesmo padrão do F8). **Status:** ✅ bakado (`onboard-tenant.sh` roda admin + auth).
+
+### F10. Login 401 — `Browser binding missing` (NÃO é erro)
+- **Evidência:** `{"code":"http_error","message":"Browser binding missing"}` → 401 ao logar via `curl` sem header.
+- **Causa:** device-binding de segurança — o access token é vinculado a um `bid` (browser id). A SPA envia `X-Browser-Id`; o `curl` não.
+- **Correção:** enviar `-H "X-Browser-Id: <id>"` (a SPA faz automaticamente). Com o header: **200 + JWT** (validado: `role=superadmin`, `tenant_id=dataforall`). **Status:** 📌 gotcha (comportamento by design).
 
 ## G. Ações de SEED recorrentes (para VM limpa)
 
