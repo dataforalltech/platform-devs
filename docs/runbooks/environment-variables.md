@@ -98,7 +98,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
 | platform-cdc | ⬜ img✅ | mysql | develop | cdc_mcp | |
 | platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
-| platform-analytics | ⬜ img✅ | mysql | develop | analytics_mcp | |
+| platform-analytics | ✅ | mysql | develop | Dockerfile.mcp (raiz), 7100 | BI; NOTIFICATION_INTERNAL_TOKEN+TRUSTED_PROXIES; MCP 117 tools |
 | platform-communication | ⬜ img✅ | mysql | develop | mcp | |
 | platform-ml | ⬜ img✗ | mysql | develop | mcp | build falhou |
 | platform-monitor | ⬜ img✗ | mysql | develop | mcp | build falhou |
@@ -203,6 +203,16 @@ MCP: `NOTIFICATION_MCP_NOTIFICATION_URL`, `NOTIFICATION_MCP_INTERNAL_API_TOKEN=�
 MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-connectors:8000`,
 `CONNECTORS_MCP_INTERNAL_API_TOKEN=••••`, `CONNECTORS_MCP_DEFAULT_TENANT_ID=dataforall`,
 `CONNECTORS_MCP_REQUEST_TIMEOUT=600`, `CONNECTORS_MCP_AUTH_URL=http://platform-auth:8000/internal`.
+
+### platform-analytics — específicos
+`ENV_PROFILE=hml` (=APP_ENV), `HEALTH_PORT=9090` (health `:9090/health/live`), `METRICS_ENABLED=true`,
+`JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, `INTERNAL_API_TOKEN=••••`,
+`NOTIFICATION_INTERNAL_TOKEN=••••` (**obrigatório**), `TRUSTED_PROXIES=[...]` (**obrigatório, não-vazio**),
+`RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false` (default é true! forçado OFF),
+`URL_GOVERNANCE=http://platform-governance:8000`, `URL_IAM=http://platform-admin:8000/api/v1/iam`,
+`NOTIFICATION_SERVICE_URL=http://platform-notification:8000`.
+MCP (porta 7100, 117 tools): `ANALYTICS_MCP_ANALYTICS_URL=http://platform-analytics:8000`,
+`ANALYTICS_MCP_INTERNAL_API_TOKEN=••••`, `ANALYTICS_MCP_DEFAULT_TENANT_ID=dataforall`, `ANALYTICS_MCP_TWIN_ENFORCE=false`.
 
 ---
 

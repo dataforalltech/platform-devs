@@ -27,7 +27,7 @@ docker exec -w /app platform-admin sh -c "alembic $XARGS upgrade head" 2>&1 | gr
 echo "== 3. migrations do platform-auth =="
 docker exec -w /app platform-auth sh -c "alembic $XARGS upgrade head" 2>&1 | grep -iE 'running upgrade|error|already' | tail -6
 # demais servicos com estado (best-effort: so se o container existir)
-for svc in platform-governance platform-notification platform-connectors; do
+for svc in platform-governance platform-notification platform-connectors platform-analytics; do
   if docker ps --format '{{.Names}}' | grep -q "^${svc}$"; then
     echo "== 3b. migrations do ${svc} =="
     docker exec -w /app "$svc" sh -c "alembic $XARGS upgrade head" 2>&1 | grep -iE 'running upgrade|error|already' | tail -6
