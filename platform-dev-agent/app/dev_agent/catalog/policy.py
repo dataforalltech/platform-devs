@@ -36,6 +36,15 @@ class RegistryCapabilityResolver:
     def record(self, tool: str) -> CapabilityRecord | None:
         return self._source.record(tool)
 
+    def record_for_operation(self, operation_id: str) -> CapabilityRecord | None:
+        # A fonte pode não implementar o método (Protocol antigo) → None.
+        fn = getattr(self._source, "record_for_operation", None)
+        return fn(operation_id) if fn is not None else None
+
+    def tool_for_operation(self, operation_id: str) -> str | None:
+        fn = getattr(self._source, "tool_for_operation", None)
+        return fn(operation_id) if fn is not None else None
+
     def resolve(self, tool: str, *, override: str | None = None) -> Capability:
         if override:
             return Capability(override)

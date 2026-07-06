@@ -1,0 +1,140 @@
+apiVersion: catalog.platform.dev/v1
+kind: Runbook
+metadata:
+  name: runbook.hotfix
+  uid: runbook.hotfix
+  title: Hotfix pipeline (branch -> fix -> gates -> deploy -> verify/rollback)
+  owner: platform
+  tags:
+  - runbook
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  runbook_id: hotfix
+  description: Hotfix pipeline (branch -> fix -> gates -> deploy -> verify/rollback)
+  responsible_profile: devops
+  tasks:
+  - task_id: precheck_health
+    operation_id: infra.check_health
+    tool: services-mcp.check_health
+    responsible: devops
+    required: true
+    depends_on: []
+    resolved: true
+  - task_id: create_branch
+    operation_id: delivery.create_branch
+    tool: deploy-mcp.create_branch
+    responsible: devops
+    required: true
+    depends_on:
+    - precheck_health
+    resolved: true
+  - task_id: commit_fix
+    operation_id: delivery.commit_files
+    tool: deploy-mcp.commit_files
+    responsible: devops
+    required: true
+    depends_on:
+    - create_branch
+    resolved: true
+  - task_id: run_tests
+    operation_id: testing.run_unit_tests
+    tool: qa-mcp.run_unit_tests
+    responsible: qa-engineer
+    required: true
+    depends_on:
+    - commit_fix
+    resolved: true
+  - task_id: run_lint
+    operation_id: testing.run_linter
+    tool: qa-mcp.run_linter
+    responsible: qa-engineer
+    required: true
+    depends_on:
+    - commit_fix
+    resolved: true
+  - task_id: run_typecheck
+    operation_id: testing.run_type_check
+    tool: qa-mcp.run_type_check
+    responsible: qa-engineer
+    required: true
+    depends_on:
+    - commit_fix
+    resolved: true
+  - task_id: open_pr
+    operation_id: delivery.create_pr
+    tool: deploy-mcp.create_pr
+    responsible: devops
+    required: true
+    depends_on:
+    - run_tests
+    - run_lint
+    - run_typecheck
+    resolved: true
+  - task_id: check_gate
+    operation_id: delivery.get_gate_status
+    tool: pipeline-mcp.get_gate_status
+    responsible: devops
+    required: true
+    depends_on:
+    - open_pr
+    resolved: true
+  - task_id: merge_pr
+    operation_id: delivery.merge_pr
+    tool: deploy-mcp.merge_pr
+    responsible: devops
+    required: true
+    depends_on:
+    - check_gate
+    resolved: true
+  - task_id: deploy
+    operation_id: delivery.deploy
+    tool: deploy-mcp.deploy
+    responsible: devops
+    required: true
+    depends_on:
+    - merge_pr
+    resolved: true
+  - task_id: verify
+    operation_id: infra.check_health
+    tool: services-mcp.check_health
+    responsible: devops
+    required: false
+    depends_on:
+    - deploy
+    resolved: true
+  - task_id: rollback
+    operation_id: delivery.rollback
+    tool: pipeline-mcp.rollback
+    responsible: devops
+    required: false
+    depends_on:
+    - deploy
+    resolved: true
+  unresolved_tools: 0
+relations:
+- verb: uses
+  target: infra.check_health
+- verb: uses
+  target: delivery.create_branch
+- verb: uses
+  target: delivery.commit_files
+- verb: uses
+  target: testing.run_unit_tests
+- verb: uses
+  target: testing.run_linter
+- verb: uses
+  target: testing.run_type_check
+- verb: uses
+  target: delivery.create_pr
+- verb: uses
+  target: delivery.get_gate_status
+- verb: uses
+  target: delivery.merge_pr
+- verb: uses
+  target: delivery.deploy
+- verb: uses
+  target: infra.check_health
+- verb: uses
+  target: delivery.rollback

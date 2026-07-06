@@ -21,17 +21,34 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class RunbookTaskSpec:
-    """One task (DAG node) of a runbook, bound to exactly one gateway tool."""
+    """One task (DAG node) of a runbook.
+
+    Operation-first (ADR-009/ADR-016): a task binds to a catalog **Operation**
+    (``operation_id``, e.g. ``delivery.deploy``); the concrete Tool is resolved
+    at runtime via the catalog. A transitional ``tool`` fallback keeps the older
+    runbooks (which bind a gateway tool directly) working. Exactly one of
+    ``operation_id`` / ``tool`` must be set — enforced in ``__post_init__``.
+    """
 
     title: str
     description: str
     required: bool
     responsible: str  # security | qa-engineer | architecture | backend | ...
-    tool: str  # "<namespace>.<operationId>" — single source here
     input_schema: dict  # JSON-schema-ish spec of expected inputs
+    tool: str | None = None  # legacy: "<namespace>.<operationId>" bound directly
+    operation_id: str | None = None  # Operation-first: catalog Operation uid
     depends_on: list[str] = field(default_factory=list)  # task_ids of the SAME runbook
     capability_override: str | None = None  # force read/write; else derived from verb
     risk_override: str | None = None  # force low/medium/high; else heuristic
+
+    def __post_init__(self) -> None:
+        # Frozen dataclass: this may raise, but must not mutate. Exactly one of
+        # operation_id / tool must be set (Operation-first with legacy fallback).
+        if bool(self.operation_id) == bool(self.tool):
+            raise ValueError(
+                f"task {self.title!r}: exactly one of 'operation_id' / 'tool' "
+                f"must be set (got operation_id={self.operation_id!r}, tool={self.tool!r})"
+            )
 
 
 @dataclass(frozen=True)
@@ -208,10 +225,267 @@ _PLATFORM_HEALTH = RunbookSpec(
 )
 
 
+# --- Wave-1 runbooks (Fase 6) — Operation-first (ADR-009/ADR-016) -----------
+# These bind each task to a catalog Operation (operation_id); the concrete Tool
+# is resolved at runtime via the catalog. No capability_override/risk_override:
+# the Operation in the catalog is authoritative for capability + risk.
+
+_PERMISSIVE = {"type": "object", "properties": {}, "required": []}
+
+
+def _op_task(title: str, description: str, *, required: bool, responsible: str,
+             operation_id: str, depends_on: list[str] | None = None) -> RunbookTaskSpec:
+    """Helper: an Operation-first task with a permissive input schema."""
+    return RunbookTaskSpec(
+        title=title, description=description, required=required,
+        responsible=responsible, input_schema=dict(_PERMISSIVE),
+        operation_id=operation_id, depends_on=depends_on or [],
+    )
+
+
+# --- hotfix: urgent fix pipeline with a HIGH-risk deploy step ----------------
+_HOTFIX = RunbookSpec(
+    id="hotfix",
+    version="1.0.0",
+    name="Hotfix pipeline (branch -> fix -> gates -> deploy -> verify/rollback)",
+    description=(
+        "Pipeline de correção urgente: valida saúde, cria branch, aplica o fix, roda "
+        "testes/lint/typecheck, abre PR, checa o gate, faz merge e deploy (write/HIGH "
+        "-> exige confirmação individual N2 via catálogo) e verifica pós-deploy. "
+        "'rollback' é a ação compensatória do caminho de falha do 'verify' — o DAG não "
+        "modela condicionais, então é o passo do operador/failure-path."
+    ),
+    responsible_profile="devops",
+    tasks={
+        "precheck_health": _op_task(
+            "Pre-check service health",
+            "Confirma que o serviço-alvo está saudável antes de iniciar o hotfix.",
+            required=True, responsible="devops", operation_id="infra.check_health",
+            depends_on=[]),
+        "create_branch": _op_task(
+            "Create hotfix branch",
+            "Cria a branch de hotfix a partir da base.",
+            required=True, responsible="devops", operation_id="delivery.create_branch",
+            depends_on=["precheck_health"]),
+        "commit_fix": _op_task(
+            "Commit the fix",
+            "Aplica e commita os arquivos do fix na branch de hotfix.",
+            required=True, responsible="devops", operation_id="delivery.commit_files",
+            depends_on=["create_branch"]),
+        "run_tests": _op_task(
+            "Run unit tests",
+            "Roda a suite de testes unitários sobre o fix.",
+            required=True, responsible="qa-engineer", operation_id="testing.run_unit_tests",
+            depends_on=["commit_fix"]),
+        "run_lint": _op_task(
+            "Run linter",
+            "Roda o linter sobre o fix.",
+            required=True, responsible="qa-engineer", operation_id="testing.run_linter",
+            depends_on=["commit_fix"]),
+        "run_typecheck": _op_task(
+            "Run type check",
+            "Roda o type-checker sobre o fix.",
+            required=True, responsible="qa-engineer", operation_id="testing.run_type_check",
+            depends_on=["commit_fix"]),
+        "open_pr": _op_task(
+            "Open pull request",
+            "Abre o PR do hotfix após os checks locais.",
+            required=True, responsible="devops", operation_id="delivery.create_pr",
+            depends_on=["run_tests", "run_lint", "run_typecheck"]),
+        "check_gate": _op_task(
+            "Check quality gate",
+            "Consulta o status do gate de qualidade do PR.",
+            required=True, responsible="devops", operation_id="delivery.get_gate_status",
+            depends_on=["open_pr"]),
+        "merge_pr": _op_task(
+            "Merge pull request",
+            "Faz o merge do PR após o gate verde.",
+            required=True, responsible="devops", operation_id="delivery.merge_pr",
+            depends_on=["check_gate"]),
+        "deploy": _op_task(
+            "Deploy the hotfix (HIGH RISK)",
+            "Faz o deploy do hotfix (write/high -> N2 via catálogo).",
+            required=True, responsible="devops", operation_id="delivery.deploy",
+            depends_on=["merge_pr"]),
+        "verify": _op_task(
+            "Post-deploy verification",
+            "Verifica a saúde do serviço após o deploy.",
+            required=False, responsible="devops", operation_id="infra.check_health",
+            depends_on=["deploy"]),
+        "rollback": _op_task(
+            "Rollback (failure-path)",
+            "Ação compensatória caso o 'verify' falhe. O DAG não modela condicionais: "
+            "este é o passo do operador/failure-path, executado apenas sob falha.",
+            required=False, responsible="devops", operation_id="delivery.rollback",
+            depends_on=["deploy"]),
+    },
+)
+
+
+# --- architecture_review: validate against Governance/Knowledge/architecture -
+_ARCHITECTURE_REVIEW = RunbookSpec(
+    id="architecture_review",
+    version="1.0.0",
+    name="Architecture review (metadata -> graph -> layer/scope -> audit)",
+    description=(
+        "Revisão de arquitetura de um serviço: metadados e ownership, dependências e "
+        "consumidores, grafo do ecossistema, política de camada e escopo, conhecimento "
+        "de governança, validação de contrato de lib e blueprint de solução, encerrando "
+        "com auditoria de compliance e veredicto. Recuperação estruturada de ADR NÃO "
+        "está coberta (gap — ver docs/catalog-gaps/runbooks-wave1.md)."
+    ),
+    responsible_profile="architecture",
+    tasks={
+        "get_metadata": _op_task(
+            "Get service metadata",
+            "Recupera os metadados do serviço em revisão.",
+            required=True, responsible="architecture",
+            operation_id="governance.get_service_metadata", depends_on=[]),
+        "get_ownership": _op_task(
+            "Get service ownership",
+            "Recupera o ownership do serviço.",
+            required=True, responsible="architecture",
+            operation_id="governance.get_service_ownership", depends_on=["get_metadata"]),
+        "map_dependencies": _op_task(
+            "Map dependencies",
+            "Mapeia as dependências do serviço.",
+            required=True, responsible="architecture",
+            operation_id="governance.find_dependencies_of", depends_on=["get_metadata"]),
+        "map_consumers": _op_task(
+            "Map consumers",
+            "Mapeia os consumidores do serviço.",
+            required=False, responsible="architecture",
+            operation_id="governance.find_consumers_of", depends_on=["get_metadata"]),
+        "query_graph": _op_task(
+            "Query ecosystem graph",
+            "Consulta o grafo do ecossistema em torno do serviço.",
+            required=True, responsible="architecture",
+            operation_id="governance.query_ecosystem_graph", depends_on=["get_metadata"]),
+        "check_layer": _op_task(
+            "Check layer policy",
+            "Verifica a política de camada aplicável ao serviço.",
+            required=True, responsible="architecture",
+            operation_id="governance.get_layer_policy", depends_on=["query_graph"]),
+        "check_scope": _op_task(
+            "Check scope",
+            "Verifica o escopo permitido do serviço.",
+            required=True, responsible="architecture",
+            operation_id="governance.check_scope", depends_on=["check_layer"]),
+        "search_knowledge": _op_task(
+            "Search governance knowledge",
+            "Consulta a base de conhecimento de governança.",
+            required=False, responsible="architecture",
+            operation_id="governance.search_governance_knowledge", depends_on=["get_metadata"]),
+        "validate_contract": _op_task(
+            "Validate lib change",
+            "Valida a mudança de contrato de biblioteca contra as dependências.",
+            required=False, responsible="architecture",
+            operation_id="governance.validate_lib_change", depends_on=["map_dependencies"]),
+        "generate_blueprint": _op_task(
+            "Generate solution blueprint",
+            "Gera o blueprint da solução a partir do grafo.",
+            required=False, responsible="architecture",
+            operation_id="architecture.generate_solution_blueprint", depends_on=["query_graph"]),
+        "run_compliance": _op_task(
+            "Run compliance audit",
+            "Executa a auditoria de compliance após verificar escopo.",
+            required=True, responsible="architecture",
+            operation_id="governance.run_audit", depends_on=["check_scope"]),
+        "record_verdict": _op_task(
+            "Record audit verdict",
+            "Registra o veredicto (aprovação) da auditoria.",
+            required=False, responsible="architecture",
+            operation_id="governance.submit_audit_approval", depends_on=["run_compliance"]),
+    },
+)
+
+
+# --- incident: detect -> diagnose -> mitigate -> verify ----------------------
+_INCIDENT = RunbookSpec(
+    id="incident",
+    version="1.0.0",
+    name="Incident response (detect -> diagnose -> mitigate -> verify)",
+    description=(
+        "Resposta a incidente: detecta (saúde da plataforma, serviço afetado), "
+        "diagnostica (logs, deploys/promoções recentes), mitiga (rollback/bloqueio/"
+        "reload) e verifica a recuperação, capturando artefato e post-mortem. "
+        "Ciclo de vida do incidente (declare/update/resolve) e paging/comunicação são "
+        "GAPS (ver docs/catalog-gaps/runbooks-wave1.md) e foram omitidos — não se "
+        "vincula um Tool diretamente."
+    ),
+    responsible_profile="devops",
+    tasks={
+        "check_platform_health": _op_task(
+            "Check platform health",
+            "Verifica a saúde de toda a plataforma para detectar o incidente.",
+            required=True, responsible="devops",
+            operation_id="infra.check_all_health", depends_on=[]),
+        "identify_service": _op_task(
+            "Identify affected service",
+            "Identifica o serviço afetado a partir do status.",
+            required=True, responsible="devops",
+            operation_id="infra.service_status", depends_on=["check_platform_health"]),
+        "fetch_logs": _op_task(
+            "Fetch service logs",
+            "Coleta os logs do serviço afetado.",
+            required=True, responsible="devops",
+            operation_id="infra.get_service_logs", depends_on=["identify_service"]),
+        "search_logs": _op_task(
+            "Search logs",
+            "Busca padrões relevantes nos logs.",
+            required=False, responsible="devops",
+            operation_id="infra.search_logs", depends_on=["identify_service"]),
+        "recent_deploys": _op_task(
+            "Check recent deploys",
+            "Consulta o status dos deploys recentes do serviço.",
+            required=True, responsible="devops",
+            operation_id="delivery.get_deploy_status", depends_on=["identify_service"]),
+        "promotion_history": _op_task(
+            "Check promotion history",
+            "Consulta o histórico de promoções do serviço.",
+            required=False, responsible="devops",
+            operation_id="delivery.get_promotion_history", depends_on=["identify_service"]),
+        "rollback": _op_task(
+            "Rollback (mitigation)",
+            "Mitigação: reverte o deploy suspeito (write/high -> N2 via catálogo).",
+            required=False, responsible="devops",
+            operation_id="delivery.rollback", depends_on=["recent_deploys"]),
+        "block_service": _op_task(
+            "Block service (mitigation)",
+            "Mitigação: bloqueia o serviço para conter o impacto.",
+            required=False, responsible="devops",
+            operation_id="delivery.block_service", depends_on=["identify_service"]),
+        "reload_service": _op_task(
+            "Reload service (mitigation)",
+            "Mitigação: recarrega o serviço afetado.",
+            required=False, responsible="devops",
+            operation_id="infra.reload_service", depends_on=["identify_service"]),
+        "verify_recovery": _op_task(
+            "Verify recovery",
+            "Verifica a recuperação do serviço após a mitigação.",
+            required=False, responsible="devops",
+            operation_id="infra.check_health", depends_on=["rollback", "reload_service"]),
+        "capture_artifact": _op_task(
+            "Capture artifact",
+            "Registra um artefato do incidente na sessão da plataforma.",
+            required=False, responsible="devops",
+            operation_id="platform.add_artifact", depends_on=["verify_recovery"]),
+        "postmortem": _op_task(
+            "Generate post-mortem doc",
+            "Gera o documento de post-mortem do incidente.",
+            required=False, responsible="devops",
+            operation_id="documentation.generate_doc", depends_on=["capture_artifact"]),
+    },
+)
+
+
 RUNBOOK_CATALOG: dict[str, RunbookSpec] = {
     _HEALTH_TO_REPORT.id: _HEALTH_TO_REPORT,
     _DEPLOY_SERVICE.id: _DEPLOY_SERVICE,
     _PLATFORM_HEALTH.id: _PLATFORM_HEALTH,
+    _HOTFIX.id: _HOTFIX,
+    _ARCHITECTURE_REVIEW.id: _ARCHITECTURE_REVIEW,
+    _INCIDENT.id: _INCIDENT,
 }
 
 

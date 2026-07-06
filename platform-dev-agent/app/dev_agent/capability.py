@@ -67,6 +67,14 @@ class CapabilityResolver:
         # Per-tool capability overrides: "<namespace>.<operationId>" -> Capability
         self._overrides = overrides or {}
 
+    def record_for_operation(self, operation_id: str) -> None:  # noqa: ARG002
+        """Heuristic-only resolver has no catalog → no Operation record."""
+        return None
+
+    def tool_for_operation(self, operation_id: str) -> None:  # noqa: ARG002
+        """Heuristic-only resolver has no catalog → no Operation→tool binding."""
+        return None
+
     def resolve(self, tool: str, *, override: str | None = None) -> Capability:
         """Resolve the :class:`Capability` for ``tool``.
 
