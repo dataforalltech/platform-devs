@@ -1,0 +1,8 @@
+# Shell scripts e o .env DEVEM ter EOL LF — sao executados no Linux (EC2 via SSM).
+# Windows/git com CRLF quebra o parsing (ex.: `set: pipefail: invalid option`,
+# `$'\r': command not found`, path `.env\r` inexistente) — foi o que aconteceu com
+# deploy/seed/onboard-tenant.sh no bring-up (2026-07-06).
+*.sh text eol=lf
+deploy/**/*.sh text eol=lf
+deploy/**/*.yml text eol=lf
+deploy/**/.env* text eol=lf
