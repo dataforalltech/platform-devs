@@ -252,15 +252,52 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Correção:** gerar e setar `OAUTH_STATE_SECRET`, `WEBHOOK_SECRET`, `FILE_PROXY_SECRET` no `.env` (hex 32). **Dica:** ao subir um serviço novo, `grep -nE 'must be set' app/core/config.py` no repo lista TODOS os obrigatórios de uma vez (evita iterar). **Status:** ✅ bakado (compose do connectors).
 
 ### K5. platform-communication-mcp — sem imagem própria (ÚNICO caso)
-- **⚠️ PECULIARIDADE:** o `platform-communication` é o **ÚNICO serviço** cujo MCP **não tem imagem própria** `<svc>-mcp` no ACR. O design pretendia rodar o MCP a partir da **mesma imagem da API**, via a variável **`MCP_HTTP_MODE=1`** (+ `MCP_HTTP_PORT`, entry `python -m src.server.mcp_server`). Todos os OUTROS serviços têm uma imagem MCP separada (`platform-<svc>-mcp`, buildada de `mcp/Dockerfile`, `Dockerfile.mcp`, `Dockerfile.<svc>-mcp` ou `gateway_mcp/Dockerfile`).
+- **⚠️ PECULIARIDADE (histórica — resolvida):** o `platform-communication` **era** o único serviço cujo MCP **não tinha imagem própria** `<svc>-mcp` no ACR. O design original pretendia rodar o MCP a partir da **mesma imagem da API**, via **`MCP_HTTP_MODE=1`** (+ `MCP_HTTP_PORT`, entry `python -m src.server.mcp_server`) — mas isso não funcionava (o `mcp/` não está na imagem da API). Agora ele **tem imagem própria** (`platform-communication-mcp`, de `mcp/Dockerfile`), alinhado aos demais serviços (que usam `mcp/Dockerfile`, `Dockerfile.mcp`, `Dockerfile.<svc>-mcp` ou `gateway_mcp/Dockerfile`).
 - **Evidência:** `ModuleNotFoundError: No module named 'src.server'` ao rodar `python -m src.server.mcp_server` da imagem da API.
 - **Causa:** o código do MCP está em `mcp/src/server/mcp_server.py`, mas o repo **não tem Dockerfile de MCP** e a imagem da API copia só `app/` + `src/` (não `mcp/`) — então a abordagem "mesma imagem + `MCP_HTTP_MODE`" não funciona (o `mcp/` não está na imagem).
-- **Correção (dev no repo):** adicionar `mcp/Dockerfile` (FROM python, COPY mcp/, pip install, `WORKDIR /app/mcp`, CMD `MCP_HTTP_MODE=1 python -m src.server.mcp_server`) e rebuildar como `platform-communication-mcp`. **Status:** ⏳ pendente (repo; tarefa criada). A API funciona.
+- **Correção (aplicada no repo):** adicionado `mcp/Dockerfile` (`FROM python:3.12-slim`, `WORKDIR /app/mcp`, `COPY mcp/pyproject.toml` + `COPY mcp/src`, `pip install` das deps do pyproject, `MCP_HTTP_MODE=1 MCP_HTTP_PORT=7100`, `CMD ["python","-m","src.server.mcp_server"]`). Detalhes que mordem:
+  - **`PYTHONPATH=/app/mcp:/app/mcp/src`** — o server mistura imports `src.*` (via `/app/mcp`) **e** bare `shared.*` (via `/app/mcp/src`). Por isso **não** se instala o pacote (`packages=["src"]` exporia `src.*` mas quebraria os `shared.*`).
+  - **Sem libs privadas / sem `--secret github_token`:** `platform_governance` é opcional no código (try/except); só é exigido com `COMMUNICATION_MCP_TWIN_ENFORCE=1`. Modo direto dispensa vendorizar repos irmãos — o que é **obrigatório** aqui porque o `build-service.sh` clona só este repo.
+  - **Contexto = raiz do repo** (`.dockerignore` não exclui `mcp/`).
+  - **Build/registro:** `build-service.sh platform-communication-mcp platform-communication develop mcp/Dockerfile .`; serviço reabilitado em `deploy/services/platform-communication/docker-compose.yml`; `reg` adicionado em `deploy/seed/register-mcp-backends.sh` (`http://platform-communication-mcp:7100`, `/mcp/tools/list`+`/mcp/tools/call`, style `mcp`).
+  - **Validação local:** `docker build -f mcp/Dockerfile -t platform-communication-mcp:local .` OK; container respondeu **`/health` HTTP 200** e **`/mcp/tools/list` HTTP 200 com 65 tools**, sem erros nos logs.
+  - **⚠️ Pendências de runtime (na EC2):** o `push` pro ACR + `docker compose up` + rodar `register-mcp-backends.sh` são na box. Confirmar auth service-to-service (`MCP_REPO_API_KEY=${INTERNAL_API_TOKEN}` via `X-API-KEY`) num tool call real contra a API. **Status:** ✅ bakado (Dockerfile + compose + register versionados); ⏳ deploy/registro na EC2 pendente.
 
 ### K6. `uvicorn: No such option '--max-requests'` (CMD bakado inválido)
 - **Evidência:** restart-loop com `Error: No such option '--max-requests'. (Did you mean '--limit-max-requests'...)`.
 - **Causa:** o CMD do Dockerfile usa `uvicorn --max-requests 1000 --max-requests-jitter 100`, flags que **não existem nesta versão do uvicorn** (é `--limit-max-requests`).
 - **Correção:** override do `command:` no compose com `--limit-max-requests 1000` (sem `--max-requests-jitter`). **Status:** ✅ bakado (compose do communication). **Raiz:** corrigir o CMD no Dockerfile do repo.
+
+## L. platform-ml — imagem enxuta (pull) + migrations MySQL
+
+> O `platform-ml` sobe da **imagem enxuta do ACR (pull, CPU-only, 14.5GB)** — sem rebuild.
+> Essa imagem trouxe 4 problemas de raiz; todos contornados no `deploy/services/platform-ml/`,
+> mas com **fix definitivo pertencente ao repo `platform-ml`** (tarefa aberta).
+
+### L1. Boot falha — `MODEL_REGISTRY_PATH is not writable` (Errno 13)
+- **Evidência:** `RuntimeError: MODEL_REGISTRY_PATH /data/platform-ml/model-registry is not writable: [Errno 13] Permission denied: '.../.write_probe'` → restart-loop.
+- **Causa:** o volume nomeado nasce **root:root**, mas a imagem roda como **appuser (uid 1000)** → não escreve.
+- **Correção:** **init-container** no compose (`platform-ml-init`, `user: "0:0"`, `chown -R 1000:1000` no path, `condition: service_completed_successfully`). Reutiliza a própria imagem (sem pull extra). **Status:** ✅ bakado (compose do ml).
+
+### L2. Boot falha — seed de notification-types 400 fatal (contrato defasado)
+- **Evidência:** `httpx.HTTPStatusError: 400 Bad Request for url .../api/internal/notification-types/seed` no lifespan → `Application startup failed`.
+- **Causa (dupla):** (1) o cliente do ml (imagem enxuta) chama `/api/internal/notification-types/seed` só com `X-Internal-Token`, mas na **API atual do notification** o seed é `/api/v1/notification-types/seed` (exige **JWT admin** + **`X-Tenant-Id`**; o `TenantHeaderContextMiddleware` retorna **400** em qualquer path sem esse header). O `notify_job` também aponta pra `/api/internal/notify`, que **não existe** mais. **Contrato inteiro defasado (version skew).** (2) O seed faz `raise_for_status()` **fatal** no boot (uma função `try_seed_*` não deveria derrubar o processo).
+- **Correção:** `NOTIFICATION_SERVICE_URL: ""` no compose → o `_configured()` do ml **pula** o seed no boot. **Status:** ✅ bakado (compose do ml). **Raiz (repo `platform-ml`):** reconciliar `app/core/notification_client.py` com a API atual do notification (endpoints `/api/v1/...`, headers `X-Tenant-Id`, auth) **e** tornar o seed não-fatal. → tarefa aberta.
+
+### L3. `bootstrap_tenants.py` falha — `No 'script_location' key` (imagem sem alembic)
+- **Evidência:** provisionar o tenant falha com `No 'script_location' key found in configuration`; `find / -name alembic.ini` **não acha nada** no container.
+- **Causa:** a **imagem enxuta não empacotou o diretório `alembic/` + `alembic.ini`**, mas o `migration_manager` (e o `scripts/bootstrap_tenants.py`, que **estão** na imagem) esperam em `/app/alembic.ini` (`Path(__file__).parents[2]`) com `script_location=alembic`.
+- **Correção:** injetar o `alembic/` do repo por **bind-mount read-only** (`deploy/services/platform-ml/alembic-inject/` → `/app/alembic.ini` e `/app/alembic`). **Status:** ✅ bakado (compose + bundle). **Raiz (repo/CI):** **incluir `alembic/` na imagem enxuta** do ml. → tarefa aberta.
+
+### L4. Migrations não-MySQL-compatíveis — `CREATE INDEX/ADD COLUMN IF NOT EXISTS`
+- **Evidência:** `(1064) You have an error in your SQL syntax ... near 'IF NOT EXISTS ...'` em `CREATE INDEX IF NOT EXISTS ...` e depois `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`.
+- **Causa:** as migrations do ml usam sintaxe **Postgres/MariaDB** que o **MySQL 8.4 não suporta** — inclusive **dentro do branch `if dialect=="mysql"`** (o autor assumiu que o MySQL aceitava `IF NOT EXISTS` em `ADD COLUMN`/`CREATE INDEX`; só aceita em `CREATE TABLE`/`DROP TABLE`). São **70×** `CREATE INDEX IF NOT EXISTS`, **15×** `ADD COLUMN IF NOT EXISTS`, **10×** `DROP COLUMN IF EXISTS` (este só em `downgrade`).
+- **Correção:** patch na **cópia injetada** (`alembic-inject`): `CREATE INDEX IF NOT EXISTS`→`CREATE INDEX`, `ADD COLUMN IF NOT EXISTS`→`ADD COLUMN`, `DROP COLUMN IF EXISTS`→`DROP COLUMN` (seguro em slate limpo + migrations lineares). Provisionamento: `1 OK, 42 tabelas ml_*`, revisão no head. **Status:** ✅ bakado (cópia injetada). **Raiz (repo `platform-ml`):** corrigir as migrations pra MySQL (remover `IF (NOT) EXISTS` de `ADD COLUMN`/`CREATE INDEX`/`DROP COLUMN` no branch mysql). → tarefa aberta.
+
+### L5. `docker compose up -d` (sem serviço) aborta por imagem MCP inexistente
+- **Evidência:** `no matching manifest ... platform-ml-mcp:latest: not found` aborta o `up` inteiro — a API não recria.
+- **Causa:** o compose referencia `platform-ml-mcp` cuja imagem ainda não fora buildada; o `up` tenta puxar todos os serviços.
+- **Correção:** subir **por serviço** enquanto o MCP não existe (`docker compose ... up -d platform-ml`), buildar o `-mcp` (leve, `mcp/Dockerfile`) e só então `up -d platform-ml-mcp`. **Status:** 📌 gotcha (ordem de bring-up).
 
 ## J. Build / rebuild de imagens (na EC2)
 
@@ -280,7 +317,21 @@ No rebuild em lote, 4 serviços falharam por **bugs no Dockerfile do próprio re
 - **platform-docextract:** o `pip install` usa deps git mas o Dockerfile **não instala `git`** → `Cannot find command 'git'`. Fix: `apt-get install -y git` antes do pip no stage de build.
 - **platform-monitor:** `COPY scripts/apply_mysql_migrations.sh` mas o repo só tem `scripts/apply_mysql_migrations.**ps1**` (o `.sh` não existe) → `"/scripts/apply_mysql_migrations.sh": not found`. Fix: adicionar o `.sh` ou ajustar o COPY.
 - **platform-ml:** `no space left on device` durante o pip/clone — **não é bug de repo**, é disco. Retentável com `docker builder prune -af && docker image prune -af` antes.
-**Status:** ⏳ os 4 primeiros pendentes (fix no repo; tarefa criada); ml retentado com prune.
+
+**Resolução (2026-07-06) — corrigido no `develop` de cada repo (o build da EC2 clona `origin/develop`):**
+- **platform-flow** ✅ (`eeaf6bc`): a causa real **não** era `openssh-client`. O Dockerfile já tinha o rewrite `ssh://`, mas rodava três `git config url.<X>.insteadOf` **separados na mesma chave**; `git config` (sem `--add`) **substitui** um valor único, então só o último (`git@github.com:`) sobrevivia e o rewrite `ssh://` era descartado → git+ssh tentava rodar ssh → `cannot run ssh`. Fix: escrever os rewrites atomicamente num único gitconfig via `printf` (padrão do platform-mcp).
+- **platform-docextract** ✅ (`e5a42fd`): além de faltar `git`, o Dockerfile **não tinha nenhum mecanismo de token/rewrite** — instalar só `git` (o fix sugerido acima) **ainda falharia** na auth dos deps privados. Fix: `git` **+** o secret BuildKit `github_token` com rewrite `ssh://→https://` (padrão platform-mcp).
+- **platform-datalake** ✅ **já estava corrigido** em `origin/develop` (`8cc896a`, 2026-06-15): tem `git` + secret + printf idêntico ao platform-mcp. A entrada original do J4 estava **desatualizada** para este repo — nada a fazer.
+- **platform-monitor** ✅ (`b119bef`): o `COPY scripts/apply_mysql_migrations.sh` foi introduzido por `eb12967` (que também instala `default-mysql-client` no runtime), mas o `.sh` nunca foi commitado — só existe o `.ps1` (runner host-side via `docker compose`). Fix: adicionado o `apply_mysql_migrations.sh` **in-container** (cliente `mysql` + settings `DB_*` do serviço, mesma ordem do `.ps1`), commitado por cima do `eb12967`. Obs.: o script é invocado explicitamente (`docker exec` / k8s Job), não pelo `CMD`.
+
+**Rebuild (rodar na EC2 — cada serviço API, contexto raiz):**
+```
+deploy/build/build-service.sh platform-flow       platform-flow       develop Dockerfile .
+deploy/build/build-service.sh platform-docextract platform-docextract develop Dockerfile .
+deploy/build/build-service.sh platform-datalake   platform-datalake   develop Dockerfile .
+deploy/build/build-service.sh platform-monitor    platform-monitor    develop Dockerfile .
+```
+**Status:** ✅ flow, docextract, datalake, monitor corrigidos em `origin/develop`; **rebuild + push ACR pendente** (rodar os comandos acima na EC2). ml: retentar com prune.
 
 ### J3. Imagens `:latest` do ACR defasadas do código (causa-raiz do F6)
 - **Correção definitiva:** rebuildar as imagens do código atual. Pipeline: `deploy/build/build-service.sh <image> <repo> <branch> [ctx]` clona `github.com/dataforalltech/<repo>`, builda com `--secret id=github_token` (libs privadas) e faz push como `:latest` + `:<sha>`. Token do GitHub em `SSM /dataforall-hml/github/token`. Branches por repo variam (auth=`release/1.4.0`, gateway/admin=`develop`). **Status:** ✅ pipeline pronto; rebuild em execução.
