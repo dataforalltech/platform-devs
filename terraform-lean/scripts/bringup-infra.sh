@@ -14,8 +14,27 @@ echo "=== bringup infra $(date -u) ==="
 BUCKET="${BUCKET:-dataforall-hml-backups-011756140303}"
 REGION="${REGION:-us-east-1}"
 
-# 1) Docker data-root -> /data/docker (disco de 100G, nao o root de 40G)
-mkdir -p /data/docker
+# 1) Disco: EBS de 100G em /data + Docker E CONTAINERD no /data (nao no root de 40G).
+#    CRITICO: o containerd guarda as IMAGENS em /var/lib/containerd (root) — o
+#    data-root do Docker NAO move isso. Sem mover o containerd, imagens gordas (ex.: ml)
+#    enchem o root de 40G. E o fstab por UUID (device name /dev/nvmeXn1 TROCA no reboot).
+EBS=$(lsblk -rno NAME,SIZE,TYPE | awk '$3=="disk" && $2=="100G"{print $1}' | head -1)
+if [ -n "$EBS" ]; then
+  mkdir -p /data
+  mountpoint -q /data || mount "/dev/$EBS" /data 2>/dev/null
+  UUID=$(blkid -s UUID -o value "/dev/$EBS" 2>/dev/null)
+  if [ -n "$UUID" ] && ! grep -q "$UUID" /etc/fstab 2>/dev/null; then
+    sed -i '\#[[:space:]]/data[[:space:]]#d' /etc/fstab
+    echo "UUID=$UUID /data ext4 defaults,nofail 0 2" >> /etc/fstab
+  fi
+fi
+mkdir -p /data/docker /data/containerd
+# containerd (image store) -> /data via symlink
+if [ ! -L /var/lib/containerd ]; then
+  systemctl stop docker docker.socket containerd 2>/dev/null
+  [ -d /var/lib/containerd ] && mv /var/lib/containerd/* /data/containerd/ 2>/dev/null
+  rm -rf /var/lib/containerd && ln -s /data/containerd /var/lib/containerd
+fi
 if ! docker info 2>/dev/null | grep -q "Docker Root Dir: /data/docker"; then
   mkdir -p /etc/docker
   cat > /etc/docker/daemon.json <<'JSON'
@@ -28,7 +47,7 @@ JSON
   systemctl restart docker
   sleep 6
 fi
-echo "Docker Root Dir: $(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/{print $2}')"
+echo "Docker Root: $(docker info 2>/dev/null | awk -F': ' '/Docker Root Dir/{print $2}') | containerd -> $(readlink /var/lib/containerd)"
 
 # 2) aws cli (para sync do S3)
 if ! command -v aws >/dev/null 2>&1; then

@@ -80,6 +80,15 @@
 - **Causa:** o crash do flag abortou o init do datadir, deixando-o corrompido; restart reaproveita o volume corrompido.
 - **Correção:** remover os volumes e recriar: `docker compose rm -sf admin-mysql tenant-mysql && docker volume rm dataforall-infra_admin-mysql-data dataforall-infra_tenant-mysql-data && up -d`. **Status:** ✅ prevenido (B7 corrigido → não recorre em VM limpa). Nome real do volume = `dataforall-infra_<svc>-data`.
 
+### B9. Disco root cheio (containerd) + /data perdido no reboot (INCIDENTE)
+- **Evidência:** build de imagem gorda (platform-ml, torch) → `no space left on device`; depois comandos SSM falhando com output vazio + exit 1; `df /`= `39G 39G 100%`. Após `reboot`: `/data` NÃO montado, **todos os containers down**, `/var/lib/containerd` = **32GB no root**.
+- **Causa-raiz DUPLA:**
+  1. **containerd guarda as IMAGENS em `/var/lib/containerd` (root de 40G)** — o Docker 29 usa o containerd image store, e o `data-root=/data/docker` **NÃO move as imagens** (só volumes/metadata). Imagens gordas encheram o root.
+  2. **`/data` sumiu no reboot:** o fstab usava `/dev/nvme1n1`, mas os **nomes de device NVMe TROCAM entre reboots** na AWS — pós-reboot o EBS de 100G virou `nvme0n1` e `nvme1n1` virou o root. Com `nofail`, o boot seguiu sem `/data`, o Docker caiu no root, containers down.
+- **Correção (recuperação):** montar o EBS (achar o disco de 100G via `lsblk`), `mv /var/lib/containerd/* /data/containerd/` + symlink `/var/lib/containerd -> /data/containerd`, fstab por **UUID** (`blkid`), `systemctl start containerd && start docker`. Os **volumes (dados dos DBs) ficam no EBS e são preservados**; imagens preservadas pelo move. Resultado: root 100%→18%, 21 containers de volta, login 200.
+- **Correção (preventiva, bakada):** `bringup-infra.sh` agora (a) monta o EBS por **UUID no fstab**, (b) move o **containerd p/ /data** via symlink, além do data-root do Docker. **Status:** ✅ bakado. **TODO:** replicar no `user_data` do Terraform (compute.tf) p/ já nascer certo no 1º boot.
+- **Nota:** o build do **platform-ml** é muito pesado (torch + libs) — mesmo com containerd no /data, monitorar espaço; considerar buildar num runner dedicado.
+
 ---
 
 ## C. Segredos / `.env`
@@ -264,6 +273,14 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Evidência:** `fatal: could not read Username for 'https://github.com': No such device or address` com `git -c http.extraheader="AUTHORIZATION: bearer <PAT>"`.
 - **Causa:** PAT clássico (40 chars) não autentica via header `bearer`; GitHub espera Basic auth. Sem TTY, o git tenta prompt e falha.
 - **Correção:** `GIT_TERMINAL_PROMPT=0 git clone https://x-access-token:<TOKEN>@github.com/<org>/<repo>.git` (Basic auth) + limpar o remote depois (`git remote set-url origin` sem token). **Status:** ✅ bakado (`deploy/build/build-service.sh`).
+
+### J4. Builds que falham por bug no Dockerfile do repo (4 serviços)
+No rebuild em lote, 4 serviços falharam por **bugs no Dockerfile do próprio repo** (dev, não deploy):
+- **platform-flow / platform-datalake:** requirements usa `git+ssh://git@github.com/...` e o build **não tem `openssh-client`** (e o `insteadOf ssh→https` do gitconfig não converteu) → `error: cannot run ssh: No such file or directory`. Fix: instalar `openssh-client` no stage de build **ou** o gitconfig cobrir `ssh://` (como o platform-mcp faz — que builda OK com git+ssh) **ou** trocar os deps p/ `git+https://`.
+- **platform-docextract:** o `pip install` usa deps git mas o Dockerfile **não instala `git`** → `Cannot find command 'git'`. Fix: `apt-get install -y git` antes do pip no stage de build.
+- **platform-monitor:** `COPY scripts/apply_mysql_migrations.sh` mas o repo só tem `scripts/apply_mysql_migrations.**ps1**` (o `.sh` não existe) → `"/scripts/apply_mysql_migrations.sh": not found`. Fix: adicionar o `.sh` ou ajustar o COPY.
+- **platform-ml:** `no space left on device` durante o pip/clone — **não é bug de repo**, é disco. Retentável com `docker builder prune -af && docker image prune -af` antes.
+**Status:** ⏳ os 4 primeiros pendentes (fix no repo; tarefa criada); ml retentado com prune.
 
 ### J3. Imagens `:latest` do ACR defasadas do código (causa-raiz do F6)
 - **Correção definitiva:** rebuildar as imagens do código atual. Pipeline: `deploy/build/build-service.sh <image> <repo> <branch> [ctx]` clona `github.com/dataforalltech/<repo>`, builda com `--secret id=github_token` (libs privadas) e faz push como `:latest` + `:<sha>`. Token do GitHub em `SSM /dataforall-hml/github/token`. Branches por repo variam (auth=`release/1.4.0`, gateway/admin=`develop`). **Status:** ✅ pipeline pronto; rebuild em execução.
