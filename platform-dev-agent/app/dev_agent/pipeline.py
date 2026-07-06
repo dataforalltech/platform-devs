@@ -24,6 +24,7 @@ from typing import Any
 from app.dev_agent.budget import RunBudget
 from app.dev_agent.capability import CapabilityEnforcer, CapabilityResolver
 from app.dev_agent.catalog import PolicyEngine, RegistryCapabilityResolver
+from app.dev_agent.events import EventEmitter, EventSink
 from app.dev_agent.gateway.client import GatewayToolClient
 from app.dev_agent.models.plan import ItemResult, Plan, PlanStatus, RiskLevel
 from app.dev_agent.plan.approval import ApprovalGate
@@ -75,11 +76,14 @@ class AutonomousPipeline:
         gate: ApprovalGate | None = None,
         resolver: RegistryCapabilityResolver | None = None,
         policy: PolicyEngine | None = None,
+        event_sink: EventSink | None = None,
     ) -> None:
         self._repo = repo
         self._gateway = gateway
         self._enforcer = enforcer
         self._selector = selector
+        # Fase 4 (ADR-012): barramento de eventos. Sem sink -> emissão no-op.
+        self._sink = event_sink
         # Fase 2: com um RegistryCapabilityResolver, o builder classifica pelo
         # CATÁLOGO (source of truth) e o executor enforça o PDP por efeito/blast.
         # Sem ele, comportamento inalterado (heurística de verbo + só read/write).
@@ -113,6 +117,11 @@ class AutonomousPipeline:
             inputs_by_task=inputs_by_task,
         )
         await self._repo.create(plan)
+        # ADR-012: PlanCreated (fato — plano persistido). correlation = plan_id (sem run ainda).
+        EventEmitter(self._sink, correlation_id=plan.plan_id, session_id=session_id).plan_created(
+            plan_id=plan.plan_id, run_id=None, goal=message,
+            runbook_id=plan.runbook_id, task_count=len(plan.items),
+        )
         high_risk_poll = (
             self._gate.build_high_risk_poll(plan)
             if plan.requires_high_risk_approval()
@@ -139,6 +148,9 @@ class AutonomousPipeline:
             raise KeyError(f"no plan for question_id {question_id!r}")
 
         decision = self._gate.resolve(plan, response_value=response_value)
+        # Um emitter por execução: correlation = run_id encadeia toda a cadeia causal.
+        emitter = EventEmitter(self._sink, correlation_id=run_id,
+                               session_id=plan.session_id, tenant_id=tenant_id)
 
         if decision.rejected:
             await self._repo.transition_plan(
@@ -146,6 +158,7 @@ class AutonomousPipeline:
                 expected=(PlanStatus.PENDING, PlanStatus.APPROVED),
                 new=PlanStatus.REJECTED,
             )
+            emitter.approval_denied(plan_id=plan.plan_id, run_id=run_id, reason="human rejected")
             return ExecutionOutcome(status=PlanStatus.REJECTED, results=[])
 
         # Nothing approved and not a rejection => the caller must re-issue the
@@ -159,6 +172,10 @@ class AutonomousPipeline:
         if budget is not None:
             budget.start()  # anchor the wall-clock ceiling at the top of the run
 
+        emitter.plan_approved(
+            plan_id=plan.plan_id, run_id=run_id,
+            level="N2" if decision.high_risk_confirmed_ids else "N1", auto=False,
+        )
         executor = PlanExecutor(
             self._repo, self._gateway, self._enforcer,
             resolver=self._resolver, policy=self._policy,
@@ -171,6 +188,7 @@ class AutonomousPipeline:
                 decision=decision,
                 budget=budget,
                 tenant_id=tenant_id,
+                emitter=emitter,
             )
         ]
         final = await self._repo.load(plan.plan_id)

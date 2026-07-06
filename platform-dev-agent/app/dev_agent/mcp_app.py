@@ -69,17 +69,31 @@ from app.dev_agent.capability import CapabilityEnforcer  # noqa: E402
 from app.dev_agent.catalog import (  # noqa: E402
     DirCatalogSource, PolicyEngine, RegistryCapabilityResolver,
 )
+from app.dev_agent.events import KafkaEventSink, LoggingEventSink  # noqa: E402
 from app.dev_agent.plan.repository import InMemoryPlanRepository  # noqa: E402
+
+
+def _build_event_sink():
+    """Fase 4 (ADR-012): Kafka se DEV_KAFKA_BOOTSTRAP setado; senão loga o envelope."""
+    boot = os.getenv("DEV_KAFKA_BOOTSTRAP")
+    if boot:
+        try:
+            return KafkaEventSink(boot)
+        except Exception:  # noqa: BLE001 - kafka-python ausente/broker off -> cai no log
+            pass
+    return LoggingEventSink()
+
 
 _REPO = InMemoryPlanRepository()
 _ENFORCER = CapabilityEnforcer({pid: {Capability.READ, Capability.WRITE} for pid in PROFILES})
 # Fase 2: catálogo (Fase 1) como source of truth + PDP por recurso/efeito. O
 # DirCatalogSource lê platform-catalog/catalog quando presente; ausente (ex.: imagem
 # Docker sem o catálogo) degrada para a heurística (migração aditiva, ADR-009 D9.10).
+# Fase 4: event_sink publica os eventos canônicos (ADR-012).
 _RESOLVER = RegistryCapabilityResolver(DirCatalogSource())
 _PIPELINE = AutonomousPipeline(
     repo=_REPO, gateway=_build_gateway(), enforcer=_ENFORCER, selector=RunbookSelector(),
-    resolver=_RESOLVER, policy=PolicyEngine(),
+    resolver=_RESOLVER, policy=PolicyEngine(), event_sink=_build_event_sink(),
 )
 
 

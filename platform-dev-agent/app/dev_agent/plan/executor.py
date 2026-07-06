@@ -38,12 +38,14 @@ is persisted or placed on an :class:`ItemResult`.
 
 from __future__ import annotations
 
+import time
 from collections.abc import AsyncIterator
 from typing import TYPE_CHECKING
 
 from app.dev_agent.budget import BudgetExceeded
 from app.dev_agent.capability import CapabilityEnforcer
 from app.dev_agent.catalog import PolicyEngine, RegistryCapabilityResolver
+from app.dev_agent.events import EventEmitter
 from app.dev_agent.gateway.client import GatewayToolClient, build_correlation
 from app.dev_agent.models.plan import (
     ItemResult,
@@ -101,6 +103,7 @@ class PlanExecutor:
         decision: ApprovalDecision | None = None,
         budget: "RunBudget | None" = None,
         tenant_id: str | None = None,
+        emitter: EventEmitter | None = None,
     ) -> AsyncIterator[ItemResult]:
         """Run ``plan`` and yield an :class:`ItemResult` per non-terminal item.
 
@@ -129,6 +132,11 @@ class PlanExecutor:
         }
         results: list[ItemResult] = []
         budget_exhausted = False
+
+        if emitter is not None:  # ADR-012: fato durável (plano já claimed EXECUTING)
+            emitter.execution_started(
+                run_id=run_id, plan_id=plan.plan_id, resume=bool(done_task_ids)
+            )
 
         for item in order:
             # RESUME: never re-run an item already in a terminal state.
@@ -186,6 +194,11 @@ class PlanExecutor:
                 if record is not None:
                     pdp = self._policy.decide(profile=item.responsible, record=record)
                     if not pdp.allowed:
+                        if emitter is not None:  # ADR-012: PolicyDenied (fato do PDP)
+                            emitter.policy_denied(
+                                run_id=run_id, operation_id=record.operation_id,
+                                actor=item.responsible, reason=pdp.reason,
+                            )
                         result = await self._skip(item, f"policy_denied (PDP): {pdp.reason}")
                         results.append(result)
                         yield result
@@ -218,7 +231,7 @@ class PlanExecutor:
                 continue
 
             result = await self._run_item(
-                item, plan=plan, run_id=run_id, tenant_id=tenant_id
+                item, plan=plan, run_id=run_id, tenant_id=tenant_id, emitter=emitter
             )
             if result.status is ItemStatus.DONE:
                 done_task_ids.add(item.task_id)
@@ -230,6 +243,18 @@ class PlanExecutor:
         await self._repo.transition_plan(
             plan.plan_id, expected=(PlanStatus.EXECUTING,), new=final
         )
+
+        # ADR-012: emitir DEPOIS de o estado ser durável (D12.7) — sem evento fantasma.
+        if emitter is not None:
+            tasks_failed = sum(1 for r in results if r.status is ItemStatus.ERROR)
+            emitter.execution_completed(
+                run_id=run_id, plan_id=plan.plan_id, status=final.value,
+                tasks_ok=len(done_task_ids), tasks_failed=tasks_failed,
+            )
+            emitter.runbook_completed(
+                run_id=run_id, runbook_id=plan.runbook_id, status=final.value,
+                steps_total=len(plan.items), steps_ok=len(done_task_ids),
+            )
 
     async def _skip(self, item: PlanItem, reason: str) -> ItemResult:
         """Guarded SKIP of a claimable item, returning the matching ItemResult."""
@@ -247,10 +272,25 @@ class PlanExecutor:
             error=reason,
         )
 
+    def _cap_meta(self, item: PlanItem) -> tuple[str, str, str, str, str]:
+        """(operation_id, provider_id, authz, risk_level, blast_radius) do catálogo,
+        com fallback no próprio item quando a tool não está catalogada."""
+        provider_id = item.tool.split(".", 1)[0]
+        rec = self._resolver.record(item.tool) if self._resolver is not None else None
+        if rec is not None:
+            return rec.operation_id, provider_id, rec.capability, rec.risk_level, rec.blast_radius
+        return item.tool, provider_id, item.capability.value, item.risk.value, "service"
+
     async def _run_item(
-        self, item: PlanItem, *, plan: Plan, run_id: str, tenant_id: str | None = None
+        self, item: PlanItem, *, plan: Plan, run_id: str, tenant_id: str | None = None,
+        emitter: EventEmitter | None = None,
     ) -> ItemResult:
         """Execute one claimed item. Any failure -> ERROR (never escapes)."""
+        op_id, provider_id, authz, risk_level, blast = self._cap_meta(item)
+        if emitter is not None:
+            emitter.task_started(run_id=run_id, task_id=item.task_id,
+                                 operation_id=op_id, tool=item.tool)
+        started = time.monotonic()
         try:
             # §1.7: enforcement INSIDE the try — a CapabilityViolation becomes an
             # item ERROR, it does not abort the plan.
@@ -280,6 +320,12 @@ class PlanExecutor:
                 new=ItemStatus.DONE,
                 output=output,
             )
+            if emitter is not None:  # ADR-012: CapabilityInvoked + TaskFinished (borda de execução)
+                ms = int((time.monotonic() - started) * 1000)
+                emitter.capability_invoked(
+                    run_id=run_id, operation_id=op_id, tool=item.tool, provider_id=provider_id,
+                    authz=authz, risk_level=risk_level, blast_radius=blast, outcome="ok", latency_ms=ms)
+                emitter.task_finished(run_id=run_id, task_id=item.task_id, status="ok", duration_ms=ms)
             return ItemResult(
                 item_id=item.item_id,
                 task_id=item.task_id,
@@ -295,6 +341,13 @@ class PlanExecutor:
                 new=ItemStatus.ERROR,
                 error=message,
             )
+            if emitter is not None:
+                ms = int((time.monotonic() - started) * 1000)
+                emitter.capability_invoked(
+                    run_id=run_id, operation_id=op_id, tool=item.tool, provider_id=provider_id,
+                    authz=authz, risk_level=risk_level, blast_radius=blast, outcome="error", latency_ms=ms)
+                emitter.task_finished(run_id=run_id, task_id=item.task_id, status="failed",
+                                      duration_ms=ms, error=message)
             return ItemResult(
                 item_id=item.item_id,
                 task_id=item.task_id,
