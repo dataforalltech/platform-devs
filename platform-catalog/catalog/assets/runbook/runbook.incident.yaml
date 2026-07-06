@@ -1,0 +1,139 @@
+apiVersion: catalog.platform.dev/v1
+kind: Runbook
+metadata:
+  name: runbook.incident
+  uid: runbook.incident
+  title: Incident response (detect -> diagnose -> mitigate -> verify)
+  owner: platform
+  tags:
+  - runbook
+  - devops
+  lifecycle: active
+  version: 1.0.0
+spec:
+  runbook_id: incident
+  description: Incident response (detect -> diagnose -> mitigate -> verify)
+  responsible_profile: devops
+  tasks:
+  - task_id: check_platform_health
+    operation_id: infra.check_all_health
+    tool: services-mcp.check_all_health
+    responsible: devops
+    required: true
+    depends_on: []
+    resolved: true
+  - task_id: identify_service
+    operation_id: infra.service_status
+    tool: services-mcp.service_status
+    responsible: devops
+    required: true
+    depends_on:
+    - check_platform_health
+    resolved: true
+  - task_id: fetch_logs
+    operation_id: infra.get_service_logs
+    tool: services-mcp.get_service_logs
+    responsible: devops
+    required: true
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: search_logs
+    operation_id: infra.search_logs
+    tool: services-mcp.search_logs
+    responsible: devops
+    required: false
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: recent_deploys
+    operation_id: delivery.get_deploy_status
+    tool: deploy-mcp.get_deploy_status
+    responsible: devops
+    required: true
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: promotion_history
+    operation_id: delivery.get_promotion_history
+    tool: pipeline-mcp.get_promotion_history
+    responsible: devops
+    required: false
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: rollback
+    operation_id: delivery.rollback
+    tool: pipeline-mcp.rollback
+    responsible: devops
+    required: false
+    depends_on:
+    - recent_deploys
+    resolved: true
+  - task_id: block_service
+    operation_id: delivery.block_service
+    tool: pipeline-mcp.block_service
+    responsible: devops
+    required: false
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: reload_service
+    operation_id: infra.reload_service
+    tool: services-mcp.reload_service
+    responsible: devops
+    required: false
+    depends_on:
+    - identify_service
+    resolved: true
+  - task_id: verify_recovery
+    operation_id: infra.check_health
+    tool: services-mcp.check_health
+    responsible: devops
+    required: false
+    depends_on:
+    - rollback
+    - reload_service
+    resolved: true
+  - task_id: capture_artifact
+    operation_id: platform.add_artifact
+    tool: session-mcp.add_artifact
+    responsible: devops
+    required: false
+    depends_on:
+    - verify_recovery
+    resolved: true
+  - task_id: postmortem
+    operation_id: documentation.generate_doc
+    tool: docs-mcp.generate_doc
+    responsible: devops
+    required: false
+    depends_on:
+    - capture_artifact
+    resolved: true
+  unresolved_tools: 0
+relations:
+- verb: uses
+  target: infra.check_all_health
+- verb: uses
+  target: infra.service_status
+- verb: uses
+  target: infra.get_service_logs
+- verb: uses
+  target: infra.search_logs
+- verb: uses
+  target: delivery.get_deploy_status
+- verb: uses
+  target: delivery.get_promotion_history
+- verb: uses
+  target: delivery.rollback
+- verb: uses
+  target: delivery.block_service
+- verb: uses
+  target: infra.reload_service
+- verb: uses
+  target: infra.check_health
+- verb: uses
+  target: platform.add_artifact
+- verb: uses
+  target: documentation.generate_doc

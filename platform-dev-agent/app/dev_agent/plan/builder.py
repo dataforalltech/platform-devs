@@ -17,7 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.dev_agent.capability import CapabilityResolver
-from app.dev_agent.models.plan import Plan, PlanItem
+from app.dev_agent.models.plan import Capability, Plan, PlanItem, RiskLevel
 from app.dev_agent.runbook.catalog import RunbookSpec, RunbookTaskSpec, get_runbook
 from app.dev_agent.runbook.dag import topological_order
 
@@ -113,8 +113,25 @@ class PlanBuilder:
             inputs = inputs_by_task.get(task_id, {})
             _validate_inputs(task_id, spec, inputs)
 
-            cap = self._caps.resolve(spec.tool, override=spec.capability_override)
-            risk = self._caps.classify_risk(spec.tool, cap, override=spec.risk_override)
+            if spec.operation_id is not None:
+                # Operation-first (ADR-009): resolve capability/risk from the
+                # catalog Operation; the concrete gateway tool is resolved too.
+                rec = self._caps.record_for_operation(spec.operation_id)
+                if rec is None:
+                    raise PlanValidationError(
+                        f"operation {spec.operation_id!r} not resolvable in catalog "
+                        f"(gap) for task {task_id!r}"
+                    )
+                cap = (Capability(spec.capability_override)
+                       if spec.capability_override else Capability(rec.capability))
+                risk = (RiskLevel(spec.risk_override)
+                        if spec.risk_override else RiskLevel(rec.risk_level))
+                tool = self._caps.tool_for_operation(spec.operation_id) or spec.operation_id
+            else:
+                # Legacy: bind the gateway tool directly (unchanged behaviour).
+                cap = self._caps.resolve(spec.tool, override=spec.capability_override)
+                risk = self._caps.classify_risk(spec.tool, cap, override=spec.risk_override)
+                tool = spec.tool
             seq += 1
             items.append(
                 PlanItem(
@@ -123,7 +140,7 @@ class PlanBuilder:
                     runbook_id=rb.id,
                     task_id=task_id,
                     depends_on=list(spec.depends_on),
-                    tool=spec.tool,
+                    tool=tool,
                     capability=cap,
                     risk=risk,
                     required=spec.required,

@@ -1,0 +1,138 @@
+apiVersion: catalog.platform.dev/v1
+kind: Runbook
+metadata:
+  name: runbook.architecture_review
+  uid: runbook.architecture_review
+  title: Architecture review (metadata -> graph -> layer/scope -> audit)
+  owner: platform
+  tags:
+  - runbook
+  - architecture
+  lifecycle: active
+  version: 1.0.0
+spec:
+  runbook_id: architecture_review
+  description: Architecture review (metadata -> graph -> layer/scope -> audit)
+  responsible_profile: architecture
+  tasks:
+  - task_id: get_metadata
+    operation_id: governance.get_service_metadata
+    tool: ai-governance-mcp.get_service_metadata
+    responsible: architecture
+    required: true
+    depends_on: []
+    resolved: true
+  - task_id: get_ownership
+    operation_id: governance.get_service_ownership
+    tool: ai-governance-mcp.get_service_ownership
+    responsible: architecture
+    required: true
+    depends_on:
+    - get_metadata
+    resolved: true
+  - task_id: map_dependencies
+    operation_id: governance.find_dependencies_of
+    tool: ai-governance-mcp.find_dependencies_of
+    responsible: architecture
+    required: true
+    depends_on:
+    - get_metadata
+    resolved: true
+  - task_id: map_consumers
+    operation_id: governance.find_consumers_of
+    tool: ai-governance-mcp.find_consumers_of
+    responsible: architecture
+    required: false
+    depends_on:
+    - get_metadata
+    resolved: true
+  - task_id: query_graph
+    operation_id: governance.query_ecosystem_graph
+    tool: ai-governance-mcp.query_ecosystem_graph
+    responsible: architecture
+    required: true
+    depends_on:
+    - get_metadata
+    resolved: true
+  - task_id: check_layer
+    operation_id: governance.get_layer_policy
+    tool: ai-governance-mcp.get_layer_policy
+    responsible: architecture
+    required: true
+    depends_on:
+    - query_graph
+    resolved: true
+  - task_id: check_scope
+    operation_id: governance.check_scope
+    tool: ai-governance-mcp.check_scope
+    responsible: architecture
+    required: true
+    depends_on:
+    - check_layer
+    resolved: true
+  - task_id: search_knowledge
+    operation_id: governance.search_governance_knowledge
+    tool: ai-governance-mcp.search_governance_knowledge
+    responsible: architecture
+    required: false
+    depends_on:
+    - get_metadata
+    resolved: true
+  - task_id: validate_contract
+    operation_id: governance.validate_lib_change
+    tool: ai-governance-mcp.validate_lib_change
+    responsible: architecture
+    required: false
+    depends_on:
+    - map_dependencies
+    resolved: true
+  - task_id: generate_blueprint
+    operation_id: architecture.generate_solution_blueprint
+    tool: architecture-mcp.generate_solution_blueprint
+    responsible: architecture
+    required: false
+    depends_on:
+    - query_graph
+    resolved: true
+  - task_id: run_compliance
+    operation_id: governance.run_audit
+    tool: audit-mcp.run_audit
+    responsible: architecture
+    required: true
+    depends_on:
+    - check_scope
+    resolved: true
+  - task_id: record_verdict
+    operation_id: governance.submit_audit_approval
+    tool: audit-mcp.submit_audit_approval
+    responsible: architecture
+    required: false
+    depends_on:
+    - run_compliance
+    resolved: true
+  unresolved_tools: 0
+relations:
+- verb: uses
+  target: governance.get_service_metadata
+- verb: uses
+  target: governance.get_service_ownership
+- verb: uses
+  target: governance.find_dependencies_of
+- verb: uses
+  target: governance.find_consumers_of
+- verb: uses
+  target: governance.query_ecosystem_graph
+- verb: uses
+  target: governance.get_layer_policy
+- verb: uses
+  target: governance.check_scope
+- verb: uses
+  target: governance.search_governance_knowledge
+- verb: uses
+  target: governance.validate_lib_change
+- verb: uses
+  target: architecture.generate_solution_blueprint
+- verb: uses
+  target: governance.run_audit
+- verb: uses
+  target: governance.submit_audit_approval

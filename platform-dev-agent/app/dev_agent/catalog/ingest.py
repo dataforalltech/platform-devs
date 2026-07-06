@@ -45,15 +45,26 @@ def build_runbook_assets(source: DirCatalogSource | None = None) -> list[dict]:
     for rid, rb in RUNBOOK_CATALOG.items():
         tasks, relations, unresolved = [], [], 0
         for tid, t in rb.tasks.items():
-            rec = src.record(t.tool)
-            op_id = rec.operation_id if rec is not None else None
-            if op_id is None:
-                unresolved += 1
+            if t.operation_id is not None:
+                # Operation-first (ADR-009): a Operation é o alvo; a tool concreta
+                # é resolvida do catálogo (determinística), podendo faltar se não
+                # houver binding (não deve ocorrer para runbooks entregues).
+                op_id = t.operation_id
+                resolved = src.record_for_operation(op_id) is not None
+                tool = src.tool_for_operation(op_id)
             else:
+                # Legacy: tool bound directly; a Operation é resolvida do tool.
+                rec = src.record(t.tool)
+                op_id = rec.operation_id if rec is not None else None
+                resolved = op_id is not None
+                tool = t.tool
+            if resolved:
                 relations.append({"verb": "uses", "target": op_id})
-            tasks.append({"task_id": tid, "operation_id": op_id, "tool": t.tool,
+            else:
+                unresolved += 1
+            tasks.append({"task_id": tid, "operation_id": op_id, "tool": tool,
                           "responsible": t.responsible, "required": t.required,
-                          "depends_on": list(t.depends_on), "resolved": op_id is not None})
+                          "depends_on": list(t.depends_on), "resolved": resolved})
         assets.append(_entity(
             "Runbook", f"runbook.{rid}",
             {"runbook_id": rid, "description": rb.name, "responsible_profile": rb.responsible_profile,

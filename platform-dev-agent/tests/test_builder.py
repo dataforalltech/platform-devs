@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from app.dev_agent.capability import CapabilityResolver
+from app.dev_agent.catalog import DirCatalogSource, RegistryCapabilityResolver
 from app.dev_agent.models.plan import Capability, RiskLevel
 from app.dev_agent.plan.builder import PlanBuilder, PlanValidationError
 from app.dev_agent.runbook.catalog import RunbookSpec, RunbookTaskSpec, get_runbook
@@ -131,3 +132,38 @@ def test_selected_tasks_filters_items() -> None:
 def test_get_runbook_unknown_raises() -> None:
     with pytest.raises(ValueError, match="does not exist"):
         get_runbook("nope")
+
+
+# --- Fase 6: Operation-first path (catalog resolves Operation -> record + tool) ---
+def test_dir_source_resolves_operation_to_record_and_tool() -> None:
+    """DirCatalogSource resolves delivery.deploy to a write/high record and a
+    concrete <provider>.<op> tool (hermetic — reads the real Fase-1 catalog)."""
+    src = DirCatalogSource()
+    rec = src.record_for_operation("delivery.deploy")
+    assert rec is not None
+    assert rec.capability == "write" and rec.risk_level == "high"
+    tool = src.tool_for_operation("delivery.deploy")
+    assert tool and "." in tool           # concrete <provider>.<op>
+    assert src.record(tool) is rec         # deterministic pick points at that record
+
+
+def test_build_operation_first_hotfix_deploy_is_write_high() -> None:
+    """PlanBuilder over the Operation-first 'hotfix' runbook stamps the deploy
+    item as write/high with a non-empty resolved gateway tool (no gateway)."""
+    builder = PlanBuilder(RegistryCapabilityResolver(DirCatalogSource()))
+    plan = builder.build_from_runbook(runbook_id="hotfix", session_id="s")
+    by_task = {i.task_id: i for i in plan.items}
+    deploy = by_task["deploy"]
+    assert deploy.capability is Capability.WRITE
+    assert deploy.risk is RiskLevel.HIGH
+    assert deploy.tool and deploy.tool != "delivery.deploy"   # concrete tool, not the op uid
+
+
+def test_operation_first_and_legacy_are_mutually_exclusive() -> None:
+    """RunbookTaskSpec enforces exactly one of operation_id / tool."""
+    common = dict(title="t", description="d", required=True, responsible="devops",
+                  input_schema={"type": "object", "properties": {}, "required": []})
+    with pytest.raises(ValueError, match="exactly one"):
+        RunbookTaskSpec(**common)                                   # neither set
+    with pytest.raises(ValueError, match="exactly one"):
+        RunbookTaskSpec(**common, tool="a.b", operation_id="x.y")   # both set

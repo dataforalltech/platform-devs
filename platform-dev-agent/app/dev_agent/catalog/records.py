@@ -38,9 +38,20 @@ class CapabilityRecord:
 
 @runtime_checkable
 class CatalogSource(Protocol):
-    """Fonte de records por tool. Retorna ``None`` se o tool não está catalogado."""
+    """Fonte de records por tool/Operation. Retorna ``None`` se não catalogado."""
 
     def record(self, tool: str) -> CapabilityRecord | None: ...
+
+    def record_for_operation(self, operation_id: str) -> CapabilityRecord | None:
+        """Record da Operation (capability/risco idênticos entre seus bindings)."""
+        ...
+
+    def tool_for_operation(self, operation_id: str) -> str | None:
+        """Tool key concreta (``<provider>.<op>``) que implementa a Operation.
+
+        Escolha DETERMINÍSTICA (``min()`` das candidatas) para estabilidade.
+        """
+        ...
 
 
 class InMemoryCatalogSource:
@@ -55,11 +66,27 @@ class InMemoryCatalogSource:
     def record(self, tool: str) -> CapabilityRecord | None:
         return self._by_tool.get(tool)
 
+    def record_for_operation(self, operation_id: str) -> CapabilityRecord | None:
+        # capability/risco são idênticos entre bindings de uma Operation; devolve
+        # o record da tool determinística (min) para consistência com o pick.
+        tool = self.tool_for_operation(operation_id)
+        return self._by_tool.get(tool) if tool is not None else None
+
+    def tool_for_operation(self, operation_id: str) -> str | None:
+        candidates = [k for k, r in self._by_tool.items() if r.operation_id == operation_id]
+        return min(candidates) if candidates else None
+
 
 class NullCatalogSource:
     """Catálogo vazio → tudo cai na heurística (default seguro se o registry não existe)."""
 
     def record(self, tool: str) -> CapabilityRecord | None:  # noqa: ARG002
+        return None
+
+    def record_for_operation(self, operation_id: str) -> CapabilityRecord | None:  # noqa: ARG002
+        return None
+
+    def tool_for_operation(self, operation_id: str) -> str | None:  # noqa: ARG002
         return None
 
 
@@ -74,6 +101,8 @@ class DirCatalogSource:
     def __init__(self, catalog_dir: str | os.PathLike | None = None) -> None:
         self._dir = Path(catalog_dir) if catalog_dir else self._default_dir()
         self._by_tool: dict[str, CapabilityRecord] = {}
+        self._by_operation: dict[str, CapabilityRecord] = {}
+        self._tool_for_operation: dict[str, str] = {}
         self._loaded = False
 
     @staticmethod
@@ -106,17 +135,36 @@ class DirCatalogSource:
                 continue
             os_ = op["spec"]
             key = f"{spec['provider_id']}.{spec['tool']}"
-            self._by_tool[key] = CapabilityRecord(
+            rec = CapabilityRecord(
                 tool=key, operation_id=spec["operation_id"], domain=os_["domain"],
                 capability=os_["authz"], risk_level=os_["risk"]["default_level"],
                 effects=tuple(os_["risk"]["effects"]), blast_radius=os_["risk"]["blast_radius"],
                 approval_required=os_["risk"]["approval_required"], resource=os_["resource"]["type"],
             )
+            self._by_tool[key] = rec
+            # Operation-first (ADR-009): capability/risco são idênticos entre os
+            # bindings de uma mesma Operation; a tool concreta é escolhida
+            # deterministicamente (min das candidatas) para estabilidade.
+            op_id = spec["operation_id"]
+            prev = self._tool_for_operation.get(op_id)
+            if prev is None or key < prev:
+                self._tool_for_operation[op_id] = key
+                self._by_operation[op_id] = rec
 
     def record(self, tool: str) -> CapabilityRecord | None:
         if not self._loaded:
             self._load()
         return self._by_tool.get(tool)
+
+    def record_for_operation(self, operation_id: str) -> CapabilityRecord | None:
+        if not self._loaded:
+            self._load()
+        return self._by_operation.get(operation_id)
+
+    def tool_for_operation(self, operation_id: str) -> str | None:
+        if not self._loaded:
+            self._load()
+        return self._tool_for_operation.get(operation_id)
 
 
 @dataclass

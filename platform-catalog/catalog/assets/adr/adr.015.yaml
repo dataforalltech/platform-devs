@@ -1,0 +1,16 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.015
+  uid: adr.015
+  title: 'ADR-015: Infra Persistence Strategy — Selective SQLite Retention'
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '015'
+  status: unknown
+  path: ADR-015-INFRA-PERSISTENCE-STRATEGY.md
+relations: []

@@ -19,7 +19,7 @@ def test_assets_loaded_by_kind(store):
     kinds = {}
     for a in store.assets.values():
         kinds[a["kind"]] = kinds.get(a["kind"], 0) + 1
-    assert kinds.get("Runbook") == 3
+    assert kinds.get("Runbook") == 6
     assert kinds.get("Persona") == 8
     assert kinds.get("Prompt") == 8
     assert kinds.get("Policy") == 8
@@ -73,7 +73,7 @@ def client():
 
 def test_api_assets(client):
     r = client.get("/v1/assets", params={"kind": "Runbook"})
-    assert r.status_code == 200 and r.json()["count"] == 3
+    assert r.status_code == 200 and r.json()["count"] == 6
     assert client.get("/v1/assets/persona.devops").status_code == 200
     assert client.get("/v1/assets/nope").status_code == 404
     rev = client.get("/v1/operations/delivery.deploy/assets").json()

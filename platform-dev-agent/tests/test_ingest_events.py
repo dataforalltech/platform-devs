@@ -10,9 +10,25 @@ def test_build_all_produces_asset_kinds():
     by_kind: dict[str, int] = {}
     for a in build_all():
         by_kind[a["kind"]] = by_kind.get(a["kind"], 0) + 1
-    assert by_kind["Runbook"] == 3
+    assert by_kind["Runbook"] == 6
     assert by_kind["Persona"] == 8 and by_kind["Prompt"] == 8 and by_kind["Policy"] == 8
     assert by_kind.get("ADR", 0) >= 9
+
+
+def test_wave1_runbooks_resolve_operation_first():
+    """Fase 6 — os 3 runbooks Operation-first resolvem 100% (Operation, sem tool-only)."""
+    assets = {a["metadata"]["uid"]: a for a in build_all()}
+    for rid in ("hotfix", "architecture_review", "incident"):
+        rb = assets[f"runbook.{rid}"]
+        assert rb["spec"]["unresolved_tools"] == 0
+        for t in rb["spec"]["tasks"]:
+            assert t["resolved"] is True
+            assert t["operation_id"]                       # Operation-first: op_id set
+            assert t["tool"]                               # concrete tool resolved
+    # hotfix's deploy step maps to the delivery.deploy Operation.
+    hotfix = assets["runbook.hotfix"]
+    deploy = next(t for t in hotfix["spec"]["tasks"] if t["task_id"] == "deploy")
+    assert deploy["operation_id"] == "delivery.deploy"
 
 
 def test_runbook_resolves_tool_to_operation():

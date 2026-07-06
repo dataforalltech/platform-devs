@@ -1,0 +1,16 @@
+apiVersion: catalog.platform.dev/v1
+kind: ADR
+metadata:
+  name: adr.016
+  uid: adr.016
+  title: 'ADR-016: CI Validation Strategy for the MCP Server Fleet'
+  owner: platform
+  tags:
+  - adr
+  lifecycle: active
+  version: 1.0.0
+spec:
+  number: '016'
+  status: unknown
+  path: ADR-016-CI-VALIDATION-STRATEGY.md
+relations: []
