@@ -268,6 +268,12 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Causa:** o CMD do Dockerfile usa `uvicorn --max-requests 1000 --max-requests-jitter 100`, flags que **não existem nesta versão do uvicorn** (é `--limit-max-requests`).
 - **Correção:** override do `command:` no compose com `--limit-max-requests 1000` (sem `--max-requests-jitter`). **Status:** ✅ bakado (compose do communication). **Raiz:** corrigir o CMD no Dockerfile do repo.
 
+### K7. platform-scheduler — engine MySQL via PLATFORMS + gotchas
+- **Engine do tenant vem do PLATFORMS, não do compose.** O `app/core/database.py` resolve `db_engine/db_host/...` de `ADMIN_DATAFORALL.PLATFORMS[tenant]` (só cai no fallback `DB_*` do settings se o tenant NÃO existe em PLATFORMS). Como `PLATFORMS.dataforall` já tem `db_engine=mysql, db_host=tenant-mysql`, o scheduler usa **MySQL** automaticamente. O `ADMIN_DATAFORALL` é **sempre MySQL** (pool aiomysql dedicado). Migrations MySQL-compat (só `now()`, que o MySQL 8 aceita; `aiomysql` no requirements) — 8 tabelas `sch_*` auto-migram no boot.
+- **`JWT_ACCESS_TOKEN_EXPIRE_MINUTES` DEVE ser `<= 30`** (validador AUTH-08, fail-fast em todos os ambientes) — os defaults de 240 dos outros serviços **quebram** aqui. Setar `30`. Demais validadores: `ENV_PROFILE == APP_ENV` (=hml), `JWT_ALGORITHM=RS256`, `JWT_ISSUER=platform-auth`, `INTERNAL_API_TOKEN >= 32 bytes`, `RATE_LIMIT_STORAGE_URI` não-vazio, sem sentinelas (`dataforall/root/...`) em senhas, CORS sem `*`.
+- **MCP não está na imagem (Dockerfile não faz `COPY mcp/`)** — igual ao iceberg. `python -m mcp.server` → `ModuleNotFoundError: No module named 'mcp'`. O código `mcp/` **está em origin/develop** e é self-contained (deps fastapi/httpx/uvicorn já na imagem; `get_twin_pep` é lazy). **Correção:** bind-mount `./mcp:/app/mcp:ro` + `working_dir: /app` + `command: python -m mcp.server` (21 tools, porta 7106, `/v1/health`+`/mcp/tools/list`). **Raiz (repo):** adicionar `COPY mcp/` no Dockerfile do scheduler. → tarefa. **Status:** ✅ bakado (bind-mount); ⏳ Dockerfile no repo.
+- Health server em **porta separada 9090** (`/health/live`); `UVICORN_WORKERS=1`. CMD já usa `--limit-max-requests` (sem o bug K6).
+
 ## L. platform-ml — imagem enxuta (pull) + migrations MySQL
 
 > O `platform-ml` sobe da **imagem enxuta do ACR (pull, CPU-only, 14.5GB)** — sem rebuild.
@@ -324,10 +330,14 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 - **Correção:** `jvm.config` do bundle = o **default da imagem 465** (`docker run --rm --entrypoint cat trinodb/trino:465 /etc/trino/jvm.config`) com **`-Xmx2G` fixo** no lugar do `MaxRAMPercentage=80` (senão, sem `mem_limit`, pega 80% dos 15G do host) + `mem_limit: 3g` no serviço. **Status:** ✅ bakado.
 - **Nota timing:** o healthcheck do Trino (`/v1/info`) fica 200 **antes** do engine aceitar SQL (`SERVER_STARTING_UP`) — o hml-init tem retry; se esgotar, re-rodar `up -d --force-recreate hml-init`.
 
-### M4. iceberg MCP — ADIADO (código não está em develop + imagem sem deps)
-- **Evidência:** `ModuleNotFoundError: No module named 'iceberg_mcp'` (imagem) e, com bind-mount, `No module named 'mcp'`/`'fastmcp'`.
-- **Causa:** `app/iceberg_mcp/` existe só **local** (não em `origin/develop`, de onde o build clona) e a imagem da API **não tem** as deps `mcp`/`fastmcp`.
-- **Correção:** MCP **adiado**; bundle `./iceberg_mcp/` mantido. **Raiz (repo):** shipar `iceberg_mcp` no develop + incluir no build (deps + Dockerfile de MCP ou COPY na imagem). → tarefa aberta. **Status:** ⏳ pendente.
+### M4. iceberg MCP — imagem própria `platform-iceberg-mcp` (padrão da plataforma)
+- **Evidência:** `ModuleNotFoundError: No module named 'iceberg_mcp'` (imagem da API) e, com bind-mount, `No module named 'mcp'`/`'fastmcp'`.
+- **Causa (2 defeitos de raiz):** (1) `app/iceberg_mcp/` estava só em commits **locais** (não em `origin/develop`, de onde o build clona); (2) a imagem da API **não tem** as deps `mcp`/`fastmcp` — o `requirements.txt` publicado não as instala.
+- **Correção (padrão `<svc>-mcp`, igual cdc/communication/ml):** imagem dedicada `platform-iceberg-mcp` a partir de **`mcp/Dockerfile`** (novo) + **`mcp/requirements.txt`** (novo) no repo `platform-iceberg`. Multi-stage `python:3.12-slim`, `COPY app/iceberg_mcp/ ./iceberg_mcp/`, `python -m iceberg_mcp.server`, porta **7104**. Deps enxutas: `mcp`+`starlette`+`uvicorn`+`httpx` (auth/governance são puro-stdlib → **sem** libs privadas, **sem** secret `github_token`). Build: `build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .`
+  - **Armadilha (resolvida):** `mcp>=1.23.0` exige `uvicorn>=0.31.1`; o `requirements.txt` da API pina `uvicorn==0.30.6` (conflito). A imagem do MCP usa `uvicorn==0.34.0`.
+  - **Re-ligado no deploy:** serviço `platform-iceberg-mcp` no `deploy/services/platform-iceberg/docker-compose.yml` + linha `reg platform-iceberg-mcp ... :7104` em `register-mcp-backends.sh`.
+- **Validação local:** `docker build -f mcp/Dockerfile -t platform-iceberg-mcp:local .` → OK; container `healthy`; `GET /health` → 200 `{"status":"ok"}`; `GET /mcp/tools/list` → 200, **13 tools**.
+- **Status:** ✅ diff pronto e validado localmente. **Pendente:** aprovar push do `app/iceberg_mcp/` + `mcp/` para `origin/develop` e buildar/publicar a imagem `platform-iceberg-mcp:latest` no ACR.
 
 ## J. Build / rebuild de imagens (na EC2)
 

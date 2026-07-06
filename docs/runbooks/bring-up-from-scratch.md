@@ -179,8 +179,8 @@ Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward 
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)
 
 ## Estado atual (2026-07-06)
-**13 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
-analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado). **9 MCP sidecars healthy**
+**14 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
+analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado), **scheduler** (MySQL via PLATFORMS). **11 MCP sidecars healthy**
 (gateway/admin/connectors/analytics/cdc/communication/ml/monitor/agents-factory + auth via SSE); o
 **platform-mcp (front-door) agrega 705 tools / 21 serviços**. **Login e2e 200.**
 Pendências: `notification-mcp` (path de agregação, K3), e os ainda-não-subidos

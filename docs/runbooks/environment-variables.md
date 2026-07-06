@@ -9,8 +9,8 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 13 APIs + 9 MCP no ar (inclui o **lakehouse iceberg**: MinIO+Polaris+Trino, SQL validado);
-> front-door agregando **705 tools / 21 serviços**; login e2e 200.
+> **Estado (2026-07-06):** 14 APIs + 11 MCP no ar (inclui o **lakehouse iceberg** e o **scheduler**);
+> front-door agregando **726 tools / 23 serviços**; login e2e 200.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
 ---
@@ -126,7 +126,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-finance | ⬜ | postgres | (não clonado) | ? | |
 | platform-finance-agent | ⬜ | postgres | (não clonado) | ? | |
 | platform-sales | ⬜ | postgres | (não clonado) | ? | |
-| platform-scheduler | ⬜ | postgres | (não clonado) | ? | |
+| platform-scheduler | ✅ | mysql (via PLATFORMS) | develop | mcp/ (bind-mount — K7) | APScheduler; engine resolvido de PLATFORMS.dataforall=mysql; JWT expire<=30; 8 tabelas `sch_`; MCP 21 tools |
 
 > Para engine **postgres**: `DB_ENGINE=postgresql`, `DB_HOST=tenant-postgres`, `DB_PORT=5432`,
 > `DB_USER=platform`, `DB_PASSWORD=••••` (=`POSTGRES_PASSWORD`).
@@ -288,6 +288,19 @@ Data-stack: **minio** (`RELEASE.2024-10-02`, `MINIO_ROOT_USER/PASSWORD=•••
 (`trinodb/trino:465` — M2, `mem_limit 3g` + jvm.config `-Xmx2G` — M3, catalog `tenant_lab_s3` OAUTH2 scope `PRINCIPAL_ROLE:ALL`,
 s3/oauth creds via `${ENV:...}` = `S3_ACCESS_KEY`/`S3_SECRET_KEY`/`POLARIS_CLIENT_SECRET`). **hml-init** cria o catalog+schema+seed (idempotente).
 **MCP adiado** (M4). Segredos: `ICEBERG_*` no `.env`.
+
+### platform-scheduler — específicos (engine MySQL via PLATFORMS — ver runbook K7)
+`ENV_PROFILE=hml` (==APP_ENV), `HEALTH_PORT=9090` (health `:9090/health/live`), `UVICORN_WORKERS=1`,
+`JWT_ALGORITHM=RS256`, `JWT_ISSUER=platform-auth`, `JWT_AUDIENCE=platform-services`, `JWT_JWKS_URL=...`,
+**`JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30`** (validador exige ≤30 — os 240 dos outros quebram aqui),
+`INTERNAL_API_TOKEN=••••` (≥32 bytes), `CREDENTIAL_ENCRYPTION_KEY=••••`, `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`.
+DB do tenant **resolvido de `PLATFORMS.dataforall` = mysql/tenant-mysql** (fallback estático `DB_ENGINE=mysql`,
+`DB_HOST=tenant-mysql`, `DB_NAME=dataforall`, root); `ADMIN_DB_*`=admin-mysql (sempre MySQL). Scheduler:
+`SCHEDULER_ENABLED=true`, `SCHEDULER_TIMEZONE=America/Sao_Paulo`, `CONNECTOR_RECONCILE_ENABLED=false`,
+`ML_RECONCILE_ENABLED=false` (minimal), `KAFKA_ENABLED=false`, `KAFKA_DLQ_ENABLED=true`. 8 tabelas `sch_` (auto no boot).
+MCP (porta 7106, 21 tools, `python -m mcp.server` da MESMA imagem via **bind-mount `./mcp:/app/mcp`** — K7):
+`MCP_PORT=7106`, `SCHEDULER_MCP_SERVICE_BASE_URL=http://platform-scheduler:8000`,
+`SCHEDULER_MCP_INTERNAL_API_TOKEN=••••`, `SCHEDULER_MCP_REQUEST_TIMEOUT=15`.
 
 ---
 
