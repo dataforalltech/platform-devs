@@ -9,7 +9,7 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** 9 APIs + 6 MCP no ar; front-door com 592 tools; login e2e 200.
+> **Estado (2026-07-06):** 12 APIs + 9 MCP no ar; front-door agregando **705 tools / 21 serviços**; login e2e 200.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
 ---
@@ -28,8 +28,8 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `GRAFANA_ADMIN_PASSWORD` | `••••` (24) | on-box | grafana |
 | `INTERNAL_API_TOKEN` | `••••` (hex 32) | on-box | token S2S compartilhado (todos os serviços + MCPs) |
 | `HEALTH_MONITORING_TOKEN` | `••••` (hex 32) | on-box | gateway (probe de health autenticado) |
-| `JWT_SECRET_KEY` | `••••` (hex 40) | on-box | auth/admin/governance/notification (service tokens HS/valida) |
-| `CREDENTIAL_ENCRYPTION_KEY` | `••••` (Fernet 44) | on-box | admin/governance/notification/connectors (cifra credenciais) |
+| `JWT_SECRET_KEY` | `••••` (hex 40) | on-box | quase todos (auth/admin/governance/notification/connectors/analytics/communication/ml/monitor/agents-factory) |
+| `CREDENTIAL_ENCRYPTION_KEY` | `••••` (Fernet 44) | on-box | quase todos (admin/governance/notification/connectors/analytics/communication/ml/monitor/agents-factory — `FERNET_KEY` no agents-factory) |
 | `OAUTH_STATE_SECRET` | `••••` (hex 32) | on-box | connectors (assina state OAuth) |
 | `WEBHOOK_SECRET` | `••••` (hex 32) | on-box | connectors (assina tokens de webhook PIX/PSP) |
 | `FILE_PROXY_SECRET` | `••••` (hex 32) | on-box | connectors (assina URLs do file proxy) |
@@ -102,17 +102,17 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-cdc | ✅ | mysql | develop | mcp/Dockerfile (raiz), 28000 | ENV_PROFILE=local-hml; Kafka/coord OFF; MCP 9 tools |
 | platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
 | platform-analytics | ✅ | mysql | develop | Dockerfile.mcp (raiz), 7100 | BI; NOTIFICATION_INTERNAL_TOKEN+TRUSTED_PROXIES; MCP 117 tools |
-| platform-communication | ✅ (API) | mysql | develop | mcp (sem Dockerfile — K5) | ENV_PROFILE=local-hml; CMD override (--limit-max-requests, K6); MCP pendente |
-| platform-ml | ⬜ img✗ | mysql | develop | mcp | build falhou |
-| platform-monitor | ⬜ img✗ | mysql | develop | mcp | build falhou |
-| platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou |
-| platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou |
-| platform-flow | ⬜ img✗ | mysql | develop | — | build falhou |
+| platform-communication | ✅ | mysql | develop | mcp/Dockerfile (própria img — K5 resolvido) | ENV_PROFILE=local-hml; CMD override (K6); MCP 65 tools |
+| platform-ml | ✅ | mysql | develop | mcp/Dockerfile (7104) | **PULL** (img enxuta CPU-only); ENV_PROFILE=hml; alembic-inject (L3); MySQL-patch (L4); notif OFF (L2); MCP 71 tools |
+| platform-monitor | ✅ | mysql | develop | mcp/Dockerfile (28000, ctx=mcp/ — J6) | health `:9090`; **NÃO** usa ENV_PROFILE; migrations SQL (`apply_mysql_migrations.sh`, tabelas `mon_`); MCP 23 tools |
+| platform-agents-factory | ✅ | mysql | develop | Dockerfile.mcp (7130) | build; ENV_PROFILE=local-hml; LLM keys lazy; MCP 10 tools |
+| platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou (git+ssh — tarefa de repo) |
+| platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou (sem git no Dockerfile — tarefa de repo) |
+| platform-flow | ⬜ img✗ | mysql | develop | — | build falhou (git+ssh — tarefa de repo) |
 | platform-dai | ⬜ | mysql | fix/ci-oasdiff-baseline | mcp | branch de fix |
 | platform-iceberg | ⬜ | mysql | develop | — | |
 | platform-pipeline | ⬜ | mysql | develop | mcp | |
 | platform-db-vector | ⬜ | mysql | develop | — | dívida: migrar p/ postgres+pgvector |
-| platform-agents-factory | ⬜ | mysql | develop | mcp | |
 | platform-security | ⬜ | mysql | (repo não clonado local) | ? | |
 | platform-crm-agent | ⬜ | mysql | (não clonado) | ? | |
 | platform-crm | ⬜ | postgres | (não clonado) | ? | |
@@ -234,6 +234,43 @@ CDC standalone (sem streaming ativo): `KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENA
 `CDC_COORDINATOR_ENABLED=false` (senão exige `TENANT_ID`), `CDC_WORKER_STANDALONE=true`, `MONITOR_EVENTS_ENABLED=false`.
 MCP (porta 28000, 9 tools, `/mcp/tools/list`): `MCP_HTTP_PORT=28000`, `CDC_INTERNAL_URL=http://platform-cdc:8000/api/v1`,
 `CDC_INTERNAL_TOKEN=••••`, `CDC_MCP_TWIN_ENFORCE=false` (senão exige twin JWKS no boot).
+
+### platform-ml — específicos (imagem ENXUTA via PULL, não build)
+`ENV_PROFILE=hml` (**=APP_ENV**, difere do core), `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`,
+`INTERNAL_API_TOKEN=••••`. ML CPU-only: `ML_METADATA_BACKEND=db`, `MODEL_REGISTRY_BACKEND=db`,
+`MODEL_REGISTRY_PATH=/data/platform-ml/model-registry` (volume `ml-model-registry`), `ML_USE_GPU=false`,
+`ML_WHISPER_DEVICE=cpu`, `ONNX_RUNTIME_ENABLED=false`. `URL_GOVERNANCE=http://platform-governance:8000`.
+`RATE_LIMIT_STORAGE_URI`/`REDIS_URL=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false`. Health `:8000/api/health/live`.
+**`NOTIFICATION_SERVICE_URL=""`** (vazio de propósito — cliente de notificação com contrato defasado derruba o boot; L2).
+**Init-container** `platform-ml-init` faz `chown 1000` no volume (L1). **Bind-mount** `alembic-inject/` → `/app/alembic*`
+(imagem enxuta não traz alembic; L3). Provisionar tabelas: `docker exec platform-ml python /app/scripts/bootstrap_tenants.py`
+(42 tabelas `ml_*`). MCP (porta 7104, 71 tools, `/mcp/tools/list`+`/mcp/tools/call`, `/v1/health`):
+`MCP_ML_HTTP=1`, `MCP_PORT=7104`, `MCP_ML_SERVICE_BASE_URL=http://platform-ml:8000`,
+`ML_MCP_SERVICE_TOKEN=••••`, `ML_MCP_TWIN_ENFORCE=0`.
+
+### platform-agents-factory — específicos
+`ENV_PROFILE=local-hml` (**{runtime}-{app}**), `JWT_SECRET_KEY=••••` (obrigatório explícito), `JWT_ACCESS_TOKEN_EXPIRE_MINUTES=240`,
+`CREDENTIAL_ENCRYPTION_KEY=••••`, `FERNET_KEY=••••` (=CREDENTIAL_ENCRYPTION_KEY), `INTERNAL_API_TOKEN=••••`,
+`AGENTS_RUNTIME=lib`, `LAB_MODE=false`, `AUTH_DEV_BYPASS=false`, `URL_AUTH=http://platform-auth:8000/internal`,
+`URL_IAM=http://platform-admin:8000/api/v1/iam`, `RATE_LIMIT_STORAGE_URI`/`REDIS_URL=redis://:••••@redis:6379/0`,
+`KAFKA_ENABLED=false`. **LLM keys (OpenAI/Anthropic) são LAZY** (resolvidas do DB por tenant — não precisam no boot).
+Migrations rodam no boot (non-fatal, `alembic_version_agents_factory`, revisões 0001–0005). Health `:8000/api/health/live`.
+MCP (porta 7130, 10 tools, `Dockerfile.mcp`): `AGENTS_FACTORY_MCP_FACTORY_URL=http://platform-agents-factory:8000`,
+`AGENTS_FACTORY_MCP_INTERNAL_API_TOKEN=••••`, `AGENTS_FACTORY_MCP_DEFAULT_TENANT_ID=dataforall`,
+`AGENTS_FACTORY_MCP_MCP_PORT=7130`, `JWT_SECRET_KEY=••••`, `JWT_ALGORITHM=RS256`,
+`AGENTS_FACTORY_MCP_JWT_ISSUER=platform-auth`, `AGENTS_FACTORY_MCP_JWT_AUDIENCE=platform-services`.
+
+### platform-monitor — específicos
+**NÃO usa `ENV_PROFILE`** (o repo não valida esse campo). Health server em **porta separada 9090** (`/health/ready`) —
+`HEALTH_PORT=9090`, `APP_HOST=0.0.0.0`, `APP_PORT=8000`, `UVICORN_WORKERS=1`. `LOG_LEVEL=INFO` (DEBUG proibido),
+**`MONITOR_ALLOW_PRIVATE_URLS=false`** (SSRF-01, obrigatório), `SCHEDULER_ENABLED=true`, `JWT_ALGORITHM=RS256` (AUTH-15),
+`JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, `INTERNAL_API_TOKEN=••••`,
+`NOTIFICATION_SERVICE_URL=http://platform-notification:8000`, `NOTIFICATION_INTERNAL_TOKEN=••••`,
+`RATE_LIMIT_STORAGE_URI`/`REDIS_URL=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENABLED=false`.
+Migrations são **SQL puro** (não alembic): `docker exec platform-monitor bash ./scripts/apply_mysql_migrations.sh` (tabelas `mon_`, 10).
+MCP (porta 28000, 23 tools, `mcp/Dockerfile` **ctx=`mcp/`** — J6): `MONITOR_MCP_SERVICE_BASE_URL=http://platform-monitor:8000`,
+`MONITOR_MCP_HEALTH_BASE_URL=http://platform-monitor:9090`, `MONITOR_MCP_TWIN_ENFORCE=false`, e **`ADMIN_DB_*`**
+(o MCP resolve `X-Internal-Token` por-tenant do `ADMIN_DATAFORALL.PLATFORMS`).
 
 ---
 
