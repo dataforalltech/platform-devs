@@ -134,9 +134,7 @@ def test_discover_maps_url_env_vars_to_services(tmp_path):
 
 
 def test_discover_ignores_unknown_url_vars(tmp_path):
-    repo = _make_repo(
-        tmp_path, name="x", pyproject_name="x", consumes_urls=["URL_NONEXISTENT_FOO"]
-    )
+    repo = _make_repo(tmp_path, name="x", pyproject_name="x", consumes_urls=["URL_NONEXISTENT_FOO"])
     d = scanner.discover_repo(repo)
     assert d.consumes_services == set()
 
@@ -200,9 +198,7 @@ def test_diff_no_drift_when_disk_matches_yaml(tmp_path):
     yaml_path = _write_yaml(
         tmp_path / "ecosystem.yaml",
         services=[{"id": "platform-foo", "port": 8050}],
-        extra_edges=[
-            {"from": "platform-foo", "to": "platform-core-lib", "relation": "uses_lib"}
-        ],
+        extra_edges=[{"from": "platform-foo", "to": "platform-core-lib", "relation": "uses_lib"}],
     )
 
     discovered = scanner.scan(repos_dir)
@@ -281,9 +277,7 @@ def test_diff_resolves_basename_when_pyproject_differs(tmp_path):
         '[project]\nname = "platform-foo"\n', encoding="utf-8"
     )
 
-    yaml_path = _write_yaml(
-        tmp_path / "ecosystem.yaml", services=[{"id": "dataforall-foo"}]
-    )
+    yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "dataforall-foo"}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     assert "dataforall-foo" in report.consistent
     assert report.missing_from_yaml == []
@@ -302,9 +296,7 @@ def test_diff_detects_lib_drift_only_on_disk(tmp_path):
     yaml_path = _write_yaml(
         tmp_path / "ecosystem.yaml",
         services=[{"id": "platform-foo", "port": 8050}],
-        extra_edges=[
-            {"from": "platform-foo", "to": "platform-core-lib", "relation": "uses_lib"}
-        ],
+        extra_edges=[{"from": "platform-foo", "to": "platform-core-lib", "relation": "uses_lib"}],
     )
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     assert len(report.lib_drift) == 1

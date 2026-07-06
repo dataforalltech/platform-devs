@@ -1,5 +1,6 @@
-import yaml
 from pathlib import Path
+
+import yaml
 
 from ..config.settings import AuditSettings
 from ..db.store import AuditStore

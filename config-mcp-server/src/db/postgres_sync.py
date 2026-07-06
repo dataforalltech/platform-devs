@@ -7,9 +7,9 @@ Valores criptografados permanecem em config.enc.json (não vão para PostgreSQL)
 
 import logging
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class ConfigPostgresSync:
     Metadados (namespace, key, owner, active, expires_at) vão para PostgreSQL.
     """
 
-    def __init__(self, postgres_config: Dict[str, Any], enabled: bool = True):
+    def __init__(self, postgres_config: dict[str, Any], enabled: bool = True):
         """
         Initialize sync layer.
 
@@ -35,7 +35,9 @@ class ConfigPostgresSync:
 
         if enabled:
             try:
-                sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template"))
+                sys.path.insert(
+                    0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template")
+                )
                 from lib.mcp_postgres_adapter import MCPPostgreSQLAdapter
 
                 self.adapter = MCPPostgreSQLAdapter("config-mcp", postgres_config)
@@ -51,9 +53,9 @@ class ConfigPostgresSync:
 
     # ========== CREDENTIAL METADATA SYNC ==========
 
-    def sync_credential_created(self, namespace: str, key: str,
-                                owner_id: Optional[int] = None,
-                                expires_at: Optional[str] = None) -> bool:
+    def sync_credential_created(
+        self, namespace: str, key: str, owner_id: int | None = None, expires_at: str | None = None
+    ) -> bool:
         """
         Sync when credential metadata is created.
 
@@ -65,16 +67,16 @@ class ConfigPostgresSync:
 
         try:
             pg_data = {
-                'namespace': namespace,
-                'key': key,
-                'owner_id': owner_id,
-                'active': True,
-                'expires_at': expires_at,
-                'created_at': datetime.utcnow().isoformat() + 'Z',
-                'updated_at': datetime.utcnow().isoformat() + 'Z',
+                "namespace": namespace,
+                "key": key,
+                "owner_id": owner_id,
+                "active": True,
+                "expires_at": expires_at,
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('credentials', pg_data)
+            self.adapter.sync_to_postgres("credentials", pg_data)
             logger.debug(f"Synced credential metadata: {namespace}.{key}")
             return True
 
@@ -150,7 +152,7 @@ class ConfigPostgresSync:
 
     # ========== QUERIES ==========
 
-    def list_credentials_for_namespace(self, namespace: str) -> Optional[list]:
+    def list_credentials_for_namespace(self, namespace: str) -> list | None:
         """
         Query PostgreSQL for all credentials in a namespace.
         Returns metadata only (not encrypted values).
@@ -174,7 +176,7 @@ class ConfigPostgresSync:
             logger.error(f"Failed to list credentials: {e}")
             return None
 
-    def get_credential_metadata(self, namespace: str, key: str) -> Optional[Dict]:
+    def get_credential_metadata(self, namespace: str, key: str) -> dict | None:
         """
         Query PostgreSQL for credential metadata (not the value).
         """
@@ -200,8 +202,14 @@ class ConfigPostgresSync:
 
     # ========== AUDIT LOGGING ==========
 
-    def log_action(self, action: str, namespace: str, key: str,
-                   actor_id: Optional[int] = None, details: Optional[Dict] = None) -> bool:
+    def log_action(
+        self,
+        action: str,
+        namespace: str,
+        key: str,
+        actor_id: int | None = None,
+        details: dict | None = None,
+    ) -> bool:
         """
         Log credential action to audit_log.
 
@@ -214,10 +222,10 @@ class ConfigPostgresSync:
             target_id = f"{namespace}.{key}"
             self.adapter.audit_log(
                 action=action,
-                target_type='credential',
+                target_type="credential",
                 target_id=target_id,
                 actor_id=actor_id,
-                details=details or {}
+                details=details or {},
             )
             return True
 

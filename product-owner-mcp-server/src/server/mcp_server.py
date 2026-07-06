@@ -6,6 +6,7 @@ Conforme MCP_SERVICE_STANDARD.md:
 - Publica /.well-known/oauth-protected-resource (RFC 9728) para disparar o fluxo OAuth do cliente.
 - Health público; qualquer rota /mcp sem token válido responde 401.
 """
+
 from __future__ import annotations
 
 import os
@@ -41,7 +42,8 @@ RESOURCE = os.getenv("PRODUCT_OWNER_RESOURCE", "http://localhost:7122/mcp")
 AS_ISSUER = os.getenv("AS_ISSUER", "http://localhost:7103")
 AS_JWKS_URL = os.getenv("AS_JWKS_URL", f"{AS_ISSUER}/.well-known/jwks.json")
 RESOURCE_METADATA_URL = os.getenv(
-    "PRODUCT_OWNER_PRM_URL", "http://localhost:7122/.well-known/oauth-protected-resource"
+    "PRODUCT_OWNER_PRM_URL",
+    "http://localhost:7122/.well-known/oauth-protected-resource",
 )
 
 # ── Registro de ferramentas: (fn, scope mínimo, sensitive) ─────────────────── #
@@ -57,16 +59,36 @@ TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     "map_product_risks": (map_product_risks, "product-owner:read", False),
     "map_user_journey": (map_user_journey, "product-owner:read", False),
     "map_user_personas": (map_user_personas, "product-owner:read", False),
-    "generate_discovery_questions": (generate_discovery_questions, "product-owner:read", False),
+    "generate_discovery_questions": (
+        generate_discovery_questions,
+        "product-owner:read",
+        False,
+    ),
     # Geração de artefatos
     "define_mvp_scope": (define_mvp_scope, "product-owner:write", False),
     "define_product_metrics": (define_product_metrics, "product-owner:write", False),
     "define_product_vision": (define_product_vision, "product-owner:write", False),
     "generate_feature_spec": (generate_feature_spec, "product-owner:write", False),
-    "generate_go_to_market_brief": (generate_go_to_market_brief, "product-owner:write", False),
-    "generate_handoff_to_architecture": (generate_handoff_to_architecture, "product-owner:write", False),
-    "generate_handoff_to_design": (generate_handoff_to_design, "product-owner:write", False),
-    "generate_handoff_to_engineering": (generate_handoff_to_engineering, "product-owner:write", False),
+    "generate_go_to_market_brief": (
+        generate_go_to_market_brief,
+        "product-owner:write",
+        False,
+    ),
+    "generate_handoff_to_architecture": (
+        generate_handoff_to_architecture,
+        "product-owner:write",
+        False,
+    ),
+    "generate_handoff_to_design": (
+        generate_handoff_to_design,
+        "product-owner:write",
+        False,
+    ),
+    "generate_handoff_to_engineering": (
+        generate_handoff_to_engineering,
+        "product-owner:write",
+        False,
+    ),
     "generate_release_plan": (generate_release_plan, "product-owner:write", False),
     "generate_user_stories": (generate_user_stories, "product-owner:write", False),
 }
@@ -83,7 +105,11 @@ def _scope_for_request(method: str, tool: str | None) -> str | None:
 
 
 def build_mcp() -> FastMCP:
-    mcp = FastMCP(name="product-owner-mcp", instructions=SYSTEM_PROMPT, stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"))
+    mcp = FastMCP(
+        name="product-owner-mcp",
+        instructions=SYSTEM_PROMPT,
+        stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
+    )
     for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
         mcp.add_tool(fn, name=name)
     return mcp
@@ -94,7 +120,11 @@ def build_app(validators: list[Callable] | None = None):
 
     `validators` permite injetar validadores no teste; em produção usa JWKS do auth-mcp.
     """
-    from shared.mcp_auth import BearerAuthMiddleware, JwtValidator, protected_resource_metadata
+    from shared.mcp_auth import (
+        BearerAuthMiddleware,
+        JwtValidator,
+        protected_resource_metadata,
+    )
 
     mcp = build_mcp()
 
@@ -104,16 +134,22 @@ def build_app(validators: list[Callable] | None = None):
 
     @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
     async def prm(_req: Request):
-        return JSONResponse(protected_resource_metadata(
-            resource=RESOURCE,
-            authorization_servers=[AS_ISSUER],
-            scopes=SCOPES_SUPPORTED,
-        ))
+        return JSONResponse(
+            protected_resource_metadata(
+                resource=RESOURCE,
+                authorization_servers=[AS_ISSUER],
+                scopes=SCOPES_SUPPORTED,
+            )
+        )
 
     app = mcp.streamable_http_app()
 
     if validators is None:
-        validators = [JwtValidator(issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL).validate]
+        validators = [
+            JwtValidator(
+                issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
+            ).validate
+        ]
 
     return BearerAuthMiddleware(
         app,
@@ -125,6 +161,7 @@ def build_app(validators: list[Callable] | None = None):
 
 def main() -> None:
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7122")))
 
 

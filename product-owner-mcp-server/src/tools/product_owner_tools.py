@@ -6,6 +6,7 @@ exata. As demais montam um artefato estruturado a partir dos inputs (scaffold), 
 útil e determinístico; onde o julgamento de produto/LLM agregaria valor, o texto é
 sinalizado como esboço para refino humano.
 """
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -67,7 +68,9 @@ def calculate_rice_score(
     # Normaliza confidence: aceita 0–1 (fração) ou 1–100 (percentual).
     confidence_fraction = confidence / 100.0 if confidence > 1 else confidence
     if confidence_fraction > 1:
-        errors.append("confidence out of range (expected 0-1 fraction or 1-100 percent)")
+        errors.append(
+            "confidence out of range (expected 0-1 fraction or 1-100 percent)"
+        )
 
     if errors:
         return {"error": "invalid_input", "details": errors, "feature": feature}
@@ -155,7 +158,10 @@ def prioritize_backlog(
         order = {"MUST": 0, "SHOULD": 1, "COULD": 2, "WONT": 3, "WON'T": 3}
         ranked = sorted(
             scored,
-            key=lambda e: (order.get(str(e["item"].get("moscow", "COULD")).upper(), 2), -e["score"]),
+            key=lambda e: (
+                order.get(str(e["item"].get("moscow", "COULD")).upper(), 2),
+                -e["score"],
+            ),
         )
     else:
         ranked = sorted(scored, key=lambda e: e["score"], reverse=True)
@@ -288,7 +294,7 @@ def define_mvp_scope(
     feats = _as_list(features)
     for idx, f in enumerate(feats):
         if isinstance(f, dict):
-            name = f.get("name") or f.get("title") or f"feature-{idx+1}"
+            name = f.get("name") or f.get("title") or f"feature-{idx + 1}"
             priority = str(f.get("priority", "")).lower()
         else:
             name = str(f)
@@ -314,7 +320,8 @@ def define_mvp_scope(
 
     return {
         "product": product,
-        "goal": goal or f"Validar a proposta de valor de {product} com o menor escopo viável.",
+        "goal": goal
+        or f"Validar a proposta de valor de {product} com o menor escopo viável.",
         "mvp_scope": {
             "core_features": must,
             "nice_to_haves": should,
@@ -393,8 +400,11 @@ def define_product_vision(
         "product": product,
         "vision": f"Para {target_audience} que enfrentam {problem}, {product} oferece {diff}.",
         "mission": f"Ajudar {target_audience} a superar {problem} por meio de {product}.",
-        "goals": goal_list or [f"Reduzir o impacto de {problem} para {target_audience}"],
-        "success_criteria": [f"Evidência mensurável de que '{g}' foi atingido" for g in goal_list]
+        "goals": goal_list
+        or [f"Reduzir o impacto de {problem} para {target_audience}"],
+        "success_criteria": [
+            f"Evidência mensurável de que '{g}' foi atingido" for g in goal_list
+        ]
         or [f"Adoção e satisfação de {target_audience} acima da baseline"],
         "differentiator": diff,
     }
@@ -455,14 +465,20 @@ def generate_feature_spec(
     reqs = [r for r in _as_list(requirements) if r]
     acs = [a for a in _as_list(acceptance_criteria) if a]
     if not acs:
-        acs = [f"Dado o requisito '{r}', então ele é atendido e verificável." for r in reqs]
+        acs = [
+            f"Dado o requisito '{r}', então ele é atendido e verificável." for r in reqs
+        ]
     return {
         "feature": feature,
         "objective": problem or f"Entregar a capacidade '{feature}'.",
         "scope": {"requirements": reqs, "in_scope": reqs, "open_questions": []},
         "user_value": user_value or f"O usuário passa a poder {feature.lower()}.",
         "acceptance_criteria": acs,
-        "feature_spec": {"feature": feature, "requirements": reqs, "acceptance_criteria": acs},
+        "feature_spec": {
+            "feature": feature,
+            "requirements": reqs,
+            "acceptance_criteria": acs,
+        },
     }
 
 
@@ -528,7 +544,8 @@ def generate_handoff_to_architecture(
     return {
         "feature": feature,
         "architecture_handoff": {"feature": feature},
-        "tech_requirements": [f"Derivado de '{r}'" for r in reqs] or [f"Suportar '{feature}'"],
+        "tech_requirements": [f"Derivado de '{r}'" for r in reqs]
+        or [f"Suportar '{feature}'"],
         "integration_needs": [i for i in _as_list(integrations) if i],
         "scale_expectations": scale_expectations or "não informado",
         "constraints": [c for c in _as_list(constraints) if c],
@@ -556,9 +573,16 @@ def generate_handoff_to_design(
         "design_handoff": {"feature": feature},
         "user_journeys": [j for j in _as_list(user_journeys) if j],
         "personas": [p for p in _as_list(personas) if p],
-        "wireframes_brief": f"Wireframes para: {', '.join(screens)}" if screens else f"Wireframes de '{feature}'",
+        "wireframes_brief": f"Wireframes para: {', '.join(screens)}"
+        if screens
+        else f"Wireframes de '{feature}'",
         "key_screens": screens,
-        "design_tokens_needs": ["cores de estado", "tipografia", "espaçamento", "componentes de formulário"],
+        "design_tokens_needs": [
+            "cores de estado",
+            "tipografia",
+            "espaçamento",
+            "componentes de formulário",
+        ],
     }
 
 
@@ -613,13 +637,17 @@ def generate_release_plan(
     phases: dict[str, list[str]] = {}
     for idx, f in enumerate(feats):
         if isinstance(f, dict):
-            name = f.get("name") or f.get("title") or f"feature-{idx+1}"
+            name = f.get("name") or f.get("title") or f"feature-{idx + 1}"
             phase = str(f.get("phase", "")) or None
         else:
             name = str(f)
             phase = None
         if not phase:
-            phase = "Alpha" if idx < len(feats) / 3 else ("Beta" if idx < 2 * len(feats) / 3 else "GA")
+            phase = (
+                "Alpha"
+                if idx < len(feats) / 3
+                else ("Beta" if idx < 2 * len(feats) / 3 else "GA")
+            )
         phases.setdefault(phase, []).append(name)
 
     phase_list = [{"phase": p, "features": items} for p, items in phases.items()]
@@ -630,7 +658,11 @@ def generate_release_plan(
         "milestones": [m for m in _as_list(milestones) if m],
         "timeline": target_date or "a definir",
         "go_to_market": {"summary": f"Coordenar comunicação do release de {product}."},
-        "success_metrics": ["adoção por fase", "estabilidade (erros/regressões)", "satisfação"],
+        "success_metrics": [
+            "adoção por fase",
+            "estabilidade (erros/regressões)",
+            "satisfação",
+        ],
         "risks": ["escopo por fase pode mudar", "dependências externas"],
         "note": "Alocação de fases sem `phase` explícita é heurística; ajuste com o time.",
     }
@@ -700,14 +732,20 @@ def map_user_journey(
     stages, touchpoints, emotions, pains = [], [], {}, []
     for idx, s in enumerate(_as_list(steps)):
         if isinstance(s, dict):
-            name = s.get("name") or s.get("step") or f"stage-{idx+1}"
+            name = s.get("name") or s.get("step") or f"stage-{idx + 1}"
             touchpoint = s.get("touchpoint")
             emotion = s.get("emotion")
             pain = s.get("pain")
         else:
             name = str(s)
             touchpoint = emotion = pain = None
-        stage = {"order": idx + 1, "stage": name, "touchpoint": touchpoint, "emotion": emotion, "pain": pain}
+        stage = {
+            "order": idx + 1,
+            "stage": name,
+            "touchpoint": touchpoint,
+            "emotion": emotion,
+            "pain": pain,
+        }
         stages.append(stage)
         if touchpoint:
             touchpoints.append(touchpoint)
@@ -742,7 +780,7 @@ def map_user_personas(
     result = []
     for idx, p in enumerate(_as_list(personas)):
         if isinstance(p, dict):
-            name = p.get("name") or f"persona-{idx+1}"
+            name = p.get("name") or f"persona-{idx + 1}"
             result.append(
                 {
                     "name": name,
@@ -754,6 +792,12 @@ def map_user_personas(
             )
         else:
             result.append(
-                {"name": str(p), "demographics": {}, "goals": [], "pains": [], "behaviors": []}
+                {
+                    "name": str(p),
+                    "demographics": {},
+                    "goals": [],
+                    "pains": [],
+                    "behaviors": [],
+                }
             )
     return {"personas": result, "count": len(result)}

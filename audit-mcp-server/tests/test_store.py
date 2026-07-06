@@ -1,8 +1,3 @@
-import pytest
-
-from src.db.store import AuditStore
-
-
 def test_create_audit(store):
     """Testa criação de auditoria."""
     audit_id = store.create_audit(

@@ -1,4 +1,5 @@
 """Configurações do config-mcp-server."""
+
 from __future__ import annotations
 
 from pydantic import Field

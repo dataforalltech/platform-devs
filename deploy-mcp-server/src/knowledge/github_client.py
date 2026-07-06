@@ -96,18 +96,14 @@ class GitHubClient:
                 raise GitHubClientError(f"Branch '{branch}' já existe em '{repo}'.") from exc
             raise GitHubClientError(f"Erro ao criar branch '{branch}': {exc}") from exc
 
-    def list_branches(
-        self, repo: str, filter_name: str | None = None
-    ) -> list[dict[str, Any]]:
+    def list_branches(self, repo: str, filter_name: str | None = None) -> list[dict[str, Any]]:
         r = self._repo(repo)
         try:
             result = []
             for b in r.get_branches():
                 if filter_name and filter_name.lower() not in b.name.lower():
                     continue
-                result.append(
-                    {"name": b.name, "sha": b.commit.sha, "protected": b.protected}
-                )
+                result.append({"name": b.name, "sha": b.commit.sha, "protected": b.protected})
             return result
         except GithubException as exc:
             raise GitHubClientError(f"Erro ao listar branches: {exc}") from exc
@@ -451,9 +447,7 @@ class GitHubClient:
                         "status": "updated",
                     }
                 except Exception as exc2:
-                    sanitized = str(exc2).replace(
-                        self._settings.github_token, "[REDACTED]"
-                    )
+                    sanitized = str(exc2).replace(self._settings.github_token, "[REDACTED]")
                     raise GitHubClientError(
                         f"Erro ao atualizar variável '{var_name}' em '{repo}': {sanitized}"
                     ) from None
@@ -476,6 +470,7 @@ class GitHubClient:
                 return token
 
         import httpx
+
         resp = httpx.post(
             f"https://{registry}/oauth2/token",
             data={
@@ -529,4 +524,3 @@ class GitHubClient:
             raise GitHubClientError(
                 f"Erro ao listar tags do ACR '{registry}/{namespace}/{service_name}': {exc}"
             ) from exc
-

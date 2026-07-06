@@ -1,6 +1,6 @@
 import base64
+
 import httpx
-from typing import Any
 
 
 class GitHubClient:
@@ -69,9 +69,7 @@ class GitHubClient:
         content = await self.get_repo_content(repo, path, ref)
         return content is not None
 
-    async def list_files_matching(
-        self, repo: str, pattern: str, ref: str = "main"
-    ) -> list[str]:
+    async def list_files_matching(self, repo: str, pattern: str, ref: str = "main") -> list[str]:
         """Lista arquivos que correspondem a um padrão (simples)."""
         import fnmatch
 

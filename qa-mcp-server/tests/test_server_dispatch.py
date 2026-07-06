@@ -63,9 +63,7 @@ def test_required_fields_in_properties():
         required = meta["schema"].get("required", [])
         props = meta["schema"].get("properties", {})
         for req_field in required:
-            assert req_field in props, (
-                f"{name}: required field '{req_field}' not in properties"
-            )
+            assert req_field in props, f"{name}: required field '{req_field}' not in properties"
 
 
 def test_unknown_tool_raises_key_error(dispatch_store, dispatch_settings):

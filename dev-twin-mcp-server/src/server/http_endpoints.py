@@ -4,12 +4,11 @@ Dev-Twin-MCP HTTP Endpoints — PostgreSQL Integration.
 Endpoints para sincronizar identidade e login com PostgreSQL.
 """
 
-from typing import Dict, Any, Optional
-import logging
-from datetime import datetime, timedelta
-import json
-import secrets
 import hashlib
+import logging
+import secrets
+from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class DevTwinHTTPEndpoints:
 
     # ========== POST /auth/login ==========
 
-    def post_auth_login(self, email: str, password: str) -> Dict[str, Any]:
+    def post_auth_login(self, email: str, password: str) -> dict[str, Any]:
         """
         POST /auth/login
 
@@ -66,9 +65,9 @@ class DevTwinHTTPEndpoints:
             if not user:
                 logger.warning(f"Login failed for {email}: invalid credentials")
                 return {
-                    'status': 401,
-                    'error': 'invalid_credentials',
-                    'message': 'Email or password is incorrect'
+                    "status": 401,
+                    "error": "invalid_credentials",
+                    "message": "Email or password is incorrect",
                 }
 
             # Step 2: Generate tokens
@@ -77,45 +76,44 @@ class DevTwinHTTPEndpoints:
 
             # Step 3: Update last_login_at in PostgreSQL
             self.postgres_sync.sync_user_login(
-                email=email,
-                login_at=datetime.utcnow().isoformat() + 'Z'
+                email=email, login_at=datetime.utcnow().isoformat() + "Z"
             )
 
             # Step 4: Log audit trail
             self.postgres_sync.log_action(
-                action='login',
-                target_type='user',
+                action="login",
+                target_type="user",
                 target_id=email,
-                details={'ip': None, 'user_agent': None}  # Would come from HTTP headers
+                details={"ip": None, "user_agent": None},  # Would come from HTTP headers
             )
 
             logger.info(f"✅ Login successful: {email}")
 
             return {
-                'status': 200,
-                'token': token,
-                'session_token': session_token,
-                'user': {
-                    'id': user.get('id'),
-                    'email': user.get('email'),
-                    'name': user.get('name'),
-                    'role': user.get('role'),
-                    'tenant_id': user.get('tenant_id')
+                "status": 200,
+                "token": token,
+                "session_token": session_token,
+                "user": {
+                    "id": user.get("id"),
+                    "email": user.get("email"),
+                    "name": user.get("name"),
+                    "role": user.get("role"),
+                    "tenant_id": user.get("tenant_id"),
                 },
-                'authenticated_at': datetime.utcnow().isoformat() + 'Z'
+                "authenticated_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /auth/login: {e}")
             return {
-                'status': 500,
-                'error': 'internal_error',
-                'message': 'An error occurred during authentication'
+                "status": 500,
+                "error": "internal_error",
+                "message": "An error occurred during authentication",
             }
 
     # ========== GET /auth/validate ==========
 
-    def get_auth_validate(self, token: str) -> Dict[str, Any]:
+    def get_auth_validate(self, token: str) -> dict[str, Any]:
         """
         GET /auth/validate
 
@@ -140,35 +138,28 @@ class DevTwinHTTPEndpoints:
         try:
             user = self._validate_token(token)
             if not user:
-                return {
-                    'status': 401,
-                    'valid': False,
-                    'error': 'invalid_token'
-                }
+                return {"status": 401, "valid": False, "error": "invalid_token"}
 
             return {
-                'status': 200,
-                'valid': True,
-                'user': {
-                    'id': user.get('id'),
-                    'email': user.get('email'),
-                    'name': user.get('name'),
-                    'role': user.get('role'),
-                    'tenant_id': user.get('tenant_id')
+                "status": 200,
+                "valid": True,
+                "user": {
+                    "id": user.get("id"),
+                    "email": user.get("email"),
+                    "name": user.get("name"),
+                    "role": user.get("role"),
+                    "tenant_id": user.get("tenant_id"),
                 },
-                'expires_at': user.get('expires_at')
+                "expires_at": user.get("expires_at"),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /auth/validate: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /auth/logout ==========
 
-    def post_auth_logout(self, email: str, token: str) -> Dict[str, Any]:
+    def post_auth_logout(self, email: str, token: str) -> dict[str, Any]:
         """
         POST /auth/logout
 
@@ -191,30 +182,27 @@ class DevTwinHTTPEndpoints:
 
             # Step 2: Log audit trail
             self.postgres_sync.log_action(
-                action='logout',
-                target_type='user',
+                action="logout",
+                target_type="user",
                 target_id=email,
-                details={'token_revoked': True}
+                details={"token_revoked": True},
             )
 
             logger.info(f"✅ Logout successful: {email}")
 
             return {
-                'status': 200,
-                'status_message': 'logged_out',
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                "status": 200,
+                "status_message": "logged_out",
+                "timestamp": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /auth/logout: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /users ==========
 
-    def get_users(self, role: Optional[str] = None, active: bool = True) -> Dict[str, Any]:
+    def get_users(self, role: str | None = None, active: bool = True) -> dict[str, Any]:
         """
         GET /users
 
@@ -242,33 +230,20 @@ class DevTwinHTTPEndpoints:
             }
         """
         try:
-            users = self.postgres_sync.list_users(
-                role=role,
-                active=active
-            )
+            users = self.postgres_sync.list_users(role=role, active=active)
 
             if users is None:
-                return {
-                    'status': 500,
-                    'error': 'database_error'
-                }
+                return {"status": 500, "error": "database_error"}
 
-            return {
-                'status': 200,
-                'users': [dict(u) for u in users],
-                'total': len(users)
-            }
+            return {"status": 200, "users": [dict(u) for u in users], "total": len(users)}
 
         except Exception as e:
             logger.error(f"Error in GET /users: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== Private Helpers ==========
 
-    def _authenticate_user(self, email: str, password: str) -> Optional[Dict]:
+    def _authenticate_user(self, email: str, password: str) -> dict | None:
         """Authenticate user against PostgreSQL credential store.
 
         Validates email/password against stored bcrypt hashes.
@@ -279,36 +254,36 @@ class DevTwinHTTPEndpoints:
 
         # Development fallback for testing
         test_credentials = {
-            'admin@example.com': ('admin', 'platform_dev'),
-            'dev@example.com': ('developer', 'platform_dev'),
+            "admin@example.com": ("admin", "platform_dev"),
+            "dev@example.com": ("developer", "platform_dev"),
         }
 
         if email in test_credentials:
             role, tenant = test_credentials[email]
             if password == f"password_{role}":
                 return {
-                    'id': hash(email) % 1000,
-                    'email': email,
-                    'name': f"{role.title()} User",
-                    'role': role,
-                    'tenant_id': tenant
+                    "id": hash(email) % 1000,
+                    "email": email,
+                    "name": f"{role.title()} User",
+                    "role": role,
+                    "tenant_id": tenant,
                 }
 
         return None
 
-    def _generate_token(self, user: Dict) -> str:
+    def _generate_token(self, user: dict) -> str:
         """Generate cryptographically secure long-lived user token."""
         token_bytes = secrets.token_bytes(32)
         token = f"twn_{hashlib.sha256(token_bytes).hexdigest()}"
         return token
 
-    def _generate_session_token(self, user: Dict) -> str:
+    def _generate_session_token(self, user: dict) -> str:
         """Generate ephemeral session token with limited lifetime."""
         session_bytes = secrets.token_bytes(24)
         session_token = f"sess_{hashlib.sha256(session_bytes).hexdigest()}"
         return session_token
 
-    def _validate_token(self, token: str) -> Optional[Dict]:
+    def _validate_token(self, token: str) -> dict | None:
         """Validate token against token store.
 
         Returns user info if token is valid, None otherwise.
@@ -319,20 +294,20 @@ class DevTwinHTTPEndpoints:
 
         if token.startswith("twn_") and len(token) > 70:
             return {
-                'id': 1,
-                'email': 'system@example.com',
-                'role': 'system',
-                'tenant_id': 'platform_dev',
-                'token_type': 'long_lived'
+                "id": 1,
+                "email": "system@example.com",
+                "role": "system",
+                "tenant_id": "platform_dev",
+                "token_type": "long_lived",
             }
 
         if token.startswith("sess_") and len(token) > 70:
             return {
-                'id': 1,
-                'email': 'session@example.com',
-                'role': 'user',
-                'tenant_id': 'platform_dev',
-                'token_type': 'ephemeral'
+                "id": 1,
+                "email": "session@example.com",
+                "role": "user",
+                "tenant_id": "platform_dev",
+                "token_type": "ephemeral",
             }
 
         return None

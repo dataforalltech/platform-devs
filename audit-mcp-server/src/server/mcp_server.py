@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 from typing import Any
@@ -251,6 +250,7 @@ def build_server() -> tuple[Any, ...]:
 
     return server, settings, store, http_app
 
+
 def _dispatch(name: str, args: dict, settings: Any, store: AuditStore) -> dict:
     """Roteia para a tool correta."""
     try:
@@ -289,7 +289,9 @@ def build_app(validators: Any = None):
     return mount_lowlevel_streamable_http(
         server,
         resource=os.getenv("AUDIT_RESOURCE", "http://localhost:7105/mcp"),
-        prm_url=os.getenv("AUDIT_PRM_URL", "http://localhost:7105/.well-known/oauth-protected-resource"),
+        prm_url=os.getenv(
+            "AUDIT_PRM_URL", "http://localhost:7105/.well-known/oauth-protected-resource"
+        ),
         as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
         as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
         scopes_supported=SCOPES_SUPPORTED,
@@ -301,6 +303,7 @@ def build_app(validators: Any = None):
 def main() -> None:
     """Entry point — Streamable HTTP + auth."""
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7105")))
 
 

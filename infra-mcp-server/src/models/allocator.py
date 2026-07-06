@@ -31,11 +31,11 @@ from pydantic import BaseModel, Field, field_validator
 # --------------------------------------------------------------------- #
 # Specs com escala de risco/custo crescente. Specs novas exigem ADR.
 VMSpecName = Literal[
-    "cpu-small",   # ~2 vCPU / 4 GB — baixo custo, default p/ tarefas leves
+    "cpu-small",  # ~2 vCPU / 4 GB — baixo custo, default p/ tarefas leves
     "cpu-medium",  # ~4 vCPU / 16 GB
-    "cpu-large",   # ~8 vCPU / 32 GB
-    "high-mem",    # ~4 vCPU / 64 GB — caro
-    "gpu-a100",    # exige aprovação humana out-of-band
+    "cpu-large",  # ~8 vCPU / 32 GB
+    "high-mem",  # ~4 vCPU / 64 GB — caro
+    "gpu-a100",  # exige aprovação humana out-of-band
 ]
 
 # Specs que SEMPRE exigem aprovação humana — request_vm com elas vai para

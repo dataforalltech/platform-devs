@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 _lock = threading.Lock()
@@ -62,7 +62,7 @@ class AuditStore:
         """
         summary = input_summary or result.get("input_summary", {})
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "repo": summary.get("repository_name", "unknown"),
             "task_description": (summary.get("task_description") or "")[:200],
             "approved": result.get("approved", True),
@@ -138,7 +138,7 @@ class AuditStore:
 
         # Inverter (mais recente primeiro), paginar.
         entries.reverse()
-        return entries[offset: offset + limit]
+        return entries[offset : offset + limit]
 
     def stats(self) -> dict:
         """Estatísticas agregadas da trilha de auditoria."""

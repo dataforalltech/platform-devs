@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg2
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 def _now() -> str:
     """Retorna ISO timestamp com timezone."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class DocsStore:
@@ -37,7 +37,9 @@ class DocsStore:
             maxconn=settings.pg_max_conn,
             dsn=settings.pg_dsn,
         )
-        logger.info(f"✅ DocsStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)")
+        logger.info(
+            f"✅ DocsStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)"
+        )
 
     @contextmanager
     def _get_conn(self):
@@ -84,13 +86,15 @@ class DocsStore:
                         repo_path,
                         "audit",
                         f"Audit: {grade}",
-                        json.dumps({
-                            "score": score,
-                            "grade": grade,
-                            "summary": summary,
-                            "details": details,
-                            "duration_ms": duration_ms,
-                        }),
+                        json.dumps(
+                            {
+                                "score": score,
+                                "grade": grade,
+                                "summary": summary,
+                                "details": details,
+                                "duration_ms": duration_ms,
+                            }
+                        ),
                         "completed",
                     ),
                 )
@@ -120,16 +124,18 @@ class DocsStore:
                 result = []
                 for row in rows:
                     content = json.loads(row["content"]) if row["content"] else {}
-                    result.append({
-                        "id": row["id"],
-                        "repo_path": row["repo_path"],
-                        "title": row["title"],
-                        "score": content.get("score"),
-                        "grade": content.get("grade"),
-                        "summary": content.get("summary", {}),
-                        "details": content.get("details", {}),
-                        "created_at": row["created_at"],
-                    })
+                    result.append(
+                        {
+                            "id": row["id"],
+                            "repo_path": row["repo_path"],
+                            "title": row["title"],
+                            "score": content.get("score"),
+                            "grade": content.get("grade"),
+                            "summary": content.get("summary", {}),
+                            "details": content.get("details", {}),
+                            "created_at": row["created_at"],
+                        }
+                    )
                 return result
 
     # ────────────────────────────────────────────────────────────────────────── #
@@ -159,12 +165,14 @@ class DocsStore:
                     (
                         doc_type,
                         file_path,
-                        json.dumps({
-                            "word_count": word_count,
-                            "last_modified": last_modified,
-                            "content_hash": content_hash,
-                            "file_path": file_path,
-                        }),
+                        json.dumps(
+                            {
+                                "word_count": word_count,
+                                "last_modified": last_modified,
+                                "content_hash": content_hash,
+                                "file_path": file_path,
+                            }
+                        ),
                         repo_path,
                         file_path,
                     ),
@@ -182,12 +190,14 @@ class DocsStore:
                             repo_path,
                             doc_type,
                             file_path,
-                            json.dumps({
-                                "word_count": word_count,
-                                "last_modified": last_modified,
-                                "content_hash": content_hash,
-                                "file_path": file_path,
-                            }),
+                            json.dumps(
+                                {
+                                    "word_count": word_count,
+                                    "last_modified": last_modified,
+                                    "content_hash": content_hash,
+                                    "file_path": file_path,
+                                }
+                            ),
                             "indexed",
                         ),
                     )
@@ -209,17 +219,19 @@ class DocsStore:
                 result = []
                 for row in rows:
                     content = json.loads(row["content"]) if row["content"] else {}
-                    result.append({
-                        "id": row["id"],
-                        "repo_path": row["repo_path"],
-                        "doc_type": row["doc_type"],
-                        "title": row["title"],
-                        "word_count": content.get("word_count", 0),
-                        "last_modified": content.get("last_modified"),
-                        "content_hash": content.get("content_hash"),
-                        "file_path": content.get("file_path"),
-                        "created_at": row["created_at"],
-                    })
+                    result.append(
+                        {
+                            "id": row["id"],
+                            "repo_path": row["repo_path"],
+                            "doc_type": row["doc_type"],
+                            "title": row["title"],
+                            "word_count": content.get("word_count", 0),
+                            "last_modified": content.get("last_modified"),
+                            "content_hash": content.get("content_hash"),
+                            "file_path": content.get("file_path"),
+                            "created_at": row["created_at"],
+                        }
+                    )
                 return result
 
     def get_index(self, repo_path: str) -> list[dict[str, Any]]:
@@ -239,15 +251,17 @@ class DocsStore:
                 result = []
                 for row in rows:
                     content = json.loads(row["content"]) if row["content"] else {}
-                    result.append({
-                        "id": row["id"],
-                        "repo_path": row["repo_path"],
-                        "doc_type": row["doc_type"],
-                        "title": row["title"],
-                        "word_count": content.get("word_count", 0),
-                        "last_modified": content.get("last_modified"),
-                        "content_hash": content.get("content_hash"),
-                        "file_path": content.get("file_path"),
-                        "created_at": row["created_at"],
-                    })
+                    result.append(
+                        {
+                            "id": row["id"],
+                            "repo_path": row["repo_path"],
+                            "doc_type": row["doc_type"],
+                            "title": row["title"],
+                            "word_count": content.get("word_count", 0),
+                            "last_modified": content.get("last_modified"),
+                            "content_hash": content.get("content_hash"),
+                            "file_path": content.get("file_path"),
+                            "created_at": row["created_at"],
+                        }
+                    )
                 return result

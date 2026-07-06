@@ -4,9 +4,9 @@ Deploy-MCP HTTP Endpoints — GitHub + ACR Integration.
 Endpoints para gerenciar repositórios, workflows e imagens Docker.
 """
 
-from typing import Dict, Any, Optional, List
 import logging
 from datetime import datetime
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,9 @@ class DeployHTTPEndpoints:
 
     # ========== GET /repositories ==========
 
-    def get_repositories(self, organization: Optional[str] = None,
-                         status: Optional[str] = None) -> Dict[str, Any]:
+    def get_repositories(
+        self, organization: str | None = None, status: str | None = None
+    ) -> dict[str, Any]:
         """
         GET /repositories
 
@@ -57,32 +58,25 @@ class DeployHTTPEndpoints:
         """
         try:
             repositories = self.postgres_sync.list_repositories(
-                organization=organization,
-                status=status
+                organization=organization, status=status
             )
 
             if repositories is None:
-                return {
-                    'status': 500,
-                    'error': 'database_error'
-                }
+                return {"status": 500, "error": "database_error"}
 
             return {
-                'status': 200,
-                'repositories': [dict(r) for r in repositories],
-                'total': len(repositories)
+                "status": 200,
+                "repositories": [dict(r) for r in repositories],
+                "total": len(repositories),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /repositories/:name ==========
 
-    def get_repository(self, name: str) -> Dict[str, Any]:
+    def get_repository(self, name: str) -> dict[str, Any]:
         """
         GET /repositories/{name}
 
@@ -117,27 +111,20 @@ class DeployHTTPEndpoints:
             repository = self.postgres_sync.get_repository(name)
 
             if repository is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             return {
-                'status': 200,
-                **repository  # Spread repository dict
+                "status": 200,
+                **repository,  # Spread repository dict
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories/{name}: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /repositories ==========
 
-    def post_repositories(self, name: str, owner: str, url: str,
-                         **kwargs) -> Dict[str, Any]:
+    def post_repositories(self, name: str, owner: str, url: str, **kwargs) -> dict[str, Any]:
         """
         POST /repositories
 
@@ -171,52 +158,44 @@ class DeployHTTPEndpoints:
             # Step 1: Check if already exists
             existing = self.postgres_sync.get_repository(name)
             if existing:
-                return {
-                    'status': 409,
-                    'error': 'repository_already_exists'
-                }
+                return {"status": 409, "error": "repository_already_exists"}
 
             # Step 2: Register in PostgreSQL
             repo_data = {
-                'name': name,
-                'owner': owner,
-                'url': url,
-                'description': kwargs.get('description'),
-                'base_branch': kwargs.get('base_branch', 'develop'),
-                'main_branch': kwargs.get('main_branch', 'main'),
-                'language': kwargs.get('language'),
-                'topics': kwargs.get('topics', []),
+                "name": name,
+                "owner": owner,
+                "url": url,
+                "description": kwargs.get("description"),
+                "base_branch": kwargs.get("base_branch", "develop"),
+                "main_branch": kwargs.get("main_branch", "main"),
+                "language": kwargs.get("language"),
+                "topics": kwargs.get("topics", []),
             }
 
             self.postgres_sync.sync_repository_registered(repo_data)
 
             # Step 3: Log audit trail
             self.postgres_sync.log_action(
-                action='register',
-                repository_name=name,
-                details=repo_data
+                action="register", repository_name=name, details=repo_data
             )
 
             logger.info(f"✅ Repository registered: {name}")
 
             return {
-                'status': 201,
-                'id': None,  # Would be returned from PostgreSQL insert
-                'name': name,
-                'status': 'active',
-                'created_at': datetime.utcnow().isoformat() + 'Z'
+                "status": 201,
+                "id": None,  # Would be returned from PostgreSQL insert
+                "name": name,
+                "status": "active",
+                "created_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /repositories: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /repositories/:name/branches ==========
 
-    def get_repository_branches(self, name: str) -> Dict[str, Any]:
+    def get_repository_branches(self, name: str) -> dict[str, Any]:
         """
         GET /repositories/{name}/branches
 
@@ -246,28 +225,22 @@ class DeployHTTPEndpoints:
             branches = self.postgres_sync.list_branches(name)
 
             if branches is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             return {
-                'status': 200,
-                'repository': name,
-                'branches': [dict(b) for b in branches],
-                'total': len(branches)
+                "status": 200,
+                "repository": name,
+                "branches": [dict(b) for b in branches],
+                "total": len(branches),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories/{name}/branches: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /repositories/:name/workflows ==========
 
-    def get_repository_workflows(self, name: str) -> Dict[str, Any]:
+    def get_repository_workflows(self, name: str) -> dict[str, Any]:
         """
         GET /repositories/{name}/workflows
 
@@ -297,28 +270,22 @@ class DeployHTTPEndpoints:
             workflows = self.postgres_sync.list_workflows(name)
 
             if workflows is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             return {
-                'status': 200,
-                'repository': name,
-                'workflows': [dict(w) for w in workflows],
-                'total': len(workflows)
+                "status": 200,
+                "repository": name,
+                "workflows": [dict(w) for w in workflows],
+                "total": len(workflows),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories/{name}/workflows: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /repositories/:name/acr-images ==========
 
-    def get_repository_acr_images(self, name: str, limit: int = 20) -> Dict[str, Any]:
+    def get_repository_acr_images(self, name: str, limit: int = 20) -> dict[str, Any]:
         """
         GET /repositories/{name}/acr-images
 
@@ -345,29 +312,24 @@ class DeployHTTPEndpoints:
             images = self.postgres_sync.list_acr_images(name, limit=limit)
 
             if images is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             return {
-                'status': 200,
-                'repository': name,
-                'images': [dict(img) for img in images],
-                'total': len(images)
+                "status": 200,
+                "repository": name,
+                "images": [dict(img) for img in images],
+                "total": len(images),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories/{name}/acr-images: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== POST /repositories/:name/workflow-run ==========
 
-    def post_repository_workflow_run(self, name: str, workflow_id: str,
-                                      ref: str, **inputs) -> Dict[str, Any]:
+    def post_repository_workflow_run(
+        self, name: str, workflow_id: str, ref: str, **inputs
+    ) -> dict[str, Any]:
         """
         POST /repositories/{name}/workflow-run
 
@@ -399,10 +361,7 @@ class DeployHTTPEndpoints:
         try:
             repository = self.postgres_sync.get_repository(name)
             if repository is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             # Step 1: Trigger workflow (GitHub)
             run_id = self._trigger_workflow(name, workflow_id, ref, inputs)
@@ -413,42 +372,39 @@ class DeployHTTPEndpoints:
                 workflow_id=workflow_id,
                 run_id=run_id,
                 branch=ref,
-                inputs=inputs
+                inputs=inputs,
             )
 
             # Step 3: Audit trail
             self.postgres_sync.log_action(
-                action='workflow_triggered',
+                action="workflow_triggered",
                 repository_name=name,
                 details={
-                    'workflow_id': workflow_id,
-                    'run_id': run_id,
-                    'branch': ref,
-                    'inputs': inputs
-                }
+                    "workflow_id": workflow_id,
+                    "run_id": run_id,
+                    "branch": ref,
+                    "inputs": inputs,
+                },
             )
 
             logger.info(f"✅ Workflow triggered: {name}#{workflow_id} (run #{run_id})")
 
             return {
-                'status': 202,
-                'triggered': True,
-                'workflow_id': workflow_id,
-                'run_id': run_id,
-                'branch': ref,
-                'triggered_at': datetime.utcnow().isoformat() + 'Z'
+                "status": 202,
+                "triggered": True,
+                "workflow_id": workflow_id,
+                "run_id": run_id,
+                "branch": ref,
+                "triggered_at": datetime.utcnow().isoformat() + "Z",
             }
 
         except Exception as e:
             logger.error(f"Error in POST /repositories/{name}/workflow-run: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== GET /repositories/:name/pull-requests ==========
 
-    def get_repository_pull_requests(self, name: str, state: str = "open") -> Dict[str, Any]:
+    def get_repository_pull_requests(self, name: str, state: str = "open") -> dict[str, Any]:
         """
         GET /repositories/{name}/pull-requests
 
@@ -478,29 +434,24 @@ class DeployHTTPEndpoints:
             prs = self.postgres_sync.list_pull_requests(name, state=state)
 
             if prs is None:
-                return {
-                    'status': 404,
-                    'error': 'repository_not_found'
-                }
+                return {"status": 404, "error": "repository_not_found"}
 
             return {
-                'status': 200,
-                'repository': name,
-                'pull_requests': [dict(pr) for pr in prs],
-                'total': len(prs)
+                "status": 200,
+                "repository": name,
+                "pull_requests": [dict(pr) for pr in prs],
+                "total": len(prs),
             }
 
         except Exception as e:
             logger.error(f"Error in GET /repositories/{name}/pull-requests: {e}")
-            return {
-                'status': 500,
-                'error': 'internal_error'
-            }
+            return {"status": 500, "error": "internal_error"}
 
     # ========== Private Helpers ==========
 
-    def _trigger_workflow(self, repo: str, workflow_id: str, ref: str,
-                         inputs: Dict[str, str]) -> int:
+    def _trigger_workflow(
+        self, repo: str, workflow_id: str, ref: str, inputs: dict[str, str]
+    ) -> int:
         """Trigger GitHub workflow via GitHub API.
 
         Args:
@@ -513,6 +464,7 @@ class DeployHTTPEndpoints:
             GitHub run_id or mock ID if offline/disabled
         """
         import os
+
         import httpx
 
         github_token = os.getenv("GITHUB_TOKEN")
@@ -528,10 +480,7 @@ class DeployHTTPEndpoints:
 
             url = f"https://api.github.com/repos/{repo}/actions/workflows/{workflow_id}/dispatches"
 
-            payload = {
-                "ref": ref,
-                "inputs": inputs or {}
-            }
+            payload = {"ref": ref, "inputs": inputs or {}}
 
             response = httpx.post(url, json=payload, headers=headers, timeout=10)
 

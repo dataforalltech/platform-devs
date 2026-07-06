@@ -14,7 +14,7 @@ from src.utils.subprocess_runner import (
 
 
 def test_redact_masks_token():
-    line = 'export TOKEN=abcdef1234567890'
+    line = "export TOKEN=abcdef1234567890"
     out = _redact(line)
     assert "abcdef1234567890" not in out
     assert "***" in out
@@ -22,8 +22,8 @@ def test_redact_masks_token():
 
 def test_redact_masks_password_and_secret():
     assert "***" in _redact('password="hunter2"')
-    assert "***" in _redact('secret: shhh')
-    assert "***" in _redact('api_key=sk-real-token')
+    assert "***" in _redact("secret: shhh")
+    assert "***" in _redact("api_key=sk-real-token")
 
 
 def test_redact_does_not_touch_safe_lines():

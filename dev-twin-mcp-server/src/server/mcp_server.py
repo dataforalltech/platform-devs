@@ -9,12 +9,12 @@ Valida o token do usuário, carrega perfil e captura contexto de ambiente.
 
 Transporte: Streamable HTTP em :7101 (gateway e cross-MCP consultam via HTTP).
 """
-from __future__ import annotations
 
-import os
+from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -218,7 +218,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # Tools admin (register/revoke/rotate) mutam tokens de acesso → sensíveis, exigem twin:write.
 SCOPE_FOR_TOOL: dict[str, str] = {
     # ── Auth ── #
-    "authenticate": "twin:write",   # muta estado de sessão (autentica) → sensível
+    "authenticate": "twin:write",  # muta estado de sessão (autentica) → sensível
     "whoami": "twin:read",
     "get_twin_context": "twin:read",
     "refresh_context": "twin:write",  # recaptura/atualiza contexto da sessão

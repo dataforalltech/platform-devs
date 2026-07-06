@@ -23,10 +23,7 @@ def test_universal_rules_always_returned(repo):
 def test_layer_specific_rules_added(repo):
     res = get_agent_guidelines(repo, layer="integrations")
     assert res["layer"] == "integrations"
-    assert any(
-        "timeout" in r.lower() or "fallback" in r.lower()
-        for r in res["mandatory_rules"]
-    )
+    assert any("timeout" in r.lower() or "fallback" in r.lower() for r in res["mandatory_rules"])
     assert "integrations.md" in res["references"]
 
 

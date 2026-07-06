@@ -16,13 +16,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-
 from src.knowledge.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
     LeaseNotFound,
 )
+
 from src.models.allocator import VMRequest, now_utc
 
 

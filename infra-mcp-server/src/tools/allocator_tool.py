@@ -55,9 +55,7 @@ def request_vm(
     nova VM, fila, ou denial."""
     try:
         if spec not in _VALID_SPECS:
-            raise ValueError(
-                f"spec inválida: {spec!r}. Opções: {sorted(_VALID_SPECS)}"
-            )
+            raise ValueError(f"spec inválida: {spec!r}. Opções: {sorted(_VALID_SPECS)}")
         if priority not in _VALID_PRIORITIES:
             raise ValueError(f"priority inválida: {priority!r}")
         require_non_empty_string(owner, "owner")
@@ -174,9 +172,7 @@ def query_capacity(
 ) -> dict:
     try:
         if spec not in _VALID_SPECS:
-            raise ValueError(
-                f"spec inválida: {spec!r}. Opções: {sorted(_VALID_SPECS)}"
-            )
+            raise ValueError(f"spec inválida: {spec!r}. Opções: {sorted(_VALID_SPECS)}")
         result = store.query_capacity(spec, owner=owner)
         return result.model_dump(mode="json")
     except ValueError as e:

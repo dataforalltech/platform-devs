@@ -223,7 +223,11 @@ def terraform_plan(
         "no_changes_reason": (
             None
             if has_changes
-            else (_NO_CHANGES_RE.search(result.stdout).group(0) if _NO_CHANGES_RE.search(result.stdout) else "no changes")
+            else (
+                _NO_CHANGES_RE.search(result.stdout).group(0)
+                if _NO_CHANGES_RE.search(result.stdout)
+                else "no changes"
+            )
         ),
         "stdout_excerpt": result.stdout[-2000:] if result.stdout else "",
         "command": {

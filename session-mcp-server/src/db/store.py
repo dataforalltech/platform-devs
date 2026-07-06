@@ -15,7 +15,7 @@ import logging
 import random
 import uuid
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg2
@@ -46,7 +46,7 @@ def _generate_name() -> str:
 
 def _now() -> str:
     """Retorna ISO timestamp com timezone."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _new_id() -> str:
@@ -64,7 +64,9 @@ class SessionStore:
             maxconn=settings.pg_max_conn,
             dsn=settings.pg_dsn,
         )
-        logger.info(f"✅ SessionStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)")
+        logger.info(
+            f"✅ SessionStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)"
+        )
 
     @contextmanager
     def _get_conn(self):
@@ -178,7 +180,9 @@ class SessionStore:
                     (progress_percentage, session_id),
                 )
 
-    def set_session_branch(self, session_id: str, branch: str, base_branch: str | None = None) -> None:
+    def set_session_branch(
+        self, session_id: str, branch: str, base_branch: str | None = None
+    ) -> None:
         """Registra informações de branch (compatibilidade com session_tool.py)."""
         # Nota: PostgreSQL schema não tem colunas branch/base_branch
         # Armazenar em last_checkpoint_summary como fallback
@@ -265,7 +269,12 @@ class SessionStore:
                     VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
                     RETURNING id
                     """,
-                    (session_id, artifact_type, content, json.dumps(metadata) if metadata else None),
+                    (
+                        session_id,
+                        artifact_type,
+                        content,
+                        json.dumps(metadata) if metadata else None,
+                    ),
                 )
                 row = cur.fetchone()
                 return row[0]

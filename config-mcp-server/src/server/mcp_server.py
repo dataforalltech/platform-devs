@@ -13,12 +13,12 @@ HTTP API na porta 7100:
   Ver shared/config_client.py para o cliente.
 Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP).
 """
-from __future__ import annotations
 
-import os
+from __future__ import annotations
 
 import json
 import logging
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -98,7 +98,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "description": "Ex: 'credentials.acr', 'credentials.github', 'credentials.portainer'.",
                 },
                 "key": {"type": "string", "description": "Nome da variável."},
-                "value": {"type": "string", "description": "Valor da credencial (será encriptado)."},
+                "value": {
+                    "type": "string",
+                    "description": "Valor da credencial (será encriptado).",
+                },
                 "description": {
                     "type": "string",
                     "description": "Descrição opcional para documentação.",
@@ -188,7 +191,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "environment": {"type": "string", "description": "Ex: 'dev', 'staging', 'production'."},
+                "environment": {
+                    "type": "string",
+                    "description": "Ex: 'dev', 'staging', 'production'.",
+                },
                 "key": {"type": "string", "description": "Nome da variável. Ex: 'DATABASE_URL'."},
                 "value": {"type": "string", "description": "Valor da variável."},
             },
@@ -243,7 +249,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "path": {"type": "string", "description": "Caminho absoluto do arquivo .env."},
-                "key_filter": {"type": "string", "description": "Filtro substring nas chaves (case-insensitive). Ex: 'URL'."},
+                "key_filter": {
+                    "type": "string",
+                    "description": "Filtro substring nas chaves (case-insensitive). Ex: 'URL'.",
+                },
             },
         },
     },
@@ -258,9 +267,20 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["directory"],
             "additionalProperties": False,
             "properties": {
-                "directory": {"type": "string", "description": "Caminho do diretorio a escanear (ex: /path/to/platform-auth)."},
-                "include_pattern": {"type": "string", "default": ".env*", "description": "Glob para os arquivos. Default: .env*."},
-                "check_store": {"type": "boolean", "default": True, "description": "Verificar se os secrets ja estao no ConfigStore. Default: true."},
+                "directory": {
+                    "type": "string",
+                    "description": "Caminho do diretorio a escanear (ex: /path/to/platform-auth).",
+                },
+                "include_pattern": {
+                    "type": "string",
+                    "default": ".env*",
+                    "description": "Glob para os arquivos. Default: .env*.",
+                },
+                "check_store": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Verificar se os secrets ja estao no ConfigStore. Default: true.",
+                },
             },
         },
     },
@@ -275,10 +295,26 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["paths"],
             "additionalProperties": False,
             "properties": {
-                "paths": {"type": "array", "items": {"type": "string"}, "description": "Lista de caminhos dos arquivos .env."},
-                "keys": {"type": "array", "items": {"type": "string"}, "description": "Chaves explicitas a redact. Se omitido, usa auto_detect."},
-                "auto_detect": {"type": "boolean", "default": True, "description": "Detectar automaticamente via padrao de nomes. Default: true."},
-                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar arquivos. Default: false."},
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Lista de caminhos dos arquivos .env.",
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Chaves explicitas a redact. Se omitido, usa auto_detect.",
+                },
+                "auto_detect": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Detectar automaticamente via padrao de nomes. Default: true.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Simular sem alterar arquivos. Default: false.",
+                },
             },
         },
     },
@@ -294,9 +330,20 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "path": {"type": "string", "description": "Caminho do arquivo .env a importar."},
-                "environment": {"type": "string", "description": "Perfil de ambiente destino (ex: 'dev', 'local')."},
-                "overwrite": {"type": "boolean", "default": False, "description": "Sobrescrever vars ja existentes no store. Default: false."},
-                "secrets_only": {"type": "boolean", "default": False, "description": "Importar apenas vars identificadas como secrets. Default: false."},
+                "environment": {
+                    "type": "string",
+                    "description": "Perfil de ambiente destino (ex: 'dev', 'local').",
+                },
+                "overwrite": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Sobrescrever vars ja existentes no store. Default: false.",
+                },
+                "secrets_only": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Importar apenas vars identificadas como secrets. Default: false.",
+                },
             },
         },
     },
@@ -446,11 +493,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ─────────────────────────────────────────────────────────────────────────── #
 SCOPE_FOR_TOOL: dict[str, str] = {
     # ── Credentials — SENSÍVEL (segredos) ─────────────────────────────────── #
-    "get_credential": "config:read",          # SENSÍVEL: lê valor de segredo
-    "list_credentials": "config:read",        # SENSÍVEL: lista chaves de segredos
-    "set_credential": "config:write",         # SENSÍVEL: grava segredo
+    "get_credential": "config:read",  # SENSÍVEL: lê valor de segredo
+    "list_credentials": "config:read",  # SENSÍVEL: lista chaves de segredos
+    "set_credential": "config:write",  # SENSÍVEL: grava segredo
     "set_credential_secure": "config:write",  # SENSÍVEL: grava segredo via getpass
-    "delete_credential": "config:write",      # SENSÍVEL: remove segredo
+    "delete_credential": "config:write",  # SENSÍVEL: remove segredo
     # ── Env ───────────────────────────────────────────────────────────────── #
     "get_env_config": "config:read",
     "list_environments": "config:read",
@@ -459,7 +506,7 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "set_env_var": "config:write",
     "sync_env_file": "config:write",
     "redact_env_secrets": "config:write",
-    "push_env_to_store": "config:write",      # SENSÍVEL: importa segredos p/ o store
+    "push_env_to_store": "config:write",  # SENSÍVEL: importa segredos p/ o store
     # ── Workspace ─────────────────────────────────────────────────────────── #
     "get_workspace_config": "config:read",
     "list_workspace_config": "config:read",
@@ -578,7 +625,9 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
             limit=args.get("limit", 50),
         )
     if name == "set_env_var":
-        return set_env_var(store, environment=args["environment"], key=args["key"], value=args["value"])
+        return set_env_var(
+            store, environment=args["environment"], key=args["key"], value=args["value"]
+        )
     if name == "list_environments":
         return list_environments(store)
     if name == "sync_env_file":

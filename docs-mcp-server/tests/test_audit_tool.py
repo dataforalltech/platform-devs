@@ -12,17 +12,10 @@ from src.tools.audit_tool import (
 )
 
 _README = (
-    "# Test Service\n\n"
-    "## Installation\n\nRun pip install.\n\n"
-    "## Usage\n\nImport and use.\n"
+    "# Test Service\n\n## Installation\n\nRun pip install.\n\n## Usage\n\nImport and use.\n"
 ) * 5
 
-_CHANGELOG = (
-    "# Changelog\n\n"
-    "## [Unreleased]\n\n"
-    "## [1.0.0] - 2026-01-01\n\n"
-    "### Added\n- Initial\n"
-)
+_CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
 
 
 def test_audit_repo_saves_to_store(store, settings, tmp_path):

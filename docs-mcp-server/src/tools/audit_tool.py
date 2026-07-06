@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +12,7 @@ from .validation_tool import check_required_docs
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _run_git_log_timestamp(file_path: Path, cwd: Path) -> int | None:
@@ -96,7 +96,7 @@ def find_stale_docs(
             days_since = int(age_secs / 86400)
 
             if age_secs > threshold_secs:
-                last_updated = datetime.fromtimestamp(last_ts, tz=timezone.utc).isoformat()
+                last_updated = datetime.fromtimestamp(last_ts, tz=UTC).isoformat()
                 rel_path = str(fpath.relative_to(root)).replace("\\", "/")
                 stale_docs.append(
                     {
@@ -175,11 +175,7 @@ def audit_repo(
         freshness_score = max(0, 100 - int(stale_count / total_docs * 100))
 
     # Weighted score
-    overall_score = int(
-        completeness_pct * 0.35
-        + standards_score * 0.40
-        + freshness_score * 0.25
-    )
+    overall_score = int(completeness_pct * 0.35 + standards_score * 0.40 + freshness_score * 0.25)
     grade = _grade(overall_score)
 
     # Build recommendations
@@ -348,7 +344,10 @@ def generate_doc_report(
     action_items: list[dict[str, str]] = []
     if missing_required > 0:
         action_items.append(
-            {"priority": "high", "action": f"Adicionar {missing_required} arquivo(s) obrigatório(s)"}
+            {
+                "priority": "high",
+                "action": f"Adicionar {missing_required} arquivo(s) obrigatório(s)",
+            }
         )
     if stale_docs > 0:
         action_items.append(

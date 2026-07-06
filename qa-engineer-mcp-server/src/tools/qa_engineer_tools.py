@@ -1,4 +1,5 @@
 """QA-Engineer tools — funções puras que retornam dict."""
+
 from __future__ import annotations
 
 import os
@@ -8,18 +9,34 @@ def analyze_quality_requirement(requirement: str, context: dict | None = None) -
     ctx = context or {}
     return {
         "requirement": requirement,
-        "quality_dimensions": ["functional", "performance", "security", "usability", "reliability"],
+        "quality_dimensions": [
+            "functional",
+            "performance",
+            "security",
+            "usability",
+            "reliability",
+        ],
         "risk_level": "medium",
         "suggested_test_types": ["unit", "integration", "e2e", "api"],
         "automation_feasibility": "high",
         "estimated_test_cases": 15,
-        "entry_criteria": ["Código implementado", "Ambiente de teste disponível", "Dados de teste preparados"],
-        "exit_criteria": ["100% dos casos críticos passando", "Cobertura >= 80%", "0 bugs P1/P2 abertos"],
+        "entry_criteria": [
+            "Código implementado",
+            "Ambiente de teste disponível",
+            "Dados de teste preparados",
+        ],
+        "exit_criteria": [
+            "100% dos casos críticos passando",
+            "Cobertura >= 80%",
+            "0 bugs P1/P2 abertos",
+        ],
         "context": ctx,
     }
 
 
-def generate_test_plan(feature: str, scope: str = "full", team: str | None = None) -> dict:
+def generate_test_plan(
+    feature: str, scope: str = "full", team: str | None = None
+) -> dict:
     return {
         "title": f"Plano de Teste — {feature}",
         "scope": scope,
@@ -38,31 +55,56 @@ def generate_test_plan(feature: str, scope: str = "full", team: str | None = Non
         "environments": ["dev", "staging"],
         "tools": ["pytest", "playwright", "k6", "postman"],
         "risks": ["Ambiente instável", "Dados de teste inconsistentes"],
-        "schedule": {"preparation": "1 dia", "execution": "2 dias", "reporting": "0.5 dia"},
+        "schedule": {
+            "preparation": "1 dia",
+            "execution": "2 dias",
+            "reporting": "0.5 dia",
+        },
     }
 
 
-def generate_test_cases(feature: str, test_type: str = "functional", count: int = 5) -> dict:
+def generate_test_cases(
+    feature: str, test_type: str = "functional", count: int = 5
+) -> dict:
     cases = []
     for i in range(1, count + 1):
-        cases.append({
-            "id": f"TC-{i:03d}",
-            "title": f"Caso de teste {i} para {feature}",
-            "type": test_type,
-            "priority": "high" if i == 1 else "medium",
-            "preconditions": ["Usuário autenticado", "Ambiente configurado"],
-            "steps": [
-                {"step": 1, "action": "Acessar funcionalidade", "expected": "Funcionalidade carregada"},
-                {"step": 2, "action": "Executar ação principal", "expected": "Resultado esperado exibido"},
-                {"step": 3, "action": "Verificar estado final", "expected": "Estado correto persistido"},
-            ],
-            "expected_result": f"Comportamento esperado de {feature} funcionando corretamente",
-            "test_data": {"input": "dados de teste", "expected_output": "saída esperada"},
-        })
+        cases.append(
+            {
+                "id": f"TC-{i:03d}",
+                "title": f"Caso de teste {i} para {feature}",
+                "type": test_type,
+                "priority": "high" if i == 1 else "medium",
+                "preconditions": ["Usuário autenticado", "Ambiente configurado"],
+                "steps": [
+                    {
+                        "step": 1,
+                        "action": "Acessar funcionalidade",
+                        "expected": "Funcionalidade carregada",
+                    },
+                    {
+                        "step": 2,
+                        "action": "Executar ação principal",
+                        "expected": "Resultado esperado exibido",
+                    },
+                    {
+                        "step": 3,
+                        "action": "Verificar estado final",
+                        "expected": "Estado correto persistido",
+                    },
+                ],
+                "expected_result": f"Comportamento esperado de {feature} funcionando corretamente",
+                "test_data": {
+                    "input": "dados de teste",
+                    "expected_output": "saída esperada",
+                },
+            }
+        )
     return {"feature": feature, "test_type": test_type, "total": count, "cases": cases}
 
 
-def generate_gherkin_scenarios(feature: str, scenarios: list[str] | None = None) -> dict:
+def generate_gherkin_scenarios(
+    feature: str, scenarios: list[str] | None = None
+) -> dict:
     default_scenarios = scenarios or [
         "fluxo principal com sucesso",
         "validação de dados inválidos",
@@ -70,19 +112,21 @@ def generate_gherkin_scenarios(feature: str, scenarios: list[str] | None = None)
     ]
     gherkin_scenarios = []
     for i, scenario in enumerate(default_scenarios, 1):
-        gherkin_scenarios.append({
-            "id": f"SCN-{i:03d}",
-            "name": scenario.title(),
-            "gherkin": (
-                f"  Scenario: {scenario.title()}\n"
-                f"    Given que o usuário está autenticado\n"
-                f"    And a funcionalidade '{feature}' está disponível\n"
-                f"    When o usuário executa a ação de {scenario}\n"
-                f"    Then o sistema deve retornar o resultado esperado\n"
-                f"    And o estado deve ser persistido corretamente"
-            ),
-            "tags": ["@smoke" if i == 1 else "@regression"],
-        })
+        gherkin_scenarios.append(
+            {
+                "id": f"SCN-{i:03d}",
+                "name": scenario.title(),
+                "gherkin": (
+                    f"  Scenario: {scenario.title()}\n"
+                    f"    Given que o usuário está autenticado\n"
+                    f"    And a funcionalidade '{feature}' está disponível\n"
+                    f"    When o usuário executa a ação de {scenario}\n"
+                    f"    Then o sistema deve retornar o resultado esperado\n"
+                    f"    And o estado deve ser persistido corretamente"
+                ),
+                "tags": ["@smoke" if i == 1 else "@regression"],
+            }
+        )
     return {
         "feature": feature,
         "feature_block": f"Feature: {feature}\n  Como usuário do sistema\n  Quero {feature}\n  Para obter valor de negócio",
@@ -90,7 +134,9 @@ def generate_gherkin_scenarios(feature: str, scenarios: list[str] | None = None)
     }
 
 
-def generate_e2e_tests(feature: str, framework: str = "playwright", base_url: str | None = None) -> dict:
+def generate_e2e_tests(
+    feature: str, framework: str = "playwright", base_url: str | None = None
+) -> dict:
     base_url = base_url or os.getenv("TEST_APP_URL", "http://localhost:3000")
     if framework == "playwright":
         code = f"""import {{ test, expect }} from '@playwright/test';
@@ -139,10 +185,17 @@ test.describe('{feature}', () => {{
   }});
 }});"""
 
-    return {"feature": feature, "framework": framework, "base_url": base_url, "code": code}
+    return {
+        "feature": feature,
+        "framework": framework,
+        "base_url": base_url,
+        "code": code,
+    }
 
 
-def generate_api_tests(endpoint: str, method: str = "GET", base_url: str | None = None) -> dict:
+def generate_api_tests(
+    endpoint: str, method: str = "GET", base_url: str | None = None
+) -> dict:
     base_url = base_url or os.getenv("TEST_API_URL", "http://localhost:8000")
     return {
         "endpoint": endpoint,
@@ -153,7 +206,7 @@ import httpx
 
 BASE_URL = "{base_url}"
 
-class Test{method.title()}{endpoint.replace('/','').title()}:
+class Test{method.title()}{endpoint.replace("/", "").title()}:
     def test_success_response(self):
         response = httpx.{method.lower()}(f"{{BASE_URL}}{endpoint}")
         assert response.status_code == 200
@@ -233,35 +286,57 @@ def generate_cypress_tests(feature: str, base_url: str | None = None) -> dict:
     return generate_e2e_tests(feature, "cypress", base_url)
 
 
-def generate_postman_collection(api_name: str, base_url: str | None = None, endpoints: list[str] | None = None) -> dict:
+def generate_postman_collection(
+    api_name: str, base_url: str | None = None, endpoints: list[str] | None = None
+) -> dict:
     base_url = base_url or os.getenv("TEST_API_URL", "http://localhost:8000")
     endpoints = endpoints or ["/health", "/api/v1/resource"]
     items = []
     for ep in endpoints:
-        items.append({
-            "name": f"GET {ep}",
-            "request": {
-                "method": "GET",
-                "url": {"raw": f"{base_url}{ep}", "host": [base_url], "path": ep.split("/")},
-                "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
-            },
-            "event": [{"listen": "test", "script": {"exec": [
-                "pm.test('Status 200', () => pm.response.to.have.status(200));",
-                "pm.test('Valid JSON', () => pm.response.to.be.json);",
-            ]}}],
-        })
+        items.append(
+            {
+                "name": f"GET {ep}",
+                "request": {
+                    "method": "GET",
+                    "url": {
+                        "raw": f"{base_url}{ep}",
+                        "host": [base_url],
+                        "path": ep.split("/"),
+                    },
+                    "header": [{"key": "Authorization", "value": "Bearer {{token}}"}],
+                },
+                "event": [
+                    {
+                        "listen": "test",
+                        "script": {
+                            "exec": [
+                                "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                                "pm.test('Valid JSON', () => pm.response.to.be.json);",
+                            ]
+                        },
+                    }
+                ],
+            }
+        )
     return {
-        "info": {"name": api_name, "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"},
+        "info": {
+            "name": api_name,
+            "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+        },
         "item": items,
         "variable": [{"key": "token", "value": ""}],
     }
 
 
-def classify_bug_severity(description: str, impact: str = "medium", frequency: str = "sometimes") -> dict:
+def classify_bug_severity(
+    description: str, impact: str = "medium", frequency: str = "sometimes"
+) -> dict:
     impact_map = {"critical": 4, "high": 3, "medium": 2, "low": 1}
     freq_map = {"always": 4, "often": 3, "sometimes": 2, "rarely": 1}
     score = impact_map.get(impact, 2) * freq_map.get(frequency, 2)
-    severity = "P1" if score >= 9 else "P2" if score >= 6 else "P3" if score >= 3 else "P4"
+    severity = (
+        "P1" if score >= 9 else "P2" if score >= 6 else "P3" if score >= 3 else "P4"
+    )
     return {
         "description": description,
         "severity": severity,
@@ -278,13 +353,20 @@ def classify_bug_severity(description: str, impact: str = "medium", frequency: s
     }
 
 
-def generate_bug_report(title: str, steps: list[str] | None = None, severity: str = "P2") -> dict:
+def generate_bug_report(
+    title: str, steps: list[str] | None = None, severity: str = "P2"
+) -> dict:
     return {
         "title": title,
         "severity": severity,
         "status": "open",
         "environment": "staging",
-        "steps_to_reproduce": steps or ["1. Acessar funcionalidade", "2. Executar ação", "3. Observar comportamento"],
+        "steps_to_reproduce": steps
+        or [
+            "1. Acessar funcionalidade",
+            "2. Executar ação",
+            "3. Observar comportamento",
+        ],
         "expected_behavior": "Comportamento esperado conforme especificação",
         "actual_behavior": "Comportamento incorreto observado",
         "logs": "Stack trace ou logs relevantes aqui",
@@ -293,7 +375,9 @@ def generate_bug_report(title: str, steps: list[str] | None = None, severity: st
     }
 
 
-def validate_story_testability(story: str, acceptance_criteria: list[str] | None = None) -> dict:
+def validate_story_testability(
+    story: str, acceptance_criteria: list[str] | None = None
+) -> dict:
     criteria = acceptance_criteria or []
     issues = []
     if not criteria:
@@ -310,7 +394,9 @@ def validate_story_testability(story: str, acceptance_criteria: list[str] | None
             "Adicionar critérios de aceite mensuráveis",
             "Definir cenários de borda",
             "Especificar dados de teste necessários",
-        ] if issues else [],
+        ]
+        if issues
+        else [],
         "acceptance_criteria_count": len(criteria),
     }
 
@@ -328,16 +414,20 @@ def generate_quality_gate(service: str, thresholds: dict | None = None) -> dict:
     return {
         "service": service,
         "gates": [
-            {"name": k, "threshold": v, "operator": ">=" if "rate" in k or "coverage" in k else "<="}
+            {
+                "name": k,
+                "threshold": v,
+                "operator": ">=" if "rate" in k or "coverage" in k else "<=",
+            }
             for k, v in defaults.items()
         ],
         "blocking": True,
         "ci_config": f"""# Quality Gate — {service}
 quality_gate:
-  unit_coverage: {defaults['unit_test_coverage']}%
-  e2e_critical: {defaults['e2e_critical_pass_rate']}%
-  performance_p95: {defaults['performance_p95_ms']}ms
-  security_critical: {defaults['security_vulnerabilities_critical']}
+  unit_coverage: {defaults["unit_test_coverage"]}%
+  e2e_critical: {defaults["e2e_critical_pass_rate"]}%
+  performance_p95: {defaults["performance_p95_ms"]}ms
+  security_critical: {defaults["security_vulnerabilities_critical"]}
 """,
     }
 
@@ -347,11 +437,23 @@ def generate_uat_checklist(feature: str, stakeholders: list[str] | None = None) 
         "feature": feature,
         "stakeholders": stakeholders or ["Product Owner", "End User", "QA"],
         "checklist": [
-            {"item": "Fluxo principal funciona conforme especificado", "category": "functional"},
-            {"item": "Fluxos alternativos tratados corretamente", "category": "functional"},
+            {
+                "item": "Fluxo principal funciona conforme especificado",
+                "category": "functional",
+            },
+            {
+                "item": "Fluxos alternativos tratados corretamente",
+                "category": "functional",
+            },
             {"item": "Mensagens de erro são claras e úteis", "category": "usability"},
-            {"item": "Performance aceitável (<2s para ações principais)", "category": "performance"},
-            {"item": "Acessibilidade: navegação por teclado funciona", "category": "accessibility"},
+            {
+                "item": "Performance aceitável (<2s para ações principais)",
+                "category": "performance",
+            },
+            {
+                "item": "Acessibilidade: navegação por teclado funciona",
+                "category": "accessibility",
+            },
             {"item": "Funciona nos browsers suportados", "category": "compatibility"},
             {"item": "Dados persistidos corretamente", "category": "data"},
             {"item": "Permissões funcionam como esperado", "category": "security"},
@@ -368,16 +470,22 @@ def review_test_coverage(module: str, current_coverage: float = 0.0) -> dict:
         "target_coverage": 80.0,
         "gap": gap,
         "status": "✅ OK" if gap == 0 else f"⚠️ Faltam {gap:.1f}%",
-        "untested_areas": ["error handlers", "edge cases", "authentication paths"] if gap > 0 else [],
+        "untested_areas": ["error handlers", "edge cases", "authentication paths"]
+        if gap > 0
+        else [],
         "recommendations": [
             f"Adicionar testes para cobrir os {gap:.0f}% restantes",
             "Priorizar fluxos críticos e de erro",
             "Usar mutation testing para avaliar qualidade dos testes",
-        ] if gap > 0 else ["Cobertura atingida — manter qualidade"],
+        ]
+        if gap > 0
+        else ["Cobertura atingida — manter qualidade"],
     }
 
 
-def generate_k6_performance_test(endpoint: str, vus: int = 10, duration: str = "30s") -> dict:
+def generate_k6_performance_test(
+    endpoint: str, vus: int = 10, duration: str = "30s"
+) -> dict:
     code = f"""import http from 'k6/http';
 import {{ check, sleep }} from 'k6';
 
@@ -408,14 +516,29 @@ export default function () {{
     }
 
 
-def generate_regression_suite(service: str, test_cases: list[str] | None = None) -> dict:
-    cases = test_cases or ["login", "cadastro", "listagem", "criação", "edição", "exclusão"]
+def generate_regression_suite(
+    service: str, test_cases: list[str] | None = None
+) -> dict:
+    cases = test_cases or [
+        "login",
+        "cadastro",
+        "listagem",
+        "criação",
+        "edição",
+        "exclusão",
+    ]
     return {
         "service": service,
         "suite_name": f"Regression Suite — {service}",
         "total_cases": len(cases),
-        "cases": [{"id": f"REG-{i:03d}", "name": case, "priority": "critical" if i < 3 else "high"}
-                  for i, case in enumerate(cases, 1)],
+        "cases": [
+            {
+                "id": f"REG-{i:03d}",
+                "name": case,
+                "priority": "critical" if i < 3 else "high",
+            }
+            for i, case in enumerate(cases, 1)
+        ],
         "execution_order": "parallel",
         "estimated_time": f"{len(cases) * 2} minutos",
         "run_on": ["push to main", "PR merge", "pre-release"],

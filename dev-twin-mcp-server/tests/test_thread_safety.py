@@ -3,6 +3,7 @@
 Verifica que múltiplas threads concorrendo em set/get/clear não causam
 race conditions ou corrupção de estado.
 """
+
 from __future__ import annotations
 
 import threading

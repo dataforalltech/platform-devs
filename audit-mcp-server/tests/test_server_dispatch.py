@@ -1,8 +1,6 @@
 import pytest
 
-from src.server.mcp_server import _TOOL_SCHEMAS, _EXPECTED, _dispatch
-from src.config.settings import AuditSettings
-from src.db.store import AuditStore
+from src.server.mcp_server import _EXPECTED, _TOOL_SCHEMAS, _dispatch
 
 
 def test_all_tools_registered():

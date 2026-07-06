@@ -63,9 +63,17 @@ def check_doc_standards(
 
     if missing:
         for m in missing:
-            all_issues.append({"severity": "error", "source": "completeness", "message": f"Arquivo obrigatório ausente: {m}"})
+            all_issues.append(
+                {
+                    "severity": "error",
+                    "source": "completeness",
+                    "message": f"Arquivo obrigatório ausente: {m}",
+                }
+            )
         recommendations.append(f"Adicionar arquivos obrigatórios: {', '.join(missing)}")
-        completeness_detail = f"{len(present)}/{len(present) + len(missing)} docs obrigatórios presentes"
+        completeness_detail = (
+            f"{len(present)}/{len(present) + len(missing)} docs obrigatórios presentes"
+        )
     else:
         completeness_detail = f"{len(present)}/{len(present)} docs obrigatórios presentes"
 
@@ -109,7 +117,9 @@ def check_doc_standards(
             validity_details.append(f"{fname} OK")
 
     validity_score = int(sum(validity_scores) / len(validity_scores)) if validity_scores else 100
-    validity_detail = "; ".join(validity_details[:5]) if validity_details else "Nenhum doc encontrado"
+    validity_detail = (
+        "; ".join(validity_details[:5]) if validity_details else "Nenhum doc encontrado"
+    )
 
     if validity_score < 80:
         recommendations.append("Corrigir estrutura dos documentos — seções obrigatórias ausentes")
@@ -172,14 +182,12 @@ def check_doc_standards(
                         "message": f"{link_result['broken']} link(s) quebrado(s)",
                     }
                 )
-                recommendations.append(f"Corrigir {link_result['broken']} link(s) quebrado(s) em {doc_name}")
+                recommendations.append(
+                    f"Corrigir {link_result['broken']} link(s) quebrado(s) em {doc_name}"
+                )
 
     # Compute overall score
-    overall_score = int(
-        completeness_score * 0.30
-        + validity_score * 0.40
-        + quality_score * 0.30
-    )
+    overall_score = int(completeness_score * 0.30 + validity_score * 0.40 + quality_score * 0.30)
     grade = _grade(overall_score)
 
     return {

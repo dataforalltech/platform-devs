@@ -1,11 +1,6 @@
 """Testes do TokenStore."""
+
 from __future__ import annotations
-
-import time
-
-import pytest
-
-from src.knowledge.token_store import TokenStore, TokenStoreError
 
 
 class TestTokenStore:
@@ -76,24 +71,19 @@ class TestTokenStore:
         assert validated["last_used_at"] is not None
 
     def test_scopes_stored_correctly(self, store):
-        record = store.register(
-            name="G", email="g@test.com", scopes=["deploy", "qa"]
-        )
+        record = store.register(name="G", email="g@test.com", scopes=["deploy", "qa"])
         import json
+
         validated = store.validate(record["token"])
         assert json.loads(validated["scopes"]) == ["deploy", "qa"]
 
     def test_environment_stored_correctly(self, store):
-        record = store.register(
-            name="H", email="h@test.com", environment="production"
-        )
+        record = store.register(name="H", email="h@test.com", environment="production")
         validated = store.validate(record["token"])
         assert validated["environment"] == "production"
 
     def test_tenant_id_stored_correctly(self, store):
-        record = store.register(
-            name="I", email="i@test.com", tenant_id="tenant_abc123"
-        )
+        record = store.register(name="I", email="i@test.com", tenant_id="tenant_abc123")
         assert record["tenant_id"] == "tenant_abc123"
         validated = store.validate(record["token"])
         assert validated["tenant_id"] == "tenant_abc123"

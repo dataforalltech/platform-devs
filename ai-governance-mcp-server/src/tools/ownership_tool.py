@@ -73,6 +73,7 @@ _LIB_FILE_PATTERNS = [
 # get_service_ownership                                                   #
 # ---------------------------------------------------------------------- #
 
+
 def get_service_ownership(repo: GovernanceRepository, service_name: str) -> dict:
     """O que o serviço possui, o que NÃO deve fazer e quem ele chama.
 
@@ -86,8 +87,7 @@ def get_service_ownership(repo: GovernanceRepository, service_name: str) -> dict
     if node_id is None:
         # Tenta listar serviços disponíveis para ajudar
         available = sorted(
-            nid for nid, data in g.graph.nodes(data=True)
-            if data.get("kind") == "service"
+            nid for nid, data in g.graph.nodes(data=True) if data.get("kind") == "service"
         )
         return {
             "service_name": service_name,
@@ -157,6 +157,7 @@ def get_service_ownership(repo: GovernanceRepository, service_name: str) -> dict
 # get_service_dependencies                                                #
 # ---------------------------------------------------------------------- #
 
+
 def get_service_dependencies(repo: GovernanceRepository, service_name: str) -> dict:
     """Upstream (o que consome) + downstream (quem consome) de um serviço.
 
@@ -211,6 +212,7 @@ def get_service_dependencies(repo: GovernanceRepository, service_name: str) -> d
 # get_port_map                                                            #
 # ---------------------------------------------------------------------- #
 
+
 def get_port_map(repo: GovernanceRepository) -> dict:
     """Mapeamento canônico porta → serviço (§47 AGENTS.md).
 
@@ -225,12 +227,14 @@ def get_port_map(repo: GovernanceRepository) -> dict:
         port = data.get("port")
         if port is None:
             continue
-        entries.append({
-            "port": int(port),
-            "service": node_id,
-            "gateway_prefix": data.get("gateway_prefix"),
-            "status": data.get("status", "unknown"),
-        })
+        entries.append(
+            {
+                "port": int(port),
+                "service": node_id,
+                "gateway_prefix": data.get("gateway_prefix"),
+                "status": data.get("status", "unknown"),
+            }
+        )
 
     entries.sort(key=lambda e: e["port"])
     used_ports = {e["port"] for e in entries}
@@ -263,6 +267,7 @@ def get_port_map(repo: GovernanceRepository) -> dict:
 # ---------------------------------------------------------------------- #
 # check_scope                                                             #
 # ---------------------------------------------------------------------- #
+
 
 def check_scope(
     repo: GovernanceRepository,
@@ -369,6 +374,7 @@ def check_scope(
 # validate_lib_change                                                     #
 # ---------------------------------------------------------------------- #
 
+
 def validate_lib_change(
     repo: GovernanceRepository,
     lib_name: str,
@@ -427,6 +433,7 @@ def validate_lib_change(
 # ---------------------------------------------------------------------- #
 # Helpers                                                                 #
 # ---------------------------------------------------------------------- #
+
 
 def _resolve_service(g, service_name: str) -> str | None:
     """Resolve service_name para o id canônico, incluindo aliases e nome parcial."""

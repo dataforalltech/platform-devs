@@ -75,7 +75,7 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "get_service": "services:read",
     "list_services": "services:read",
     "update_service": "services:write",
-    "unregister_service": "services:write",   # deregister
+    "unregister_service": "services:write",  # deregister
     # PortMap
     "get_port_map": "services:read",
     "find_by_port": "services:read",
@@ -91,14 +91,14 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "reload_service": "services:write",
     # Gateway
     "get_gateway_map": "services:read",
-    "update_service_gateway": "services:write",   # configure
+    "update_service_gateway": "services:write",  # configure
     "sync_registry": "services:write",
     # Launch
     "launch_service": "services:write",
     "stop_service": "services:write",
     # Env (edições de arquivo .env são mutações)
     "read_env_file": "services:read",
-    "set_env_var": "services:write",              # configure
+    "set_env_var": "services:write",  # configure
     "sync_service_urls": "services:write",
     "audit_env_files": "services:read",
     "redact_env_secrets": "services:write",
@@ -149,8 +149,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "type": {
                     "type": "string",
                     "enum": [
-                        "docker", "process", "remote", "unknown",
-                        "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+                        "docker",
+                        "process",
+                        "remote",
+                        "unknown",
+                        "mysql",
+                        "mariadb",
+                        "postgres",
+                        "redis",
+                        "kafka",
+                        "mongodb",
                     ],
                     "description": "Tipo do servico. Default: unknown.",
                     "default": "unknown",
@@ -229,8 +237,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "type": {
                     "type": "string",
                     "enum": [
-                        "docker", "process", "remote", "unknown",
-                        "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+                        "docker",
+                        "process",
+                        "remote",
+                        "unknown",
+                        "mysql",
+                        "mariadb",
+                        "postgres",
+                        "redis",
+                        "kafka",
+                        "mongodb",
                     ],
                     "description": "Filtrar por tipo.",
                 },
@@ -569,33 +585,92 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["name", "mode", "port"],
             "additionalProperties": False,
             "properties": {
-                "name": {"type": "string", "description": "Nome do servico (usado no registry e como container name)."},
+                "name": {
+                    "type": "string",
+                    "description": "Nome do servico (usado no registry e como container name).",
+                },
                 "mode": {
                     "type": "string",
                     "enum": ["uvicorn", "docker", "docker-compose"],
                     "description": "Modo de start.",
                 },
-                "port": {"type": "integer", "minimum": 1, "maximum": 65535, "description": "Portado host."},
-                "app": {"type": "string", "description": "uvicorn: caminho ASGI (ex: 'mypackage.main:app')."},
-                "host": {"type": "string", "default": "localhost", "description": "Host parauvicorn. Default: localhost."},
-                "cwd": {"type": "string", "description": "Diretorio de trabalho (uvicorn / docker-compose)."},
-                "extra_args": {"type": "array", "items": {"type": "string"}, "description": "Args extras passados ao comando."},
-                "env_vars": {"type": "object", "additionalProperties": {"type": "string"}, "description": "Variaveis de ambiente."},
-                "image": {"type": "string", "description": "docker: imagem Docker (ex: 'nginx:latest')."},
-                "container_port": {"type": "integer", "description": "docker: portainternado container. Default: igual ao port."},
-                "container_name": {"type": "string", "description": "docker: nome do container. Default: igual ao name."},
-                "compose_file": {"type": "string", "description": "docker-compose: path parao compose file. Default: docker-compose.yml."},
-                "compose_service": {"type": "string", "description": "docker-compose: nome do servico no compose. Default: igual ao name."},
-                "health_path": {"type": "string", "default": "/v1/health", "description": "Path do health check. Default: /v1/health."},
+                "port": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 65535,
+                    "description": "Portado host.",
+                },
+                "app": {
+                    "type": "string",
+                    "description": "uvicorn: caminho ASGI (ex: 'mypackage.main:app').",
+                },
+                "host": {
+                    "type": "string",
+                    "default": "localhost",
+                    "description": "Host parauvicorn. Default: localhost.",
+                },
+                "cwd": {
+                    "type": "string",
+                    "description": "Diretorio de trabalho (uvicorn / docker-compose).",
+                },
+                "extra_args": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Args extras passados ao comando.",
+                },
+                "env_vars": {
+                    "type": "object",
+                    "additionalProperties": {"type": "string"},
+                    "description": "Variaveis de ambiente.",
+                },
+                "image": {
+                    "type": "string",
+                    "description": "docker: imagem Docker (ex: 'nginx:latest').",
+                },
+                "container_port": {
+                    "type": "integer",
+                    "description": "docker: portainternado container. Default: igual ao port.",
+                },
+                "container_name": {
+                    "type": "string",
+                    "description": "docker: nome do container. Default: igual ao name.",
+                },
+                "compose_file": {
+                    "type": "string",
+                    "description": "docker-compose: path parao compose file. Default: docker-compose.yml.",
+                },
+                "compose_service": {
+                    "type": "string",
+                    "description": "docker-compose: nome do servico no compose. Default: igual ao name.",
+                },
+                "health_path": {
+                    "type": "string",
+                    "default": "/v1/health",
+                    "description": "Path do health check. Default: /v1/health.",
+                },
                 "environment": {
                     "type": "string",
                     "enum": ["local", "dev", "hml", "prod"],
                     "default": "local",
                     "description": "Ambiente pararegistro.",
                 },
-                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags parao servico."},
-                "wait_timeout": {"type": "integer", "minimum": 1, "maximum": 300, "default": 30, "description": "Segundos aguardando o servico responder. Default: 30."},
-                "detach": {"type": "boolean", "default": True, "description": "Rodar em background. Default: true."},
+                "tags": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Tags parao servico.",
+                },
+                "wait_timeout": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300,
+                    "default": 30,
+                    "description": "Segundos aguardando o servico responder. Default: 30.",
+                },
+                "detach": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Rodar em background. Default: true.",
+                },
             },
         },
     },
@@ -616,7 +691,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "enum": ["docker", "docker-compose", "process"],
                     "description": "Forcar tipo de stop. Se omitido, detectapelo registro.",
                 },
-                "timeout": {"type": "integer", "minimum": 1, "maximum": 120, "default": 10, "description": "Timeout em segundos paradocker stop. Default: 10."},
+                "timeout": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 120,
+                    "default": 10,
+                    "description": "Timeout em segundos paradocker stop. Default: 10.",
+                },
             },
         },
     },
@@ -631,8 +712,14 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["path"],
             "additionalProperties": False,
             "properties": {
-                "path": {"type": "string", "description": "Caminho absoluto ou relativo do arquivo .env."},
-                "key_filter": {"type": "string", "description": "Substring parafiltrar chaves (case-insensitive). Ex: 'URL' retornaapenas vars URL_*."},
+                "path": {
+                    "type": "string",
+                    "description": "Caminho absoluto ou relativo do arquivo .env.",
+                },
+                "key_filter": {
+                    "type": "string",
+                    "description": "Substring parafiltrar chaves (case-insensitive). Ex: 'URL' retornaapenas vars URL_*.",
+                },
             },
         },
     },
@@ -655,7 +742,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "default": True,
                     "description": "Criar avariavel se naoo existir. Default: true.",
                 },
-                "comment": {"type": "string", "description": "Comentario aadicionar acimadavariavel (so quando criando)."},
+                "comment": {
+                    "type": "string",
+                    "description": "Comentario aadicionar acimadavariavel (so quando criando).",
+                },
             },
         },
     },
@@ -675,7 +765,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "url_map": {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
-                    "description": "Mapeamento explicito {ENV_VAR: service_name}. Ex: {\"URL_ADMIN\": \"platform-admin\"}.",
+                    "description": 'Mapeamento explicito {ENV_VAR: service_name}. Ex: {"URL_ADMIN": "platform-admin"}.',
                 },
                 "url_suffix": {
                     "type": "string",
@@ -704,8 +794,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "directory": {"type": "string", "description": "Caminho do diretorio a escanear."},
-                "include_pattern": {"type": "string", "default": ".env*", "description": "Glob para os arquivos. Default: .env*."},
-                "check_registry_urls": {"type": "boolean", "default": True, "description": "Verificar URLs contra o registry. Default: true."},
+                "include_pattern": {
+                    "type": "string",
+                    "default": ".env*",
+                    "description": "Glob para os arquivos. Default: .env*.",
+                },
+                "check_registry_urls": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Verificar URLs contra o registry. Default: true.",
+                },
             },
         },
     },
@@ -721,10 +819,26 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["paths"],
             "additionalProperties": False,
             "properties": {
-                "paths": {"type": "array", "items": {"type": "string"}, "description": "Lista de caminhos dos arquivos .env a processar."},
-                "keys": {"type": "array", "items": {"type": "string"}, "description": "Chaves explicitas a redact (ex: [JWT_SECRET_KEY]). Se omitido, usa auto_detect."},
-                "auto_detect": {"type": "boolean", "default": True, "description": "Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: true."},
-                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar arquivos. Default: false."},
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Lista de caminhos dos arquivos .env a processar.",
+                },
+                "keys": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Chaves explicitas a redact (ex: [JWT_SECRET_KEY]). Se omitido, usa auto_detect.",
+                },
+                "auto_detect": {
+                    "type": "boolean",
+                    "default": True,
+                    "description": "Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: true.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Simular sem alterar arquivos. Default: false.",
+                },
             },
         },
     },
@@ -740,18 +854,42 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["name", "kind"],
             "additionalProperties": False,
             "properties": {
-                "name": {"type": "string", "description": "Nome unico no registry (ex: mysql, redis, kafka)."},
+                "name": {
+                    "type": "string",
+                    "description": "Nome unico no registry (ex: mysql, redis, kafka).",
+                },
                 "kind": {
                     "type": "string",
                     "enum": ["mysql", "mariadb", "postgres", "redis", "kafka", "mongodb"],
                     "description": "Tipo de infraestrutura.",
                 },
-                "host": {"type": "string", "default": "localhost", "description": "Host. Default: localhost."},
-                "port": {"type": "integer", "description": "Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379, kafka:9092)."},
-                "host_port": {"type": "integer", "description": "Porta mapeada no host para acesso externo (Kafka EXTERNAL listener). Ex: 9094."},
-                "environment": {"type": "string", "default": "local", "description": "Ambiente. Default: local."},
-                "container_name": {"type": "string", "description": "Nome do container Docker, se aplicavel."},
-                "metadata": {"type": "object", "additionalProperties": True, "description": "Metadados extras livres."},
+                "host": {
+                    "type": "string",
+                    "default": "localhost",
+                    "description": "Host. Default: localhost.",
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379, kafka:9092).",
+                },
+                "host_port": {
+                    "type": "integer",
+                    "description": "Porta mapeada no host para acesso externo (Kafka EXTERNAL listener). Ex: 9094.",
+                },
+                "environment": {
+                    "type": "string",
+                    "default": "local",
+                    "description": "Ambiente. Default: local.",
+                },
+                "container_name": {
+                    "type": "string",
+                    "description": "Nome do container Docker, se aplicavel.",
+                },
+                "metadata": {
+                    "type": "object",
+                    "additionalProperties": True,
+                    "description": "Metadados extras livres.",
+                },
             },
         },
     },
@@ -766,8 +904,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "timeout": {"type": "integer", "default": 10, "description": "Timeout do docker ps em segundos. Default: 10."},
-                "environment": {"type": "string", "default": "local", "description": "Ambiente a marcar nos registros. Default: local."},
+                "timeout": {
+                    "type": "integer",
+                    "default": 10,
+                    "description": "Timeout do docker ps em segundos. Default: 10.",
+                },
+                "environment": {
+                    "type": "string",
+                    "default": "local",
+                    "description": "Ambiente a marcar nos registros. Default: local.",
+                },
             },
         },
     },
@@ -785,8 +931,15 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["path"],
             "additionalProperties": False,
             "properties": {
-                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env a atualizar."},
-                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar o arquivo. Default: false."},
+                "path": {
+                    "type": "string",
+                    "description": "Caminho absoluto do arquivo .env a atualizar.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Simular sem alterar o arquivo. Default: false.",
+                },
                 "db_kind": {
                     "type": "string",
                     "enum": ["mysql", "mariadb", "postgres"],
@@ -842,8 +995,15 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "required": ["path"],
             "additionalProperties": False,
             "properties": {
-                "path": {"type": "string", "description": "Caminho absoluto do arquivo .env a atualizar."},
-                "dry_run": {"type": "boolean", "default": False, "description": "Simular sem alterar o arquivo. Default: false."},
+                "path": {
+                    "type": "string",
+                    "description": "Caminho absoluto do arquivo .env a atualizar.",
+                },
+                "dry_run": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Simular sem alterar o arquivo. Default: false.",
+                },
             },
         },
     },
@@ -862,10 +1022,24 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "name": {"type": "string", "description": "Nome do servico no registry."},
-                "lines": {"type": "integer", "default": 100, "description": "Numero de linhas a retornar. Default: 100."},
-                "since": {"type": "string", "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional."},
-                "grep": {"type": "string", "description": "Filtro regex case-insensitive nas linhas. Opcional."},
-                "timestamps": {"type": "boolean", "default": False, "description": "Inclui timestamp Docker. Default: false."},
+                "lines": {
+                    "type": "integer",
+                    "default": 100,
+                    "description": "Numero de linhas a retornar. Default: 100.",
+                },
+                "since": {
+                    "type": "string",
+                    "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional.",
+                },
+                "grep": {
+                    "type": "string",
+                    "description": "Filtro regex case-insensitive nas linhas. Opcional.",
+                },
+                "timestamps": {
+                    "type": "boolean",
+                    "default": False,
+                    "description": "Inclui timestamp Docker. Default: false.",
+                },
             },
         },
     },
@@ -882,9 +1056,19 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "name": {"type": "string", "description": "Nome do servico no registry."},
-                "pattern": {"type": "string", "description": "Padrao regex a buscar nos logs (case-insensitive)."},
-                "lines": {"type": "integer", "default": 500, "description": "Janela de linhas a vasculhar. Default: 500."},
-                "since": {"type": "string", "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional."},
+                "pattern": {
+                    "type": "string",
+                    "description": "Padrao regex a buscar nos logs (case-insensitive).",
+                },
+                "lines": {
+                    "type": "integer",
+                    "default": 500,
+                    "description": "Janela de linhas a vasculhar. Default: 500.",
+                },
+                "since": {
+                    "type": "string",
+                    "description": "Janela de tempo: '30m', '1h', '5s' ou ISO 8601. Opcional.",
+                },
             },
         },
     },
@@ -928,6 +1112,7 @@ def _build_http_app(store: ServiceStore) -> FastAPI:
         svc = store.get(name)
         if svc is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail=f"Servico nao encontrado: {name}")
 
         source_info = _resolve_log_source(svc)
@@ -939,8 +1124,10 @@ def _build_http_app(store: ServiceStore) -> FastAPI:
         elif source == "file":
             gen = _stream_file_logs(target, lines=lines, grep=grep)
         else:
+
             async def _no_source():
                 yield 'data: {"error": "no_log_source", "detail": "Servico nao possui fonte de log configurada."}\n\n'
+
             gen = _no_source()
 
         return StreamingResponse(gen, media_type="text/event-stream")

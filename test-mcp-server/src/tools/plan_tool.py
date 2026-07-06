@@ -47,6 +47,9 @@ def list_test_plans(
 ) -> dict[str, Any]:
     """Lista planos de teste, opcionalmente filtrados por status."""
     if status and status not in _VALID_STATUSES:
-        return {"error": "ValidationError", "details": f"status deve ser um de: {sorted(_VALID_STATUSES)}"}
+        return {
+            "error": "ValidationError",
+            "details": f"status deve ser um de: {sorted(_VALID_STATUSES)}",
+        }
     plans = store.list_plans(status=status, limit=min(limit, 100))
     return {"count": len(plans), "plans": plans}

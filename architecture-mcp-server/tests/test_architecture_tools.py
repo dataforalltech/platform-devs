@@ -4,11 +4,11 @@ Foco: a saída deve ser DERIVADA DOS INPUTS (nada de listas fixas/constantes).
 Cada teste passa inputs custom e afirma que eles reaparecem na saída, e que
 inputs *não* fornecidos não vazam valores canônicos antigos ('User'/'Admin').
 """
+
 from __future__ import annotations
 
 import re
 
-import pytest
 
 from src.tools.architecture_tools import (
     generate_architecture,
@@ -22,9 +22,18 @@ from src.tools.architecture_tools import (
 def test_c4_uses_custom_actors_not_fixed_list():
     result = generate_c4_diagram(
         system_name="Billing Platform",
-        actors=["Merchant", {"name": "Fraud Analyst", "type": "person", "description": "reviews cases"}],
+        actors=[
+            "Merchant",
+            {"name": "Fraud Analyst", "type": "person", "description": "reviews cases"},
+        ],
         containers=[{"name": "Payments API", "technology": "FastAPI"}, "Postgres"],
-        relationships=[{"source": "Merchant", "target": "Payments API", "description": "submits charge"}],
+        relationships=[
+            {
+                "source": "Merchant",
+                "target": "Payments API",
+                "description": "submits charge",
+            }
+        ],
     )
 
     ctx = result["levels"]["system_context"]
@@ -42,7 +51,11 @@ def test_c4_uses_custom_actors_not_fixed_list():
     container_names = {c["name"] for c in result["levels"]["container"]["containers"]}
     assert container_names == {"Payments API", "Postgres"}
     # Metadados de tecnologia preservados a partir do dict de input.
-    api = next(c for c in result["levels"]["container"]["containers"] if c["name"] == "Payments API")
+    api = next(
+        c
+        for c in result["levels"]["container"]["containers"]
+        if c["name"] == "Payments API"
+    )
     assert api["technology"] == "FastAPI"
 
 
@@ -66,13 +79,19 @@ def test_c4_actor_type_and_relationship_resolution():
 
 def test_c4_empty_inputs_produce_empty_model_not_defaults():
     result = generate_c4_diagram(system_name="Empty")
-    assert result["summary"] == {"actor_count": 0, "container_count": 0, "relationship_count": 0}
+    assert result["summary"] == {
+        "actor_count": 0,
+        "container_count": 0,
+        "relationship_count": 0,
+    }
     assert result["levels"]["system_context"]["actors"] == []
     assert result["levels"]["container"]["containers"] == []
 
 
 def test_c4_deduplicates_repeated_actors():
-    result = generate_c4_diagram(system_name="S", actors=["User", "User", {"name": "User"}])
+    result = generate_c4_diagram(
+        system_name="S", actors=["User", "User", {"name": "User"}]
+    )
     assert len(result["levels"]["system_context"]["actors"]) == 1
 
 
@@ -91,7 +110,9 @@ def test_blueprint_components_derived_from_requirements():
     ]
     biz_layer = next(l for l in result["layers"] if l["name"] == "Business Logic")
     # Componentes derivam dos requisitos (slug), não de lista fixa.
-    assert any("loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"])
+    assert any(
+        "loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"]
+    )
     assert "core_domain" not in biz_layer["components"]  # só quando não há requisitos
 
 
@@ -103,7 +124,9 @@ def test_blueprint_pattern_selection_is_traceable():
     names = {p["name"] for p in result["chosen_patterns"]}
     assert "Event-Driven Architecture" in names
     # A escolha é rastreável ao gatilho, não uma constante.
-    edp = next(p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture")
+    edp = next(
+        p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture"
+    )
     assert edp["triggered_by"]  # não vazio
 
 

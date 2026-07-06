@@ -398,15 +398,15 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "get_pipeline_overview": "pipeline:read",
     # ── write: trigger/gate/promoção/rollback/mutação ────────────────────── #
     "register_pipeline": "pipeline:write",
-    "watch_prs": "pipeline:write",          # trigger de auto-merge/scan em repos
+    "watch_prs": "pipeline:write",  # trigger de auto-merge/scan em repos
     "block_service": "pipeline:write",
-    "add_gate_result": "pipeline:write",    # gate: escreve resultado
-    "clear_gates": "pipeline:write",        # gate: apaga resultados
+    "add_gate_result": "pipeline:write",  # gate: escreve resultado
+    "clear_gates": "pipeline:write",  # gate: apaga resultados
     "set_pipeline_config": "pipeline:write",
     # ── write SENSÍVEL: promoção/rollback mudam ambiente de execução ─────── #
-    "promote_service": "pipeline:write",    # sensível: promove entre ambientes (cria/mergia PR)
+    "promote_service": "pipeline:write",  # sensível: promove entre ambientes (cria/mergia PR)
     "approve_promotion": "pipeline:write",  # sensível: executa merge da PR e muda o env do serviço
-    "rollback": "pipeline:write",           # sensível: reverte versão em produção/ambiente
+    "rollback": "pipeline:write",  # sensível: reverte versão em produção/ambiente
 }
 SCOPES_SUPPORTED = ["pipeline:read", "pipeline:write"]
 
@@ -437,6 +437,7 @@ def _build_http_app(store: PipelineStore) -> FastAPI:
         pipeline = store.get_pipeline(service)
         if pipeline is None:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=404, detail=f"Service '{service}' not found")
         return pipeline
 
@@ -622,6 +623,7 @@ def build_app(validators: Any = None):
 def main() -> None:
     """Entry point — Streamable HTTP + auth."""
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7108")))
 
 

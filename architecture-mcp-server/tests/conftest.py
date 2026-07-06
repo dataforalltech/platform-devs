@@ -3,6 +3,7 @@
 Permite `from src.tools...` mesmo quando o pytest é invocado de outro cwd,
 sem depender de `pip install -e .` (embora este também funcione).
 """
+
 from __future__ import annotations
 
 import sys

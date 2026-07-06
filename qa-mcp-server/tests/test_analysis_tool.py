@@ -80,7 +80,7 @@ _RADON_JSON = json.dumps(
 )
 
 _MYPY_OUTPUT = (
-    "src/main.py:10: error: Argument 1 to \"foo\" has incompatible type\n"
+    'src/main.py:10: error: Argument 1 to "foo" has incompatible type\n'
     "src/utils.py:5: warning: Unused variable x\n"
     "Found 1 error in 1 file (checked 20 source files)\n"
 )
@@ -191,9 +191,7 @@ def test_check_dependencies_python_pip_audit(store, settings, tmp_path):
 
 def test_check_dependencies_no_vulnerabilities(store, settings, tmp_path):
     (tmp_path / "pyproject.toml").write_text("[project]\nname='test'")
-    clean_json = json.dumps(
-        {"dependencies": [{"name": "flask", "version": "3.0.0", "vulns": []}]}
-    )
+    clean_json = json.dumps({"dependencies": [{"name": "flask", "version": "3.0.0", "vulns": []}]})
     with patch(
         "src.tools.analysis_tool._run_subprocess",
         return_value=(0, clean_json, ""),

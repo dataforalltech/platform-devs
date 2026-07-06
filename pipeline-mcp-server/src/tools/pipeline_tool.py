@@ -44,7 +44,11 @@ def list_pipeline(
     status: str | None = None,
 ) -> dict:
     pipelines = store.list_pipelines(env=env, status=status)
-    return {"total": len(pipelines), "filters": {"env": env, "status": status}, "pipelines": pipelines}
+    return {
+        "total": len(pipelines),
+        "filters": {"env": env, "status": status},
+        "pipelines": pipelines,
+    }
 
 
 def promote_service(
@@ -309,36 +313,44 @@ def watch_prs(
                         pr_number=pr_num,
                         commit_message=f"Auto-merge PR #{pr_num}: {pr_title} [pipeline-mcp]",
                     )
-                    auto_approved.append({
-                        "repo": repo,
-                        "pr_number": pr_num,
-                        "pr_url": pr_url,
-                        "title": pr_title,
-                        "target_branch": base,
-                        "merged": merge_result.get("success", False),
-                        "merge_sha": merge_result.get("sha"),
-                        "error": merge_result.get("error") if not merge_result.get("success") else None,
-                        "gate_details": gate_details,
-                    })
+                    auto_approved.append(
+                        {
+                            "repo": repo,
+                            "pr_number": pr_num,
+                            "pr_url": pr_url,
+                            "title": pr_title,
+                            "target_branch": base,
+                            "merged": merge_result.get("success", False),
+                            "merge_sha": merge_result.get("sha"),
+                            "error": merge_result.get("error")
+                            if not merge_result.get("success")
+                            else None,
+                            "gate_details": gate_details,
+                        }
+                    )
                 else:
-                    waiting_human.append({
-                        "repo": repo,
-                        "pr_number": pr_num,
-                        "pr_url": pr_url,
-                        "title": pr_title,
-                        "target_branch": base,
-                        "reason": gate_details,
-                    })
+                    waiting_human.append(
+                        {
+                            "repo": repo,
+                            "pr_number": pr_num,
+                            "pr_url": pr_url,
+                            "title": pr_title,
+                            "target_branch": base,
+                            "reason": gate_details,
+                        }
+                    )
 
             elif base in ("homol", "main"):
-                waiting_human.append({
-                    "repo": repo,
-                    "pr_number": pr_num,
-                    "pr_url": pr_url,
-                    "title": pr_title,
-                    "target_branch": base,
-                    "reason": "human approval required for homol/prod",
-                })
+                waiting_human.append(
+                    {
+                        "repo": repo,
+                        "pr_number": pr_num,
+                        "pr_url": pr_url,
+                        "title": pr_title,
+                        "target_branch": base,
+                        "reason": "human approval required for homol/prod",
+                    }
+                )
 
     return {
         "repos_checked": len(repo_list),
@@ -392,7 +404,9 @@ def rollback(
     }
 
 
-def get_promotion_history(store: PipelineStore, service: str | None = None, limit: int = 20) -> dict:
+def get_promotion_history(
+    store: PipelineStore, service: str | None = None, limit: int = 20
+) -> dict:
     history = store.get_promotion_history(service=service, limit=limit)
     return {"total": len(history), "service": service, "limit": limit, "promotions": history}
 
@@ -401,7 +415,9 @@ def get_pipeline_overview(store: PipelineStore) -> dict:
     return store.get_pipeline_overview()
 
 
-def set_pipeline_config(store: PipelineStore, service: str, gates_required: dict[str, list[str]]) -> dict:
+def set_pipeline_config(
+    store: PipelineStore, service: str, gates_required: dict[str, list[str]]
+) -> dict:
     pipeline = store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
@@ -410,6 +426,7 @@ def set_pipeline_config(store: PipelineStore, service: str, gates_required: dict
 
 
 # ── GitHub API helpers ────────────────────────────────────────────────────── #
+
 
 def _gh_headers(token: str) -> dict[str, str]:
     return {

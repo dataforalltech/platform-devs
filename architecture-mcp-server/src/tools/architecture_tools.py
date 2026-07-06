@@ -8,6 +8,7 @@ inputs (heurísticas transparentes por palavra-chave) em vez de inventar anális
 Essa limitação está documentada no campo ``_meta.limitation`` de cada saída e no
 ``skipped`` do relatório final do agente.
 """
+
 from __future__ import annotations
 
 import re
@@ -232,8 +233,14 @@ def generate_c4_diagram(
 # ──────────────────────────────────────────────────────────────────────────── #
 # Heurísticas transparentes de palavra-chave → padrão arquitetural sugerido.
 _PATTERN_HINTS: list[tuple[str, tuple[str, ...]]] = [
-    ("Event-Driven Architecture", ("event", "evento", "stream", "kafka", "queue", "fila", "pub/sub", "pubsub")),
-    ("Microservices", ("microservi", "scal", "escal", "independent", "decoupl", "desacopl")),
+    (
+        "Event-Driven Architecture",
+        ("event", "evento", "stream", "kafka", "queue", "fila", "pub/sub", "pubsub"),
+    ),
+    (
+        "Microservices",
+        ("microservi", "scal", "escal", "independent", "decoupl", "desacopl"),
+    ),
     ("CQRS", ("cqrs", "read model", "write model", "command", "query")),
     ("API Gateway", ("api gateway", "gateway", "bff", "rate limit", "throttl")),
     ("Caching Layer", ("cache", "latency", "latência", "fast read", "performance")),
@@ -243,16 +250,61 @@ _PATTERN_HINTS: list[tuple[str, tuple[str, ...]]] = [
 
 # Palavra-chave → preocupação não-funcional (NFR).
 _NFR_HINTS: list[tuple[str, tuple[str, ...]]] = [
-    ("Security", ("secur", "segur", "auth", "oauth", "encrypt", "criptograf", "compliance", "gdpr", "lgpd", "pci")),
-    ("Scalability", ("scal", "escal", "throughput", "load", "carga", "concurrent", "concorren")),
-    ("Availability", ("availab", "disponib", "uptime", "ha", "high availability", "sla", "failover", "resilien")),
-    ("Performance", ("performance", "latency", "latência", "fast", "rápid", "real-time", "tempo real")),
+    (
+        "Security",
+        (
+            "secur",
+            "segur",
+            "auth",
+            "oauth",
+            "encrypt",
+            "criptograf",
+            "compliance",
+            "gdpr",
+            "lgpd",
+            "pci",
+        ),
+    ),
+    (
+        "Scalability",
+        ("scal", "escal", "throughput", "load", "carga", "concurrent", "concorren"),
+    ),
+    (
+        "Availability",
+        (
+            "availab",
+            "disponib",
+            "uptime",
+            "ha",
+            "high availability",
+            "sla",
+            "failover",
+            "resilien",
+        ),
+    ),
+    (
+        "Performance",
+        (
+            "performance",
+            "latency",
+            "latência",
+            "fast",
+            "rápid",
+            "real-time",
+            "tempo real",
+        ),
+    ),
     ("Observability", ("observab", "monitor", "logging", "trace", "metric", "métric")),
-    ("Data Consistency", ("consisten", "transaction", "transaç", "acid", "integrity", "integridade")),
+    (
+        "Data Consistency",
+        ("consisten", "transaction", "transaç", "acid", "integrity", "integridade"),
+    ),
 ]
 
 
-def _match_hints(text: str, hints: list[tuple[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
+def _match_hints(
+    text: str, hints: list[tuple[str, tuple[str, ...]]]
+) -> list[dict[str, Any]]:
     lowered = text.lower()
     matched: list[dict[str, Any]] = []
     for label, keywords in hints:
@@ -367,10 +419,39 @@ def generate_solution_blueprint(
 # 3) Architecture proposal — scaffold a partir de domínio + restrições
 # ──────────────────────────────────────────────────────────────────────────── #
 _STYLE_HINTS: list[tuple[str, tuple[str, ...]]] = [
-    ("Event-Driven Microservices", ("event", "evento", "stream", "kafka", "assíncron", "async")),
-    ("Microservices", ("microservi", "scal", "escal", "independent", "decoupl", "desacopl", "distributed", "distribuíd")),
-    ("Serverless", ("serverless", "lambda", "function", "faas", "pay-per-use", "sob demanda")),
-    ("Modular Monolith", ("monolith", "monólito", "single deploy", "startup", "mvp", "simple", "simples")),
+    (
+        "Event-Driven Microservices",
+        ("event", "evento", "stream", "kafka", "assíncron", "async"),
+    ),
+    (
+        "Microservices",
+        (
+            "microservi",
+            "scal",
+            "escal",
+            "independent",
+            "decoupl",
+            "desacopl",
+            "distributed",
+            "distribuíd",
+        ),
+    ),
+    (
+        "Serverless",
+        ("serverless", "lambda", "function", "faas", "pay-per-use", "sob demanda"),
+    ),
+    (
+        "Modular Monolith",
+        (
+            "monolith",
+            "monólito",
+            "single deploy",
+            "startup",
+            "mvp",
+            "simple",
+            "simples",
+        ),
+    ),
     ("Layered (N-Tier)", ("crud", "traditional", "tradicional")),
 ]
 
@@ -443,7 +524,8 @@ def generate_architecture(
         tactics.append(
             {
                 "quality_attribute": qa,
-                "tactic": tactic or "Definir tática específica (não coberta por heurística)",
+                "tactic": tactic
+                or "Definir tática específica (não coberta por heurística)",
                 "heuristic_matched": tactic is not None,
             }
         )
@@ -476,7 +558,12 @@ def generate_architecture(
 # ──────────────────────────────────────────────────────────────────────────── #
 def status() -> dict[str, Any]:
     """Retorna o status real do servidor (nome, versão do pyproject, nº de tools, timestamp)."""
-    tool_names = ["generate_c4_diagram", "generate_solution_blueprint", "generate_architecture", "status"]
+    tool_names = [
+        "generate_c4_diagram",
+        "generate_solution_blueprint",
+        "generate_architecture",
+        "status",
+    ]
     return {
         "name": SERVER_NAME,
         "status": "ok",

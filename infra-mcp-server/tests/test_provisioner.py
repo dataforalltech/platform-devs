@@ -18,6 +18,7 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
+
 from src.knowledge.provisioner import (
     ImmediateProvisioner,
     OnDone,
@@ -150,6 +151,7 @@ class TestTerraformProvisionerMocked:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.5:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "output" in cmd:
                     return self._ok(output_json)
@@ -181,6 +183,7 @@ class TestTerraformProvisionerMocked:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.1:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 # cmd[1] é o subcomando terraform (plan, apply, output)
                 calls.append(cmd[1] if len(cmd) > 1 else "?")
@@ -216,6 +219,7 @@ class TestTerraformProvisionerMocked:
         done = threading.Event()
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if cmd[1] == "plan":
                     return self._fail("Error: invalid config")
@@ -245,6 +249,7 @@ class TestTerraformProvisionerMocked:
         done = threading.Event()
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if cmd[1] == "apply":
                     return self._fail("Error: something went wrong")
@@ -274,6 +279,7 @@ class TestTerraformProvisionerMocked:
         done = threading.Event()
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "output" in cmd:
                     return self._ok('{"other_output": {"value": "x"}}')
@@ -695,11 +701,21 @@ class TestAllocatorDestroyIntegration:
 
     def test_destroy_called_on_provision_failure(self):
         """Provisão falha → _on_vm_failed → destroy chamado (idempotente se nada foi criado)."""
+
         class FailProvisioner:
             def __init__(self) -> None:
                 self.destroys: list[str] = []
 
-            def provision(self, spec, vm_id, modules_root, timeout_sec, on_ready, on_failed, extra_tf_vars=None) -> None:
+            def provision(
+                self,
+                spec,
+                vm_id,
+                modules_root,
+                timeout_sec,
+                on_ready,
+                on_failed,
+                extra_tf_vars=None,
+            ) -> None:
                 on_failed(f"simulated failure for {vm_id}")
 
             def destroy(self, spec, vm_id, modules_root, timeout_sec, on_done, on_failed) -> None:
@@ -720,6 +736,7 @@ class TestAllocatorDestroyIntegration:
         from datetime import timedelta
 
         from src.knowledge.allocator_store import _dt_to_str
+
         from src.models.allocator import now_utc
 
         prov = RecordingProvisioner()
@@ -729,7 +746,9 @@ class TestAllocatorDestroyIntegration:
 
         # Faz o lease expirar no passado
         past = _dt_to_str(now_utc() - timedelta(hours=2))
-        store._con.execute("UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id))
+        store._con.execute(
+            "UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id)
+        )
 
         # Qualquer operação dispara _gc_expired
         store.get_lease(d.lease.lease_id)
@@ -774,6 +793,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.1:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     infracost_called.append(True)
@@ -811,6 +831,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.2:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     return self._ok(self._infracost_json(150.0))  # abaixo de 200
@@ -847,6 +868,7 @@ class TestTerraformProvisionerInfracost:
         done = threading.Event()
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     return self._ok(self._infracost_json(350.0))  # excede 100
@@ -886,6 +908,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.3:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     raise FileNotFoundError("infracost-notexist: not found")
@@ -924,6 +947,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.4:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     raise _subprocess.TimeoutExpired(cmd=cmd, timeout=120)
@@ -959,6 +983,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.5:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     return self._ok("not-valid-json{{{")
@@ -994,6 +1019,7 @@ class TestTerraformProvisionerInfracost:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.6:22"}}'
 
         with patch("subprocess.run") as mock_run:
+
             def side_effect(cmd, **kwargs):
                 if "infracost" in cmd[0]:
                     r = MagicMock()

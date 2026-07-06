@@ -14,6 +14,7 @@ Segurança:
   - /v1/session/scopes removido (redundante com /v1/session/user).
   - check-scope retorna 403 quando escopo negado (não 200 com allowed: false).
 """
+
 from __future__ import annotations
 
 import secrets
@@ -96,7 +97,9 @@ def make_router(api_token: str) -> APIRouter:
     async def check_scope(req: ScopeCheckRequest) -> dict[str, Any]:
         session = SessionManager.get()
         if not session:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nenhuma sessão autenticada.")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, detail="Nenhuma sessão autenticada."
+            )
         allowed = "*" in session.scopes or req.scope in session.scopes
         if not allowed:
             raise HTTPException(

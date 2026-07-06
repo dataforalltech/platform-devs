@@ -1,12 +1,12 @@
 """Testes das auth tools."""
+
 from __future__ import annotations
 
 import pytest
 
-from src.knowledge.token_store import TokenStore
 from src.knowledge.session import SessionManager
-from src.tools.auth_tool import authenticate, whoami, get_twin_context, refresh_context
-from src.tools.admin_tool import register_token, revoke_token, list_tokens, rotate_token
+from src.tools.admin_tool import list_tokens, register_token, revoke_token, rotate_token
+from src.tools.auth_tool import authenticate, get_twin_context, whoami
 
 
 @pytest.fixture(autouse=True)
@@ -90,16 +90,22 @@ class TestGetTwinContext:
 class TestAdminTools:
     def test_register_requires_admin_token(self, store, admin_token):
         result = register_token(
-            store, admin_token_configured=admin_token,
-            admin_token="wrong", name="X", email="x@test.com",
+            store,
+            admin_token_configured=admin_token,
+            admin_token="wrong",
+            name="X",
+            email="x@test.com",
         )
         assert "error" in result
         assert result["error"] == "Unauthorized"
 
     def test_register_success(self, store, admin_token):
         result = register_token(
-            store, admin_token_configured=admin_token,
-            admin_token=admin_token, name="Frank", email="frank@test.com",
+            store,
+            admin_token_configured=admin_token,
+            admin_token=admin_token,
+            name="Frank",
+            email="frank@test.com",
         )
         assert result["success"] is True
         assert result["token"]
@@ -115,24 +121,31 @@ class TestAdminTools:
     def test_revoke_via_admin(self, store, admin_token):
         record = store.register(name="H", email="h@test.com")
         result = revoke_token(
-            store, admin_token_configured=admin_token,
-            admin_token=admin_token, identifier=record["token"],
+            store,
+            admin_token_configured=admin_token,
+            admin_token=admin_token,
+            identifier=record["token"],
         )
         assert result["success"] is True
 
     def test_rotate_via_admin(self, store, admin_token):
         record = store.register(name="I", email="i@test.com")
         result = rotate_token(
-            store, admin_token_configured=admin_token,
-            admin_token=admin_token, identifier=record["user_id"],
+            store,
+            admin_token_configured=admin_token,
+            admin_token=admin_token,
+            identifier=record["user_id"],
         )
         assert result["success"] is True
         assert result["new_token"] != record["token"]
 
     def test_register_with_tenant_id(self, store, admin_token):
         result = register_token(
-            store, admin_token_configured=admin_token,
-            admin_token=admin_token, name="J", email="j@test.com",
+            store,
+            admin_token_configured=admin_token,
+            admin_token=admin_token,
+            name="J",
+            email="j@test.com",
             tenant_id="tenant_xyz99",
         )
         assert result["success"] is True

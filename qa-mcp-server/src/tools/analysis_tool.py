@@ -357,9 +357,7 @@ def check_dependencies(
                             "version": dep.get("version", ""),
                             "vuln_id": vuln.get("id", ""),
                             "description": vuln.get("description", ""),
-                            "fix_version": (
-                                vuln.get("fix_versions") or ["unknown"]
-                            )[0],
+                            "fix_version": (vuln.get("fix_versions") or ["unknown"])[0],
                         }
                     )
         except (json.JSONDecodeError, KeyError):
@@ -491,9 +489,7 @@ def run_type_check(
         files_checked = len(seen_files)
     else:
         # tsc: filename(line,col): error TSxxxx: message
-        pattern = re.compile(
-            r"^(.+?)\((\d+),\d+\):\s+(error|warning)\s+\w+:\s+(.+)$", re.MULTILINE
-        )
+        pattern = re.compile(r"^(.+?)\((\d+),\d+\):\s+(error|warning)\s+\w+:\s+(.+)$", re.MULTILINE)
         seen_files = set()
         for m in pattern.finditer(combined_output):
             fname, line, sev, msg = m.group(1), m.group(2), m.group(3), m.group(4)
@@ -626,9 +622,7 @@ def analyze_complexity(
         except (json.JSONDecodeError, KeyError):
             pass
 
-    avg_complexity = (
-        round(sum(complexities) / len(complexities), 2) if complexities else 0.0
-    )
+    avg_complexity = round(sum(complexities) / len(complexities), 2) if complexities else 0.0
 
     hotspots.sort(key=lambda h: h["complexity"], reverse=True)
 

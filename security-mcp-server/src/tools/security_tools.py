@@ -4,6 +4,7 @@ Funções puras que recebem inputs e retornam dict. Cada ferramenta faz análise
 concreta sobre o que recebe (código, manifest, vetor CVSS, contexto de compliance)
 em vez de devolver dados fixos.
 """
+
 from __future__ import annotations
 
 import math
@@ -18,55 +19,82 @@ from typing import Any
 _CODE_PATTERNS: list[tuple[str, str, str, str, str, str, tuple[str, ...]]] = [
     (
         r"""(?i)\b(?:select|insert|update|delete)\b.*?\+\s*['"]?\s*\w+|f['"].*?\b(?:select|insert|update|delete)\b.*?\{""",
-        "Possível SQL Injection", "high", "CWE-89", "A03:2021-Injection",
+        "Possível SQL Injection",
+        "high",
+        "CWE-89",
+        "A03:2021-Injection",
         "Use queries parametrizadas / prepared statements; nunca concatene input em SQL.",
         ("python", "java", "javascript", "typescript", "go", "php"),
     ),
     (
         r"(?i)\b(?:os\.system|subprocess\.(?:call|run|Popen)|exec|eval|child_process\.exec)\s*\(.*(?:\+|%|f['\"]|\$\{|request|input|argv|params)",
-        "Possível Command/Code Injection", "critical", "CWE-78", "A03:2021-Injection",
+        "Possível Command/Code Injection",
+        "critical",
+        "CWE-78",
+        "A03:2021-Injection",
         "Evite exec/eval com input do usuário; use APIs seguras e allow-lists de argumentos.",
         ("python", "javascript", "typescript", "php"),
     ),
     (
         r"(?i)(?:innerHTML|outerHTML|document\.write|dangerouslySetInnerHTML)\s*[=(]",
-        "Possível Cross-Site Scripting (XSS)", "high", "CWE-79", "A03:2021-Injection",
+        "Possível Cross-Site Scripting (XSS)",
+        "high",
+        "CWE-79",
+        "A03:2021-Injection",
         "Sanitize/escape a saída; prefira textContent ou frameworks com auto-escaping.",
         ("javascript", "typescript"),
     ),
     (
         r"(?i)\b(?:md5|sha1)\s*\(|hashlib\.(?:md5|sha1)\b|MessageDigest\.getInstance\(\s*['\"](?:MD5|SHA-?1)['\"]",
-        "Algoritmo de hash fraco", "medium", "CWE-327", "A02:2021-Cryptographic Failures",
+        "Algoritmo de hash fraco",
+        "medium",
+        "CWE-327",
+        "A02:2021-Cryptographic Failures",
         "Use SHA-256+ para integridade; para senhas use argon2id/bcrypt/scrypt.",
         ("python", "java", "javascript", "typescript", "go"),
     ),
     (
         r"(?i)(?:AES|DES|Cipher)\S*(?:ECB|/ECB/)|Cipher\.getInstance\(\s*['\"]DES",
-        "Cifra insegura (ECB/DES)", "high", "CWE-327", "A02:2021-Cryptographic Failures",
+        "Cifra insegura (ECB/DES)",
+        "high",
+        "CWE-327",
+        "A02:2021-Cryptographic Failures",
         "Use AES-GCM (AEAD) com IV aleatório; nunca ECB nem DES/3DES.",
         ("python", "java", "javascript", "typescript"),
     ),
     (
         r"(?i)verify\s*=\s*False|rejectUnauthorized\s*:\s*false|InsecureSkipVerify\s*:\s*true|CURLOPT_SSL_VERIFYPEER\s*,\s*(?:0|false)",
-        "Verificação de certificado TLS desabilitada", "high", "CWE-295", "A07:2021-Identification and Authentication Failures",
+        "Verificação de certificado TLS desabilitada",
+        "high",
+        "CWE-295",
+        "A07:2021-Identification and Authentication Failures",
         "Nunca desabilite verificação de certificado; corrija a cadeia de confiança.",
         ("python", "javascript", "typescript", "go", "php"),
     ),
     (
         r"(?i)pickle\.loads?|yaml\.load\s*\((?!.*Loader)|Marshal\.load|ObjectInputStream",
-        "Desserialização insegura", "high", "CWE-502", "A08:2021-Software and Data Integrity Failures",
+        "Desserialização insegura",
+        "high",
+        "CWE-502",
+        "A08:2021-Software and Data Integrity Failures",
         "Use yaml.safe_load / formatos seguros (JSON); não desserialize dados não confiáveis.",
         ("python", "java", "ruby"),
     ),
     (
         r"(?i)Math\.random\s*\(\)|random\.random\s*\(\)|random\.randint",
-        "PRNG não criptográfico usado em contexto sensível", "low", "CWE-338", "A02:2021-Cryptographic Failures",
+        "PRNG não criptográfico usado em contexto sensível",
+        "low",
+        "CWE-338",
+        "A02:2021-Cryptographic Failures",
         "Para tokens/segredos use secrets (Python) ou crypto.randomBytes (Node).",
         ("python", "javascript", "typescript"),
     ),
     (
         r"(?i)(?:open|render_template_string|send_file)\s*\(.*(?:\.\./|request\.|params|argv)",
-        "Possível Path Traversal / SSTI", "high", "CWE-22", "A01:2021-Broken Access Control",
+        "Possível Path Traversal / SSTI",
+        "high",
+        "CWE-22",
+        "A01:2021-Broken Access Control",
         "Valide e normalize paths; use allow-list; não interpole input em templates.",
         ("python", "javascript", "typescript"),
     ),
@@ -85,15 +113,17 @@ def review_secure_code(code: str = "", language: str = "python") -> dict[str, An
         pattern = re.compile(regex)
         for idx, line in enumerate(lines, start=1):
             if pattern.search(line):
-                findings.append({
-                    "type": title,
-                    "severity": severity,
-                    "line": idx,
-                    "cwe": cwe,
-                    "owasp": owasp,
-                    "snippet": line.strip()[:160],
-                    "recommendation": rec,
-                })
+                findings.append(
+                    {
+                        "type": title,
+                        "severity": severity,
+                        "line": idx,
+                        "cwe": cwe,
+                        "owasp": owasp,
+                        "snippet": line.strip()[:160],
+                        "recommendation": rec,
+                    }
+                )
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda f: order.get(f["severity"], 9))
@@ -105,7 +135,9 @@ def review_secure_code(code: str = "", language: str = "python") -> dict[str, An
         "issues_found": len(findings),
         "severity_counts": counts,
         "issues": findings,
-        "verdict": "reprovado" if counts["critical"] or counts["high"] else ("atenção" if findings else "aprovado"),
+        "verdict": "reprovado"
+        if counts["critical"] or counts["high"]
+        else ("atenção" if findings else "aprovado"),
         "note": "Análise heurística por padrões — complemente com SAST dedicado (Semgrep/CodeQL) e revisão manual.",
         "status": "reviewed",
     }
@@ -117,15 +149,31 @@ def review_secure_code(code: str = "", language: str = "python") -> dict[str, An
 
 _SECRET_PATTERNS: list[tuple[str, str, str]] = [
     (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID", "critical"),
-    (r"(?i)aws_secret_access_key\s*[=:]\s*['\"]?([A-Za-z0-9/+=]{40})", "AWS Secret Access Key", "critical"),
+    (
+        r"(?i)aws_secret_access_key\s*[=:]\s*['\"]?([A-Za-z0-9/+=]{40})",
+        "AWS Secret Access Key",
+        "critical",
+    ),
     (r"ghp_[A-Za-z0-9]{36}", "GitHub Personal Access Token", "critical"),
     (r"github_pat_[A-Za-z0-9_]{22,}", "GitHub Fine-grained PAT", "critical"),
     (r"xox[baprs]-[A-Za-z0-9-]{10,}", "Slack Token", "high"),
     (r"sk-[A-Za-z0-9]{20,}", "OpenAI/Stripe-style Secret Key", "high"),
     (r"AIza[0-9A-Za-z\-_]{35}", "Google API Key", "high"),
-    (r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----", "Private Key", "critical"),
-    (r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}", "JWT (possível token exposto)", "medium"),
-    (r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*['\"]([^'\"]{6,})['\"]", "Credencial hardcoded", "high"),
+    (
+        r"-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----",
+        "Private Key",
+        "critical",
+    ),
+    (
+        r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}",
+        "JWT (possível token exposto)",
+        "medium",
+    ),
+    (
+        r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key)\s*[=:]\s*['\"]([^'\"]{6,})['\"]",
+        "Credencial hardcoded",
+        "high",
+    ),
     (r"(?i)postgres(?:ql)?://[^:\s]+:[^@\s]+@", "Connection string com senha", "high"),
 ]
 
@@ -148,13 +196,15 @@ def scan_secrets(content: str = "", filename: str = "") -> dict[str, Any]:
             m = pattern.search(line)
             if m:
                 captured = m.group(1) if m.groups() else m.group(0)
-                findings.append({
-                    "type": kind,
-                    "severity": severity,
-                    "line": idx,
-                    "masked_value": _mask(captured),
-                    "cwe": "CWE-798",
-                })
+                findings.append(
+                    {
+                        "type": kind,
+                        "severity": severity,
+                        "line": idx,
+                        "masked_value": _mask(captured),
+                        "cwe": "CWE-798",
+                    }
+                )
 
     return {
         "filename": filename or "(inline)",
@@ -165,7 +215,9 @@ def scan_secrets(content: str = "", filename: str = "") -> dict[str, Any]:
             "Remova segredos do código; use um secrets manager (Vault/KMS/Secrets Manager), "
             "rotacione qualquer credencial exposta e adicione varredura de segredos no CI (gitleaks/trufflehog)."
         ),
-        "status": "critical" if any(f["severity"] == "critical" for f in findings) else ("findings" if findings else "clean"),
+        "status": "critical"
+        if any(f["severity"] == "critical" for f in findings)
+        else ("findings" if findings else "clean"),
     }
 
 
@@ -271,38 +323,67 @@ def calculate_cvss(vector: str = "") -> dict[str, Any]:
 # ============================================================================
 
 _STRIDE = {
-    "Spoofing": ("Autenticação", "Falsificação de identidade de usuário/serviço",
-                 "MFA, mTLS, tokens assinados, validação de identidade"),
-    "Tampering": ("Integridade", "Modificação não autorizada de dados/código em trânsito ou repouso",
-                  "Assinaturas/HMAC, TLS, controle de integridade, WORM logs"),
-    "Repudiation": ("Não-repúdio", "Negar ações executadas por falta de trilha",
-                    "Logs auditáveis assinados, correlação de eventos, timestamps confiáveis"),
-    "Information Disclosure": ("Confidencialidade", "Vazamento de dados sensíveis/PII",
-                               "Criptografia at-rest/in-transit, mascaramento, least privilege"),
-    "Denial of Service": ("Disponibilidade", "Exaustão de recursos / indisponibilidade",
-                          "Rate limiting, quotas, autoscaling, timeouts, circuit breakers"),
-    "Elevation of Privilege": ("Autorização", "Ganho de privilégios além do autorizado",
-                               "RBAC/ABAC, validação server-side, deny-by-default, isolamento"),
+    "Spoofing": (
+        "Autenticação",
+        "Falsificação de identidade de usuário/serviço",
+        "MFA, mTLS, tokens assinados, validação de identidade",
+    ),
+    "Tampering": (
+        "Integridade",
+        "Modificação não autorizada de dados/código em trânsito ou repouso",
+        "Assinaturas/HMAC, TLS, controle de integridade, WORM logs",
+    ),
+    "Repudiation": (
+        "Não-repúdio",
+        "Negar ações executadas por falta de trilha",
+        "Logs auditáveis assinados, correlação de eventos, timestamps confiáveis",
+    ),
+    "Information Disclosure": (
+        "Confidencialidade",
+        "Vazamento de dados sensíveis/PII",
+        "Criptografia at-rest/in-transit, mascaramento, least privilege",
+    ),
+    "Denial of Service": (
+        "Disponibilidade",
+        "Exaustão de recursos / indisponibilidade",
+        "Rate limiting, quotas, autoscaling, timeouts, circuit breakers",
+    ),
+    "Elevation of Privilege": (
+        "Autorização",
+        "Ganho de privilégios além do autorizado",
+        "RBAC/ABAC, validação server-side, deny-by-default, isolamento",
+    ),
 }
 
 
-def generate_threat_model(system: str = "system", scope: str = "", components: list | None = None) -> dict[str, Any]:
+def generate_threat_model(
+    system: str = "system", scope: str = "", components: list | None = None
+) -> dict[str, Any]:
     """Gera modelo de ameaças STRIDE. Se `components` for informado, mapeia por componente."""
-    components = components or ["API Gateway", "Auth Service", "Database", "External Integration"]
+    components = components or [
+        "API Gateway",
+        "Auth Service",
+        "Database",
+        "External Integration",
+    ]
 
     threats = []
     tid = 1
     for comp in components:
         for category, (dim, desc, mitig) in _STRIDE.items():
-            threats.append({
-                "id": f"T{tid:02d}",
-                "component": comp,
-                "category": category,
-                "security_dimension": dim,
-                "threat": desc,
-                "recommended_mitigation": mitig,
-                "default_severity": "high" if category in ("Elevation of Privilege", "Information Disclosure") else "medium",
-            })
+            threats.append(
+                {
+                    "id": f"T{tid:02d}",
+                    "component": comp,
+                    "category": category,
+                    "security_dimension": dim,
+                    "threat": desc,
+                    "recommended_mitigation": mitig,
+                    "default_severity": "high"
+                    if category in ("Elevation of Privilege", "Information Disclosure")
+                    else "medium",
+                }
+            )
             tid += 1
 
     return {
@@ -326,7 +407,12 @@ def generate_threat_model(system: str = "system", scope: str = "", components: l
 # 5. Attack surface & controls
 # ============================================================================
 
-def map_attack_surface(system: str = "system", endpoints: list | None = None, integrations: list | None = None) -> dict[str, Any]:
+
+def map_attack_surface(
+    system: str = "system",
+    endpoints: list | None = None,
+    integrations: list | None = None,
+) -> dict[str, Any]:
     """Mapeia a superfície de ataque; aceita endpoints/integrações reais."""
     endpoints = endpoints or [
         {"type": "API", "path": "/api/*", "authentication": "required"},
@@ -337,8 +423,17 @@ def map_attack_surface(system: str = "system", endpoints: list | None = None, in
         {"name": "External API", "type": "external", "exposure": "public"},
     ]
 
-    exposed = [e for e in endpoints if str(e.get("authentication", "")).lower() in ("optional", "none", "public", "")]
-    public_integrations = [i for i in integrations if str(i.get("exposure", "")).lower() in ("public", "external")]
+    exposed = [
+        e
+        for e in endpoints
+        if str(e.get("authentication", "")).lower()
+        in ("optional", "none", "public", "")
+    ]
+    public_integrations = [
+        i
+        for i in integrations
+        if str(i.get("exposure", "")).lower() in ("public", "external")
+    ]
 
     return {
         "title": f"Attack Surface: {system}",
@@ -358,17 +453,51 @@ def map_attack_surface(system: str = "system", endpoints: list | None = None, in
     }
 
 
-def generate_security_controls(system: str = "system", threat_categories: list | None = None) -> dict[str, Any]:
+def generate_security_controls(
+    system: str = "system", threat_categories: list | None = None
+) -> dict[str, Any]:
     """Gera controles técnicos e processuais, mapeados por categoria de ameaça."""
     catalog = {
-        "authentication": {"name": "Autenticação forte (MFA/OIDC)", "type": "technical", "nist_csf": "PR.AC"},
-        "authorization": {"name": "RBAC/ABAC deny-by-default", "type": "technical", "nist_csf": "PR.AC"},
-        "encryption": {"name": "Criptografia in-transit (TLS 1.3) e at-rest (AES-GCM)", "type": "technical", "nist_csf": "PR.DS"},
-        "input_validation": {"name": "Validação/saneamento de input", "type": "technical", "nist_csf": "PR.IP"},
-        "logging": {"name": "Logging e auditoria centralizados", "type": "operational", "nist_csf": "DE.CM"},
-        "monitoring": {"name": "Monitoramento e alerta de anomalias", "type": "operational", "nist_csf": "DE.CM"},
-        "incident_response": {"name": "Plano de resposta a incidentes", "type": "operational", "nist_csf": "RS.RP"},
-        "backup": {"name": "Backup e recuperação testados", "type": "operational", "nist_csf": "PR.IP"},
+        "authentication": {
+            "name": "Autenticação forte (MFA/OIDC)",
+            "type": "technical",
+            "nist_csf": "PR.AC",
+        },
+        "authorization": {
+            "name": "RBAC/ABAC deny-by-default",
+            "type": "technical",
+            "nist_csf": "PR.AC",
+        },
+        "encryption": {
+            "name": "Criptografia in-transit (TLS 1.3) e at-rest (AES-GCM)",
+            "type": "technical",
+            "nist_csf": "PR.DS",
+        },
+        "input_validation": {
+            "name": "Validação/saneamento de input",
+            "type": "technical",
+            "nist_csf": "PR.IP",
+        },
+        "logging": {
+            "name": "Logging e auditoria centralizados",
+            "type": "operational",
+            "nist_csf": "DE.CM",
+        },
+        "monitoring": {
+            "name": "Monitoramento e alerta de anomalias",
+            "type": "operational",
+            "nist_csf": "DE.CM",
+        },
+        "incident_response": {
+            "name": "Plano de resposta a incidentes",
+            "type": "operational",
+            "nist_csf": "RS.RP",
+        },
+        "backup": {
+            "name": "Backup e recuperação testados",
+            "type": "operational",
+            "nist_csf": "PR.IP",
+        },
     }
     selected = threat_categories or list(catalog.keys())
     controls = []
@@ -389,7 +518,10 @@ def generate_security_controls(system: str = "system", threat_categories: list |
 # 6. Dependency / SCA scanning (parse do manifest fornecido)
 # ============================================================================
 
-def scan_dependency_risks(manifest: str = "", ecosystem: str = "python") -> dict[str, Any]:
+
+def scan_dependency_risks(
+    manifest: str = "", ecosystem: str = "python"
+) -> dict[str, Any]:
     """Extrai dependências de um manifest e sinaliza riscos heurísticos.
 
     Sem acesso a um feed de CVE em runtime, sinaliza padrões de risco (versões
@@ -403,15 +535,26 @@ def scan_dependency_risks(manifest: str = "", ecosystem: str = "python") -> dict
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        m = re.match(r"^\"?([A-Za-z0-9_.\-@/]+)\"?\s*[:=]?\s*[\^~>=<]*\s*([0-9][0-9A-Za-z.\-]*)", line)
+        m = re.match(
+            r"^\"?([A-Za-z0-9_.\-@/]+)\"?\s*[:=]?\s*[\^~>=<]*\s*([0-9][0-9A-Za-z.\-]*)",
+            line,
+        )
         if not m:
-            m = re.match(r"^([A-Za-z0-9_.\-@/]+)[=<>~^ ]+v?([0-9][0-9A-Za-z.\-]*)", line)
+            m = re.match(
+                r"^([A-Za-z0-9_.\-@/]+)[=<>~^ ]+v?([0-9][0-9A-Za-z.\-]*)", line
+            )
         if m:
             name, version = m.group(1), m.group(2)
             risk_flags = []
             if version.startswith("0."):
                 risk_flags.append("pre-1.0 (API instável)")
-            deps.append({"package": name, "version": version, "flags": ", ".join(risk_flags) or "-"})
+            deps.append(
+                {
+                    "package": name,
+                    "version": version,
+                    "flags": ", ".join(risk_flags) or "-",
+                }
+            )
 
     unpinned = len(re.findall(r"[\^~]|>=|\*", manifest))
 
@@ -438,7 +581,10 @@ _COMPLIANCE_FRAMEWORKS = {
         "controls": [
             ("base_legal", "Base legal para tratamento de dados pessoais"),
             ("consentimento", "Coleta e gestão de consentimento"),
-            ("direitos_titular", "Atendimento a direitos do titular (acesso, correção, eliminação, portabilidade)"),
+            (
+                "direitos_titular",
+                "Atendimento a direitos do titular (acesso, correção, eliminação, portabilidade)",
+            ),
             ("minimizacao", "Minimização e finalidade do tratamento"),
             ("dpo", "Encarregado (DPO) designado"),
             ("incidentes", "Comunicação de incidentes à ANPD e titulares"),
@@ -448,9 +594,15 @@ _COMPLIANCE_FRAMEWORKS = {
     "soc2": {
         "name": "SOC 2 (Trust Services Criteria)",
         "controls": [
-            ("security", "Segurança (controles de acesso, criptografia, monitoramento)"),
+            (
+                "security",
+                "Segurança (controles de acesso, criptografia, monitoramento)",
+            ),
             ("availability", "Disponibilidade (SLA, DR, backups)"),
-            ("confidentiality", "Confidencialidade (classificação e proteção de dados)"),
+            (
+                "confidentiality",
+                "Confidencialidade (classificação e proteção de dados)",
+            ),
             ("processing_integrity", "Integridade de processamento"),
             ("privacy", "Privacidade (ciclo de vida de dados pessoais)"),
         ],
@@ -495,7 +647,9 @@ _COMPLIANCE_FRAMEWORKS = {
 }
 
 
-def analyze_compliance(framework: str = "owasp", context: dict | None = None) -> dict[str, Any]:
+def analyze_compliance(
+    framework: str = "owasp", context: dict | None = None
+) -> dict[str, Any]:
     """Avalia conformidade contra um framework. `context` marca controles atendidos.
 
     context = {"satisfied": ["A01", "A02"]} → marca esses controles como conformes.
@@ -514,7 +668,9 @@ def analyze_compliance(framework: str = "owasp", context: dict | None = None) ->
     gaps = []
     for ctrl_id, desc in fw["controls"]:
         is_ok = ctrl_id.lower() in satisfied
-        controls.append({"id": ctrl_id, "control": desc, "status": "compliant" if is_ok else "gap"})
+        controls.append(
+            {"id": ctrl_id, "control": desc, "status": "compliant" if is_ok else "gap"}
+        )
         if not is_ok:
             gaps.append({"id": ctrl_id, "control": desc})
 
@@ -538,9 +694,17 @@ def analyze_compliance(framework: str = "owasp", context: dict | None = None) ->
 # 8. Incident response plan (NIST 800-61)
 # ============================================================================
 
-def generate_incident_response_plan(incident_type: str = "data_breach", severity: str = "high") -> dict[str, Any]:
+
+def generate_incident_response_plan(
+    incident_type: str = "data_breach", severity: str = "high"
+) -> dict[str, Any]:
     """Gera um runbook de resposta a incidentes seguindo o ciclo NIST SP 800-61."""
-    sla = {"critical": "15 min", "high": "1 h", "medium": "4 h", "low": "1 dia útil"}.get(severity.lower(), "1 h")
+    sla = {
+        "critical": "15 min",
+        "high": "1 h",
+        "medium": "4 h",
+        "low": "1 dia útil",
+    }.get(severity.lower(), "1 h")
 
     return {
         "incident_type": incident_type,
@@ -548,7 +712,11 @@ def generate_incident_response_plan(incident_type: str = "data_breach", severity
         "response_sla": sla,
         "framework": "NIST SP 800-61r2",
         "phases": {
-            "1_preparation": ["Contatos e on-call definidos", "Acesso a logs/EDR garantido", "Playbooks versionados"],
+            "1_preparation": [
+                "Contatos e on-call definidos",
+                "Acesso a logs/EDR garantido",
+                "Playbooks versionados",
+            ],
             "2_detection_analysis": [
                 "Confirmar o incidente e escopo (IOCs, sistemas, dados afetados)",
                 "Classificar severidade e acionar war room",
@@ -558,13 +726,29 @@ def generate_incident_response_plan(incident_type: str = "data_breach", severity
                 "Contenção de curto prazo (isolar host/credencial)",
                 "Contenção de longo prazo (patch, rotação de segredos, revogação de tokens)",
             ],
-            "4_eradication": ["Remover acesso do atacante", "Eliminar malware/backdoors", "Corrigir vulnerabilidade raiz"],
-            "5_recovery": ["Restaurar de fonte confiável", "Monitoramento reforçado", "Validar integridade antes de reabrir"],
-            "6_post_incident": ["RCA (5 whys)", "Lições aprendidas", "Atualizar controles e detecções"],
+            "4_eradication": [
+                "Remover acesso do atacante",
+                "Eliminar malware/backdoors",
+                "Corrigir vulnerabilidade raiz",
+            ],
+            "5_recovery": [
+                "Restaurar de fonte confiável",
+                "Monitoramento reforçado",
+                "Validar integridade antes de reabrir",
+            ],
+            "6_post_incident": [
+                "RCA (5 whys)",
+                "Lições aprendidas",
+                "Atualizar controles e detecções",
+            ],
         },
         "communication": {
             "internal": ["Security lead", "Engenharia", "Jurídico", "Comunicação"],
-            "external_if_pii": ["ANPD (LGPD, até 3 dias úteis)", "Titulares afetados", "Clientes/parceiros conforme contrato"],
+            "external_if_pii": [
+                "ANPD (LGPD, até 3 dias úteis)",
+                "Titulares afetados",
+                "Clientes/parceiros conforme contrato",
+            ],
         },
         "status": "ready",
     }
@@ -598,7 +782,9 @@ def harden_headers(current_headers: dict | None = None) -> dict[str, Any]:
 
     dangerous = []
     if "server" in current or "x-powered-by" in current:
-        dangerous.append("Remova headers Server/X-Powered-By (fingerprinting da stack).")
+        dangerous.append(
+            "Remova headers Server/X-Powered-By (fingerprinting da stack)."
+        )
 
     return {
         "present_secure_headers": present,
@@ -613,6 +799,7 @@ def harden_headers(current_headers: dict | None = None) -> dict[str, Any]:
 # 10. Password / auth policy assessment (NIST 800-63B)
 # ============================================================================
 
+
 def check_password_policy(policy: dict | None = None) -> dict[str, Any]:
     """Avalia uma política de senha contra NIST SP 800-63B."""
     policy = policy or {}
@@ -620,21 +807,53 @@ def check_password_policy(policy: dict | None = None) -> dict[str, Any]:
     findings = []
 
     if min_len < 8:
-        findings.append({"issue": "Comprimento mínimo abaixo de 8", "severity": "high", "fix": "Exija >= 8 (ideal 12+) caracteres."})
+        findings.append(
+            {
+                "issue": "Comprimento mínimo abaixo de 8",
+                "severity": "high",
+                "fix": "Exija >= 8 (ideal 12+) caracteres.",
+            }
+        )
     if policy.get("require_complexity"):
-        findings.append({"issue": "Regras de complexidade obrigatórias", "severity": "low",
-                         "fix": "NIST desaconselha composição forçada; prefira comprimento + blocklist."})
+        findings.append(
+            {
+                "issue": "Regras de complexidade obrigatórias",
+                "severity": "low",
+                "fix": "NIST desaconselha composição forçada; prefira comprimento + blocklist.",
+            }
+        )
     if policy.get("periodic_rotation"):
-        findings.append({"issue": "Rotação periódica forçada", "severity": "low",
-                         "fix": "NIST recomenda rotacionar só sob suspeita de comprometimento."})
+        findings.append(
+            {
+                "issue": "Rotação periódica forçada",
+                "severity": "low",
+                "fix": "NIST recomenda rotacionar só sob suspeita de comprometimento.",
+            }
+        )
     if not policy.get("check_breached_passwords"):
-        findings.append({"issue": "Sem verificação contra senhas vazadas", "severity": "medium",
-                         "fix": "Compare com blocklist (ex: HaveIBeenPwned k-anonymity)."})
+        findings.append(
+            {
+                "issue": "Sem verificação contra senhas vazadas",
+                "severity": "medium",
+                "fix": "Compare com blocklist (ex: HaveIBeenPwned k-anonymity).",
+            }
+        )
     if not policy.get("mfa"):
-        findings.append({"issue": "MFA não exigido", "severity": "high", "fix": "Exija MFA, preferindo WebAuthn/TOTP a SMS."})
+        findings.append(
+            {
+                "issue": "MFA não exigido",
+                "severity": "high",
+                "fix": "Exija MFA, preferindo WebAuthn/TOTP a SMS.",
+            }
+        )
     if not policy.get("rate_limit_login"):
-        findings.append({"issue": "Sem rate limiting / lockout no login", "severity": "medium",
-                         "fix": "Aplique throttling e proteção contra credential stuffing."})
+        findings.append(
+            {
+                "issue": "Sem rate limiting / lockout no login",
+                "severity": "medium",
+                "fix": "Aplique throttling e proteção contra credential stuffing.",
+            }
+        )
 
     order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda f: order.get(f["severity"], 9))

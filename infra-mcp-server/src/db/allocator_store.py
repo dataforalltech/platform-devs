@@ -17,10 +17,8 @@ Thread-safety:
 from __future__ import annotations
 
 import threading
-import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import psycopg2
@@ -29,16 +27,12 @@ import psycopg2.pool
 
 from ..config.settings import Settings
 from ..models.allocator import (
-    HUMAN_APPROVAL_REQUIRED_SPECS,
-    SPEC_COST_USD_PER_HOUR,
     AllocationDecision,
     CapacityResponse,
     VMInfo,
     VMLease,
     VMPoolSnapshot,
     VMRequest,
-    lease_expiration,
-    now_utc,
 )
 from ..utils.logger import get_logger
 from .provisioner import ImmediateProvisioner, Provisioner
@@ -71,9 +65,7 @@ class AllocatorPolicy:
     max_active_leases_per_owner: int = 3
     max_lease_duration_min: int = 24 * 60  # 24h
     max_extensions_per_lease: int = 3
-    spec_whitelist_no_approval: frozenset[str] = frozenset(
-        {"cpu-small", "cpu-medium", "cpu-large"}
-    )
+    spec_whitelist_no_approval: frozenset[str] = frozenset({"cpu-small", "cpu-medium", "cpu-large"})
 
 
 # --------------------------------------------------------------------- #
@@ -91,6 +83,7 @@ def _str_to_dt(s: str | None):  # type: ignore[no-untyped-def]
     if s is None:
         return None
     from datetime import datetime  # noqa: PLC0415
+
     return datetime.fromisoformat(s)
 
 
@@ -120,13 +113,16 @@ class AllocatorStore:
             self._fernet_key: bytes = lease_secret.encode()
         else:
             from .ssh_key import generate_fernet_key  # noqa: PLC0415
+
             self._fernet_key = generate_fernet_key()
             _log.warning(
                 "lease_secret_not_configured",
-                extra={"extras": {
-                    "action": "ssh_keys_ephemeral",
-                    "impact": "chaves SSH perdidas em restart; definir INFRA_LEASE_SECRET",
-                }},
+                extra={
+                    "extras": {
+                        "action": "ssh_keys_ephemeral",
+                        "impact": "chaves SSH perdidas em restart; definir INFRA_LEASE_SECRET",
+                    }
+                },
             )
 
         # PostgreSQL connection pool

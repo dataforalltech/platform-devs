@@ -59,9 +59,7 @@ def test_required_fields_are_in_properties():
         props = set(schema.get("properties", {}).keys())
         required = set(schema.get("required", []))
         missing = required - props
-        assert not missing, (
-            f"{name}: required {missing} não estão em properties"
-        )
+        assert not missing, f"{name}: required {missing} não estão em properties"
 
 
 def test_unknown_tool_raises_key_error(settings, client):

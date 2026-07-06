@@ -11,7 +11,9 @@ def test_generate_rest_api(store, plan):
 
 
 def test_generate_with_context(store, plan):
-    result = generate_scenarios(store, plan_id=plan["id"], category="rest_api", context="/api/users")
+    result = generate_scenarios(
+        store, plan_id=plan["id"], category="rest_api", context="/api/users"
+    )
     # Context should replace {endpoint} in scenario names/steps
     assert result["generated_count"] > 0
 

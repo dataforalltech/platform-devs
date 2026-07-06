@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import os
-
 import json
+import os
 from typing import Any
 
 from fastapi import FastAPI
@@ -407,7 +406,9 @@ SCOPE_FOR_TOOL: dict[str, str] = {
 }
 SCOPES_SUPPORTED = ["qa:read", "qa:write"]
 
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), "SCOPE_FOR_TOOL cobre todas as tools"
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL cobre todas as tools"
+)
 
 
 # ---------------------------------------------------------------------- #
@@ -443,9 +444,7 @@ def build_server() -> tuple[Any, ...]:
         ]
 
     @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict[str, Any] | None
-    ) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
         try:
             payload = _dispatch(name, args, settings, store)

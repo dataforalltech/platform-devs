@@ -313,24 +313,23 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # ---------------------------------------------------------------------- #
 SCOPE_FOR_TOOL: dict[str, str] = {
     # --- infra:read — plan/scan/validação/custo (não modificam state) --- #
-    "terraform_validate": "infra:read",       # terraform validate (read-only)
-    "terraform_fmt_check": "infra:read",       # terraform fmt -check (não escreve)
-    "terraform_plan": "infra:read",            # terraform plan (não aplica; só planeja)
-    "terraform_show_plan": "infra:read",       # terraform show -json (read-only)
-    "policy_scan_checkov": "infra:read",       # checkov (scan estático)
-    "cost_estimate_infracost": "infra:read",   # infracost (estimativa de custo)
+    "terraform_validate": "infra:read",  # terraform validate (read-only)
+    "terraform_fmt_check": "infra:read",  # terraform fmt -check (não escreve)
+    "terraform_plan": "infra:read",  # terraform plan (não aplica; só planeja)
+    "terraform_show_plan": "infra:read",  # terraform show -json (read-only)
+    "policy_scan_checkov": "infra:read",  # checkov (scan estático)
+    "cost_estimate_infracost": "infra:read",  # infracost (estimativa de custo)
     # leituras do allocator (consultas, sem mutação de estado)
     "get_lease": "infra:read",
     "list_my_leases": "infra:read",
     "list_pool": "infra:read",
-    "query_capacity": "infra:read",            # planejamento sem efeito
-
+    "query_capacity": "infra:read",  # planejamento sem efeito
     # --- infra:write — APPLY/mutação de infra + allocator que muda estado --- #
-    "request_vm": "infra:write",               # SENSÍVEL: provisiona VM real (terraform apply) / cria lease
-    "release_lease": "infra:write",            # SENSÍVEL: libera lease e pode terminar VM (terraform destroy)
-    "extend_lease": "infra:write",             # muda estado do lease (prorroga validade)
-    "cancel_queued_request": "infra:write",    # muda estado da fila de provisão
-    "get_lease_ssh_key": "infra:write",        # SENSÍVEL: expõe chave privada Ed25519 da VM
+    "request_vm": "infra:write",  # SENSÍVEL: provisiona VM real (terraform apply) / cria lease
+    "release_lease": "infra:write",  # SENSÍVEL: libera lease e pode terminar VM (terraform destroy)
+    "extend_lease": "infra:write",  # muda estado do lease (prorroga validade)
+    "cancel_queued_request": "infra:write",  # muda estado da fila de provisão
+    "get_lease_ssh_key": "infra:write",  # SENSÍVEL: expõe chave privada Ed25519 da VM
 }
 SCOPES_SUPPORTED = ["infra:read", "infra:write"]
 
@@ -364,6 +363,7 @@ def build_server() -> tuple[Any, ...]:
         backend_config: dict[str, str] = {}
         if settings.tf_backend_config_json:
             import json as _json  # noqa: PLC0415
+
             try:
                 backend_config = _json.loads(settings.tf_backend_config_json)
             except Exception:  # noqa: BLE001
@@ -380,11 +380,13 @@ def build_server() -> tuple[Any, ...]:
         )
         _log.info(
             "provisioner_terraform",
-            extra={"extras": {
-                "tf_modules_root": str(settings.tf_modules_root),
-                "backend_type": settings.tf_backend_type,
-                "cost_cap_usd_month": settings.cost_cap_usd_month,
-            }},
+            extra={
+                "extras": {
+                    "tf_modules_root": str(settings.tf_modules_root),
+                    "backend_type": settings.tf_backend_type,
+                    "cost_cap_usd_month": settings.cost_cap_usd_month,
+                }
+            },
         )
     else:
         provisioner = ImmediateProvisioner()
@@ -400,15 +402,19 @@ def build_server() -> tuple[Any, ...]:
     )
     _log.info(
         "allocator_ready",
-        extra={"extras": {
-            "pg_host": settings.pg_host,
-            "pg_db": settings.pg_db,
-            "tf_modules_root": str(settings.tf_modules_root) if settings.tf_modules_root else None,
-            "provisioner": type(provisioner).__name__,
-            "max_cost_usd_per_hour": allocator.policy.max_cost_usd_per_hour,
-            "max_active_leases_per_owner": allocator.policy.max_active_leases_per_owner,
-            "max_lease_duration_min": allocator.policy.max_lease_duration_min,
-        }},
+        extra={
+            "extras": {
+                "pg_host": settings.pg_host,
+                "pg_db": settings.pg_db,
+                "tf_modules_root": str(settings.tf_modules_root)
+                if settings.tf_modules_root
+                else None,
+                "provisioner": type(provisioner).__name__,
+                "max_cost_usd_per_hour": allocator.policy.max_cost_usd_per_hour,
+                "max_active_leases_per_owner": allocator.policy.max_active_leases_per_owner,
+                "max_lease_duration_min": allocator.policy.max_lease_duration_min,
+            }
+        },
     )
 
     server: Server = Server("infra-mcp-server")
@@ -472,9 +478,7 @@ def _dispatch(
             var_file=args.get("var_file"),
         )
     if name == "terraform_show_plan":
-        return terraform_show_plan(
-            settings, plan_path=args.get("plan_path"), path=args.get("path")
-        )
+        return terraform_show_plan(settings, plan_path=args.get("plan_path"), path=args.get("path"))
     if name == "policy_scan_checkov":
         return policy_scan_checkov(
             settings,
@@ -512,9 +516,7 @@ def _dispatch(
             additional_min=args.get("additional_min"),
         )
     if name == "list_my_leases":
-        return list_my_leases(
-            allocator, owner=args.get("owner"), status=args.get("status")
-        )
+        return list_my_leases(allocator, owner=args.get("owner"), status=args.get("status"))
     if name == "list_pool":
         return list_pool(allocator)
     if name == "query_capacity":

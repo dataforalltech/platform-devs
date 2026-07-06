@@ -21,20 +21,21 @@ Segurança:
   - validate() faz lookup por token_prefix (índice) + bcrypt.checkpw().
   - Tokens antigos sem token_prefix são invalidados automaticamente na migration.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 import secrets
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
 _log = logging.getLogger(__name__)
 
@@ -114,7 +115,7 @@ class TokenStore:
         Retorna None se: token não existe, active=0, expirado ou bcrypt falha.
         """
         prefix = token[:8]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with self._conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -160,12 +161,10 @@ class TokenStore:
         token_prefix = token[:8]
         token_hash = bcrypt.hashpw(token.encode(), bcrypt.gensalt(rounds=10)).decode()
         user_id = secrets.token_hex(8)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         expires_at = None
         if expires_in_days:
-            expires_at = (
-                datetime.now(timezone.utc) + timedelta(days=expires_in_days)
-            ).isoformat()
+            expires_at = (datetime.now(UTC) + timedelta(days=expires_in_days)).isoformat()
 
         scopes_json = json.dumps(scopes or ["*"])
 
@@ -178,8 +177,17 @@ class TokenStore:
                             tenant_id, active, created_at, expires_at)
                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s)""",
                         (
-                            token_hash, token_prefix, user_id, name, email, role,
-                            scopes_json, environment, tenant_id, now, expires_at,
+                            token_hash,
+                            token_prefix,
+                            user_id,
+                            name,
+                            email,
+                            role,
+                            scopes_json,
+                            environment,
+                            tenant_id,
+                            now,
+                            expires_at,
                         ),
                     )
         except psycopg2.IntegrityError as exc:
@@ -187,7 +195,10 @@ class TokenStore:
 
         _log.info(
             "token_registered user_id=%s name=%s role=%s tenant_id=%s",
-            user_id, name, role, tenant_id,
+            user_id,
+            name,
+            role,
+            tenant_id,
         )
         return {
             "token": token,  # plaintext — retornado apenas uma vez
@@ -250,9 +261,7 @@ class TokenStore:
                 )
                 row = cur.fetchone()
                 if not row:
-                    raise TokenStoreError(
-                        f"user_id '{identifier}' não encontrado ou já revogado."
-                    )
+                    raise TokenStoreError(f"user_id '{identifier}' não encontrado ou já revogado.")
                 record = dict(row)
                 cur.execute(
                     "UPDATE tokens SET active = 0 WHERE user_id = %s AND active = 1",
@@ -270,7 +279,7 @@ class TokenStore:
 
     def touch(self, user_id: str) -> None:
         """Atualiza last_used_at para o usuário."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         with self._conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -298,10 +307,7 @@ class TokenStore:
                 "ORDER BY created_at DESC LIMIT %s OFFSET %s"
             )
         else:
-            query = (
-                f"SELECT {cols} FROM tokens "
-                "ORDER BY created_at DESC LIMIT %s OFFSET %s"
-            )
+            query = f"SELECT {cols} FROM tokens ORDER BY created_at DESC LIMIT %s OFFSET %s"
         with self._conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 cur.execute(query, (limit, offset))

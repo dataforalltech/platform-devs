@@ -204,9 +204,7 @@ class TestCommitFiles:
         assert result["error"] == "ValidationError"
 
     def test_files_missing_path_returns_validation_error(self, client):
-        result = commit_files(
-            client, "repo", "branch", "msg", [{"content": "x"}]
-        )
+        result = commit_files(client, "repo", "branch", "msg", [{"content": "x"}])
         assert result["error"] == "ValidationError"
 
     def test_multiple_files_uses_git_data_api(self, client, mock_github):

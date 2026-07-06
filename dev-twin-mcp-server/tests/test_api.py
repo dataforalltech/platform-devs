@@ -6,6 +6,7 @@ Cobre:
 - /v1/session/scopes: removido (deve retornar 404/405)
 - Autenticação Bearer com secrets.compare_digest
 """
+
 from __future__ import annotations
 
 import pytest
@@ -30,6 +31,7 @@ def api_token() -> str:
 @pytest.fixture
 def client(api_token: str):
     from fastapi import FastAPI
+
     app = FastAPI()
     app.include_router(make_router(api_token))
     return TestClient(app, raise_server_exceptions=True)
@@ -41,17 +43,19 @@ def auth_headers(api_token: str) -> dict:
 
 
 def _set_session(name="Alice", scopes=None, role="developer"):
-    SessionManager.set(UserSession(
-        token="tok",
-        user_id="uid_alice",
-        name=name,
-        email=f"{name.lower()}@test.com",
-        role=role,
-        scopes=scopes or ["deploy", "qa"],
-        environment="dev",
-        authenticated_at="2024-01-01T00:00:00+00:00",
-        context={"git": {"branch": "main"}},
-    ))
+    SessionManager.set(
+        UserSession(
+            token="tok",
+            user_id="uid_alice",
+            name=name,
+            email=f"{name.lower()}@test.com",
+            role=role,
+            scopes=scopes or ["deploy", "qa"],
+            environment="dev",
+            authenticated_at="2024-01-01T00:00:00+00:00",
+            context={"git": {"branch": "main"}},
+        )
+    )
 
 
 class TestHealth:

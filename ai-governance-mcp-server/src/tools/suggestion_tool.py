@@ -47,7 +47,9 @@ def _require_store(repo: GovernanceRepository):
     return repo.suggestions
 
 
-def _resolve_canonical_target(repo: GovernanceRepository, target_repo: str) -> tuple[str, list[str]]:
+def _resolve_canonical_target(
+    repo: GovernanceRepository, target_repo: str
+) -> tuple[str, list[str]]:
     """Tenta resolver target_repo via EcosystemGraph (alias/deprecated_by).
 
     Devolve (canonical, notes). Se o grafo está indisponível ou o target não
@@ -75,9 +77,7 @@ def _resolve_canonical_target(repo: GovernanceRepository, target_repo: str) -> t
     for node_id, attrs in g.graph.nodes(data=True):
         aliases = attrs.get("aliases") or []
         if target_repo in aliases:
-            notes.append(
-                f"target_repo '{target_repo}' é alias de '{node_id}' (canônico)."
-            )
+            notes.append(f"target_repo '{target_repo}' é alias de '{node_id}' (canônico).")
             return node_id, notes
 
     notes.append(
@@ -112,14 +112,10 @@ def submit_suggestion(
 
     cat_norm = safe_lower(category)
     if cat_norm not in _VALID_CATEGORIES:
-        raise ValueError(
-            f"category inválida: {category!r}. Opções: {sorted(_VALID_CATEGORIES)}"
-        )
+        raise ValueError(f"category inválida: {category!r}. Opções: {sorted(_VALID_CATEGORIES)}")
     sev_norm = safe_lower(severity)
     if sev_norm not in _VALID_SEVERITIES:
-        raise ValueError(
-            f"severity inválida: {severity!r}. Opções: {sorted(_VALID_SEVERITIES)}"
-        )
+        raise ValueError(f"severity inválida: {severity!r}. Opções: {sorted(_VALID_SEVERITIES)}")
 
     if len(title) > 200:
         raise ValueError("title muito longo (máx. 200 caracteres)")
@@ -130,7 +126,9 @@ def submit_suggestion(
 
     suggestion = store.create(
         source_agent=source_agent.strip(),
-        source_repo=source_repo.strip() if isinstance(source_repo, str) and source_repo.strip() else None,
+        source_repo=source_repo.strip()
+        if isinstance(source_repo, str) and source_repo.strip()
+        else None,
         target_repo=target_repo.strip(),
         target_repo_canonical=canonical,
         category=cat_norm,  # type: ignore[arg-type]  # validado contra _VALID_CATEGORIES

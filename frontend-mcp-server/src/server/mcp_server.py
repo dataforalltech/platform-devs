@@ -6,6 +6,7 @@ Conforme MCP_SERVICE_STANDARD.md:
 - Publica /.well-known/oauth-protected-resource (RFC 9728) para disparar o fluxo OAuth do cliente.
 - Health público; qualquer rota /mcp sem token válido responde 401.
 """
+
 from __future__ import annotations
 
 import os
@@ -42,7 +43,11 @@ TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     "generate_react_component": (generate_react_component, "frontend:write", False),
     "generate_nextjs_page": (generate_nextjs_page, "frontend:write", False),
     "generate_storybook_story": (generate_storybook_story, "frontend:write", False),
-    "generate_form_with_validation": (generate_form_with_validation, "frontend:write", False),
+    "generate_form_with_validation": (
+        generate_form_with_validation,
+        "frontend:write",
+        False,
+    ),
     # Leitura / status
     "status": (stub_tool, "frontend:read", False),
 }
@@ -59,7 +64,11 @@ def _scope_for_request(method: str, tool: str | None) -> str | None:
 
 
 def build_mcp() -> FastMCP:
-    mcp = FastMCP(name="frontend-mcp", instructions=SYSTEM_PROMPT, stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"))
+    mcp = FastMCP(
+        name="frontend-mcp",
+        instructions=SYSTEM_PROMPT,
+        stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
+    )
     for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
         mcp.add_tool(fn, name=name)
     return mcp
@@ -70,7 +79,11 @@ def build_app(validators: list[Callable] | None = None):
 
     `validators` permite injetar validadores no teste; em produção usa JWKS do auth-mcp.
     """
-    from shared.mcp_auth import BearerAuthMiddleware, JwtValidator, protected_resource_metadata
+    from shared.mcp_auth import (
+        BearerAuthMiddleware,
+        JwtValidator,
+        protected_resource_metadata,
+    )
 
     mcp = build_mcp()
 
@@ -80,16 +93,22 @@ def build_app(validators: list[Callable] | None = None):
 
     @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
     async def prm(_req: Request):
-        return JSONResponse(protected_resource_metadata(
-            resource=RESOURCE,
-            authorization_servers=[AS_ISSUER],
-            scopes=SCOPES_SUPPORTED,
-        ))
+        return JSONResponse(
+            protected_resource_metadata(
+                resource=RESOURCE,
+                authorization_servers=[AS_ISSUER],
+                scopes=SCOPES_SUPPORTED,
+            )
+        )
 
     app = mcp.streamable_http_app()
 
     if validators is None:
-        validators = [JwtValidator(issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL).validate]
+        validators = [
+            JwtValidator(
+                issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
+            ).validate
+        ]
 
     return BearerAuthMiddleware(
         app,
@@ -101,6 +120,7 @@ def build_app(validators: list[Callable] | None = None):
 
 def main() -> None:
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7120")))
 
 

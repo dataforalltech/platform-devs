@@ -8,8 +8,16 @@ from ..db.store import ServiceStore
 from ..models.service import service_record
 
 VALID_TYPES = {
-    "docker", "process", "remote", "unknown",
-    "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+    "docker",
+    "process",
+    "remote",
+    "unknown",
+    "mysql",
+    "mariadb",
+    "postgres",
+    "redis",
+    "kafka",
+    "mongodb",
 }
 VALID_ENVS = {"local", "dev", "hml", "prod"}
 VALID_STATUSES = {"running", "stopped", "unknown"}

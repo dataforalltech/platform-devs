@@ -22,7 +22,7 @@ from ..config.settings import DeploySettings
 from ..knowledge.github_client import GitHubClient, GitHubClientError
 from .acr_tool import list_acr_images, setup_repo
 from .pipeline_tool import scaffold_pipeline
-from .workflow_tool import list_workflow_runs, trigger_workflow
+from .workflow_tool import trigger_workflow
 
 # Statuses que indicam CI passou
 _CI_SUCCESS = {"success"}
@@ -66,9 +66,7 @@ def _ci_status(client: GitHubClient, repo: str, workflow_id: str, ref: str) -> d
     }
 
 
-def _acr_status(
-    client: GitHubClient, settings: DeploySettings, repo_name: str
-) -> dict[str, Any]:
+def _acr_status(client: GitHubClient, settings: DeploySettings, repo_name: str) -> dict[str, Any]:
     """Verifica se existe imagem no ACR para o repo."""
     result = list_acr_images(client, settings, service_name=repo_name, limit=1)
     if "error" in result:
@@ -164,16 +162,18 @@ def ensure_all_repos_healthy(
         else:
             health = "ACR_MISSING"
 
-        repos_report.append({
-            "name": name,
-            "ci_status": ci["status"],
-            "ci_conclusion": ci.get("conclusion"),
-            "ci_run_url": ci.get("url"),
-            "acr_status": acr["status"],
-            "acr_latest_tag": acr.get("latest_tag"),
-            "health": health,
-            "remediation": None,
-        })
+        repos_report.append(
+            {
+                "name": name,
+                "ci_status": ci["status"],
+                "ci_conclusion": ci.get("conclusion"),
+                "ci_run_url": ci.get("url"),
+                "acr_status": acr["status"],
+                "acr_latest_tag": acr.get("latest_tag"),
+                "health": health,
+                "remediation": None,
+            }
+        )
 
     # ── Fase 3: remediação ──────────────────────────────────────────────────── #
     if not dry_run:
@@ -192,23 +192,31 @@ def ensure_all_repos_healthy(
                     scaffold_result = scaffold_pipeline(
                         client, name, templates=["ci", "cd-dev"], branch=ref
                     )
-                    actions_taken.append({
-                        "repo": name,
-                        "action": "scaffold_pipeline",
-                        "templates": ["ci", "cd-dev"],
-                        "result": "ok" if scaffold_result.get("committed") else scaffold_result.get("error", "error"),
-                    })
+                    actions_taken.append(
+                        {
+                            "repo": name,
+                            "action": "scaffold_pipeline",
+                            "templates": ["ci", "cd-dev"],
+                            "result": "ok"
+                            if scaffold_result.get("committed")
+                            else scaffold_result.get("error", "error"),
+                        }
+                    )
                     time.sleep(5)  # aguarda propagação do commit
 
                 # Disparar CI
                 trigger_result = trigger_workflow(client, name, workflow_id, ref)
-                actions_taken.append({
-                    "repo": name,
-                    "action": "trigger_ci",
-                    "workflow": workflow_id,
-                    "ref": ref,
-                    "result": "dispatched" if not trigger_result.get("error") else trigger_result.get("error"),
-                })
+                actions_taken.append(
+                    {
+                        "repo": name,
+                        "action": "trigger_ci",
+                        "workflow": workflow_id,
+                        "ref": ref,
+                        "result": "dispatched"
+                        if not trigger_result.get("error")
+                        else trigger_result.get("error"),
+                    }
+                )
 
                 # Aguardar resultado
                 final_status = _wait_for_ci(client, name, workflow_id, ref, wait_seconds)
@@ -223,40 +231,64 @@ def ensure_all_repos_healthy(
                         repo["acr_status"] = "triggered_via_ci"
                         needs_acr = False
                 else:
-                    actions_taken.append({
-                        "repo": name,
-                        "action": "ci_result",
-                        "result": final_status,
-                        "note": "Remediation failed — check workflow logs",
-                    })
+                    actions_taken.append(
+                        {
+                            "repo": name,
+                            "action": "ci_result",
+                            "result": final_status,
+                            "note": "Remediation failed — check workflow logs",
+                        }
+                    )
                     needs_acr = False  # não tenta ACR se CI ainda está falhando
 
             # ── remediar ACR ────────────────────────────────────────────────── #
             if needs_acr:
                 setup_result = setup_repo(client, settings, name, image_name=name)
-                actions_taken.append({
-                    "repo": name,
-                    "action": "setup_repo",
-                    "result": "ok" if setup_result.get("success") else setup_result.get("errors"),
-                })
+                actions_taken.append(
+                    {
+                        "repo": name,
+                        "action": "setup_repo",
+                        "result": "ok"
+                        if setup_result.get("success")
+                        else setup_result.get("errors"),
+                    }
+                )
 
                 cd_result = trigger_workflow(client, name, cd_workflow_id, ref)
-                actions_taken.append({
-                    "repo": name,
-                    "action": "trigger_cd",
-                    "workflow": cd_workflow_id,
-                    "ref": ref,
-                    "result": "dispatched" if not cd_result.get("error") else cd_result.get("error"),
-                })
+                actions_taken.append(
+                    {
+                        "repo": name,
+                        "action": "trigger_cd",
+                        "workflow": cd_workflow_id,
+                        "ref": ref,
+                        "result": "dispatched"
+                        if not cd_result.get("error")
+                        else cd_result.get("error"),
+                    }
+                )
                 repo["acr_status"] = "triggered"
                 repo["remediation"] = (repo["remediation"] or "") + "_acr_triggered"
 
     # ── Fase 4: summary ─────────────────────────────────────────────────────── #
-    healthy = sum(1 for r in repos_report if r["health"] == "HEALTHY" or r.get("remediation") == "ci_success")
-    ci_failing = sum(1 for r in repos_report if r["ci_status"] in ("failing", "no_workflow", "no_runs", "timeout"))
+    healthy = sum(
+        1 for r in repos_report if r["health"] == "HEALTHY" or r.get("remediation") == "ci_success"
+    )
+    ci_failing = sum(
+        1
+        for r in repos_report
+        if r["ci_status"] in ("failing", "no_workflow", "no_runs", "timeout")
+    )
     acr_missing = sum(1 for r in repos_report if r["acr_status"] in ("missing", "error"))
-    remediated = sum(1 for r in repos_report if r.get("remediation") and "success" in (r.get("remediation") or ""))
-    remediation_failed = sum(1 for r in repos_report if r.get("remediation") and "timeout" in (r.get("remediation") or ""))
+    remediated = sum(
+        1
+        for r in repos_report
+        if r.get("remediation") and "success" in (r.get("remediation") or "")
+    )
+    remediation_failed = sum(
+        1
+        for r in repos_report
+        if r.get("remediation") and "timeout" in (r.get("remediation") or "")
+    )
 
     return {
         "summary": {

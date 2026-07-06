@@ -1,7 +1,11 @@
 """Product-Manager Product Management Tools."""
+
 from typing import Any
 
-def generate_feature_spec(feature: str = "Feature", objective: str = "") -> dict[str, Any]:
+
+def generate_feature_spec(
+    feature: str = "Feature", objective: str = ""
+) -> dict[str, Any]:
     """Generate comprehensive feature specification."""
     return {
         "title": f"Feature Spec: {feature}",
@@ -11,6 +15,7 @@ def generate_feature_spec(feature: str = "Feature", objective: str = "") -> dict
         "acceptance_criteria": ["Scenario 1", "Scenario 2"],
         "status": "draft",
     }
+
 
 def generate_go_to_market_brief() -> dict[str, Any]:
     """Generate GTM brief for product launch."""
@@ -24,6 +29,7 @@ def generate_go_to_market_brief() -> dict[str, Any]:
         "status": "draft",
     }
 
+
 def define_product_vision() -> dict[str, Any]:
     """Define product vision, mission, and goals."""
     return {
@@ -33,6 +39,7 @@ def define_product_vision() -> dict[str, Any]:
         "goals": ["Market leadership", "Customer satisfaction", "Revenue growth"],
         "status": "active",
     }
+
 
 def generate_release_plan() -> dict[str, Any]:
     """Generate product release plan."""
@@ -47,6 +54,7 @@ def generate_release_plan() -> dict[str, Any]:
         "features_per_phase": {"alpha": 5, "beta": 3, "ga": 2},
         "status": "planned",
     }
+
 
 def stub_tool() -> dict[str, Any]:
     """Status check stub."""

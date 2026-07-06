@@ -122,7 +122,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "repository_name": {"type": "string", "description": "Nome do repositório alvo (opcional)."},
+                "repository_name": {
+                    "type": "string",
+                    "description": "Nome do repositório alvo (opcional).",
+                },
                 "task_type": {
                     "type": "string",
                     "description": "feature | bugfix | refactor | migration | infra | docs | test | chore",
@@ -257,8 +260,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "relation": {"type": "string", "enum": _RELATION_ENUM},
                 "direction": {"type": "string", "enum": ["out", "in", "both"]},
                 "filter_text": {"type": "string", "description": "Filtro de texto livre nos nós."},
-                "limit": {"type": "integer", "default": 20, "description": "Máximo de resultados. Padrão: 20."},
-                "offset": {"type": "integer", "default": 0, "description": "Paginação: pular N resultados."},
+                "limit": {
+                    "type": "integer",
+                    "default": 20,
+                    "description": "Máximo de resultados. Padrão: 20.",
+                },
+                "offset": {
+                    "type": "integer",
+                    "default": 0,
+                    "description": "Paginação: pular N resultados.",
+                },
             },
             "additionalProperties": False,
         },
@@ -272,7 +283,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "node_id": {"type": "string", "description": "id canônico do nó (service/contract/library)"},
+                "node_id": {
+                    "type": "string",
+                    "description": "id canônico do nó (service/contract/library)",
+                },
             },
             "required": ["node_id"],
             "additionalProperties": False,
@@ -742,10 +756,14 @@ SCOPE_FOR_TOOL: dict[str, str] = {
 SCOPES_SUPPORTED = ["aigov:read", "aigov:write"]
 
 # Garante que SCOPE_FOR_TOOL cobre exatamente todas as tools declaradas.
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), "SCOPE_FOR_TOOL não cobre todas as tools"
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL não cobre todas as tools"
+)
 
 
-def _dispatch(name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore) -> dict:
+def _dispatch(
+    name: str, args: dict[str, Any], repo: GovernanceRepository, audit: AuditStore
+) -> dict:
     """Roteia a chamada para a função pura correspondente."""
     if name == "get_agent_guidelines":
         return get_agent_guidelines(

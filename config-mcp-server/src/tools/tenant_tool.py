@@ -2,6 +2,7 @@
 
 Namespace: tenants.<tenant_id>
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -13,6 +14,7 @@ def _get_twin_tenant_id() -> str | None:
     """Tenta resolver o tenant_id da sessão atual via dev-twin-mcp HTTP API."""
     try:
         from shared.twin_client import TwinClient
+
         return TwinClient.from_env().get_tenant_id()
     except Exception:  # noqa: BLE001
         return None

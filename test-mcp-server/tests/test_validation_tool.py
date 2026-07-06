@@ -66,7 +66,9 @@ def test_double_check_critical_finding_blocks(store, plan):
         expected_result="r",
     )
     record_result(store, plan_id=plan["id"], scenario_id=sc["scenario_id"], status="passed")
-    add_finding(store, plan_id=plan["id"], severity="critical", title="Bug crítico", description="X")
+    add_finding(
+        store, plan_id=plan["id"], severity="critical", title="Bug crítico", description="X"
+    )
     result = double_check(store, plan_id=plan["id"])
     assert result["summary"]["ready_to_ship"] is False
 

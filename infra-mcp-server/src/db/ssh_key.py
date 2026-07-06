@@ -42,10 +42,15 @@ def generate_keypair() -> tuple[str, str]:
         PrivateFormat.OpenSSH,
         NoEncryption(),
     ).decode()
-    public_openssh = private_key.public_key().public_bytes(
-        Encoding.OpenSSH,
-        PublicFormat.OpenSSH,
-    ).decode().strip()
+    public_openssh = (
+        private_key.public_key()
+        .public_bytes(
+            Encoding.OpenSSH,
+            PublicFormat.OpenSSH,
+        )
+        .decode()
+        .strip()
+    )
     return private_pem, public_openssh
 
 

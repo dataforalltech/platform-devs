@@ -6,6 +6,7 @@ Conforme MCP_SERVICE_STANDARD.md:
 - Publica /.well-known/oauth-protected-resource (RFC 9728) para disparar o fluxo OAuth do cliente.
 - Health público; qualquer rota /mcp sem token válido responde 401.
 """
+
 from __future__ import annotations
 
 import os
@@ -38,7 +39,11 @@ RESOURCE_METADATA_URL = os.getenv(
 # Nenhuma ferramenta é destrutiva/irreversível, então sensitive=False em todas.
 TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
     # Geração de artefatos de arquitetura
-    "generate_solution_blueprint": (generate_solution_blueprint, "architecture:write", False),
+    "generate_solution_blueprint": (
+        generate_solution_blueprint,
+        "architecture:write",
+        False,
+    ),
     "generate_c4_diagram": (generate_c4_diagram, "architecture:write", False),
     "generate_architecture": (generate_architecture, "architecture:write", False),
     # Leitura / status
@@ -57,7 +62,10 @@ TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "generate_c4_diagram": {
         "type": "object",
         "properties": {
-            "system_name": {"type": "string", "description": "Nome do software system em foco"},
+            "system_name": {
+                "type": "string",
+                "description": "Nome do software system em foco",
+            },
             "actors": {
                 "type": "array",
                 "description": "Pessoas/sistemas externos (str ou {name,type,description})",
@@ -79,9 +87,15 @@ TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     "generate_solution_blueprint": {
         "type": "object",
         "properties": {
-            "requirements": {"type": "string", "description": "Requisitos funcionais/de negócio (texto livre)"},
+            "requirements": {
+                "type": "string",
+                "description": "Requisitos funcionais/de negócio (texto livre)",
+            },
             "solution_name": {"type": "string", "description": "Nome da solução"},
-            "context": {"type": "string", "description": "Contexto adicional (domínio, org)"},
+            "context": {
+                "type": "string",
+                "description": "Contexto adicional (domínio, org)",
+            },
             "constraints": {
                 "type": "array",
                 "description": "Restrições técnicas/organizacionais",
@@ -104,7 +118,10 @@ TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
                 "description": "Atributos de qualidade priorizados",
                 "items": {"type": "string"},
             },
-            "architecture_name": {"type": "string", "description": "Nome opcional; default derivado do domínio"},
+            "architecture_name": {
+                "type": "string",
+                "description": "Nome opcional; default derivado do domínio",
+            },
         },
         "required": [],
     },
@@ -146,12 +163,20 @@ def _scope_for_request(method: str, tool: str | None) -> str | None:
 
 
 def build_mcp() -> FastMCP:
-    mcp = FastMCP(name="architecture-mcp", instructions=SYSTEM_PROMPT, stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"))
+    mcp = FastMCP(
+        name="architecture-mcp",
+        instructions=SYSTEM_PROMPT,
+        stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
+    )
     for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
         # O inputSchema é derivado das anotações de tipo de cada fn (ver
         # TOOL_INPUT_SCHEMAS para o contrato documentado). Antes as tools não
         # recebiam argumentos; agora expõem parâmetros tipados.
-        mcp.add_tool(fn, name=name, description=(fn.__doc__ or "").strip().split("\n", 1)[0] or None)
+        mcp.add_tool(
+            fn,
+            name=name,
+            description=(fn.__doc__ or "").strip().split("\n", 1)[0] or None,
+        )
     return mcp
 
 
@@ -160,7 +185,11 @@ def build_app(validators: list[Callable] | None = None):
 
     `validators` permite injetar validadores no teste; em produção usa JWKS do auth-mcp.
     """
-    from shared.mcp_auth import BearerAuthMiddleware, JwtValidator, protected_resource_metadata
+    from shared.mcp_auth import (
+        BearerAuthMiddleware,
+        JwtValidator,
+        protected_resource_metadata,
+    )
 
     mcp = build_mcp()
 
@@ -170,16 +199,22 @@ def build_app(validators: list[Callable] | None = None):
 
     @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
     async def prm(_req: Request):
-        return JSONResponse(protected_resource_metadata(
-            resource=RESOURCE,
-            authorization_servers=[AS_ISSUER],
-            scopes=SCOPES_SUPPORTED,
-        ))
+        return JSONResponse(
+            protected_resource_metadata(
+                resource=RESOURCE,
+                authorization_servers=[AS_ISSUER],
+                scopes=SCOPES_SUPPORTED,
+            )
+        )
 
     app = mcp.streamable_http_app()
 
     if validators is None:
-        validators = [JwtValidator(issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL).validate]
+        validators = [
+            JwtValidator(
+                issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
+            ).validate
+        ]
 
     return BearerAuthMiddleware(
         app,
@@ -191,6 +226,7 @@ def build_app(validators: list[Callable] | None = None):
 
 def main() -> None:
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7118")))
 
 

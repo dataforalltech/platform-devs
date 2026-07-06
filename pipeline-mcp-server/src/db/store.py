@@ -1,22 +1,22 @@
 from __future__ import annotations
 
 import json
-import psycopg2
-import psycopg2.pool
-import psycopg2.extras
-from contextlib import contextmanager
-import threading
-import os
 import logging
-from datetime import datetime, timezone
-from pathlib import Path
+import os
+import threading
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from typing import Any
+
+import psycopg2
+import psycopg2.extras
+import psycopg2.pool
 
 _log = logging.getLogger(__name__)
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 DEFAULT_GATES: dict[str, list[str]] = {
@@ -26,7 +26,14 @@ DEFAULT_GATES: dict[str, list[str]] = {
 }
 
 VALID_ENVS = {"dev", "homol", "prod", "blocked", "rollback"}
-VALID_GATE_TYPES = {"qa_tests", "security_scan", "pr_approved", "health_check", "manual_approval", "audit_compliance"}
+VALID_GATE_TYPES = {
+    "qa_tests",
+    "security_scan",
+    "pr_approved",
+    "health_check",
+    "manual_approval",
+    "audit_compliance",
+}
 
 
 class PipelineStore:
@@ -113,9 +120,7 @@ class PipelineStore:
             now = _now()
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT service FROM pipelines WHERE service=%s", (service,)
-                    )
+                    cur.execute("SELECT service FROM pipelines WHERE service=%s", (service,))
                     existing = cur.fetchone()
                     default_config = json.dumps(DEFAULT_GATES)
                     if existing is None:
@@ -133,9 +138,7 @@ class PipelineStore:
                             (repo, base_branch, now, service),
                         )
                         action = "updated"
-                    cur.execute(
-                        "SELECT * FROM pipelines WHERE service=%s", (service,)
-                    )
+                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
                     row = cur.fetchone()
                     result = {"action": action, "pipeline": _pipeline_row(row)}
 
@@ -145,9 +148,7 @@ class PipelineStore:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT * FROM pipelines WHERE service=%s", (service,)
-                    )
+                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
                     row = cur.fetchone()
                     if row is None:
                         return None
@@ -160,9 +161,7 @@ class PipelineStore:
                     pipeline["recent_promotions"] = [dict(p) for p in promotions]
                     return pipeline
 
-    def list_pipelines(
-        self, env: str | None = None, status: str | None = None
-    ) -> list[dict]:
+    def list_pipelines(self, env: str | None = None, status: str | None = None) -> list[dict]:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -206,9 +205,7 @@ class PipelineStore:
                            WHERE service=%s""",
                         (reason, blocked_by, now, now, service),
                     )
-                    cur.execute(
-                        "SELECT * FROM pipelines WHERE service=%s", (service,)
-                    )
+                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
                     row = cur.fetchone()
                     result = _pipeline_row(row) if row else {}
 
@@ -223,9 +220,7 @@ class PipelineStore:
                         "UPDATE pipelines SET gates_config=%s, updated_at=%s WHERE service=%s",
                         (json.dumps(gates_required), now, service),
                     )
-                    cur.execute(
-                        "SELECT * FROM pipelines WHERE service=%s", (service,)
-                    )
+                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
                     row = cur.fetchone()
                     return _pipeline_row(row) if row else {}
 
@@ -255,9 +250,17 @@ class PipelineStore:
                            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                            RETURNING id""",
                         (
-                            service, from_env, to_env, promoted_by, reason,
-                            json.dumps(gates_snapshot), deploy_ref,
-                            pr_number, pr_url, status, now,
+                            service,
+                            from_env,
+                            to_env,
+                            promoted_by,
+                            reason,
+                            json.dumps(gates_snapshot),
+                            deploy_ref,
+                            pr_number,
+                            pr_url,
+                            status,
+                            now,
                         ),
                     )
                     promotion_id = cur.fetchone()[0]
@@ -283,9 +286,7 @@ class PipelineStore:
                         "UPDATE promotions SET approved_by=%s, approved_at=%s, status='approved', completed_at=%s WHERE id=%s",
                         (approved_by, now, now, promotion_id),
                     )
-                    cur.execute(
-                        "SELECT * FROM promotions WHERE id=%s", (promotion_id,)
-                    )
+                    cur.execute("SELECT * FROM promotions WHERE id=%s", (promotion_id,))
                     row = cur.fetchone()
                     result = dict(row) if row else None
 
@@ -295,15 +296,11 @@ class PipelineStore:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT * FROM promotions WHERE id=%s", (promotion_id,)
-                    )
+                    cur.execute("SELECT * FROM promotions WHERE id=%s", (promotion_id,))
                     row = cur.fetchone()
                     return dict(row) if row else None
 
-    def get_promotion_history(
-        self, service: str | None = None, limit: int = 20
-    ) -> list[dict]:
+    def get_promotion_history(self, service: str | None = None, limit: int = 20) -> list[dict]:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -369,9 +366,7 @@ class PipelineStore:
         with self._lock:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
-                    cur.execute(
-                        "DELETE FROM gates WHERE service=%s AND env=%s", (service, env)
-                    )
+                    cur.execute("DELETE FROM gates WHERE service=%s AND env=%s", (service, env))
                     return cur.rowcount
 
     def get_pipeline_overview(self) -> dict:

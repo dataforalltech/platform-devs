@@ -17,12 +17,7 @@ def test_blocks_silent_fallback_pattern(repo):
         repo,
         repository_name="orders-service",
         task_description="ajustar chamada ao provider de pagamento",
-        proposed_change=(
-            "try:\n"
-            "    return provider.charge(amount)\n"
-            "except Exception:\n"
-            "    pass\n"
-        ),
+        proposed_change=("try:\n    return provider.charge(amount)\nexcept Exception:\n    pass\n"),
     )
     assert res["approved"] is False
     assert res["risk_level"] == "critical"

@@ -6,6 +6,7 @@ Consumido por whoami(), get_twin_context() e pela HTTP API.
 Thread-safety: todas as operações do SessionManager usam um RLock para evitar
 race conditions entre a thread stdio do MCP e a thread HTTP do FastAPI.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,8 +15,9 @@ import platform
 import subprocess
 import threading
 import time
-from dataclasses import dataclass, field, replace as dc_replace
-from datetime import datetime, timezone
+from dataclasses import dataclass, field
+from dataclasses import replace as dc_replace
+from datetime import UTC, datetime
 from typing import Any
 
 _log = logging.getLogger(__name__)
@@ -57,7 +59,9 @@ class SessionManager:
             cls._current = session
         _log.info(
             "session_set user_id=%s name=%s environment=%s",
-            session.user_id, session.name, session.environment,
+            session.user_id,
+            session.name,
+            session.environment,
         )
 
     @classmethod
@@ -81,8 +85,7 @@ class SessionManager:
         with cls._lock:
             if cls._current is None:
                 raise RuntimeError(
-                    "Nenhuma sessão autenticada. "
-                    "Chame authenticate(token) primeiro."
+                    "Nenhuma sessão autenticada. Chame authenticate(token) primeiro."
                 )
             return cls._current
 
@@ -98,9 +101,7 @@ class SessionManager:
         """Incrementa contador de tool calls e retorna o novo total."""
         with cls._lock:
             if cls._current is not None:
-                cls._current = dc_replace(
-                    cls._current, tool_calls=cls._current.tool_calls + 1
-                )
+                cls._current = dc_replace(cls._current, tool_calls=cls._current.tool_calls + 1)
                 return cls._current.tool_calls
             return 0
 
@@ -134,14 +135,18 @@ def _collect_fresh() -> dict[str, Any]:
     try:
         branch = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if branch.returncode == 0:
             git_info["branch"] = branch.stdout.strip()
 
         repo = subprocess.run(
             ["git", "rev-parse", "--show-toplevel"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if repo.returncode == 0:
             git_info["repo"] = os.path.basename(repo.stdout.strip())
@@ -149,7 +154,9 @@ def _collect_fresh() -> dict[str, Any]:
 
         sha = subprocess.run(
             ["git", "rev-parse", "--short=7", "HEAD"],
-            capture_output=True, text=True, timeout=3,
+            capture_output=True,
+            text=True,
+            timeout=3,
         )
         if sha.returncode == 0:
             git_info["head_sha"] = sha.stdout.strip()
@@ -168,5 +175,5 @@ def _collect_fresh() -> dict[str, Any]:
     return {
         "git": git_info,
         "os": os_info,
-        "captured_at": datetime.now(timezone.utc).isoformat(),
+        "captured_at": datetime.now(UTC).isoformat(),
     }

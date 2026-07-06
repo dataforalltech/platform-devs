@@ -1,7 +1,11 @@
 """Frontend Frontend & UI Tools."""
+
 from typing import Any
 
-def generate_react_component(name: str = "Component", variant: str = "functional") -> dict[str, Any]:
+
+def generate_react_component(
+    name: str = "Component", variant: str = "functional"
+) -> dict[str, Any]:
     """Generate React component scaffold."""
     return {
         "title": f"React Component: {name}",
@@ -11,6 +15,7 @@ def generate_react_component(name: str = "Component", variant: str = "functional
         "styling": "tailwind",
         "status": "generated",
     }
+
 
 def generate_nextjs_page(route: str = "/") -> dict[str, Any]:
     """Generate Next.js page with App Router."""
@@ -22,6 +27,7 @@ def generate_nextjs_page(route: str = "/") -> dict[str, Any]:
         "status": "generated",
     }
 
+
 def generate_storybook_story(component_name: str = "Component") -> dict[str, Any]:
     """Generate Storybook story (CSF 3.0)."""
     return {
@@ -30,6 +36,7 @@ def generate_storybook_story(component_name: str = "Component") -> dict[str, Any
         "stories": ["Default", "Loading", "Error"],
         "status": "generated",
     }
+
 
 def generate_form_with_validation(form_name: str = "Form") -> dict[str, Any]:
     """Generate form with React Hook Form + Zod validation."""
@@ -41,6 +48,7 @@ def generate_form_with_validation(form_name: str = "Form") -> dict[str, Any]:
         "library": "react-hook-form",
         "status": "generated",
     }
+
 
 def stub_tool() -> dict[str, Any]:
     """Status check stub."""

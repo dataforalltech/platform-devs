@@ -1,9 +1,7 @@
-import pytest
-
+from src.checkers.docs_checker import DocsChecker
+from src.checkers.security_checker import SecurityChecker
 from src.checkers.structure_checker import StructureChecker
 from src.checkers.test_checker import TestChecker
-from src.checkers.security_checker import SecurityChecker
-from src.checkers.docs_checker import DocsChecker
 
 
 def test_structure_checker_has_src_dir(tmp_repo):

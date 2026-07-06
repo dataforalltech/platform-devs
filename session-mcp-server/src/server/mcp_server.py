@@ -2,11 +2,11 @@
 
 Transporte: Streamable HTTP (SDK oficial) + auth Bearer (shared.mcp_auth) na porta 7102.
 """
+
 from __future__ import annotations
 
-import os
-
 import json
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -14,12 +14,14 @@ from typing import Any
 
 class _JSONEncoder(json.JSONEncoder):
     """Serializa tipos extras: datetime, date, Decimal."""
+
     def default(self, o: Any) -> Any:
         if isinstance(o, (datetime, date)):
             return o.isoformat()
         if isinstance(o, Decimal):
             return float(o)
         return super().default(o)
+
 
 from fastapi import FastAPI
 from mcp.server import Server
@@ -155,8 +157,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_session": {
         "description": (
-            "Atualiza o status e/ou progresso de uma sessão. "
-            "Status: active | paused | completed."
+            "Atualiza o status e/ou progresso de uma sessão. Status: active | paused | completed."
         ),
         "schema": {
             "type": "object",
@@ -602,9 +603,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "defer_suggestion": {
-        "description": (
-            "Difere uma sugestão pendente. actor obrigatório, reason opcional."
-        ),
+        "description": ("Difere uma sugestão pendente. actor obrigatório, reason opcional."),
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -750,9 +749,7 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
         ]
 
     @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict[str, Any] | None
-    ) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
         try:
             payload = _dispatch(name, args, store, settings.default_base_branch)
@@ -761,7 +758,12 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
         except Exception as exc:  # noqa: BLE001
             payload = {"error": "internal_error", "details": str(exc), "tool": name}
 
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder))]
+        return [
+            TextContent(
+                type="text",
+                text=json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder),
+            )
+        ]
 
     # ── HTTP MCP endpoints (for wrapper compatibility) ─────────────────── #
 
@@ -1004,6 +1006,7 @@ def build_app(validators: Any = None):
 def main() -> None:
     """Entry point — Streamable HTTP + auth."""
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7102")))
 
 

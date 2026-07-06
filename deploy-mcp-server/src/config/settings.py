@@ -24,9 +24,7 @@ class DeploySettings(BaseSettings):
     )
 
     # ── GitHub ─────────────────────────────────────────────────────────────── #
-    github_token: str = Field(
-        description="GitHub PAT com escopos repo + workflow (obrigatório)."
-    )
+    github_token: str = Field(description="GitHub PAT com escopos repo + workflow (obrigatório).")
     github_org: str = Field(
         default="dataforalltech",
         description="Organização GitHub padrão usada quando repo não tem owner/.",
@@ -70,7 +68,7 @@ class DeploySettings(BaseSettings):
         ),
     )
 
-    def get_repos_root_path(self) -> "Path | None":
+    def get_repos_root_path(self) -> Path | None:
         """Retorna o Path resolvido do repos_root, ou None se nao configurado."""
         from pathlib import Path
 

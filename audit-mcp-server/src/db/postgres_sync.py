@@ -7,9 +7,9 @@ Cobre: create_audit, update_audit_status, add_audit_item, add_approval, set_serv
 
 import logging
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class AuditPostgresSync:
     Cobre: audits, audit_items, audit_approvals, service_criticality.
     """
 
-    def __init__(self, postgres_config: Dict[str, Any], enabled: bool = True):
+    def __init__(self, postgres_config: dict[str, Any], enabled: bool = True):
         """
         Initialize sync layer.
 
@@ -34,7 +34,9 @@ class AuditPostgresSync:
 
         if enabled:
             try:
-                sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template"))
+                sys.path.insert(
+                    0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template")
+                )
                 from lib.mcp_postgres_adapter import MCPPostgreSQLAdapter
 
                 self.adapter = MCPPostgreSQLAdapter("audit-mcp", postgres_config)
@@ -50,7 +52,7 @@ class AuditPostgresSync:
 
     # ========== AUDIT RECORD SYNC ==========
 
-    def sync_audit_created(self, audit_data: Dict[str, Any]) -> bool:
+    def sync_audit_created(self, audit_data: dict[str, Any]) -> bool:
         """
         Sync when audit record is created.
         """
@@ -59,20 +61,20 @@ class AuditPostgresSync:
 
         try:
             pg_data = {
-                'id': audit_data['id'],
-                'service': audit_data['service'],
-                'repo': audit_data.get('repo', ''),
-                'environment': audit_data.get('env', 'unknown'),
-                'criticality': audit_data.get('criticality', 'medium'),
-                'score': float(audit_data.get('score', 0)),
-                'passed': audit_data.get('passed', False),
-                'status': audit_data.get('status', 'pending'),
-                'checklist_data': audit_data.get('checklist', '{}'),
-                'created_at': datetime.utcnow().isoformat() + 'Z',
-                'updated_at': datetime.utcnow().isoformat() + 'Z',
+                "id": audit_data["id"],
+                "service": audit_data["service"],
+                "repo": audit_data.get("repo", ""),
+                "environment": audit_data.get("env", "unknown"),
+                "criticality": audit_data.get("criticality", "medium"),
+                "score": float(audit_data.get("score", 0)),
+                "passed": audit_data.get("passed", False),
+                "status": audit_data.get("status", "pending"),
+                "checklist_data": audit_data.get("checklist", "{}"),
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('audits', pg_data)
+            self.adapter.sync_to_postgres("audits", pg_data)
             logger.debug(f"Synced audit created: {audit_data['id']}")
             return True
 
@@ -80,7 +82,7 @@ class AuditPostgresSync:
             logger.error(f"Failed to sync audit created: {e}")
             return False
 
-    def sync_audit_updated(self, audit_id: str, updates: Dict[str, Any]) -> bool:
+    def sync_audit_updated(self, audit_id: str, updates: dict[str, Any]) -> bool:
         """
         Sync when audit is updated (status, score, passed).
         """
@@ -91,17 +93,17 @@ class AuditPostgresSync:
             set_clauses = []
             values = []
 
-            if 'status' in updates:
+            if "status" in updates:
                 set_clauses.append("status = %s")
-                values.append(updates['status'])
+                values.append(updates["status"])
 
-            if 'score' in updates:
+            if "score" in updates:
                 set_clauses.append("score = %s")
-                values.append(float(updates['score']))
+                values.append(float(updates["score"]))
 
-            if 'passed' in updates:
+            if "passed" in updates:
                 set_clauses.append("passed = %s")
-                values.append(updates['passed'])
+                values.append(updates["passed"])
 
             if not set_clauses:
                 return True
@@ -120,7 +122,7 @@ class AuditPostgresSync:
 
     # ========== AUDIT ITEM SYNC ==========
 
-    def sync_audit_item_added(self, audit_id: str, item_data: Dict[str, Any]) -> bool:
+    def sync_audit_item_added(self, audit_id: str, item_data: dict[str, Any]) -> bool:
         """
         Sync when audit item is added.
         """
@@ -129,16 +131,16 @@ class AuditPostgresSync:
 
         try:
             pg_data = {
-                'audit_id': audit_id,
-                'category': item_data.get('category', ''),
-                'name': item_data.get('name', ''),
-                'required': item_data.get('required', False),
-                'passed': item_data.get('passed', False),
-                'details': item_data.get('details'),
-                'created_at': datetime.utcnow().isoformat() + 'Z',
+                "audit_id": audit_id,
+                "category": item_data.get("category", ""),
+                "name": item_data.get("name", ""),
+                "required": item_data.get("required", False),
+                "passed": item_data.get("passed", False),
+                "details": item_data.get("details"),
+                "created_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('audit_items', pg_data)
+            self.adapter.sync_to_postgres("audit_items", pg_data)
             logger.debug(f"Synced audit item: {audit_id}/{item_data.get('name')}")
             return True
 
@@ -148,7 +150,7 @@ class AuditPostgresSync:
 
     # ========== APPROVAL SYNC ==========
 
-    def sync_approval_added(self, audit_id: str, approval_data: Dict[str, Any]) -> bool:
+    def sync_approval_added(self, audit_id: str, approval_data: dict[str, Any]) -> bool:
         """
         Sync when approval is added.
         """
@@ -157,15 +159,15 @@ class AuditPostgresSync:
 
         try:
             pg_data = {
-                'audit_id': audit_id,
-                'approved_by': approval_data.get('approved_by', ''),
-                'role': approval_data.get('role'),
-                'decision': approval_data.get('decision', 'pending'),
-                'notes': approval_data.get('notes'),
-                'created_at': datetime.utcnow().isoformat() + 'Z',
+                "audit_id": audit_id,
+                "approved_by": approval_data.get("approved_by", ""),
+                "role": approval_data.get("role"),
+                "decision": approval_data.get("decision", "pending"),
+                "notes": approval_data.get("notes"),
+                "created_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('audit_approvals', pg_data)
+            self.adapter.sync_to_postgres("audit_approvals", pg_data)
             logger.debug(f"Synced approval: {audit_id}")
             return True
 
@@ -184,13 +186,13 @@ class AuditPostgresSync:
 
         try:
             pg_data = {
-                'service': service,
-                'criticality': criticality,
-                'updated_by': updated_by,
-                'updated_at': datetime.utcnow().isoformat() + 'Z',
+                "service": service,
+                "criticality": criticality,
+                "updated_by": updated_by,
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('service_criticality', pg_data)
+            self.adapter.sync_to_postgres("service_criticality", pg_data)
             logger.debug(f"Synced service criticality: {service} → {criticality}")
             return True
 
@@ -200,7 +202,7 @@ class AuditPostgresSync:
 
     # ========== QUERIES ==========
 
-    def get_audit(self, audit_id: str) -> Optional[Dict]:
+    def get_audit(self, audit_id: str) -> dict | None:
         """
         Query PostgreSQL for audit record.
         """
@@ -220,7 +222,9 @@ class AuditPostgresSync:
             logger.error(f"Failed to get audit: {e}")
             return None
 
-    def list_audits(self, service: Optional[str] = None, environment: Optional[str] = None) -> Optional[list]:
+    def list_audits(
+        self, service: str | None = None, environment: str | None = None
+    ) -> list | None:
         """
         Query PostgreSQL for audits.
         """
@@ -249,7 +253,7 @@ class AuditPostgresSync:
             logger.error(f"Failed to list audits: {e}")
             return None
 
-    def get_audit_items(self, audit_id: str) -> Optional[list]:
+    def get_audit_items(self, audit_id: str) -> list | None:
         """
         Query PostgreSQL for audit items.
         """
@@ -266,7 +270,7 @@ class AuditPostgresSync:
             logger.error(f"Failed to get audit items: {e}")
             return None
 
-    def get_approvals(self, audit_id: str) -> Optional[list]:
+    def get_approvals(self, audit_id: str) -> list | None:
         """
         Query PostgreSQL for audit approvals.
         """
@@ -285,8 +289,9 @@ class AuditPostgresSync:
 
     # ========== AUDIT LOGGING ==========
 
-    def log_action(self, action: str, audit_id: str,
-                   actor_id: Optional[int] = None, details: Optional[Dict] = None) -> bool:
+    def log_action(
+        self, action: str, audit_id: str, actor_id: int | None = None, details: dict | None = None
+    ) -> bool:
         """
         Log audit action to audit_log.
 
@@ -298,10 +303,10 @@ class AuditPostgresSync:
         try:
             self.adapter.audit_log(
                 action=action,
-                target_type='audit',
+                target_type="audit",
                 target_id=audit_id,
                 actor_id=actor_id,
-                details=details or {}
+                details=details or {},
             )
             return True
 

@@ -1,9 +1,6 @@
-import pytest
-
-from src.tools.policy_tool import get_compliance_policy, set_service_criticality
 from src.tools.gate_tool import get_audit_gate_result
+from src.tools.policy_tool import get_compliance_policy, set_service_criticality
 from src.tools.report_tool import list_audits
-from src.tools.approval_tool import submit_audit_approval
 
 
 def test_get_compliance_policy_dev(store, settings):

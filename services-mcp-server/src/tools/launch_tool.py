@@ -17,10 +17,10 @@ ApÃ³s o start
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import time
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -32,12 +32,13 @@ _log = logging.getLogger(__name__)
 
 # â”€â”€ Constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-_DEFAULT_WAIT_TIMEOUT = 30      # segundos esperando o serviÃ§o responder
-_DEFAULT_CHECK_INTERVAL = 1.0   # intervalo entre tentativas de health
-_DEFAULT_HEALTH_TIMEOUT = 2.0   # timeout por requisiÃ§Ã£o HTTP de health
+_DEFAULT_WAIT_TIMEOUT = 30  # segundos esperando o serviÃ§o responder
+_DEFAULT_CHECK_INTERVAL = 1.0  # intervalo entre tentativas de health
+_DEFAULT_HEALTH_TIMEOUT = 2.0  # timeout por requisiÃ§Ã£o HTTP de health
 
 
 # â”€â”€ Entry point pÃºblico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def launch_service(
     store: ServiceStore,
@@ -81,7 +82,10 @@ def launch_service(
     """
     mode = mode.lower().strip()
     if mode not in ("uvicorn", "docker", "docker-compose"):
-        return {"error": "InvalidMode", "details": f"mode deve ser 'uvicorn', 'docker' ou 'docker-compose'. Recebido: {mode!r}"}
+        return {
+            "error": "InvalidMode",
+            "details": f"mode deve ser 'uvicorn', 'docker' ou 'docker-compose'. Recebido: {mode!r}",
+        }
 
     if not name or not name.strip():
         return {"error": "ValidationError", "details": "name nÃ£o pode ser vazio"}
@@ -91,25 +95,38 @@ def launch_service(
     # â”€â”€ Executa o start no modo correto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     if mode == "uvicorn":
         if not app:
-            return {"error": "ValidationError", "details": "app Ã© obrigatÃ³rio para mode=uvicorn (ex: 'mypackage.main:app')"}
+            return {
+                "error": "ValidationError",
+                "details": "app Ã© obrigatÃ³rio para mode=uvicorn (ex: 'mypackage.main:app')",
+            }
         start_result = _launch_uvicorn(
-            name=name, app=app, host=host, port=port,
-            cwd=cwd, extra_args=extra_args or [], env_vars=env_vars or {},
+            name=name,
+            app=app,
+            host=host,
+            port=port,
+            cwd=cwd,
+            extra_args=extra_args or [],
+            env_vars=env_vars or {},
         )
 
     elif mode == "docker":
         if not image:
             return {"error": "ValidationError", "details": "image Ã© obrigatÃ³rio para mode=docker"}
         start_result = _launch_docker(
-            name=container_name or name, image=image,
-            host_port=port, container_port=container_port or port,
-            env_vars=env_vars or {}, extra_args=extra_args or [],
+            name=container_name or name,
+            image=image,
+            host_port=port,
+            container_port=container_port or port,
+            env_vars=env_vars or {},
+            extra_args=extra_args or [],
         )
 
     else:  # docker-compose
         svc = compose_service or name
         start_result = _launch_compose(
-            service=svc, compose_file=compose_file, cwd=cwd,
+            service=svc,
+            compose_file=compose_file,
+            cwd=cwd,
         )
 
     if "error" in start_result:
@@ -127,7 +144,11 @@ def launch_service(
 
     # â”€â”€ Registra no store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     svc_type = "process" if mode == "uvicorn" else "docker"
-    internal_url = f"http://{container_name or name}:{container_port or port}" if mode in ("docker", "docker-compose") else None
+    internal_url = (
+        f"http://{container_name or name}:{container_port or port}"
+        if mode in ("docker", "docker-compose")
+        else None
+    )
 
     fields: dict[str, Any] = {
         "host": host,
@@ -145,13 +166,21 @@ def launch_service(
         fields["pid"] = start_result["pid"]
     if mode in ("docker", "docker-compose") and start_result.get("container_id"):
         fields["container_name"] = container_name or name
-        fields["metadata"] = json.dumps({
-            "container_id": start_result["container_id"],
-            "image": image or "",
-        })
+        fields["metadata"] = json.dumps(
+            {
+                "container_id": start_result["container_id"],
+                "image": image or "",
+            }
+        )
 
     store.upsert(name, fields)
-    _log.info("launch_service name=%s mode=%s port=%d healthy=%s", name, mode, port, health_result["healthy"])
+    _log.info(
+        "launch_service name=%s mode=%s port=%d healthy=%s",
+        name,
+        mode,
+        port,
+        health_result["healthy"],
+    )
 
     return {
         "name": name,
@@ -171,6 +200,7 @@ def launch_service(
 
 # â”€â”€ Helpers de start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _launch_uvicorn(
     *,
     name: str,
@@ -183,10 +213,14 @@ def _launch_uvicorn(
 ) -> dict[str, Any]:
     """Spawna uvicorn como processo filho (detached)."""
     cmd = [
-        "uvicorn", app,
-        "--host", host,
-        "--port", str(port),
-        "--log-level", "warning",
+        "uvicorn",
+        app,
+        "--host",
+        host,
+        "--port",
+        str(port),
+        "--log-level",
+        "warning",
         *extra_args,
     ]
 
@@ -212,7 +246,10 @@ def _launch_uvicorn(
             "cmd": " ".join(cmd),
         }
     except FileNotFoundError:
-        return {"error": "UvicornNotFound", "details": "uvicorn nÃ£o encontrado no PATH. Instale com: pip install uvicorn"}
+        return {
+            "error": "UvicornNotFound",
+            "details": "uvicorn nÃ£o encontrado no PATH. Instale com: pip install uvicorn",
+        }
     except Exception as exc:  # noqa: BLE001
         return {"error": "LaunchError", "details": str(exc)}
 
@@ -290,7 +327,10 @@ def _launch_compose(
         return {"error": "Timeout", "details": "docker compose up demorou mais de 120s"}
 
     if result.returncode != 0:
-        return {"error": "ComposeUpFailed", "details": result.stderr.strip() or result.stdout.strip()}
+        return {
+            "error": "ComposeUpFailed",
+            "details": result.stderr.strip() or result.stdout.strip(),
+        }
 
     # Pega container_id do serviÃ§o que acabou de subir
     container_id = _get_compose_container_id(service, cwd=work_dir)
@@ -320,6 +360,7 @@ def _get_compose_container_id(service: str, cwd: Path | None) -> str | None:
 
 
 # â”€â”€ Health check com polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def _wait_healthy(
     *,
@@ -366,6 +407,7 @@ def _wait_healthy(
 
 # â”€â”€ stop_service (complementar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def stop_service(
     store: ServiceStore,
     *,
@@ -392,7 +434,9 @@ def stop_service(
         try:
             r = subprocess.run(
                 ["docker", "stop", "--time", str(timeout), cname],
-                capture_output=True, text=True, timeout=timeout + 5,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5,
             )
             result["stopped"] = r.returncode == 0
             result["output"] = r.stdout.strip() or r.stderr.strip()
@@ -408,6 +452,7 @@ def stop_service(
         else:
             try:
                 import signal
+
                 os.kill(int(pid), signal.SIGTERM)
                 result["stopped"] = True
                 result["pid"] = pid
@@ -419,7 +464,9 @@ def stop_service(
                 result["error"] = str(exc)
     else:
         result["stopped"] = False
-        result["error"] = f"tipo '{svc_type}' nÃ£o suportado para stop. Use mode='docker' ou mode='process'"
+        result["error"] = (
+            f"tipo '{svc_type}' nÃ£o suportado para stop. Use mode='docker' ou mode='process'"
+        )
 
     if result.get("stopped"):
         store.upsert(name, {"status": "stopped"})

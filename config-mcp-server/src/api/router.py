@@ -12,13 +12,14 @@ Endpoints:
 
 Auth: Bearer token no header Authorization (opcional se api_token vazio).
 """
+
 from __future__ import annotations
 
 import logging
 import secrets
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from ..knowledge.store import ConfigStore

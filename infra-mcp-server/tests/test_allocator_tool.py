@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import pytest
-
 from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
+
 from src.tools.allocator_tool import (
     extend_lease,
     get_lease,
@@ -36,9 +36,7 @@ def test_request_vm_invalid_spec(store):
 
 
 def test_request_vm_invalid_priority(store):
-    res = request_vm(
-        store, spec="cpu-small", duration_min=60, owner="x", priority="urgent"
-    )
+    res = request_vm(store, spec="cpu-small", duration_min=60, owner="x", priority="urgent")
     assert res["error"] == "validation_error"
 
 

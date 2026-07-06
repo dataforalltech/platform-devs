@@ -2,6 +2,7 @@
 
 Namespaces: env.dev, env.staging, env.production
 """
+
 from __future__ import annotations
 
 import logging
@@ -21,20 +22,27 @@ _SECRET_NAME_RE = re.compile(
 
 # Safe value patterns — values that are already references or placeholders
 _SAFE_VALUE_RE = re.compile(
-    r"^\$\{[^}]+\}$"          # ${VAR}
-    r"|^/run/secrets/"         # /run/secrets/…
-    r"|^dev-"                  # dev-…
+    r"^\$\{[^}]+\}$"  # ${VAR}
+    r"|^/run/secrets/"  # /run/secrets/…
+    r"|^dev-"  # dev-…
     r"|^placeholder$"
     r"|^changeme$"
     r"|^replace.?me$"
-    r"|^<.*>$"                 # <something>
-    r"|^x+$",                  # xxx, xxxx …
+    r"|^<.*>$"  # <something>
+    r"|^x+$",  # xxx, xxxx …
     re.IGNORECASE,
 )
 
 _CANONICAL_PROFILES = {
-    "local-dev", "local-hml", "cloud-dev", "cloud-hml",
-    "cloud-prod", "defaults", "example", "lab", "test",
+    "local-dev",
+    "local-hml",
+    "cloud-dev",
+    "cloud-hml",
+    "cloud-prod",
+    "defaults",
+    "example",
+    "lab",
+    "test",
 }
 
 
@@ -257,20 +265,24 @@ def audit_env_files(
                         in_store = existing is not None
                     except Exception:
                         pass
-                hardcoded_secrets.append({
-                    "file": env_file.name,
-                    "key": k,
-                    "value_preview": v[:4] + "***" if len(v) > 4 else "***",
-                    "in_store": in_store,
-                    "suggested_ref": f"${{{k}}}",
-                })
+                hardcoded_secrets.append(
+                    {
+                        "file": env_file.name,
+                        "key": k,
+                        "value_preview": v[:4] + "***" if len(v) > 4 else "***",
+                        "in_store": in_store,
+                        "suggested_ref": f"${{{k}}}",
+                    }
+                )
 
-        files_info.append({
-            "file": env_file.name,
-            "profile": profile,
-            "var_count": len(variables),
-            "has_hardcoded_secrets": has_secrets,
-        })
+        files_info.append(
+            {
+                "file": env_file.name,
+                "profile": profile,
+                "var_count": len(variables),
+                "has_hardcoded_secrets": has_secrets,
+            }
+        )
 
     action_required: list[str] = []
     if hardcoded_secrets:
@@ -343,12 +355,14 @@ def redact_env_secrets(
 
             if should_redact:
                 new_value = f"${{{key}}}"
-                file_changes.append({
-                    "file": str(p),
-                    "key": key,
-                    "old_value_preview": value[:4] + "***" if len(value) > 4 else "***",
-                    "new_value": new_value,
-                })
+                file_changes.append(
+                    {
+                        "file": str(p),
+                        "key": key,
+                        "old_value_preview": value[:4] + "***" if len(value) > 4 else "***",
+                        "new_value": new_value,
+                    }
+                )
                 new_lines.append(f"{key}={new_value}")
             else:
                 new_lines.append(raw)

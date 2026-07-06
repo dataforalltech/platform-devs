@@ -63,9 +63,7 @@ def test_screenshot_page_with_selector(store, settings, tmp_path):
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(update={"screenshots_dir": str(tmp_path)})
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = screenshot_page(
-            store, settings, url="http://example.com", selector="nav.header"
-        )
+        result = screenshot_page(store, settings, url="http://example.com", selector="nav.header")
     assert result["selector"] == "nav.header"
     # element screenshot should be called
     page.locator.assert_called_once_with("nav.header")

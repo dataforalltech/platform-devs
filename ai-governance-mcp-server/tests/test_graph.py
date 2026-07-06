@@ -71,7 +71,9 @@ def test_query_neighbors_outbound(repo):
 
 
 def test_query_neighbors_inbound(repo):
-    res = query_ecosystem_graph(repo, node_id="platform-core-lib", direction="in", relation="uses_lib")
+    res = query_ecosystem_graph(
+        repo, node_id="platform-core-lib", direction="in", relation="uses_lib"
+    )
     sources = {e["from"] for e in res["results"]}
     assert "dataforall-agents-factory" in sources
     assert "dataforall-rag-service" in sources
@@ -169,20 +171,26 @@ def test_metadata_for_unknown_node(repo):
 def test_platform_cdc_runs_on_port_8017(repo):
     """Canônica em AGENTS.md §47 e DEVOPS_STANDARDS §3: cdc=8017, NOT 8018.
     Memória do projeto tinha 8018 errado — o grafo é a fonte da verdade agora."""
-    res = query_ecosystem_graph(repo, node_id="platform-cdc", relation="runs_on_port", direction="out")
+    res = query_ecosystem_graph(
+        repo, node_id="platform-cdc", relation="runs_on_port", direction="out"
+    )
     targets = {e["to"] for e in res["results"]}
     assert "port-8017" in targets
 
 
 def test_platform_api_gateway_runs_on_port_8018(repo):
     """8018 é do api-gateway, não do cdc."""
-    res = query_ecosystem_graph(repo, node_id="platform-api-gateway", relation="runs_on_port", direction="out")
+    res = query_ecosystem_graph(
+        repo, node_id="platform-api-gateway", relation="runs_on_port", direction="out"
+    )
     targets = {e["to"] for e in res["results"]}
     assert "port-8018" in targets
 
 
 def test_platform_admin_uses_port_8002_only(repo):
-    res = query_ecosystem_graph(repo, node_id="platform-admin", relation="runs_on_port", direction="out")
+    res = query_ecosystem_graph(
+        repo, node_id="platform-admin", relation="runs_on_port", direction="out"
+    )
     targets = {e["to"] for e in res["results"]}
     assert "port-8002" in targets
     assert "port-8017" not in targets
@@ -198,7 +206,9 @@ def test_platform_ml_does_not_provide_embeddings(repo):
 
 
 def test_rag_service_owns_embeddings_api(repo):
-    res = query_ecosystem_graph(repo, node_id="dataforall-rag-service", relation="provides_api", direction="out")
+    res = query_ecosystem_graph(
+        repo, node_id="dataforall-rag-service", relation="provides_api", direction="out"
+    )
     targets = {e["to"] for e in res["results"]}
     assert "rag.embeddings.api" in targets
     assert "rag.search.api" in targets
@@ -208,12 +218,27 @@ def test_rag_service_owns_embeddings_api(repo):
 def test_all_canonical_services_present(repo):
     """Todos os 22 serviços canônicos da AGENTS.md §47 devem estar no grafo."""
     expected = {
-        "platform-auth", "platform-admin", "platform-governance", "platform-analytics",
-        "platform-scheduler", "platform-connectors", "platform-ml", "platform-cloud",
-        "platform-monitor", "platform-notification", "platform-communication",
-        "platform-dataquality", "platform-docextract", "dataforall-agents-factory",
-        "dataforall-rag-service", "platform-datalake", "platform-cdc",
-        "platform-api-gateway", "platform-iceberg", "platform-flow", "platform-security",
+        "platform-auth",
+        "platform-admin",
+        "platform-governance",
+        "platform-analytics",
+        "platform-scheduler",
+        "platform-connectors",
+        "platform-ml",
+        "platform-cloud",
+        "platform-monitor",
+        "platform-notification",
+        "platform-communication",
+        "platform-dataquality",
+        "platform-docextract",
+        "dataforall-agents-factory",
+        "dataforall-rag-service",
+        "platform-datalake",
+        "platform-cdc",
+        "platform-api-gateway",
+        "platform-iceberg",
+        "platform-flow",
+        "platform-security",
         "dataforall-ui-connect",
     }
     res = query_ecosystem_graph(repo, kind="service", status="active")

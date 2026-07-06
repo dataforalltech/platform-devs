@@ -31,9 +31,7 @@ def test_run_unit_tests_with_coverage(store, settings, tmp_path):
     (tmp_path / "pyproject.toml").write_text("[tool.pytest]")
     output = "5 passed in 2s\nTOTAL   100   15   85%"
     with patch("subprocess.run", return_value=_make_proc(output)):
-        result = run_unit_tests(
-            store, settings, repo_path=str(tmp_path), coverage=True
-        )
+        result = run_unit_tests(store, settings, repo_path=str(tmp_path), coverage=True)
     assert result["coverage_pct"] == 85.0
     assert result["passed"] == 5
 
@@ -46,11 +44,11 @@ def test_run_unit_tests_framework_detection_python(store, settings, tmp_path):
 
 
 def test_run_unit_tests_framework_detection_jest(store, settings, tmp_path):
-    (tmp_path / "package.json").write_text('{"scripts": {"test": "jest"}, "devDependencies": {"jest": "^29"}}')
+    (tmp_path / "package.json").write_text(
+        '{"scripts": {"test": "jest"}, "devDependencies": {"jest": "^29"}}'
+    )
     with patch("subprocess.run", return_value=_make_proc("1 passed", returncode=0)):
-        result = run_unit_tests(
-            store, settings, repo_path=str(tmp_path), framework="auto"
-        )
+        result = run_unit_tests(store, settings, repo_path=str(tmp_path), framework="auto")
     assert result["framework"] == "jest"
 
 

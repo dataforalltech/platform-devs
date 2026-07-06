@@ -3,8 +3,16 @@ from __future__ import annotations
 from typing import Any, Literal
 
 ServiceType = Literal[
-    "docker", "process", "remote", "unknown",
-    "mysql", "mariadb", "postgres", "redis", "kafka", "mongodb",
+    "docker",
+    "process",
+    "remote",
+    "unknown",
+    "mysql",
+    "mariadb",
+    "postgres",
+    "redis",
+    "kafka",
+    "mongodb",
 ]
 ServiceStatus = Literal["running", "stopped", "unknown"]
 EnvironmentName = Literal["local", "dev", "hml", "prod"]
@@ -38,5 +46,7 @@ def service_record(row: dict) -> dict[str, Any]:
         "registered_at": row.get("registered_at"),
         "last_seen": row.get("last_seen"),
         "last_check_at": row.get("last_check_at"),
-        "last_check_ok": bool(row["last_check_ok"]) if row.get("last_check_ok") is not None else None,
+        "last_check_ok": bool(row["last_check_ok"])
+        if row.get("last_check_ok") is not None
+        else None,
     }

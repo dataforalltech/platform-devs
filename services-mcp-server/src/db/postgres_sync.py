@@ -6,9 +6,9 @@ Estende services-mcp para sincronizar registro de serviços e health status com 
 
 import logging
 import sys
-from pathlib import Path
-from typing import Any, Dict, Optional
 from datetime import datetime
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,7 +19,7 @@ class ServicesPostgresSync:
     Cobre: register_service, update_service_status, health_checks.
     """
 
-    def __init__(self, postgres_config: Dict[str, Any], enabled: bool = True):
+    def __init__(self, postgres_config: dict[str, Any], enabled: bool = True):
         """
         Initialize sync layer.
 
@@ -33,7 +33,9 @@ class ServicesPostgresSync:
 
         if enabled:
             try:
-                sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template"))
+                sys.path.insert(
+                    0, str(Path(__file__).parent.parent.parent.parent / "platform-service-template")
+                )
                 from lib.mcp_postgres_adapter import MCPPostgreSQLAdapter
 
                 self.adapter = MCPPostgreSQLAdapter("services-mcp", postgres_config)
@@ -49,7 +51,7 @@ class ServicesPostgresSync:
 
     # ========== SERVICE REGISTRATION SYNC ==========
 
-    def sync_service_registered(self, service_data: Dict[str, Any]) -> bool:
+    def sync_service_registered(self, service_data: dict[str, Any]) -> bool:
         """
         Sync when service is registered.
         """
@@ -58,21 +60,21 @@ class ServicesPostgresSync:
 
         try:
             pg_data = {
-                'name': service_data['name'],
-                'type': service_data.get('type', 'unknown'),
-                'host': service_data.get('host', 'localhost'),
-                'port': service_data.get('port'),
-                'description': service_data.get('description', ''),
-                'health_check_url': service_data.get('health_check_url'),
-                'endpoint': service_data.get('endpoint'),
-                'status': 'unknown',  # Will be updated by first health check
-                'environment': service_data.get('environment', 'dev'),
-                'requires_auth': service_data.get('requires_auth', False),
-                'created_at': datetime.utcnow().isoformat() + 'Z',
-                'updated_at': datetime.utcnow().isoformat() + 'Z',
+                "name": service_data["name"],
+                "type": service_data.get("type", "unknown"),
+                "host": service_data.get("host", "localhost"),
+                "port": service_data.get("port"),
+                "description": service_data.get("description", ""),
+                "health_check_url": service_data.get("health_check_url"),
+                "endpoint": service_data.get("endpoint"),
+                "status": "unknown",  # Will be updated by first health check
+                "environment": service_data.get("environment", "dev"),
+                "requires_auth": service_data.get("requires_auth", False),
+                "created_at": datetime.utcnow().isoformat() + "Z",
+                "updated_at": datetime.utcnow().isoformat() + "Z",
             }
 
-            self.adapter.sync_to_postgres('services', pg_data)
+            self.adapter.sync_to_postgres("services", pg_data)
             logger.debug(f"Synced service registered: {service_data['name']}")
             return True
 
@@ -80,7 +82,7 @@ class ServicesPostgresSync:
             logger.error(f"Failed to sync service registered: {e}")
             return False
 
-    def sync_service_updated(self, service_name: str, updates: Dict[str, Any]) -> bool:
+    def sync_service_updated(self, service_name: str, updates: dict[str, Any]) -> bool:
         """
         Sync when service metadata is updated.
         """
@@ -89,11 +91,11 @@ class ServicesPostgresSync:
 
         try:
             field_map = {
-                'description': 'description',
-                'health_check_url': 'health_check_url',
-                'endpoint': 'endpoint',
-                'environment': 'environment',
-                'requires_auth': 'requires_auth',
+                "description": "description",
+                "health_check_url": "health_check_url",
+                "endpoint": "endpoint",
+                "environment": "environment",
+                "requires_auth": "requires_auth",
             }
 
             set_clauses = []
@@ -121,7 +123,9 @@ class ServicesPostgresSync:
 
     # ========== HEALTH STATUS SYNC ==========
 
-    def sync_health_check_result(self, service_name: str, status: str, response_time_ms: Optional[float] = None) -> bool:
+    def sync_health_check_result(
+        self, service_name: str, status: str, response_time_ms: float | None = None
+    ) -> bool:
         """
         Sync health check result.
 
@@ -169,7 +173,9 @@ class ServicesPostgresSync:
 
     # ========== QUERIES ==========
 
-    def list_services(self, environment: Optional[str] = None, status: Optional[str] = None) -> Optional[list]:
+    def list_services(
+        self, environment: str | None = None, status: str | None = None
+    ) -> list | None:
         """
         Query PostgreSQL for services.
 
@@ -205,7 +211,7 @@ class ServicesPostgresSync:
             logger.error(f"Failed to list services: {e}")
             return None
 
-    def get_service(self, service_name: str) -> Optional[Dict]:
+    def get_service(self, service_name: str) -> dict | None:
         """
         Query PostgreSQL for single service.
         """
@@ -225,7 +231,7 @@ class ServicesPostgresSync:
             logger.error(f"Failed to get service: {e}")
             return None
 
-    def list_unhealthy_services(self) -> Optional[list]:
+    def list_unhealthy_services(self) -> list | None:
         """
         Query for all unhealthy services.
         """
@@ -244,8 +250,13 @@ class ServicesPostgresSync:
 
     # ========== AUDIT LOGGING ==========
 
-    def log_action(self, action: str, service_name: str,
-                   actor_id: Optional[int] = None, details: Optional[Dict] = None) -> bool:
+    def log_action(
+        self,
+        action: str,
+        service_name: str,
+        actor_id: int | None = None,
+        details: dict | None = None,
+    ) -> bool:
         """
         Log service action to audit_log.
 
@@ -257,10 +268,10 @@ class ServicesPostgresSync:
         try:
             self.adapter.audit_log(
                 action=action,
-                target_type='service',
+                target_type="service",
                 target_id=service_name,
                 actor_id=actor_id,
-                details=details or {}
+                details=details or {},
             )
             return True
 

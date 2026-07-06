@@ -405,9 +405,7 @@ def build_server() -> tuple[Any, ...]:
         ]
 
     @server.call_tool()
-    async def call_tool(
-        name: str, arguments: dict[str, Any] | None
-    ) -> list[TextContent]:
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
         try:
             payload = _dispatch(name, args, settings, store)
@@ -567,6 +565,7 @@ def build_app(validators: Any = None):
 def main() -> None:
     """Entry point — Streamable HTTP + auth."""
     import uvicorn
+
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7111")))
 
 

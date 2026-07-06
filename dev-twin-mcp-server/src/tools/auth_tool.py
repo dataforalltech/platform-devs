@@ -6,15 +6,17 @@ get_twin_context — contexto completo: usuário + ambiente (lazy, cached 60s)
 refresh_context  — força re-coleta do contexto de ambiente
 context_status   — retorna métricas de uso do contexto e recomendação de /compact
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 try:
     from shared.config_client import ConfigClient
+
     _has_config_client = True
 except ImportError:
     _has_config_client = False
@@ -24,15 +26,15 @@ _log = logging.getLogger(__name__)
 _CRITICAL_PREFIXES = ("JWT_", "URL_")
 _CRITICAL_EXACT = {"INTERNAL_API_TOKEN", "SERVICE_ID"}
 
+from ..db.token_store import TokenStore
 from ..knowledge.session import (
     SessionManager,
     UserSession,
     collect_environment_context,
 )
-from ..db.token_store import TokenStore
 
 # Thresholds para recomendação de /compact
-_COMPACT_WARN_CALLS = 80   # aviso
+_COMPACT_WARN_CALLS = 80  # aviso
 _COMPACT_URGE_CALLS = 150  # recomendação forte
 
 
@@ -64,10 +66,12 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         name=record["name"],
         email=record["email"],
         role=record["role"],
-        scopes=record["scopes"] if isinstance(record["scopes"], list) else json.loads(record["scopes"]),
+        scopes=record["scopes"]
+        if isinstance(record["scopes"], list)
+        else json.loads(record["scopes"]),
         environment=record["environment"],
         tenant_id=record.get("tenant_id"),
-        authenticated_at=datetime.now(timezone.utc).isoformat(),
+        authenticated_at=datetime.now(UTC).isoformat(),
         context={},  # contexto coletado de forma lazy em get_twin_context()
     )
     SessionManager.set(session)
@@ -84,8 +88,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
                 critical_vars = {
                     k: v
                     for k, v in all_vars.items()
-                    if any(k.startswith(p) for p in _CRITICAL_PREFIXES)
-                    or k in _CRITICAL_EXACT
+                    if any(k.startswith(p) for p in _CRITICAL_PREFIXES) or k in _CRITICAL_EXACT
                 }
                 SessionManager.update_context({"env_config": critical_vars})
                 env_config_loaded = True
@@ -104,8 +107,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         "env_vars_count": env_vars_count,
         "active_env_namespace": f"env.{session.environment}",
         "message": (
-            f"Bem-vindo, {session.name}! "
-            "Use get_twin_context() para contexto completo (git, OS)."
+            f"Bem-vindo, {session.name}! Use get_twin_context() para contexto completo (git, OS)."
         ),
     }
 
@@ -191,7 +193,7 @@ def context_status() -> dict[str, Any]:
             "error": "Nenhuma sessão ativa. Chame authenticate(token) primeiro.",
         }
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     authenticated_at = datetime.fromisoformat(session.authenticated_at)
     elapsed_minutes = (now - authenticated_at).total_seconds() / 60
     tool_calls = session.tool_calls

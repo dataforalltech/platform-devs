@@ -18,17 +18,18 @@ Cobre:
 from __future__ import annotations
 
 import pytest
-
 from src.knowledge.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
 )
+
 from src.models.allocator import VMRequest
 
 # ------------------------------------------------------------------ #
 # Helpers                                                             #
 # ------------------------------------------------------------------ #
+
 
 def _policy(**kw) -> AllocatorPolicy:
     defaults = dict(
@@ -75,6 +76,7 @@ _LOW_CAP = _policy(max_cost_usd_per_hour=0.15)
 # 1-3. Enfileiramento básico                                          #
 # ------------------------------------------------------------------ #
 
+
 class TestQueueBasics:
     def test_queued_when_cost_cap_hit(self):
         """Segundo request com nova VM vai para QUEUED quando cost cap é atingido."""
@@ -119,6 +121,7 @@ class TestQueueBasics:
 # 4-6. cancel_queued_request                                          #
 # ------------------------------------------------------------------ #
 
+
 class TestCancelQueuedRequest:
     def test_cancel_success(self):
         """Cancela request WAITING com sucesso."""
@@ -152,13 +155,16 @@ class TestCancelQueuedRequest:
 # 7-10. Preemption                                                    #
 # ------------------------------------------------------------------ #
 
+
 class TestPreemption:
     def test_high_priority_preempts_exclusive_low_priority_vm(self):
         """Priority='high' preempta VM exclusiva com apenas leases low-priority."""
         store = _store(_LOW_CAP)
 
         # VM1 provisionada com lease low-priority exclusivo → trava o cap
-        r1 = store.request_vm(_req(spec="cpu-small", owner="agent-1", priority="low", exclusive=True))
+        r1 = store.request_vm(
+            _req(spec="cpu-small", owner="agent-1", priority="low", exclusive=True)
+        )
         assert r1.outcome == "LEASED"
         lease1_id = r1.lease.lease_id  # type: ignore[union-attr]
 
@@ -191,9 +197,7 @@ class TestPreemption:
         """VM com lease medium-priority não é preemptável. Request high vai para QUEUED."""
         store = _store(_LOW_CAP)
         # VM1 com lease medium (não preemptável)
-        store.request_vm(
-            _req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True)
-        )
+        store.request_vm(_req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True))
 
         # High-priority request: sem VM preemptável → QUEUED
         r2 = store.request_vm(_req(spec="cpu-small", owner="agent-2", priority="high"))
@@ -211,9 +215,13 @@ class TestPreemption:
         # → QUEUED mesmo sendo high-priority.
         store = _store(_policy(max_cost_usd_per_hour=0.25))
 
-        r1 = store.request_vm(_req(spec="cpu-small", owner="agent-1", priority="low", exclusive=True))
+        r1 = store.request_vm(
+            _req(spec="cpu-small", owner="agent-1", priority="low", exclusive=True)
+        )
         assert r1.outcome == "LEASED"
-        r2 = store.request_vm(_req(spec="cpu-small", owner="agent-2", priority="low", exclusive=True))
+        r2 = store.request_vm(
+            _req(spec="cpu-small", owner="agent-2", priority="low", exclusive=True)
+        )
         assert r2.outcome == "LEASED"
 
         # Cost now: $0.20. Provisioning cpu-medium ($0.30): $0.50 > $0.25.
@@ -226,6 +234,7 @@ class TestPreemption:
 # ------------------------------------------------------------------ #
 # 11-12. Processamento da fila após liberar capacidade               #
 # ------------------------------------------------------------------ #
+
 
 class TestQueueFulfillment:
     def test_queued_fulfilled_after_release(self):
@@ -256,9 +265,7 @@ class TestQueueFulfillment:
         r1 = store.request_vm(_req(spec="cpu-small", owner="agent-1", exclusive=True))
         assert r1.outcome == "LEASED"
 
-        r2 = store.request_vm(
-            _req(spec="cpu-medium", owner="agent-2", priority="low")
-        )
+        r2 = store.request_vm(_req(spec="cpu-medium", owner="agent-2", priority="low"))
         assert r2.outcome == "QUEUED"
 
         store.release_lease(r1.lease.lease_id, by="agent-1")  # type: ignore[union-attr]
@@ -356,6 +363,7 @@ class TestQueueFulfillment:
 # 13-15. Ordem da fila + owner cap                                    #
 # ------------------------------------------------------------------ #
 
+
 class TestQueueOrder:
     def test_high_priority_fulfilled_before_low_when_capacity_frees(self):
         """Na fila, high-priority é atendido antes de low-priority.
@@ -366,13 +374,19 @@ class TestQueueOrder:
         """
         store = _store(_LOW_CAP)
         # Usa medium-priority para agent-1 → VM1 NÃO é preemptável
-        r1 = store.request_vm(_req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True))
+        r1 = store.request_vm(
+            _req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True)
+        )
         assert r1.outcome == "LEASED"
 
         # Dois requests na fila (exclusive=True para não poderem compartilhar entre si):
         # low antes de high na chegada → fila persistida
-        r_low = store.request_vm(_req(spec="cpu-small", owner="agent-low", priority="low", exclusive=True))
-        r_high = store.request_vm(_req(spec="cpu-small", owner="agent-high", priority="high", exclusive=True))
+        r_low = store.request_vm(
+            _req(spec="cpu-small", owner="agent-low", priority="low", exclusive=True)
+        )
+        r_high = store.request_vm(
+            _req(spec="cpu-small", owner="agent-high", priority="high", exclusive=True)
+        )
         assert r_low.outcome == "QUEUED"
         assert r_high.outcome == "QUEUED"  # high não preempta porque VM1 tem lease medium
 
@@ -394,7 +408,9 @@ class TestQueueOrder:
         a leitura do teste confusa).
         """
         store = _store(_LOW_CAP)  # cap $0.15 → cabe apenas 1 cpu-small ($0.10)
-        r1 = store.request_vm(_req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True))
+        r1 = store.request_vm(
+            _req(spec="cpu-small", owner="agent-1", priority="medium", exclusive=True)
+        )
         assert r1.outcome == "LEASED"
 
         # Dois agentes na fila com exclusive=True → sem share possível
@@ -411,9 +427,8 @@ class TestQueueOrder:
         leases_2 = store.list_leases(owner="agent-2")
         leases_3 = store.list_leases(owner="agent-3")
         # Exatamente 1 agente foi atendido
-        active_count = (
-            sum(1 for lx in leases_2 if lx.status in ("PENDING", "ACTIVE"))
-            + sum(1 for lx in leases_3 if lx.status in ("PENDING", "ACTIVE"))
+        active_count = sum(1 for lx in leases_2 if lx.status in ("PENDING", "ACTIVE")) + sum(
+            1 for lx in leases_3 if lx.status in ("PENDING", "ACTIVE")
         )
         assert active_count == 1
         # agent-2 (posição 1) deve ter sido o atendido

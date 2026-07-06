@@ -13,10 +13,9 @@ Tools:
 
 from __future__ import annotations
 
-import os
-
 import json
 import logging
+import os
 from typing import Any
 
 from mcp.server import Server
@@ -771,22 +770,24 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "get_repos_root": "deploy:read",
     "list_local_repos": "deploy:read",
     # ── deploy:write — ações que MUTAM estado (SENSÍVEIS) ──────────────────── #
-    "create_branch": "deploy:write",       # SENSÍVEL: git — cria branch no repo remoto
-    "commit_files": "deploy:write",        # SENSÍVEL: git commit/push — altera conteúdo do repo
-    "create_pr": "deploy:write",           # SENSÍVEL: cria Pull Request
-    "merge_pr": "deploy:write",            # SENSÍVEL: merge — integra código na base
-    "cancel_workflow_run": "deploy:write", # SENSÍVEL: cancela execução de workflow em curso
-    "trigger_workflow": "deploy:write",    # SENSÍVEL: dispara workflow (workflow_dispatch)
-    "deploy": "deploy:write",              # SENSÍVEL: dispara deploy para um ambiente
-    "scaffold_pipeline": "deploy:write",   # SENSÍVEL: commit de workflows no repo alvo
-    "setup_repo": "deploy:write",          # SENSÍVEL: grava GitHub Actions secrets no repo
-    "acr_build": "deploy:write",           # SENSÍVEL: docker build + push de imagem para o ACR
-    "set_repos_root": "deploy:write",      # SENSÍVEL: persiste config no config-mcp / cria diretório
-    "clone_repo": "deploy:write",          # SENSÍVEL: clona repo (escreve no filesystem local)
+    "create_branch": "deploy:write",  # SENSÍVEL: git — cria branch no repo remoto
+    "commit_files": "deploy:write",  # SENSÍVEL: git commit/push — altera conteúdo do repo
+    "create_pr": "deploy:write",  # SENSÍVEL: cria Pull Request
+    "merge_pr": "deploy:write",  # SENSÍVEL: merge — integra código na base
+    "cancel_workflow_run": "deploy:write",  # SENSÍVEL: cancela execução de workflow em curso
+    "trigger_workflow": "deploy:write",  # SENSÍVEL: dispara workflow (workflow_dispatch)
+    "deploy": "deploy:write",  # SENSÍVEL: dispara deploy para um ambiente
+    "scaffold_pipeline": "deploy:write",  # SENSÍVEL: commit de workflows no repo alvo
+    "setup_repo": "deploy:write",  # SENSÍVEL: grava GitHub Actions secrets no repo
+    "acr_build": "deploy:write",  # SENSÍVEL: docker build + push de imagem para o ACR
+    "set_repos_root": "deploy:write",  # SENSÍVEL: persiste config no config-mcp / cria diretório
+    "clone_repo": "deploy:write",  # SENSÍVEL: clona repo (escreve no filesystem local)
 }
 SCOPES_SUPPORTED = ["deploy:read", "deploy:write"]
 
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), "SCOPE_FOR_TOOL cobre todas as tools"
+assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
+    "SCOPE_FOR_TOOL cobre todas as tools"
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────── #
@@ -921,13 +922,9 @@ def _dispatch(
             limit=args.get("limit", 10),
         )
     if name == "get_workflow_run":
-        return get_workflow_run(
-            client, repo=args.get("repo"), run_id=args.get("run_id")
-        )
+        return get_workflow_run(client, repo=args.get("repo"), run_id=args.get("run_id"))
     if name == "cancel_workflow_run":
-        return cancel_workflow_run(
-            client, repo=args.get("repo"), run_id=args.get("run_id")
-        )
+        return cancel_workflow_run(client, repo=args.get("repo"), run_id=args.get("run_id"))
     # ── Deploy ────────────────────────────────────────────────────────────── #
     if name == "deploy":
         return deploy(

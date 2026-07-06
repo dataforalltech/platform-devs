@@ -20,11 +20,11 @@ Tools
 
 from __future__ import annotations
 
-import os
 import json
+import logging
+import os
 import re
 import subprocess
-import logging
 from pathlib import Path
 from typing import Any
 
@@ -36,12 +36,15 @@ _log = logging.getLogger(__name__)
 
 # â”€â”€ Contexto de execuÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _is_docker() -> bool:
     """Detecta se o processo estÃ¡ rodando dentro de um container Docker."""
     return Path("/.dockerenv").exists() or os.getenv("RUNNING_IN_DOCKER", "") == "1"
 
 
-def _derive_internal_url(name: str, port: int | None, container_name: str | None = None) -> str | None:
+def _derive_internal_url(
+    name: str, port: int | None, container_name: str | None = None
+) -> str | None:
     """Deriva a URL interna Docker a partir do nome do serviÃ§o/container.
 
     Dentro do Docker, o hostname do serviÃ§o Ã© o nome do container na rede.
@@ -91,6 +94,7 @@ def _probe_url(url: str, timeout: float = 2.0) -> bool:
 
 
 # â”€â”€ Tools pÃºblicas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
 
 def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
     """Retorna o MAPPING_GATEWAY â€” mapa de serviÃ§os com URLs interna e externa.
@@ -271,9 +275,7 @@ def sync_registry(
 
     # â”€â”€ Totais â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
     results["total_upserted"] = (
-        docker_upserted
-        + port_result.get("found", 0)
-        + (results["name_scan"] or {}).get("found", 0)
+        docker_upserted + port_result.get("found", 0) + (results["name_scan"] or {}).get("found", 0)
     )
     results["gateway_updated"] = results["total_upserted"]
     _log.info(
@@ -286,12 +288,15 @@ def sync_registry(
 
 # â”€â”€ Helpers internos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+
 def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
     """Scan docker ps salvando internal_url correta para cada container."""
     try:
         result = subprocess.run(
             ["docker", "ps", "--format", "{{json .}}"],
-            capture_output=True, text=True, timeout=timeout,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
     except FileNotFoundError:
         return {"upserted": 0, "error": "docker not found"}
@@ -312,7 +317,7 @@ def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict
             continue
 
         raw_name = cdata.get("Names", "")
-        svc_name = raw_name.lstrip("/") or f"docker-{cdata.get('ID','')[:8]}"
+        svc_name = raw_name.lstrip("/") or f"docker-{cdata.get('ID', '')[:8]}"
         ports_str = cdata.get("Ports", "")
 
         # Porta do host (acesso externo)
@@ -339,13 +344,15 @@ def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict
 
         store.upsert(svc_name, fields)
         upserted += 1
-        containers.append({
-            "name": svc_name,
-            "host_port": host_port,
-            "container_port": container_port,
-            "external_url": external_url,
-            "internal_url": internal_url,
-        })
+        containers.append(
+            {
+                "name": svc_name,
+                "host_port": host_port,
+                "container_port": container_port,
+                "external_url": external_url,
+                "internal_url": internal_url,
+            }
+        )
 
     return {"upserted": upserted, "containers": containers}
 
@@ -379,14 +386,17 @@ def _scan_port_ranges(
             if svc_name:
                 external_url = url
                 internal_url = _derive_internal_url(svc_name, port)
-                store.upsert(svc_name, {
-                    "host": "localhost",
-                    "port": port,
-                    "url": external_url,
-                    "internal_url": internal_url,
-                    "type": "process",
-                    "status": "running",
-                })
+                store.upsert(
+                    svc_name,
+                    {
+                        "host": "localhost",
+                        "port": port,
+                        "url": external_url,
+                        "internal_url": internal_url,
+                        "type": "process",
+                        "status": "running",
+                    },
+                )
                 found.append({"name": svc_name, "port": port, "url": url})
 
     return {"scanned": len(ports_to_scan), "found": len(found), "services": found}
@@ -437,11 +447,14 @@ def _scan_by_names(
             if not probe or _probe_url(url, timeout=timeout):
                 internal_url = f"http://{name}:{port}" if port else None
                 external_url = f"http://localhost:{port}" if port else None
-                store.upsert(name, {
-                    "internal_url": internal_url,
-                    "url": external_url,
-                    "status": "running",
-                })
+                store.upsert(
+                    name,
+                    {
+                        "internal_url": internal_url,
+                        "url": external_url,
+                        "status": "running",
+                    },
+                )
                 found.append({"name": name, "url": url, "kind": kind})
                 break
 

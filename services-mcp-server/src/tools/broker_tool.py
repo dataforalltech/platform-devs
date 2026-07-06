@@ -14,6 +14,7 @@ Redis : servico com nome `redis` ou `platform-redis`; tipo `redis` | `cache`
 
 O sync procura no registry pelo tipo ou nome do servico, nao pela porta hardcoded.
 """
+
 from __future__ import annotations
 
 import logging
@@ -29,9 +30,7 @@ from ..db.store import ServiceStore
 _log = logging.getLogger(__name__)
 
 # Variaveis que apontam para Kafka (valor = bootstrap servers host:port)
-_KAFKA_VARS = re.compile(
-    r"^KAFKA_BOOTSTRAP_SERVERS$", re.IGNORECASE
-)
+_KAFKA_VARS = re.compile(r"^KAFKA_BOOTSTRAP_SERVERS$", re.IGNORECASE)
 
 # Variaveis que apontam para Redis (valor = URL redis://... ou host:port)
 _REDIS_URL_VARS = re.compile(
@@ -45,6 +44,7 @@ _REDIS_SCHEME = re.compile(r"^redis(s)?://", re.IGNORECASE)
 
 
 # ── Helpers de TCP ────────────────────────────────────────────────────────────
+
 
 def _tcp_ping(host: str, port: int, timeout: float = 2.0) -> tuple[bool, float]:
     """Tenta abrir conexao TCP. Retorna (sucesso, latencia_ms)."""
@@ -90,6 +90,7 @@ def _parse_redis_url(value: str) -> tuple[str, int]:
 
 # ── Parse/serializa .env preservando comentarios ─────────────────────────────
 
+
 def _parse_env_file(path: Path) -> list[tuple[str, str]]:
     lines: list[tuple[str, str]] = []
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -123,6 +124,7 @@ def _write_env_lines(path: Path, lines: list[tuple[str, str]]) -> None:
 
 # ── Lookup de servicos no registry ───────────────────────────────────────────
 
+
 def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
     """Busca servico no registry pelo tipo (kafka/redis) ou por nome canonico."""
     all_services = store.list_services()
@@ -142,6 +144,7 @@ def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
 
 def kafka_status(
     store: ServiceStore,
@@ -176,11 +179,13 @@ def kafka_status(
         ok, latency_ms = _tcp_ping(host, port)
         if ok:
             any_ok = True
-        results.append({
-            "broker": f"{host}:{port}",
-            "reachable": ok,
-            "latency_ms": round(latency_ms, 1),
-        })
+        results.append(
+            {
+                "broker": f"{host}:{port}",
+                "reachable": ok,
+                "latency_ms": round(latency_ms, 1),
+            }
+        )
 
     return {
         "ok": any_ok,

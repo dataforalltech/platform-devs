@@ -74,6 +74,7 @@ PRODUCTION_RELATIONS = {
 # Erros tipados                                                          #
 # --------------------------------------------------------------------- #
 
+
 class EcosystemGraphError(ValueError):
     """Erro de carregamento ou validação do grafo."""
 
@@ -93,6 +94,7 @@ class GraphValidationReport:
 # --------------------------------------------------------------------- #
 # Classe principal                                                       #
 # --------------------------------------------------------------------- #
+
 
 class EcosystemGraph:
     """Carrega o YAML para um MultiDiGraph e expõe consultas tipadas."""
@@ -313,9 +315,7 @@ class EcosystemGraph:
 
         visited: set[str] = {node_id}
         results: dict[str, dict] = {}
-        queue: deque[tuple[str, int, str | None, str | None]] = deque(
-            [(node_id, 0, None, None)]
-        )
+        queue: deque[tuple[str, int, str | None, str | None]] = deque([(node_id, 0, None, None)])
 
         while queue:
             current, depth, via_rel, via_src = queue.popleft()

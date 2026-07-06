@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import psycopg2
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 def _now() -> str:
     """Retorna ISO timestamp com timezone."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 class AuditStore:
@@ -200,18 +200,24 @@ class AuditStore:
                 cur.execute("SELECT checklist FROM audit_log WHERE id = %s", (audit_id,))
                 row = cur.fetchone()
                 if row:
-                    checklist = json.loads(row["checklist"]) if isinstance(row["checklist"], str) else row["checklist"]
+                    checklist = (
+                        json.loads(row["checklist"])
+                        if isinstance(row["checklist"], str)
+                        else row["checklist"]
+                    )
                     if not isinstance(checklist, dict):
                         checklist = {}
                     if "items" not in checklist:
                         checklist["items"] = []
-                    checklist["items"].append({
-                        "category": category,
-                        "name": name,
-                        "required": required,
-                        "passed": passed,
-                        "details": details,
-                    })
+                    checklist["items"].append(
+                        {
+                            "category": category,
+                            "name": name,
+                            "required": required,
+                            "passed": passed,
+                            "details": details,
+                        }
+                    )
                     cur.execute(
                         "UPDATE audit_log SET checklist = %s WHERE id = %s",
                         (json.dumps(checklist), audit_id),
@@ -224,7 +230,11 @@ class AuditStore:
                 cur.execute("SELECT checklist FROM audit_log WHERE id = %s", (audit_id,))
                 row = cur.fetchone()
                 if row and row.get("checklist"):
-                    checklist = json.loads(row["checklist"]) if isinstance(row["checklist"], str) else row["checklist"]
+                    checklist = (
+                        json.loads(row["checklist"])
+                        if isinstance(row["checklist"], str)
+                        else row["checklist"]
+                    )
                     return checklist.get("items", [])
                 return []
 
@@ -243,18 +253,24 @@ class AuditStore:
                 cur.execute("SELECT checklist FROM audit_log WHERE id = %s", (audit_id,))
                 row = cur.fetchone()
                 if row:
-                    checklist = json.loads(row["checklist"]) if isinstance(row["checklist"], str) else row["checklist"]
+                    checklist = (
+                        json.loads(row["checklist"])
+                        if isinstance(row["checklist"], str)
+                        else row["checklist"]
+                    )
                     if not isinstance(checklist, dict):
                         checklist = {}
                     if "approvals" not in checklist:
                         checklist["approvals"] = []
-                    checklist["approvals"].append({
-                        "approved_by": approved_by,
-                        "role": role,
-                        "decision": decision,
-                        "notes": notes,
-                        "created_at": _now(),
-                    })
+                    checklist["approvals"].append(
+                        {
+                            "approved_by": approved_by,
+                            "role": role,
+                            "decision": decision,
+                            "notes": notes,
+                            "created_at": _now(),
+                        }
+                    )
                     cur.execute(
                         "UPDATE audit_log SET checklist = %s WHERE id = %s",
                         (json.dumps(checklist), audit_id),
@@ -267,7 +283,11 @@ class AuditStore:
                 cur.execute("SELECT checklist FROM audit_log WHERE id = %s", (audit_id,))
                 row = cur.fetchone()
                 if row and row.get("checklist"):
-                    checklist = json.loads(row["checklist"]) if isinstance(row["checklist"], str) else row["checklist"]
+                    checklist = (
+                        json.loads(row["checklist"])
+                        if isinstance(row["checklist"], str)
+                        else row["checklist"]
+                    )
                     return checklist.get("approvals", [])
                 return []
 

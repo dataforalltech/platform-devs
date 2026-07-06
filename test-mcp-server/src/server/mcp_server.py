@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 import json
 import logging
+import os
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -14,7 +13,7 @@ from fastapi import FastAPI
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from ..config.settings import TestSettings, get_settings
+from ..config.settings import get_settings
 from ..db.store import TestStore
 from ..tools import checklist_tool, plan_tool, scenario_tool, validation_tool
 
@@ -43,6 +42,7 @@ SCOPES_SUPPORTED = ["test:read", "test:write"]
 
 class _JSONEncoder(json.JSONEncoder):
     """Serializa tipos extras do psycopg2 (datetime, Decimal)."""
+
     def default(self, o: Any) -> Any:
         if isinstance(o, (datetime, date)):
             return o.isoformat()
@@ -84,9 +84,18 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["title", "scope"],
                     "properties": {
-                        "title": {"type": "string", "description": "TÃ­tulo do plano (ex: 'GET /api/users')"},
-                        "scope": {"type": "string", "description": "O que serÃ¡ testado e quais limites"},
-                        "feature": {"type": "string", "description": "Nome da feature ou ticket relacionado"},
+                        "title": {
+                            "type": "string",
+                            "description": "TÃ­tulo do plano (ex: 'GET /api/users')",
+                        },
+                        "scope": {
+                            "type": "string",
+                            "description": "O que serÃ¡ testado e quais limites",
+                        },
+                        "feature": {
+                            "type": "string",
+                            "description": "Nome da feature ou ticket relacionado",
+                        },
                     },
                 },
             ),
@@ -138,7 +147,15 @@ def build_server() -> tuple[Any, ...]:
                         "plan_id": {"type": "string"},
                         "category": {
                             "type": "string",
-                            "enum": ["rest_api", "react_component", "auth_flow", "db_migration", "websocket", "form_validation", "ui_data_validation"],
+                            "enum": [
+                                "rest_api",
+                                "react_component",
+                                "auth_flow",
+                                "db_migration",
+                                "websocket",
+                                "form_validation",
+                                "ui_data_validation",
+                            ],
                         },
                         "context": {
                             "type": "string",
@@ -160,19 +177,32 @@ def build_server() -> tuple[Any, ...]:
                         "category": {
                             "type": "string",
                             "enum": [
-                                "happy_path", "auth", "boundary", "error", "edge_case",
-                                "empty_state", "pagination", "performance", "schema",
+                                "happy_path",
+                                "auth",
+                                "boundary",
+                                "error",
+                                "edge_case",
+                                "empty_state",
+                                "pagination",
+                                "performance",
+                                "schema",
                                 "concurrency",
                             ],
                         },
-                        "steps": {"type": "string", "description": "Passos para executar o cenÃ¡rio"},
+                        "steps": {
+                            "type": "string",
+                            "description": "Passos para executar o cenÃ¡rio",
+                        },
                         "expected_result": {"type": "string", "description": "Resultado esperado"},
                         "priority": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
                             "default": "medium",
                         },
-                        "preconditions": {"type": "string", "description": "PrÃ©-condiÃ§Ãµes necessÃ¡rias"},
+                        "preconditions": {
+                            "type": "string",
+                            "description": "PrÃ©-condiÃ§Ãµes necessÃ¡rias",
+                        },
                     },
                 },
             ),
@@ -185,14 +215,23 @@ def build_server() -> tuple[Any, ...]:
                     "required": ["plan_id", "scenario_id", "status"],
                     "properties": {
                         "plan_id": {"type": "string"},
-                        "scenario_id": {"type": "integer", "description": "ID numÃ©rico do cenÃ¡rio"},
+                        "scenario_id": {
+                            "type": "integer",
+                            "description": "ID numÃ©rico do cenÃ¡rio",
+                        },
                         "status": {
                             "type": "string",
                             "enum": ["passed", "failed", "blocked", "skipped"],
                         },
-                        "actual_result": {"type": "string", "description": "O que realmente aconteceu"},
+                        "actual_result": {
+                            "type": "string",
+                            "description": "O que realmente aconteceu",
+                        },
                         "notes": {"type": "string", "description": "ObservaÃ§Ãµes adicionais"},
-                        "evidence": {"type": "string", "description": "Link ou referÃªncia para evidÃªncia (screenshot, log, etc.)"},
+                        "evidence": {
+                            "type": "string",
+                            "description": "Link ou referÃªncia para evidÃªncia (screenshot, log, etc.)",
+                        },
                     },
                 },
             ),
@@ -211,9 +250,20 @@ def build_server() -> tuple[Any, ...]:
                         "title": {"type": "string"},
                         "checklist_type": {
                             "type": "string",
-                            "enum": ["pre_deploy", "post_deploy", "code_review", "security", "accessibility", "data_integrity", "custom"],
+                            "enum": [
+                                "pre_deploy",
+                                "post_deploy",
+                                "code_review",
+                                "security",
+                                "accessibility",
+                                "data_integrity",
+                                "custom",
+                            ],
                         },
-                        "plan_id": {"type": "string", "description": "Associar ao plano de teste (opcional)"},
+                        "plan_id": {
+                            "type": "string",
+                            "description": "Associar ao plano de teste (opcional)",
+                        },
                         "use_template": {
                             "type": "boolean",
                             "default": True,
@@ -244,7 +294,10 @@ def build_server() -> tuple[Any, ...]:
                     "required": ["checklist_id"],
                     "properties": {
                         "checklist_id": {"type": "string"},
-                        "executor": {"type": "string", "description": "Nome ou identificador de quem estÃ¡ executando"},
+                        "executor": {
+                            "type": "string",
+                            "description": "Nome ou identificador de quem estÃ¡ executando",
+                        },
                     },
                 },
             ),
@@ -282,15 +335,27 @@ def build_server() -> tuple[Any, ...]:
                     "additionalProperties": False,
                     "required": ["plan_id", "severity", "title", "description"],
                     "properties": {
-                        "plan_id": {"type": "string", "description": "ID do plano de teste ao qual o bug pertence."},
+                        "plan_id": {
+                            "type": "string",
+                            "description": "ID do plano de teste ao qual o bug pertence.",
+                        },
                         "severity": {
                             "type": "string",
                             "enum": ["critical", "high", "medium", "low"],
                             "description": "critical=sistema parado | high=funcionalidade quebrada | medium=degradaÃ§Ã£o | low=cosmÃ©tico",
                         },
-                        "title": {"type": "string", "description": "TÃ­tulo curto e descritivo do bug (ex: 'Login falha com email maiÃºsculo')"},
-                        "description": {"type": "string", "description": "DescriÃ§Ã£o detalhada: passos para reproduzir, comportamento esperado vs atual."},
-                        "evidence": {"type": "string", "description": "Log, screenshot, stack trace ou link para evidÃªncia."},
+                        "title": {
+                            "type": "string",
+                            "description": "TÃ­tulo curto e descritivo do bug (ex: 'Login falha com email maiÃºsculo')",
+                        },
+                        "description": {
+                            "type": "string",
+                            "description": "DescriÃ§Ã£o detalhada: passos para reproduzir, comportamento esperado vs atual.",
+                        },
+                        "evidence": {
+                            "type": "string",
+                            "description": "Log, screenshot, stack trace ou link para evidÃªncia.",
+                        },
                     },
                 },
             ),
@@ -367,7 +432,11 @@ def build_server() -> tuple[Any, ...]:
             logger.exception("Erro na tool %s", name)
             result = {"error": type(exc).__name__, "details": str(exc)}
 
-        return [TextContent(type="text", text=json.dumps(result, ensure_ascii=False, indent=2, cls=_JSONEncoder))]
+        return [
+            TextContent(
+                type="text", text=json.dumps(result, ensure_ascii=False, indent=2, cls=_JSONEncoder)
+            )
+        ]
 
     @http_app.get("/mcp/tools/list")
     async def http_list_tools() -> dict:
@@ -395,7 +464,9 @@ def build_app(validators: Any = None):
     return mount_lowlevel_streamable_http(
         server,
         resource=os.getenv("TEST_RESOURCE", "http://localhost:7117/mcp"),
-        prm_url=os.getenv("TEST_PRM_URL", "http://localhost:7117/.well-known/oauth-protected-resource"),
+        prm_url=os.getenv(
+            "TEST_PRM_URL", "http://localhost:7117/.well-known/oauth-protected-resource"
+        ),
         as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
         as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
         scopes_supported=SCOPES_SUPPORTED,
@@ -407,6 +478,7 @@ def build_app(validators: Any = None):
 def main() -> None:
     """Entry point — Streamable HTTP + auth."""
     import uvicorn
+
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
     uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7117")))
 

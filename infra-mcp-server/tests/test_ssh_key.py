@@ -20,13 +20,13 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from src.knowledge.allocator_store import (
     AllocatorPolicy,
     AllocatorStore,
     AllocatorStoreError,
     LeaseNotFound,
 )
+
 from src.knowledge.provisioner import TerraformProvisioner
 from src.knowledge.ssh_key import (
     decrypt_private_key,
@@ -134,9 +134,20 @@ class TestAllocatorSSHKeys:
 
     def test_get_lease_ssh_key_not_available_before_active(self):
         """Lease em status != ACTIVE deve retornar erro."""
+
         class HoldProvisioner:
             """Provisioner que nunca chama on_ready — mantém lease PENDING."""
-            def provision(self, spec, vm_id, modules_root, timeout_sec, on_ready, on_failed, extra_tf_vars=None):
+
+            def provision(
+                self,
+                spec,
+                vm_id,
+                modules_root,
+                timeout_sec,
+                on_ready,
+                on_failed,
+                extra_tf_vars=None,
+            ):
                 pass  # nunca chama on_ready
 
             def destroy(self, spec, vm_id, modules_root, timeout_sec, on_done, on_failed):
@@ -160,21 +171,32 @@ class TestAllocatorSSHKeys:
         vm_id = d.lease.vm_id
 
         # Confirma que chave existe
-        assert store._con.execute(
-            "SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)
-        ).fetchone() is not None
+        assert (
+            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone()
+            is not None
+        )
 
         store.release_lease(d.lease.lease_id)
 
         # Chave deve ter sido deletada
-        assert store._con.execute(
-            "SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)
-        ).fetchone() is None
+        assert (
+            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
+        )
 
     def test_ssh_key_deleted_on_provision_failure(self):
         """_on_vm_failed → vm_keys deletado."""
+
         class FailProv:
-            def provision(self, spec, vm_id, modules_root, timeout_sec, on_ready, on_failed, extra_tf_vars=None):
+            def provision(
+                self,
+                spec,
+                vm_id,
+                modules_root,
+                timeout_sec,
+                on_ready,
+                on_failed,
+                extra_tf_vars=None,
+            ):
                 on_failed("simulated")
 
             def destroy(self, *a, on_done, **kw):
@@ -189,15 +211,16 @@ class TestAllocatorSSHKeys:
         vm_id = d.lease.vm_id
 
         # Após falha, chave deve ser deletada
-        assert store._con.execute(
-            "SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)
-        ).fetchone() is None
+        assert (
+            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
+        )
 
     def test_ssh_key_deleted_on_gc_expired(self):
         """GC de leases expirados → VM órfã terminada → vm_keys deletado."""
         from datetime import timedelta
 
         from src.knowledge.allocator_store import _dt_to_str
+
         from src.models.allocator import now_utc
 
         store = self._make_store()
@@ -214,16 +237,25 @@ class TestAllocatorSSHKeys:
         # Operação que dispara GC
         store.get_lease(d.lease.lease_id)
 
-        assert store._con.execute(
-            "SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)
-        ).fetchone() is None
+        assert (
+            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
+        )
 
     def test_extra_tf_vars_has_ssh_public_key(self):
         """provisioner.provision() deve receber extra_tf_vars com ssh_public_key."""
         captured_vars: list[dict] = []
 
         class CapturingProvisioner:
-            def provision(self, spec, vm_id, modules_root, timeout_sec, on_ready, on_failed, extra_tf_vars=None):
+            def provision(
+                self,
+                spec,
+                vm_id,
+                modules_root,
+                timeout_sec,
+                on_ready,
+                on_failed,
+                extra_tf_vars=None,
+            ):
                 captured_vars.append(extra_tf_vars or {})
                 on_ready(f"cap://{vm_id}:22")
 
@@ -342,10 +374,7 @@ class TestTerraformProvisionerRemoteBackend:
         assert results == ["1.2.3.4:22"]
         # Pelo menos um subprocess.run deve ter TF_VAR_ssh_public_key
         apply_envs = [e for e in captured_envs if e]
-        assert any(
-            e.get("TF_VAR_ssh_public_key") == "ssh-ed25519 AAAA..."
-            for e in apply_envs
-        )
+        assert any(e.get("TF_VAR_ssh_public_key") == "ssh-ed25519 AAAA..." for e in apply_envs)
 
     def test_backend_override_file_written_on_init(self, tmp_path):
         """Backend remoto: _backend_override.tf deve ser escrito no module dir."""

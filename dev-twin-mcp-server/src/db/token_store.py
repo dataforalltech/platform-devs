@@ -21,13 +21,14 @@ Segurança:
   - validate() faz lookup por token_prefix (índice) + bcrypt.checkpw().
   - Tokens antigos sem token_prefix são invalidados automaticamente na migration.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import secrets
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import bcrypt
@@ -123,7 +124,7 @@ class TokenStore:
         Retorna None se: token não existe, active=false, expirado ou bcrypt falha.
         """
         prefix = token[:8]
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
@@ -171,7 +172,7 @@ class TokenStore:
         token_prefix = token[:8]
         token_hash = bcrypt.hashpw(token.encode(), bcrypt.gensalt(rounds=10)).decode()
         user_id = secrets.token_hex(8)
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expires_at = None
         if expires_in_days:
             expires_at = now + timedelta(days=expires_in_days)
@@ -187,8 +188,17 @@ class TokenStore:
                             tenant_id, active, created_at, expires_at)
                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)""",
                         (
-                            token_hash, token_prefix, user_id, name, email, role,
-                            scopes_json, environment, tenant_id, now, expires_at,
+                            token_hash,
+                            token_prefix,
+                            user_id,
+                            name,
+                            email,
+                            role,
+                            scopes_json,
+                            environment,
+                            tenant_id,
+                            now,
+                            expires_at,
                         ),
                     )
         except psycopg2.IntegrityError as exc:
@@ -196,7 +206,10 @@ class TokenStore:
 
         _log.info(
             "token_registered user_id=%s name=%s role=%s tenant_id=%s",
-            user_id, name, role, tenant_id,
+            user_id,
+            name,
+            role,
+            tenant_id,
         )
         return {
             "token": token,  # plaintext — retornado apenas uma vez
@@ -238,7 +251,8 @@ class TokenStore:
                         try:
                             if bcrypt.checkpw(identifier.encode(), row[1].encode()):
                                 cur.execute(
-                                    "UPDATE agent_tokens SET active = FALSE WHERE id = %s", (row[0],)
+                                    "UPDATE agent_tokens SET active = FALSE WHERE id = %s",
+                                    (row[0],),
                                 )
                                 affected = 1
                                 break
@@ -262,9 +276,7 @@ class TokenStore:
                 )
                 row = cur.fetchone()
                 if not row:
-                    raise TokenStoreError(
-                        f"user_id '{identifier}' não encontrado ou já revogado."
-                    )
+                    raise TokenStoreError(f"user_id '{identifier}' não encontrado ou já revogado.")
                 record = dict(row)
                 # Revoga dentro da mesma conexão (2 round trips → 1 transação)
                 cur.execute(
@@ -283,7 +295,7 @@ class TokenStore:
 
     def touch(self, user_id: str) -> None:
         """Atualiza last_used_at para o usuário."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         with self._get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(

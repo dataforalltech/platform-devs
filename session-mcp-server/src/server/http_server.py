@@ -4,11 +4,11 @@ Session-MCP HTTP Server — FastAPI wrapper.
 Wires SessionHTTPEndpoints into a FastAPI application on port 7100.
 """
 
-from fastapi import FastAPI, HTTPException, Query, Path
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, Path, Query
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def create_session_http_server(session_store):
         title="session-mcp",
         description="Session and task tracking API",
         version="1.0.0",
-        lifespan=lifespan
+        lifespan=lifespan,
     )
 
     # ========== Health ==========
@@ -51,54 +51,42 @@ def create_session_http_server(session_store):
 
     @app.get("/sessions")
     async def get_sessions(
-        status: str = Query(None),
-        repo: str = Query(None),
-        limit: int = Query(20)
+        status: str = Query(None), repo: str = Query(None), limit: int = Query(20)
     ):
         result = endpoints.get_sessions(status=status, repo=repo, limit=limit)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.get("/sessions/{session_id}")
     async def get_session(session_id: str = Path(...)):
         result = endpoints.get_session(session_id)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     # ========== Tasks ==========
 
     @app.get("/sessions/{session_id}/tasks")
-    async def list_session_tasks(
-        session_id: str = Path(...),
-        status: str = Query(None)
-    ):
+    async def list_session_tasks(session_id: str = Path(...), status: str = Query(None)):
         result = endpoints.list_session_tasks(session_id, status=status)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     @app.get("/sessions/{session_id}/tasks/{task_id}")
-    async def get_task(
-        session_id: str = Path(...),
-        task_id: int = Path(...)
-    ):
+    async def get_task(session_id: str = Path(...), task_id: int = Path(...)):
         result = endpoints.get_task(session_id, task_id)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     # ========== Checkpoints ==========
@@ -106,26 +94,21 @@ def create_session_http_server(session_store):
     @app.get("/sessions/{session_id}/checkpoints")
     async def list_session_checkpoints(session_id: str = Path(...)):
         result = endpoints.list_session_checkpoints(session_id)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     # ========== Artifacts ==========
 
     @app.get("/sessions/{session_id}/artifacts")
-    async def list_session_artifacts(
-        session_id: str = Path(...),
-        artifact_type: str = Query(None)
-    ):
+    async def list_session_artifacts(session_id: str = Path(...), artifact_type: str = Query(None)):
         result = endpoints.list_session_artifacts(session_id, artifact_type=artifact_type)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     # ========== Suggestions ==========
@@ -133,11 +116,10 @@ def create_session_http_server(session_store):
     @app.get("/sessions/{session_id}/suggestions")
     async def list_session_suggestions(session_id: str = Path(...)):
         result = endpoints.list_session_suggestions(session_id)
-        if result.get('status') == 200:
+        if result.get("status") == 200:
             return result
         raise HTTPException(
-            status_code=result.get('status', 500),
-            detail=result.get('error', 'internal_error')
+            status_code=result.get("status", 500), detail=result.get("error", "internal_error")
         )
 
     return app

@@ -22,15 +22,15 @@ Namespaces convencionais:
   env.<environment>      — variáveis de ambiente por perfil (dev, staging, production)
   tenants.<tenant_id>    — variáveis de ambiente por tenant
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import os
 from pathlib import Path
-from typing import Any
 
-from .encryptor import Encryptor, EncryptionError
+from .encryptor import EncryptionError, Encryptor
 
 _log = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class ConfigStore:
         if os.getenv("POSTGRES_SYNC_ENABLED", "false").lower() == "true":
             try:
                 from db.postgres_sync import ConfigPostgresSync
+
                 postgres_config = {
                     "host": os.getenv("POSTGRES_HOST", "claude-dev"),
                     "port": int(os.getenv("POSTGRES_PORT", "5432")),

@@ -14,4 +14,6 @@ def store(tmp_path) -> TestStore:
 @pytest.fixture
 def plan(store: TestStore) -> dict:
     """Plano de teste pré-criado."""
-    return store.create_plan(title="Plano de Teste", scope="Endpoint GET /api/items", feature="items-list")
+    return store.create_plan(
+        title="Plano de Teste", scope="Endpoint GET /api/items", feature="items-list"
+    )

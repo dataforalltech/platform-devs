@@ -7,8 +7,8 @@ mesmo arquivo SQLite e verificando que leases e VMs sobrevivem.
 from __future__ import annotations
 
 import pytest
-
 from src.knowledge.allocator_store import AllocatorPolicy, AllocatorStore
+
 from src.models.allocator import VMRequest
 
 

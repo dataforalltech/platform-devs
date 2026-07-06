@@ -3,11 +3,11 @@
 Cobre: matemática exata do RICE, ordenação da priorização, formato das user
 stories e reflexo dos inputs nos artefatos (nenhuma saída constante).
 """
+
 from __future__ import annotations
 
 import asyncio
 
-import pytest
 
 from src.tools.product_owner_tools import (
     analyze_product_problem,
@@ -44,7 +44,9 @@ class TestRiceScore:
         assert r["breakdown"]["confidence"] == 0.8
 
     def test_reflects_feature_name(self):
-        r = calculate_rice_score(reach=10, impact=1, confidence=1, effort=1, feature="Checkout")
+        r = calculate_rice_score(
+            reach=10, impact=1, confidence=1, effort=1, feature="Checkout"
+        )
         assert r["feature"] == "Checkout"
         assert r["score"] == 10.0
 
@@ -73,8 +75,20 @@ class TestPrioritizeBacklog:
 
     def test_computes_rice_when_no_score(self):
         items = [
-            {"name": "low", "reach": 100, "impact": 1, "confidence": 0.5, "effort": 10},  # 5
-            {"name": "high", "reach": 100, "impact": 2, "confidence": 1, "effort": 1},  # 200
+            {
+                "name": "low",
+                "reach": 100,
+                "impact": 1,
+                "confidence": 0.5,
+                "effort": 10,
+            },  # 5
+            {
+                "name": "high",
+                "reach": 100,
+                "impact": 2,
+                "confidence": 1,
+                "effort": 1,
+            },  # 200
         ]
         r = prioritize_backlog(items, framework="RICE")
         ranked = r["prioritized_items"]
@@ -118,7 +132,9 @@ class TestUserStories:
     def test_defaults_when_minimal(self):
         r = generate_user_stories(feature="Busca")
         assert r["count"] == 1
-        assert r["user_stories"][0]["story"].startswith("As a usuário, I want usar Busca")
+        assert r["user_stories"][0]["story"].startswith(
+            "As a usuário, I want usar Busca"
+        )
 
 
 class TestMvpScope:
@@ -176,7 +192,9 @@ class TestInputReflection:
         assert any("motivo do abandono" in q for q in r["research_questions"])
 
     def test_feature_spec_derives_acceptance(self):
-        r = generate_feature_spec(feature="Export CSV", requirements=["exportar filtrado"])
+        r = generate_feature_spec(
+            feature="Export CSV", requirements=["exportar filtrado"]
+        )
         assert r["feature"] == "Export CSV"
         assert any("exportar filtrado" in a for a in r["acceptance_criteria"])
 
@@ -195,12 +213,16 @@ class TestInputReflection:
         assert r["scale_expectations"] == "10k rps"
 
     def test_handoff_design_reflects(self):
-        r = generate_handoff_to_design(feature="Onboarding", key_screens=["welcome", "profile"])
+        r = generate_handoff_to_design(
+            feature="Onboarding", key_screens=["welcome", "profile"]
+        )
         assert r["key_screens"] == ["welcome", "profile"]
 
     def test_handoff_engineering_normalizes_stories(self):
         r = generate_handoff_to_engineering(
-            feature="F", user_stories=["story a", {"story": "story b"}], dependencies=["auth-mcp"]
+            feature="F",
+            user_stories=["story a", {"story": "story b"}],
+            dependencies=["auth-mcp"],
         )
         assert r["user_stories"][0] == {"story": "story a"}
         assert r["dependencies"] == ["auth-mcp"]
@@ -231,7 +253,12 @@ class TestInputReflection:
         r = map_user_journey(
             persona="Ana",
             steps=[
-                {"name": "descobre", "touchpoint": "ads", "emotion": "curiosa", "pain": "ruído"},
+                {
+                    "name": "descobre",
+                    "touchpoint": "ads",
+                    "emotion": "curiosa",
+                    "pain": "ruído",
+                },
                 "cadastra",
             ],
         )
@@ -245,7 +272,13 @@ class TestInputReflection:
 
     def test_personas_structured(self):
         r = map_user_personas(
-            personas=[{"name": "Dev João", "goals": ["shipar rápido"], "pains": ["flaky tests"]}]
+            personas=[
+                {
+                    "name": "Dev João",
+                    "goals": ["shipar rápido"],
+                    "pains": ["flaky tests"],
+                }
+            ]
         )
         assert r["count"] == 1
         assert r["personas"][0]["name"] == "Dev João"

@@ -80,10 +80,17 @@ def test_format_comment_low_marks_ok():
 
 
 def test_format_comment_includes_file_count():
-    payload = {"affected_files": ["a.py", "b.py", "c.py"], "affected_layers": ["backend", "testing"]}
+    payload = {
+        "affected_files": ["a.py", "b.py", "c.py"],
+        "affected_layers": ["backend", "testing"],
+    }
     result = {
-        "approved": True, "risk_level": "low",
-        "violations": [], "required_actions": [], "recommendations": [], "notes": [],
+        "approved": True,
+        "risk_level": "low",
+        "violations": [],
+        "required_actions": [],
+        "recommendations": [],
+        "notes": [],
     }
     md = pr._format_comment(payload, result)
     assert "3" in md
@@ -93,8 +100,12 @@ def test_format_comment_includes_file_count():
 def test_format_comment_handles_empty_layers():
     payload = {"affected_files": ["a"], "affected_layers": []}
     result = {
-        "approved": True, "risk_level": "low",
-        "violations": [], "required_actions": [], "recommendations": [], "notes": [],
+        "approved": True,
+        "risk_level": "low",
+        "violations": [],
+        "required_actions": [],
+        "recommendations": [],
+        "notes": [],
     }
     md = pr._format_comment(payload, result)
     assert "(none detected)" in md
@@ -104,8 +115,12 @@ def test_format_comment_omits_empty_sections():
     """Sem violations/actions/recs/notes — não devem aparecer headers."""
     payload = {"affected_files": ["a"], "affected_layers": []}
     result = {
-        "approved": True, "risk_level": "low",
-        "violations": [], "required_actions": [], "recommendations": [], "notes": [],
+        "approved": True,
+        "risk_level": "low",
+        "violations": [],
+        "required_actions": [],
+        "recommendations": [],
+        "notes": [],
     }
     md = pr._format_comment(payload, result)
     assert "### Violations" not in md
@@ -133,9 +148,11 @@ def test_post_comment_extracts_from_github_ref(monkeypatch):
 
     def fake_run(args, **kwargs):
         captured["args"] = args
+
         class Result:
             returncode = 0
             stderr = ""
+
         return Result()
 
     monkeypatch.setattr(pr.subprocess, "run", fake_run)
@@ -166,9 +183,7 @@ def test_diff_range_truncates(monkeypatch):
 
 
 def test_files_changed_returns_list(monkeypatch):
-    monkeypatch.setattr(
-        pr, "_git", lambda args: "a.py\nb.py\n   \n  c.py  \n"
-    )
+    monkeypatch.setattr(pr, "_git", lambda args: "a.py\nb.py\n   \n  c.py  \n")
     files = pr._files_changed("base", "head")
     assert files == ["a.py", "b.py", "c.py"]
 

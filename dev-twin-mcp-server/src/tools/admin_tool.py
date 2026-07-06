@@ -7,6 +7,7 @@ revoke_token   — revoga acesso
 rotate_token   — revoga + emite novo token para o mesmo usuário
 list_tokens    — lista todos os tokens ativos (sem exibir os valores)
 """
+
 from __future__ import annotations
 
 import secrets
