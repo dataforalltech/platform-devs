@@ -171,11 +171,46 @@ services:
     restart: unless-stopped
     logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
-  # ---- MCP sidecar: ADIADO ---------------------------------------------------
-  # O codigo `app/iceberg_mcp/` NAO esta em origin/develop (so local) e a imagem da API
-  # NAO tem as deps `mcp`/`fastmcp` -> nao roda desta imagem. Fix de raiz no repo platform-iceberg:
-  # shipar o iceberg_mcp no develop + incluir no build (deps + Dockerfile de MCP ou COPY no image).
-  # Bundle `./iceberg_mcp/` mantido para quando houver imagem. Ver tarefa aberta.
+  # ---- MCP sidecar — imagem propria platform-iceberg-mcp --------------------
+  # Buildada de mcp/Dockerfile do repo platform-iceberg (contexto=raiz), rodando o
+  # sidecar HTTP MCPHttpSidecar (porta 7104). Imagem enxuta: so mcp+starlette+uvicorn+httpx
+  # (auth/governance sao puro-stdlib -> sem libs privadas, sem secret github_token).
+  #   build-service.sh platform-iceberg-mcp platform-iceberg develop mcp/Dockerfile .
+  # Registrado no platform-mcp por deploy/seed/register-mcp-backends.sh (host:7104).
+  # Alcanca a API via platform-local; entra tambem em iceberg-net por simetria.
+  platform-iceberg-mcp:
+    image: d4all.azurecr.io/dataforall/3.0/platform-iceberg-mcp:${IMAGE_TAG:-latest}
+    container_name: platform-iceberg-mcp
+    networks: [iceberg-net, platform-local]
+    environment:
+      APP_NAME: platform-iceberg-mcp
+      SERVICE_ID: platform-iceberg-mcp
+      ENVIRONMENT: homologacao   # relaxa a exigencia de MCP_SERVICE_TOKEN no boot (auth.py)
+      TZ: UTC
+      LOG_LEVEL: INFO
+      MCP_HTTP_PORT: "7104"
+      # Cliente da API interna (Bearer = API_TOKEN estatico da API).
+      ICEBERG_INTERNAL_URL: http://platform-iceberg:8018/api/v1
+      ICEBERG_INTERNAL_TOKEN: ${ICEBERG_API_TOKEN:?defina em .env}
+      ICEBERG_HEALTH_URL: http://platform-iceberg:8018/api/health/ready
+      # HMAC p/ autenticar chamadas do gateway. Opcional em homologacao; se vazio, o
+      # sidecar sobe sem token verifier. Obrigatorio em prod/staging (auth.py fail-closed).
+      MCP_SERVICE_TOKEN: ${ICEBERG_MCP_SERVICE_TOKEN:-}
+      # Twin PEP desligado no ambiente enxuto (senao exigiria claims/JWKS).
+      ICEBERG_MCP_TWIN_ENFORCE: "0"
+      OTEL_TRACES_ENABLED: "false"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+    depends_on:
+      platform-iceberg:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7104/health',timeout=4).status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
 
   # ---- hml-init — cria o catalog no Polaris + schema/tabelas via Trino (1x) --
   hml-init:
