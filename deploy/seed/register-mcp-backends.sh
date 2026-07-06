@@ -36,6 +36,7 @@ reg platform-cdc-mcp         mcp_http http://platform-cdc-mcp:28000        /mcp/
 reg platform-communication-mcp mcp_http http://platform-communication-mcp:7100 /mcp/tools/list /mcp/tools/call mcp  # 65 tools (K5 resolvido)
 reg platform-ml-mcp          mcp_http http://platform-ml-mcp:7104          /mcp/tools/list  /mcp/tools/call  mcp
 reg platform-agents-factory-mcp mcp_http http://platform-agents-factory-mcp:7130 /mcp/tools/list /mcp/tools/call mcp
+reg platform-monitor-mcp     mcp_http http://platform-monitor-mcp:28000     /mcp/tools/list  /mcp/tools/call  mcp
 # notification-mcp: /mcp/tools/list deu 404 (path a confirmar) — pendente
 
 echo "== recarrega o registry do platform-mcp =="

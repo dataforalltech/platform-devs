@@ -336,6 +336,16 @@ deploy/build/build-service.sh platform-monitor    platform-monitor    develop Do
 ### J3. Imagens `:latest` do ACR defasadas do código (causa-raiz do F6)
 - **Correção definitiva:** rebuildar as imagens do código atual. Pipeline: `deploy/build/build-service.sh <image> <repo> <branch> [ctx]` clona `github.com/dataforalltech/<repo>`, builda com `--secret id=github_token` (libs privadas) e faz push como `:latest` + `:<sha>`. Token do GitHub em `SSM /dataforall-hml/github/token`. Branches por repo variam (auth=`release/1.4.0`, gateway/admin=`develop`). **Status:** ✅ pipeline pronto; rebuild em execução.
 
+### J5. Builds paralelos do MESMO repo colidem no diretório de clone
+- **Evidência:** `fatal: could not open '/data/build/platform-monitor/.git/objects/pack/tmp_pack_...' for reading: No such file or directory` / `invalid index-pack output` → `FALHA clone`. Aconteceu ao buildar API e MCP do monitor **em paralelo** (ambos `build-service.sh ... platform-monitor ...`).
+- **Causa:** o `build-service.sh` clona em `$BUILDROOT/$REPO` (dir por REPO, não por IMAGE) e faz `rm -rf "$D"` antes. Dois builds do mesmo repo em paralelo → um apaga/escreve enquanto o outro baixa → pack corrompido.
+- **Correção:** buildar API e MCP do mesmo repo **sequencialmente** (não em `&`/paralelo). **Status:** 📌 gotcha. **Melhoria futura:** clone dir por IMAGE (`$BUILDROOT/$IMAGE`) tornaria paralelo seguro.
+
+### J6. Dockerfile de MCP com contexto próprio (`mcp/`) — não usar a raiz
+- **Evidência:** build do `-mcp` falha em `pip install` com `error: cannot run ssh: No such file or directory` / `exit code: 128`, apontando pro `COPY requirements.txt` do estágio builder.
+- **Causa:** alguns `mcp/Dockerfile` são feitos pra **contexto `mcp/`** (o header do Dockerfile diz `docker build ... mcp/`): dentro deles `COPY requirements.txt` = `mcp/requirements.txt` (só `git+https`). Se buildar com **contexto = raiz** (`ctx=.`), o `COPY requirements.txt` pega o **`requirements.txt` da raiz (API)**, que tem deps **`git+ssh://`** — e o builder do MCP não tem `openssh-client`/git-rewrite → quebra.
+- **Correção:** passar o **contexto `mcp`** no `build-service.sh` (`... develop mcp/Dockerfile mcp`), não `.`. Confirmar no header do `mcp/Dockerfile` qual contexto ele espera. **Status:** 📌 gotcha (monitor-mcp). Casa com o `platform-communication-mcp` (K5) que também builda de `mcp/Dockerfile`.
+
 ## H. Ordem de bring-up limpo (resumo)
 
 1. `terraform apply` (infra: EC2, tunnel, DNS, KMS, S3, IAM com kms:Decrypt + SSM read).
