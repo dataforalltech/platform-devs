@@ -131,6 +131,18 @@ ENV_PROFILE conforme o validador do serviço) → migrations no tenant (se tiver
 
 ---
 
+## Acesso ao ambiente (HML)
+| | |
+|---|---|
+| URL | `https://app.dataforall.tech` (SPA / login) |
+| Usuário | `admin@dataforall.tech` (superadmin) |
+| Senha | a definida no `onboard-tenant.sh` (padrão de teste `Dataforall@2026` — **trocar em uso real**) |
+| Tenant | `dataforall` (resolvido pelo subdomínio via `PLATFORMS.domain=app.dataforall.tech`) |
+
+Novo tenant/usuário: `onboard-tenant.sh <tenant_id> <email> <senha>` (cria DB + migrations + superadmin).
+Acesso à EC2: `aws ssm start-session --target <instance_id> --region us-east-1`.
+Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward — ver [local-db-access-ssm.md](local-db-access-ssm.md)).
+
 ## Referências
 - **Erros** (A–K): [bring-up-errors-and-fixes.md](bring-up-errors-and-fixes.md)
 - **Variáveis de ambiente** (inventário, senhas mascaradas): [environment-variables.md](environment-variables.md)
