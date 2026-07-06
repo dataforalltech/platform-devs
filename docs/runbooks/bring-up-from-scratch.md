@@ -143,6 +143,11 @@ Padrão validado (auth/admin/governance/mcp/notification/connectors/analytics). 
      -x db_port=3306 -x db_user=root -x db_password=<pw> -x db_name=dataforall upgrade head"
    bash deploy/seed/fix-gateway-route.sh <svc> 8000
    ```
+   > **Migrations variam por serviço** — confirme no repo antes: a maioria é `alembic upgrade head`
+   > (via `-x tenant_id`), mas há variantes: **ml** usa `python scripts/bootstrap_tenants.py`
+   > (e a imagem enxuta nem traz `alembic/` — L3); **monitor** usa **SQL puro**
+   > `bash scripts/apply_mysql_migrations.sh` (tabelas `mon_`); **agents-factory** roda no boot (non-fatal).
+   > Cuidado: migrations podem ter **sintaxe não-MySQL** (`IF NOT EXISTS` em `CREATE INDEX`/`ADD COLUMN` — L4).
    > Segredos novos obrigatórios → adicione ao `/opt/dataforall/deploy/.env` (gerar `openssl rand -hex 32`)
    > e documente em `environment-variables.md`.
 5. **MCP:** suba o sidecar e registre no front-door: `deploy/seed/register-mcp-backends.sh` (ou um
@@ -174,8 +179,20 @@ Acesso aos DBs no IDE: `terraform-lean/scripts/db-tunnel.ps1` (SSM port-forward 
 - **Playbook de produção (escala)**: [aws-production-deployment-playbook.md](aws-production-deployment-playbook.md)
 
 ## Estado atual (2026-07-06)
-**9 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, connectors, analytics.
-**6 MCP sidecars healthy** (gateway/auth/admin/notification/connectors/analytics); o **platform-mcp
-(front-door) agrega 592 tools**. **Login e2e 200.** Pendências: `governance-mcp` (defeito de build no
-repo — K1), `notification-mcp`/`auth-mcp` (agregação de tools — path/SSE, K3), e os demais ~20 serviços
-(rebuild + subida 1 a 1). Ver roster completo em [environment-variables.md](environment-variables.md) §5.0.
+**14 APIs healthy:** frontend, gateway, auth, admin, governance, mcp, notification, cdc, connectors,
+analytics, communication, ml, monitor, agents-factory, **iceberg** (+ lakehouse MinIO/Polaris/Trino, SQL validado), **scheduler** (MySQL via PLATFORMS). **11 MCP sidecars healthy**
+(gateway/admin/connectors/analytics/cdc/communication/ml/monitor/agents-factory + auth via SSE); o
+**platform-mcp (front-door) agrega 705 tools / 21 serviços**. **Login e2e 200.**
+Pendências: `notification-mcp` (path de agregação, K3), e os ainda-não-subidos
+(datalake/docextract/flow — build falha por bug de Dockerfile no repo, tarefa aberta; iceberg/pipeline/db-vector/dai).
+Ver roster completo em [environment-variables.md](environment-variables.md) §5.0.
+
+> **Aprendizados das últimas subidas (ml/agents-factory/monitor):**
+> - **`platform-ml` sobe via PULL** (imagem enxuta CPU-only, não build) — mas ela veio com defeitos
+>   (sem `alembic/`, migrations não-MySQL, cliente de notificação defasado): ver **L1–L5** + tarefa de repo.
+> - **`platform-monitor`** usa migrations **SQL puro** (`scripts/apply_mysql_migrations.sh`, não alembic),
+>   health em **porta separada 9090**, e **não** usa `ENV_PROFILE`.
+> - **Build de MCP:** rode API e MCP do mesmo repo **em sequência** (paralelo colide no clone — J5);
+>   confira o **contexto** que o `mcp/Dockerfile` espera (`mcp/` vs raiz — J6).
+> - **`platform-iceberg` é um lakehouse** (MinIO+Polaris+Trino numa rede dedicada) — não segue o padrão comum.
+>   Cuidado com o pareamento de versões Trino↔Polaris (props OAuth) e o `jvm.config` do Trino ao montar `/etc/trino` (ver **M1–M4**).

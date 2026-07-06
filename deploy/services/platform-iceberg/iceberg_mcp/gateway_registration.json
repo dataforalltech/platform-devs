@@ -1,0 +1,28 @@
+{
+  "_comment": "Registro do platform-iceberg no platform-mcp gateway (DTR pattern). Plugar em TWIN_GATEWAY_SERVICES.",
+  "name": "platform-iceberg",
+  "namespace": "iceberg",
+  "kind": "mcp_http",
+  "mcpUrl": "http://platform-iceberg-mcp:7104",
+  "audience": "mcp:iceberg",
+  "toolsListPath": "/mcp/tools/list",
+  "toolsCallPath": "/mcp/tools/call",
+  "callStyle": "mcp",
+  "healthPath": "/health",
+  "excludeTools": ["rotate_iceberg_tenant_token"],
+  "exemptTools": ["health_check"],
+  "capabilityOverrides": {
+    "list_iceberg_tenants": "tenants:read",
+    "get_iceberg_tenant": "tenants:read",
+    "create_iceberg_tenant": "tenants:write",
+    "delete_iceberg_tenant": "tenants:write",
+    "rotate_iceberg_tenant_token": "tenants:write",
+    "create_iceberg_warehouse": "warehouses:write",
+    "list_iceberg_warehouses": "warehouses:read",
+    "create_iceberg_sql_user": "users:write",
+    "list_iceberg_sql_users": "users:read",
+    "grant_iceberg_permission": "permissions:write",
+    "revoke_iceberg_permission": "permissions:write",
+    "list_iceberg_permissions": "permissions:read"
+  }
+}

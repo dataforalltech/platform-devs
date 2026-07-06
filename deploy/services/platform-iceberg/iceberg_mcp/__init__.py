@@ -1,0 +1,1 @@
+"""platform-iceberg MCP sidecar."""
