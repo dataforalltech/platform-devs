@@ -149,3 +149,17 @@ plataforma (operar, evoluir e escalar como ecossistema de engenharia).
 ## Origem
 Esta divisão incorpora uma revisão externa de arquitetura (MCP/OAuth 2.1/Zero Trust/identidade
 distribuída/multiagente) e as ressalvas de reconciliação com o estado real dos repositórios da plataforma.
+
+---
+
+## ADRs operacionais (fora desta série de segurança/capabilities)
+
+Decisões de plataforma/engenharia que não pertencem às camadas de auth/capability acima, mas
+ficam catalogadas aqui para não se perderem no histórico de commits:
+
+| ADR | Tema |
+|---|---|
+| [ADR-001](ADR-001-PYTHON-POSTGRESQL-MIGRATION.md) | **Python + PostgreSQL** — migração do stack TS/SQLite; PostgreSQL como source of truth do fleet |
+| [ADR-002](ADR-002-REPO-AUTOMATION-GOVERNANCE.md) | **Repo Automation & Governance** |
+| [ADR-015](ADR-015-INFRA-PERSISTENCE-STRATEGY.md) | **Infra Persistence Strategy** — SQLite oficial para `infra`/`session` até haver PG concorrente-seguro; **emenda escopada** à ADR-001 (com critérios de migração) |
+| [ADR-016](ADR-016-CI-VALIDATION-STRATEGY.md) | **CI Validation Strategy** — testes herméticos, venv limpo CI-faithful, plugins obrigatórios (`pytest-cov`/`pytest-asyncio`), cobertura ≥80%, `fail-fast: false`, reporte por contagem |
