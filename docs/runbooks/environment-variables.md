@@ -94,7 +94,7 @@ tunnel `17ea08ca-...`, KMS `alias/dataforall-hml`.
 
 ### 5.0 Roster completo (todos os serviços — subidos e pendentes)
 
-Status: ✅ no ar · ⬜ pendente · img✅/img✗ = imagem `:latest` rebuildada no ACR (ou falhou).
+Status: ✅ no ar · ⬜ pendente · ⏳ aguardar (pending — decisão de não subir por ora) · img✅/img✗ = imagem `:latest` rebuildada no ACR (ou falhou).
 Engine define `DB_HOST`/`DB_PORT`/`DB_USER` (mysql→`tenant-mysql:3306` root; postgres→`tenant-postgres:5432` platform).
 Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics documentados na subida.
 
@@ -119,9 +119,9 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-flow | ⬜ img✗ | mysql | develop | — | build falhou (git+ssh — tarefa de repo) |
 | platform-dai | ✅ | mysql | develop | Dockerfile.mcp (7120) | orquestrador de agentes IA; porta 5003; DOCS_ENABLED=true (MCP lê openapi); LLM keys lazy; 13 tabelas `dai_`; MCP 46 tools (PyJWT via workaround — K8) |
 | platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; MCP adiado (M4) |
-| platform-pipeline | ⬜ | mysql | develop | mcp | |
+| platform-pipeline | ⏳ aguardar | mysql | develop | mcp | **pending** (decisão do usuário — não subir agora) |
 | platform-db-vector | ✅ | postgres+**pgvector dedicado** | develop | — (só em feat/mcp-server) | RAG/vetores; porta 5004; `dbvec-postgres` (pgvector/pgvector:pg16); embeddings OpenAI; develop tinha 5 bugs (K9) |
-| platform-security | ⬜ | mysql | (repo não clonado local) | ? | |
+| platform-security | ⏳ aguardar | mysql | (repo não clonado local) | ? | **pending** (decisão do usuário — não subir agora) |
 | platform-crm-agent | ⬜ | mysql | (não clonado) | ? | |
 | platform-crm | ⬜ | postgres | (não clonado) | ? | |
 | platform-marketing | ⬜ | postgres | (não clonado) | ? | |
