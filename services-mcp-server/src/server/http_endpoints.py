@@ -194,7 +194,7 @@ class ServicesHTTPEndpoints:
                 "status": 201,
                 "id": None,  # Would be returned from PostgreSQL insert
                 "name": name,
-                "status": "unknown",
+                "service_status": "unknown",
                 "created_at": datetime.utcnow().isoformat() + "Z",
             }
 

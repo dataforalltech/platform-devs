@@ -153,9 +153,19 @@ class DocsStore:
         content_hash: str | None,
     ) -> None:
         """Insere ou atualiza documento no índice."""
+        index_payload = json.dumps(
+            {
+                "word_count": word_count,
+                "last_modified": last_modified,
+                "content_hash": content_hash,
+                "file_path": file_path,
+                "doc_title": title,
+            }
+        )
         with self._get_conn() as conn:
             with conn.cursor() as cur:
-                # Tenta atualizar primeiro
+                # Tenta atualizar primeiro (identidade do índice = repo_path + file_path,
+                # persistido na coluna `title` por compatibilidade com o schema unificado).
                 cur.execute(
                     """
                     UPDATE documents
@@ -165,14 +175,7 @@ class DocsStore:
                     (
                         doc_type,
                         file_path,
-                        json.dumps(
-                            {
-                                "word_count": word_count,
-                                "last_modified": last_modified,
-                                "content_hash": content_hash,
-                                "file_path": file_path,
-                            }
-                        ),
+                        index_payload,
                         repo_path,
                         file_path,
                     ),
@@ -190,14 +193,7 @@ class DocsStore:
                             repo_path,
                             doc_type,
                             file_path,
-                            json.dumps(
-                                {
-                                    "word_count": word_count,
-                                    "last_modified": last_modified,
-                                    "content_hash": content_hash,
-                                    "file_path": file_path,
-                                }
-                            ),
+                            index_payload,
                             "indexed",
                         ),
                     )
@@ -224,11 +220,11 @@ class DocsStore:
                             "id": row["id"],
                             "repo_path": row["repo_path"],
                             "doc_type": row["doc_type"],
-                            "title": row["title"],
+                            "title": content.get("doc_title", row["title"]),
                             "word_count": content.get("word_count", 0),
                             "last_modified": content.get("last_modified"),
                             "content_hash": content.get("content_hash"),
-                            "file_path": content.get("file_path"),
+                            "file_path": content.get("file_path", row["title"]),
                             "created_at": row["created_at"],
                         }
                     )
@@ -256,11 +252,11 @@ class DocsStore:
                             "id": row["id"],
                             "repo_path": row["repo_path"],
                             "doc_type": row["doc_type"],
-                            "title": row["title"],
+                            "title": content.get("doc_title", row["title"]),
                             "word_count": content.get("word_count", 0),
                             "last_modified": content.get("last_modified"),
                             "content_hash": content.get("content_hash"),
-                            "file_path": content.get("file_path"),
+                            "file_path": content.get("file_path", row["title"]),
                             "created_at": row["created_at"],
                         }
                     )

@@ -127,7 +127,7 @@ def _write_env_lines(path: Path, lines: list[tuple[str, str]]) -> None:
 
 def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
     """Busca servico no registry pelo tipo (kafka/redis) ou por nome canonico."""
-    all_services = store.list_services()
+    all_services = store.list_all()
     # Prioridade: tipo exato, entao nome
     for svc in all_services:
         if svc.get("type", "").lower() == service_type:
@@ -283,7 +283,6 @@ def sync_broker_urls(
         return {"error": f"Arquivo nao encontrado: {path}"}
 
     lines = _parse_env_file(env_path)
-    current = _lines_to_dict(lines)
 
     # Descobre servicos do registry uma vez
     kafka_svc = _find_broker(store, "kafka")

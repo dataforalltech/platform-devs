@@ -109,7 +109,6 @@ def _docker_inspect_runtime(container_ids: list[str], timeout: int = 8) -> dict[
 
         cid = data.get("Id", "")[:12]
         config = data.get("Config", {})
-        host_config = data.get("HostConfig", {})
 
         # Comando de entrypoint + cmd
         entry = config.get("Entrypoint") or []
@@ -171,7 +170,7 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
             "docker_error": ps_result.stderr.strip() or f"exit {ps_result.returncode}",
         }
 
-    ps_lines = [l.strip() for l in ps_result.stdout.splitlines() if l.strip()]
+    ps_lines = [line.strip() for line in ps_result.stdout.splitlines() if line.strip()]
     ps_data: list[dict] = []
     for line in ps_lines:
         try:

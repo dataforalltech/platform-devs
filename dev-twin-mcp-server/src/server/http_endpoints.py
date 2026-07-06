@@ -313,10 +313,10 @@ class DevTwinHTTPEndpoints:
         return None
 
     def _revoke_token(self, token: str) -> bool:
-        """Revoke token in PostgreSQL."""
+        """Revoke token via the PostgreSQL sync backend."""
         try:
-            result = self.token_store.revoke(token)
-            return result.get("revoked", False)
+            result = self.postgres_sync.revoke_token(token)
+            return bool(result.get("revoked", False))
         except Exception as e:
-            _log.error(f"Failed to revoke token: {e}")
+            logger.error(f"Failed to revoke token: {e}")
             return False

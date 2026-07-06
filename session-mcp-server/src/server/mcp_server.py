@@ -11,18 +11,6 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-
-class _JSONEncoder(json.JSONEncoder):
-    """Serializa tipos extras: datetime, date, Decimal."""
-
-    def default(self, o: Any) -> Any:
-        if isinstance(o, (datetime, date)):
-            return o.isoformat()
-        if isinstance(o, Decimal):
-            return float(o)
-        return super().default(o)
-
-
 from fastapi import FastAPI
 from mcp.server import Server
 from mcp.types import TextContent, Tool
@@ -67,6 +55,18 @@ from ..tools.session_tool import (
     supersede_suggestion,
     update_session,
 )
+
+
+class _JSONEncoder(json.JSONEncoder):
+    """Serializa tipos extras: datetime, date, Decimal."""
+
+    def default(self, o: Any) -> Any:
+        if isinstance(o, (datetime, date)):
+            return o.isoformat()
+        if isinstance(o, Decimal):
+            return float(o)
+        return super().default(o)
+
 
 _ACTOR_SCHEMA = {
     "type": "object",

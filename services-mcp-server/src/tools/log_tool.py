@@ -106,7 +106,7 @@ def _docker_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 
@@ -129,7 +129,7 @@ def _file_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 
@@ -153,7 +153,7 @@ def _journald_logs(
 
     if grep:
         pattern = re.compile(grep, re.IGNORECASE)
-        raw = [l for l in raw if pattern.search(l)]
+        raw = [line for line in raw if pattern.search(line)]
 
     return True, raw
 

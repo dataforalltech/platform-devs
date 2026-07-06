@@ -306,7 +306,7 @@ def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict
     if result.returncode != 0:
         return {"upserted": 0, "error": result.stderr.strip()}
 
-    lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     upserted = 0
     containers = []
 

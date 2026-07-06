@@ -18,7 +18,7 @@ Segurança:
 from __future__ import annotations
 
 import secrets
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -36,7 +36,9 @@ class ScopeCheckRequest(BaseModel):
 def make_router(api_token: str) -> APIRouter:
     router = APIRouter(prefix="/v1")
 
-    def _check_auth(creds: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> None:
+    def _check_auth(
+        creds: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)] = None,
+    ) -> None:
         if not api_token:
             return
         if not creds or not secrets.compare_digest(creds.credentials, api_token):

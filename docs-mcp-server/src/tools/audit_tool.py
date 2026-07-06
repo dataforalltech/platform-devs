@@ -253,7 +253,7 @@ def get_audit_history(
             {
                 "id": a["id"],
                 "repo_path": a["repo_path"],
-                "started_at": a["started_at"],
+                "started_at": a.get("created_at"),
                 "score": a["score"],
                 "grade": a["grade"],
                 "summary": a["summary"],
@@ -299,7 +299,7 @@ def generate_doc_report(
     latest = audits[0]
     score = latest["score"]
     grade = latest["grade"]
-    last_audit = latest["started_at"]
+    last_audit = latest.get("created_at")
 
     # Determine trend
     trend = "no_history"

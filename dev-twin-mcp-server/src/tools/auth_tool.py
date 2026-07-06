@@ -14,6 +14,13 @@ import logging
 from datetime import UTC, datetime
 from typing import Any
 
+from ..db.token_store import TokenStore
+from ..knowledge.session import (
+    SessionManager,
+    UserSession,
+    collect_environment_context,
+)
+
 try:
     from shared.config_client import ConfigClient
 
@@ -25,13 +32,6 @@ _log = logging.getLogger(__name__)
 
 _CRITICAL_PREFIXES = ("JWT_", "URL_")
 _CRITICAL_EXACT = {"INTERNAL_API_TOKEN", "SERVICE_ID"}
-
-from ..db.token_store import TokenStore
-from ..knowledge.session import (
-    SessionManager,
-    UserSession,
-    collect_environment_context,
-)
 
 # Thresholds para recomendação de /compact
 _COMPACT_WARN_CALLS = 80  # aviso

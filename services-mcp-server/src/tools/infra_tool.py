@@ -303,7 +303,7 @@ def scan_infra(
             "error": result.stderr.strip() or f"exit {result.returncode}",
         }
 
-    lines = [l.strip() for l in result.stdout.splitlines() if l.strip()]
+    lines = [line.strip() for line in result.stdout.splitlines() if line.strip()]
     registered: list[dict] = []
     skipped: list[str] = []
 

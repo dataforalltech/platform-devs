@@ -44,7 +44,7 @@ class TestTokenStore:
         assert new["name"] == "Dave"
 
     def test_list_all_excludes_revoked_by_default(self, store):
-        a = store.register(name="A", email="a@test.com")
+        store.register(name="A", email="a@test.com")
         b = store.register(name="B", email="b@test.com")
         store.revoke(b["token"])
         records = store.list_all()
@@ -59,7 +59,7 @@ class TestTokenStore:
         assert any(r["name"] == "A" for r in records)
 
     def test_list_all_hides_token_values(self, store):
-        record = store.register(name="E", email="e@test.com")
+        store.register(name="E", email="e@test.com")
         records = store.list_all()
         for r in records:
             assert "token" not in r
