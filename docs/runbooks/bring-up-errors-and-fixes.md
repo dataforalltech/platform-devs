@@ -212,6 +212,21 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
 
 > Mitigação de config sobrescreve o sintoma; o rebuild corrige a origem.
 
+## J. Build / rebuild de imagens (na EC2)
+
+### J1. SSM `AWS-RunShellScript` roda com `/bin/sh` (dash)
+- **Evidência:** `Syntax error: redirection unexpected` na linha 1 de um script SSM que usava `exec > >(tee -a "$LOG") 2>&1`.
+- **Causa:** o SSM executa o script com `/bin/sh` (dash no Ubuntu), que **não** suporta process substitution `>(...)` (bash-ism). Scripts que funcionaram tinham `#!/usr/bin/env bash` na **linha 1** (o SSM honra o shebang).
+- **Correção:** começar todo script SSM com `#!/bin/bash`, ou evitar bash-isms; para logar, usar redirect sh-safe `cmd > arquivo 2>&1`. **Status:** ✅ bakado (wrappers com shebang).
+
+### J2. `git clone` privado falha — `could not read Username`
+- **Evidência:** `fatal: could not read Username for 'https://github.com': No such device or address` com `git -c http.extraheader="AUTHORIZATION: bearer <PAT>"`.
+- **Causa:** PAT clássico (40 chars) não autentica via header `bearer`; GitHub espera Basic auth. Sem TTY, o git tenta prompt e falha.
+- **Correção:** `GIT_TERMINAL_PROMPT=0 git clone https://x-access-token:<TOKEN>@github.com/<org>/<repo>.git` (Basic auth) + limpar o remote depois (`git remote set-url origin` sem token). **Status:** ✅ bakado (`deploy/build/build-service.sh`).
+
+### J3. Imagens `:latest` do ACR defasadas do código (causa-raiz do F6)
+- **Correção definitiva:** rebuildar as imagens do código atual. Pipeline: `deploy/build/build-service.sh <image> <repo> <branch> [ctx]` clona `github.com/dataforalltech/<repo>`, builda com `--secret id=github_token` (libs privadas) e faz push como `:latest` + `:<sha>`. Token do GitHub em `SSM /dataforall-hml/github/token`. Branches por repo variam (auth=`release/1.4.0`, gateway/admin=`develop`). **Status:** ✅ pipeline pronto; rebuild em execução.
+
 ## H. Ordem de bring-up limpo (resumo)
 
 1. `terraform apply` (infra: EC2, tunnel, DNS, KMS, S3, IAM com kms:Decrypt + SSM read).
