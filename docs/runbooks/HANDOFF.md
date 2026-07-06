@@ -102,8 +102,8 @@
 | Subdomínio | Frontend (repo) | Backends principais | Tenant | Status |
 |---|---|---|---|---|
 | `app.dataforall.tech` (atual) | `platform-dataforall-frontend` (product-dataforall) | plataforma toda | `dataforall` | ✅ no ar |
-| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (branch **`main`**) | platform-crm, platform-sales-partners | **`sales`** | 🟡 imagem `platform-sales-frontend` buildada + roteada, MAS o repo é **TanStack Start + Nitro (SSR)** — nao SPA estatico; nginx serve o index default. Deploy correto exige rodar o **servidor Nitro (Node)**. PENDENTE. (lock estava dessincronizado → build usou `npm install`) |
-| `partner.dataforall.tech` | **`platform-sales-partners-frontend`** (branch **`develop`**) | platform-sales-partners | **novo: `partner`** (a provisionar) | ✅ **NO AR** — `platform-partner-frontend` (SPA estatico) roteado por Host, serve `Console do Parceiro`. Falta: **provisionar o tenant `partner`** no PLATFORMS + DB (senao `/api` nao resolve o tenant) |
+| `sales.dataforall.tech` | **`dataforall-sales-frontend`** (branch **`main`**) | platform-crm, platform-sales-partners | **`sales`** | 🔴 roteado, mas **BLOQUEADO**: o repo e **TanStack Start + Nitro com target serverless/Cloudflare** — o build (`dist/server/server.js`) e um **handler `fetch` (Workers), NAO um servidor node que escuta porta** (testado: `node server.js` sai sem escutar). Rebuild com `NITRO_PRESET=node-server` NAO resolveu (o app escreve em `dist/`, nao `.output/`). Deploy exige **adaptador node** (http.createServer envolvendo o fetch handler) OU mudar o preset nitro **no repo**. Imagens `platform-sales-frontend:latest` (nginx estatico, index default) e `:ssr` (handler, nao escuta) no ACR. (lock do repo estava dessincronizado → build usa `npm install`.) |
+| `partner.dataforall.tech` | **`platform-sales-partners-frontend`** (branch **`develop`**) | platform-sales-partners | **`partner`** ✅ provisionado | ✅ **NO AR + TENANT PROVISIONADO** — `platform-partner-frontend` (SPA estatico) roteado por Host (`Console do Parceiro`). Tenant `partner` no PLATFORMS (INSERT..SELECT da row de sales) + DB `partner` + sales-partners migrado (rev 001→008, 14 tbls). `/api` resolve o tenant. |
 | `admin.dataforall.tech` | (3º frontend novo — a definir/clonar) | platform-admin | a definir | ⏳ planejado |
 | `platform.dataforall.tech` | (provável = o "atual" renomeado, a confirmar) | plataforma toda | `dataforall` | ⏳ planejado |
 
@@ -133,7 +133,8 @@
 | tenant_id | domain | engine | DB(s) | Notas |
 |---|---|---|---|---|
 | `dataforall` | app.dataforall.tech | mysql | `dataforall` (tenant-mysql) | superadmin `admin@dataforall.tech` / `••••` (senha de teste definida no `onboard-tenant.sh` — trocar em uso real) |
-| `sales` | sales.dataforall.tech | mysql | `sales` (tenant-mysql) | criado nesta rodada; crm migrado (75 tabelas); **sales-partners AINDA sem migrar** |
+| `sales` | sales.dataforall.tech | mysql | `sales` (tenant-mysql) | crm migrado (75 tbls) + sales-partners migrado (rev 001→008); schema `sales` = 89 tabelas |
+| `partner` | partner.dataforall.tech | mysql | `partner` (tenant-mysql) | **provisionado 2026-07-06** (INSERT..SELECT da row de sales); sales-partners migrado (14 tbls). Frontend `platform-partner-frontend` no ar |
 
 **Provisionar um tenant novo:**
 1. `INSERT` no `ADMIN_DATAFORALL.PLATFORMS` com **todas as colunas NOT-NULL** (`tenant_id, domain, name, db_engine, db_host, db_port, db_user, db_password, internal_token, internal_port, url` + `active=1`). *(Gotcha: o INSERT falha silenciosamente se faltar coluna obrigatória — foi o que aconteceu com `sales` na 1ª tentativa.)*
