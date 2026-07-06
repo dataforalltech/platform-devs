@@ -289,7 +289,7 @@ mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviç
   3. `app/api/health/health_control.py` e `app/integrations/db/base_table.py` importavam `from platform_core.logging import get_logger` — **`get_logger` nunca existiu** no core-lib (confirmado em todas as tags v0.1.0→v0.3.2). O db-vector tem o próprio `app/config/logger.py::get_logger` (os outros 8 arquivos usam esse). → 2 imports corrigidos p/ `from app.config.logger import get_logger`.
   4. `app/core/limiter.py` usava a estratégia `fixed-window-elastic-expiry`, **removida na `limits` 3.0** (`Invalid rate limiting strategy`). → `fixed-window`.
   5. `RATE_LIMIT_STORAGE_URI=redis://...` exige o pacote python `redis` (que a `limits` reclama faltar); e a `limits` 2.x exige `pkg_resources`/setuptools (ausente no slim). → `RATE_LIMIT_STORAGE_URI=memory://` (in-memory) no compose.
-- **Status:** ✅ API + pgvector healthy. Correções 1-4 são no **repo `platform-db-vector`** (diff pronto/validado; commit sob aprovação). Correção 5 é no compose (bakada). **Nota:** o `connection_factory` valida `tenant_id` como **UUID** → provisionar KB exige tenant UUID (não `dataforall`).
+- **Status:** ✅ API + pgvector healthy. Correções 1-4 **commitadas e pushadas** no repo `platform-db-vector` (develop `14fef87`); imagem do ACR rebuildada pela pipeline padrão (`build-service.sh`, build limpo). Correção 5 é no compose (bakada). **Nota:** o `connection_factory` valida `tenant_id` como **UUID** → provisionar KB exige tenant UUID (não `dataforall`).
 
 ## L. platform-ml — imagem enxuta (pull) + migrations MySQL
 
