@@ -58,6 +58,12 @@ services:
       RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
       # Token interno service-to-service
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
+      # IAM/admin: chamada DIRETA ao platform-admin (NAO pelo gateway). O gateway
+      # rejeitaria a chamada S2S com 403 UNKNOWN_DOMAIN (Host nao e dominio de tenant).
+      # E o valor que o codigo documenta como correto (config.py:314-322); fixado aqui
+      # porque a imagem :latest do ACR e anterior ao fix (commit f82581e). Ver F6.
+      URL_ADMIN: http://platform-admin:8000/api/v1
+      URL_IAM: http://platform-admin:8000/api/v1
       # CORS
       CORS_ALLOWED_ORIGINS: '["https://app.dataforall.tech"]'
       # Observabilidade

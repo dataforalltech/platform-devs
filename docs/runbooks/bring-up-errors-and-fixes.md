@@ -165,8 +165,10 @@
 
 ### F6. Login 403 — `integration_error [403] POST /auth: UNKNOWN_DOMAIN`
 - **Evidência:** `httpx: POST http://platform-api-gateway:8000/api/v1/admin/auth "HTTP/1.1 403 Forbidden"` → `Integration error [POST /auth]: [403] ... This domain is not associated with any tenant.`
-- **Causa:** o auth chama **de volta o gateway** (padrão gateway-único) para falar com o `platform-admin`; essa chamada interna usa `Host: platform-api-gateway:8000`, que **não é domínio de tenant** → o `DomainTenantMiddleware` rejeita.
-- **Correção:** **pendente** — duas frentes: (a) subir `platform-admin` (#5); (b) fazer o gateway **aceitar chamadas internas** (com `X-Internal-Token`+`X-Tenant-Id`) sem exigir resolução de domínio, OU o cliente interno enviar `Host`/`X-Forwarded-Host` = domínio do tenant. **Status:** ⏳ pendente (decisão do usuário: subir admin e integrar o trio).
+- **Sintoma imediato:** o `IAMClient` do auth chama o `platform-admin` **através do gateway**; a chamada S2S usa `Host: platform-api-gateway:8000`, que **não é domínio de tenant** → o `DomainTenantMiddleware` rejeita com 403 (o `/api/v1/*` exige resolução de tenant; só `/api/internal/*` bypassa).
+- **CAUSA-RAIZ (confirmada via git):** **imagem `:latest` do ACR desatualizada.** O código atual (`platform-auth` @ `release/1.4.0`, `config.py:314-322`) define `URL_ADMIN`/`URL_IAM` = `http://platform-admin:8000/api/v1` (**direto, NÃO pelo gateway**) — com um comentário que descreve *exatamente* este 403 como o motivo. O fix entrou no commit **`f82581e`**. Porém a imagem `:latest` puxada do ACR resolve `settings.URL_ADMIN` para `http://platform-api-gateway:8000/api/v1/admin` (comportamento **anterior** ao fix). Ou seja: o código foi corrigido, mas **a imagem não foi rebuildada**.
+- **Correção (root-aligned):** fixar `URL_ADMIN`/`URL_IAM=http://platform-admin:8000/api/v1` no compose do auth (sobrescreve o default velho com o valor que o próprio código documenta como correto; permanece correto após rebuild). **Status:** ✅ bakado (compose do auth). **Correção definitiva:** rebuildar `platform-auth:latest` no ACR.
+- **⚠️ Implicação:** se o `:latest` do auth está velho, **outras imagens do ACR podem estar também** — auditar/rebuildar (ver §I).
 
 ---
 
@@ -192,6 +194,23 @@ subir limpa. Consolidar em um script de seed do admin DB executado após a infra
 > no fluxo de bring-up, para eliminar os passos manuais.
 
 ---
+
+## I. ⚠️ Imagens `:latest` do ACR potencialmente desatualizadas
+
+O F6 revelou que a imagem `platform-auth:latest` do ACR é **anterior** a um fix já
+mergeado no código (`f82581e`). Isso é um risco sistêmico: **qualquer serviço** cujo
+`:latest` esteja velho pode exibir bugs já corrigidos no código, difíceis de diagnosticar
+(o código local diz uma coisa, a imagem faz outra).
+
+**Ação recomendada:**
+1. Auditar a data/commit de cada imagem `d4all.azurecr.io/dataforall/3.0/<svc>:latest`
+   (`docker inspect ... .Created`; comparar com o HEAD do repo).
+2. Rebuildar+push as imagens defasadas (idealmente via CI, com tag imutável por commit
+   além de `latest`).
+3. Enquanto não rebuilda: fixar no compose os valores que o código documenta como
+   corretos (como feito no F6 com `URL_ADMIN`/`URL_IAM`).
+
+> Mitigação de config sobrescreve o sintoma; o rebuild corrige a origem.
 
 ## H. Ordem de bring-up limpo (resumo)
 
