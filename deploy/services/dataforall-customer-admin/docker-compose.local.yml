@@ -15,3 +15,11 @@ services:
       # the account into its CUSTOMERS registry. Producer only (consumer stays off).
       KAFKA_ENABLED: "true"
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Verification email on signup → Mailpit (local SMTP catcher, UI :8025).
+      # Prod points SMTP_* at SES/SendGrid instead.
+      SMTP_ENABLED: "true"
+      SMTP_HOST: dataforall-mailpit
+      SMTP_PORT: "1025"
+      EMAIL_FROM: no-reply@dataforall.tech
+      EMAIL_FROM_NAME: Dataforall
+      APP_PUBLIC_URL: http://localhost:2021
