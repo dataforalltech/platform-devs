@@ -1,0 +1,11 @@
+services:
+  platform-dataforall-admin:
+    ports:
+      - "127.0.0.1:25987:25987"
+    environment:
+      # Consume `customer.created` from dataforall-customer-admin → sync CUSTOMERS.
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      KAFKA_CONSUMER_ENABLED: "true"
+      KAFKA_CONSUMER_GROUP: dataforall-management
+      KAFKA_CONSUMER_STANDALONE: "false"
