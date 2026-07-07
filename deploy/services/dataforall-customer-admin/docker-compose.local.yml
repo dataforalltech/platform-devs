@@ -1,5 +1,9 @@
 services:
   dataforall-customer-admin:
+    # Expose the backend on the host so the customer-admin frontend dev proxy
+    # (vite target 127.0.0.1:2222) can reach it. Prod uses the gateway instead.
+    ports:
+      - "127.0.0.1:2222:8000"
     environment:
       APP_NAME: platform-customer-admin
       JWT_ALGORITHM: RS256
