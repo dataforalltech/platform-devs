@@ -17,7 +17,8 @@
 
 ## 1. Estado atual (2026-07-06)
 
-- **52 containers no ar** (2026-07-06: +crm/sales-partners-mcp, +governance-mcp, +iceberg-mcp, +sales/partner-frontend). ~24 serviços de aplicação healthy + data tier + observabilidade.
+- **54 containers no ar** (2026-07-06: +crm/sales-partners-mcp, +governance-mcp, +iceberg-mcp, +sales/partner-frontend, +platform-dataforall-admin, +dataforall-customer-admin). ~26 serviços de aplicação healthy + data tier + observabilidade.
+- **Bundle admin (`product-dataforall-admin`) no ar:** `platform-dataforall-admin` (`dataforall-management`, :25987, admin-plane, **dono da PLATFORMS** — migrations 000→003 aplicadas: criou `CUSTOMERS` + `PLATFORMS.customer_id` nullable + FK; as 3 rows de tenant intactas, roteamento inalterado) e `dataforall-customer-admin` (:8000, tenant-scoped, JWT HS256; nota: `ModuleNotFoundError platform_customer_admin` não-fatal no módulo `items`). Composes em `deploy/services/`. Sem MCP-sidecar.
 - **Front-door `platform-mcp`: 1043 tools / 27 serviços** (era 772/24; +crm/sales-partners/iceberg/governance-mcp). **platform-mcp foi patchado** (auth-por-backend via `additional_info.apiKey` — governance passou de 401→200). Login e2e **200**.
 - **2 tenants** no `ADMIN_DATAFORALL.PLATFORMS`: `dataforall` (app.dataforall.tech) e `sales` (sales.dataforall.tech).
 - **Recursos:** RAM 15Gi (≈8.3Gi usados, 6.7Gi disp.); disco root 18%, `/data` (EBS 100G) **76%** — **monitorar** (builds futuros + Trino/JVM apertam).
