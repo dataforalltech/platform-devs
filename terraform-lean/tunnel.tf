@@ -24,6 +24,25 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "main" {
       hostname = var.domain
       service  = "http://localhost:${var.edge_port}"
     }
+    # Frontends de produto em zonas .com.br (separadas do var.domain) — bring-up
+    # 2026-07-07. Adicionados via API; declarados aqui p/ um apply futuro NÃO
+    # reverter o ingress. Ver docs/runbooks/frontends-data4all-bringup.md.
+    ingress_rule {
+      hostname = "admin.data4all.com.br"
+      service  = "http://localhost:${var.edge_port}"
+    }
+    ingress_rule {
+      hostname = "partner.data4all.com.br"
+      service  = "http://localhost:${var.edge_port}"
+    }
+    ingress_rule {
+      hostname = "sales.data4all.com.br"
+      service  = "http://localhost:${var.edge_port}"
+    }
+    ingress_rule {
+      hostname = "platform.d4all.com.br"
+      service  = "http://localhost:${var.edge_port}"
+    }
     ingress_rule {
       service = "http_status:404" # catch-all obrigatório
     }

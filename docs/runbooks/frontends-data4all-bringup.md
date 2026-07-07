@@ -31,7 +31,24 @@ Arquitetura: **gateway-único** — o SPA chama `origin + /api/v1`; o edge proxi
 
 ## 4. Pendências para 100%
 
-1. **Cloudflare Tunnel (fora do box — dashboard/API):** o tunnel é gerenciado por token; adicionar 4 *public hostnames* em **Zero Trust → Networks → Tunnels → [tunnel] → Public Hostname**, cada um → **Service HTTP `localhost:8080`**, para `admin.data4all.com.br`, `platform.d4all.com.br`, `partner.data4all.com.br`, `sales.data4all.com.br`. Cria o DNS e leva o tráfego ao box. (Pré-req: domínios na mesma conta Cloudflare.)
+1. ✅ **Cloudflare — FEITO via API (2026-07-07).** As 3 zonas (`data4all.com.br` `b4f5da6a…37e33`, `d4all.com.br` `2793a536…49c0e`, `dataforall.tech`) estão na conta `8a10daf8…65ed4`. No tunnel `dataforall-hml` (`17ea08ca-59c4-45be-a7e1-e5e37bdfe2a1`) foram adicionados 4 `ingress_rule` (`admin`/`partner`/`sales`.data4all.com.br + `platform.d4all.com.br` → `http://localhost:8080`), **preservando** o `*.dataforall.tech`. DNS (CNAME proxied → `<tunnel>.cfargotunnel.com`): admin/partner/sales criados; **`platform.d4all.com.br` repontado** (era `A 185.158.133.1`, não-proxied — guardar p/ revert). **Os 4 respondem `200` públicos via Cloudflare** com o app correto.
+
+   **⚠️ Drift de Terraform.** A mudança foi via API. O `tunnel.tf` foi atualizado com os 4 `ingress_rule` (evita que um apply reverta o ingress — o resource do config já está no state, então sem `import`). As 4 CNAMEs **não** estão no state — para IaC completo, declare + `import` (NUNCA `terraform apply` amplo: `data.aws_ami.ubuntu` com `most_recent=true` pode **recriar a EC2 e perder o box**; use `-target` + `plan` revisado):
+
+   ```hcl
+   locals { cf_tunnel_cname = "${cloudflare_zero_trust_tunnel_cloudflared.main.id}.cfargotunnel.com" }
+   resource "cloudflare_record" "admin_data4all"   { zone_id = "b4f5da6a2cb4c9b123521516ccb37e33" name = "admin"    type = "CNAME" value = local.cf_tunnel_cname proxied = true ttl = 1 }
+   resource "cloudflare_record" "partner_data4all" { zone_id = "b4f5da6a2cb4c9b123521516ccb37e33" name = "partner"  type = "CNAME" value = local.cf_tunnel_cname proxied = true ttl = 1 }
+   resource "cloudflare_record" "sales_data4all"   { zone_id = "b4f5da6a2cb4c9b123521516ccb37e33" name = "sales"    type = "CNAME" value = local.cf_tunnel_cname proxied = true ttl = 1 }
+   resource "cloudflare_record" "platform_d4all"   { zone_id = "2793a53609cc8977b4585c0cc4049c0e" name = "platform" type = "CNAME" value = local.cf_tunnel_cname proxied = true ttl = 1 }
+   ```
+   ```bash
+   terraform import cloudflare_record.admin_data4all   b4f5da6a2cb4c9b123521516ccb37e33/eb8b3ca624fb495851ad555b20b387c0
+   terraform import cloudflare_record.partner_data4all b4f5da6a2cb4c9b123521516ccb37e33/e681b49a693f76f32b5c6a28f78672db
+   terraform import cloudflare_record.sales_data4all   b4f5da6a2cb4c9b123521516ccb37e33/6a96249eb4fd6b453ae93c848f573eee
+   terraform import cloudflare_record.platform_d4all   2793a53609cc8977b4585c0cc4049c0e/26a4c2f7380607170022dee074b8370a
+   ```
+   Reverter o `platform.d4all.com.br`: PUT a record `26a4c2f7…8370a` de volta p/ `A 185.158.133.1` (proxied=false).
 2. **Superadmin por tenant (criação de conta):** cada tenant precisa de um usuário. Opções: auto-cadastro pela tela, **ou** `onboard-tenant.sh <tenant_id> <email> <senha>` (passo 4 — cria `adm_users_profile`/`adm_users`/`adm_users_login_config` com hash real). Ex.: `onboard-tenant.sh PLATFORM_DATAFORALL_ADMIN admin@... 'Senha!'`.
 3. **CSP:** deixei `connect-src https: wss:` amplo nos 4 (bring-up seguro); apertar após smoke-test no browser (padrão do F3 no `pentest-frontends-2026-07.md`).
 4. **customer-admin:** buildado como SPA gateway-único; tem um `nginx.conf.template` próprio (proxy a backend + injeção de token por-tenant) não usado. Reavaliar se o modelo dele deve ser esse.
