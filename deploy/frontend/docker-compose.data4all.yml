@@ -1,0 +1,43 @@
+# Frontends de produto (.com.br) — bring-up 2026-07-07 na VM HML.
+# 4 SPAs Vite/React servidos por nginx enxuto (SPA-only). O edge (dataforall-frontend)
+# roteia os hostnames .com.br -> estes containers e faz /api -> gateway :9999.
+# Imagens buildadas ON-BOX (deploy/build/build-frontend.sh, sem push): Dockerfile
+# multi-stage + nginx injetados; security headers ficam no EDGE (fonte unica).
+#
+# PENDENTE para funcionar 100%:
+#   1. Cloudflare tunnel: adicionar os 4 public hostnames -> http://localhost:8080
+#   2. PLATFORMS: linha domain->tenant_id p/ cada dominio (senao /api = UNKNOWN_DOMAIN 403)
+name: data4all-frontends
+
+networks:
+  platform-local:
+    external: true
+
+services:
+  admin-data4all-frontend:      # admin.data4all.com.br  (platform-dataforall-admin-frontend@master)
+    image: d4all.azurecr.io/dataforall/3.0/admin-data4all-frontend:latest
+    container_name: admin-data4all-frontend
+    restart: unless-stopped
+    networks: [platform-local]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  platform-d4all-frontend:      # platform.d4all.com.br  (dataforall-customer-admin-frontend@develop)
+    image: d4all.azurecr.io/dataforall/3.0/platform-d4all-frontend:latest
+    container_name: platform-d4all-frontend
+    restart: unless-stopped
+    networks: [platform-local]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  partner-data4all-frontend:    # partner.data4all.com.br  (platform-sales-partners-frontend@develop)
+    image: d4all.azurecr.io/dataforall/3.0/partner-data4all-frontend:latest
+    container_name: partner-data4all-frontend
+    restart: unless-stopped
+    networks: [platform-local]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
+
+  sales-data4all-frontend:      # sales.data4all.com.br  (dataforall-sales-frontend@develop)
+    image: d4all.azurecr.io/dataforall/3.0/sales-data4all-frontend:latest
+    container_name: sales-data4all-frontend
+    restart: unless-stopped
+    networks: [platform-local]
+    logging: { driver: json-file, options: { max-size: "10m", max-file: "3" } }
