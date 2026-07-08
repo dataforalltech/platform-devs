@@ -10,6 +10,12 @@ services:
       JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
       JWT_ISSUER: platform-auth
       JWT_AUDIENCE: platform-services
+      # RS256 signing: o login do cliente minta access tokens, então o serviço
+      # precisa da chave RSA privada (não só do JWKS de verificação). Compartilha a
+      # MESMA chave da platform-auth (volume dfa-jwt-key) para que os tokens
+      # assinados aqui verifiquem pelo mesmo JWKS. KEY_ID casa com o kid do JWKS.
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_key.pem
+      JWT_KEY_ID: platform-auth-1
       CORS_ALLOWED_ORIGINS: '["http://localhost:8080"]'
       # Publish `customer.created` on signup → platform-dataforall-admin mirrors
       # the account into its CUSTOMERS registry. Producer only (consumer stays off).
@@ -23,3 +29,10 @@ services:
       EMAIL_FROM: no-reply@dataforall.tech
       EMAIL_FROM_NAME: Dataforall
       APP_PUBLIC_URL: http://localhost:2021
+    # Chave RSA privada compartilhada (0600, uid 1000) para o RS256 do login.
+    volumes:
+      - dfa-jwt-key:/run/secrets:ro
+
+volumes:
+  dfa-jwt-key:
+    external: true
