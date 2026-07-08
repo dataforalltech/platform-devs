@@ -13,7 +13,7 @@
 >   derivados dele. Outros repositórios (frontends, libs JS, ferramentas Go) seguem
 >   apenas a Parte I, somada ao seu próprio AGENTS.md local.
 >
-> **Última revisão**: 2026-05-05.
+> **Última revisão**: 2026-07-08.
 
 ---
 
@@ -2436,7 +2436,7 @@ class Settings(BaseSettings):
     # ── Permissões ────────────────────────────────────────────────────────────
     SECURITY_ADVANCED_MODULES: str = ""
     PERMISSION_CACHE_TTL_SECONDS: int = 30
-    URL_IAM: str = "http://platform-admin:8000/api/v1/iam"
+    URL_IAM: str = "http://platform-admin:8000/api/internal/iam"
 
     # ── Encryption de credenciais ─────────────────────────────────────────────
     CREDENTIAL_ENCRYPTION_KEY: str | None = None
