@@ -55,7 +55,7 @@ services:
       TRUSTED_PROXIES: '["127.0.0.1/32","10.0.0.0/8","172.16.0.0/12"]'
       # S2S DIRETO
       URL_GOVERNANCE: http://platform-governance:8000
-      URL_IAM: http://platform-admin:8000/api/v1/iam
+      URL_IAM: http://platform-admin:8000/api/internal/iam
       NOTIFICATION_SERVICE_URL: http://platform-notification:8000
       # Kafka OFF (default do analytics e ON; forcamos OFF p/ nao depender)
       KAFKA_ENABLED: "false"

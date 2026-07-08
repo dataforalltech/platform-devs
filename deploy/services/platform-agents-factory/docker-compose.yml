@@ -56,7 +56,7 @@ services:
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       # S2S direto
       URL_AUTH: http://platform-auth:8000/internal
-      URL_IAM: http://platform-admin:8000/api/v1/iam
+      URL_IAM: http://platform-admin:8000/api/internal/iam
       # rate limit / observabilidade
       RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0
       REDIS_URL: redis://:${REDIS_PASSWORD:?defina em .env}@redis:6379/0

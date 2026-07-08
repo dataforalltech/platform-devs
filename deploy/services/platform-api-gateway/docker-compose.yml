@@ -56,8 +56,8 @@ services:
       CORS_ALLOWED_ORIGINS: '["https://app.dataforall.tech"]'
       # Downstream
       URL_AUTH: http://platform-auth:8000/internal
-      URL_ADMIN: http://platform-admin:8000/api/v1
-      URL_IAM: http://platform-admin:8000/api/v1/iam
+      URL_ADMIN: http://platform-admin:8000/api/internal
+      URL_IAM: http://platform-admin:8000/api/internal/iam
       # Observabilidade
       OTEL_TRACES_ENABLED: "true"
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318

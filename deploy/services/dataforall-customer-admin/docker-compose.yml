@@ -52,7 +52,7 @@ services:
       KAFKA_CONSUMER_ENABLED: "false"
       # S2S
       URL_AUTH: http://platform-auth:8000/internal
-      URL_IAM: http://platform-admin:8000/api/v1/iam
+      URL_IAM: http://platform-admin:8000/api/internal/iam
       INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       # observabilidade off + rate-limit em memoria
       OTEL_TRACES_ENABLED: "false"
