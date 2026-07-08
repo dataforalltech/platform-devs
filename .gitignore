@@ -227,3 +227,6 @@ docker-compose.override.yml
 
 # Dumps de backup de DB (dado sensível — ver scripts/dev_db_backup.py)
 scripts/backups/
+
+# Dependencies — nunca versionar no git (regeneravel via package manager)
+node_modules/
