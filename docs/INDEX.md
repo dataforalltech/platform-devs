@@ -55,6 +55,7 @@ Runbooks relacionados: [frontends-data4all-auth](runbooks/frontends-data4all-aut
 
 ## 🛡️ Segurança / Pentest
 
+- **Remediação F02 (auth/S2S):** [f02-auth-s2s-remediation](runbooks/f02-auth-s2s-remediation.md) — o quê/porquê/contrato/PRs/validação/pendências
 - [pentest-frontends-2026-07](runbooks/pentest-frontends-2026-07.md) · [pentest-frontends-source-2026-07](runbooks/pentest-frontends-source-2026-07.md)
 - Contrato de auth vigente: ver a seção **🔐 Contrato de auth** no topo.
 
