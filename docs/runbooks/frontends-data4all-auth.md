@@ -1,6 +1,6 @@
 # Auth dos 4 frontends de produto (.com.br) — integração HML
 
-**Data:** 2026-07-07. Complementa [frontends-data4all-bringup.md](frontends-data4all-bringup.md).
+**Data:** 2026-07-08. Complementa [frontends-data4all-bringup.md](frontends-data4all-bringup.md).
 
 Descoberta ao subir os 4: **cada produto tem um modelo de login diferente** (endpoint + tabela + hashing). O onboarding só semeou `adm_users` (platform-auth), que serve apenas o sales. Integração de cada um abaixo.
 
@@ -27,6 +27,17 @@ bash /opt/dataforall/deploy/seed/seed-admin-customer.sh   admin@data4all.com.br 
 # customer-admin -> accounts (Argon2id)
 bash /opt/dataforall/deploy/seed/seed-customer-account.sh admin@platform.d4all.com.br '<senha>'
 # sales/partners -> adm_users (ja seedado via seed-superadmin.sh p/ os tenants SALES e PARTNERS)
+```
+
+## Arquitetura real de auth (descoberta no debug do partner, 2026-07-07)
+
+`/auth/login` (adm_users): o **platform-auth NÃO verifica a senha** — ele resolve o tenant por Host (DB = `tenant_id`; **não há coluna `db_name` na PLATFORMS**, o nome do schema = tenant_id) e **delega ao platform-admin** via `POST http://platform-admin:8000/api/internal/auth`. O platform-admin lê `<tenant>.adm_users` e verifica com `app.core.password.verify_password` (**Argon2id**, argon2-cffi; migra BLAKE2B legado). Campo canônico do body = **`identifier`** (mas `email` também é aceito → chega na verificação). Sucesso → `POST platform-admin/api/internal/iam/users/{id}/events/login 202` + `audit auth.login`. Falha → `.../api/internal/auth 401` + `audit auth.login_failed`. Logs em `docker logs platform-auth` (container **`platform-auth`**, não `platform-auth-mcp`). Colunas-chave de `adm_users`: `username,password,email,idf_access_profile,status,is_active` — o hash está em **`password`**, NÃO `password_hash`.
+
+## Bug do seed (partner login 401) + reset
+
+Partner dava **401** com conta válida e idêntica ao sales (mesmo argon2id, `status=active`, `is_active=1`). Causa: `seed-superadmin.sh` interpolava a senha **inline** no `python -c "...hash_password('$UPASS')"` → `$`/backtick/`\` na senha eram expandidos pelo **shell** antes do Python → hasheou uma string diferente da senha real → login com a senha certa dá 401. O sales não tinha caractere especial e por isso passou. **Corrigido** nos 3 seeds (senha via `docker exec -e SEED_PW` + `os.environ`). Como o seed é idempotente (não sobrescreve), criado **`deploy/seed/reset-superadmin-pass.sh`** (UPDATE do hash; senha via env, segura p/ qualquer char) — deployado em `/opt/dataforall/deploy/seed/`. Reset = ação do usuário (senha dele):
+```bash
+bash /opt/dataforall/deploy/seed/reset-superadmin-pass.sh PLATFORM_DATAFORALL_PARTNERS admin@partner.data4all.com.br 'NovaSenha'
 ```
 
 ## Bônus

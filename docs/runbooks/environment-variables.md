@@ -177,13 +177,13 @@ Porta publicada: `0.0.0.0:9999:8000` (frontend chega via host.docker.internal). 
 
 ### platform-auth (#3) — específicos
 `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem`
-(monta `secrets/jwt-auth.pem`), `URL_ADMIN`/`URL_IAM=http://platform-admin:8000/api/v1` (S2S DIRETO),
+(monta `secrets/jwt-auth.pem`), `URL_ADMIN`/`URL_IAM=http://platform-admin:8000/api/internal` (S2S DIRETO; delega o check de senha p/ `POST /api/internal/auth`),
 `VAULT_ADDR=http://vault:8200`, `VAULT_AUTH_METHOD=token`, `VAULT_TOKEN=••••`. Health: `:9090/health/ready`.
 
 ### platform-admin (#5) — específicos
 `JWT_KEY_ID=platform-auth-1`, `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem` (MESMA chave do auth),
 `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, `URL_AUTH=http://platform-auth:8000/api/v1/auth`,
-`URL_IAM=http://platform-admin:8000/api/v1`. Health: `:9090/health/ready`. MCP: `ADMIN_MCP_ADMIN_URL`,
+`URL_IAM=http://platform-admin:8000/api/internal/iam` (self-call S2S). Health: `:9090/health/ready`. MCP: `ADMIN_MCP_ADMIN_URL`,
 `ADMIN_MCP_INTERNAL_API_TOKEN=••••`, `ADMIN_MCP_MCP_PORT=7100`.
 
 ### platform-governance (#4) — específicos
@@ -211,7 +211,7 @@ MCP: `NOTIFICATION_MCP_NOTIFICATION_URL`, `NOTIFICATION_MCP_INTERNAL_API_TOKEN=�
 `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••` (Fernet, **obrigatória**),
 `OAUTH_STATE_SECRET=••••`, `WEBHOOK_SECRET=••••`, `FILE_PROXY_SECRET=••••` (**os 3 obrigatórios fora de dev**),
 `SERVICE_TENANT_ID=dataforall`, `URL_AUTH=http://platform-auth:8000/internal`,
-`URL_IAM=http://platform-admin:8000/api/v1/iam`, `URL_GOVERNANCE=http://platform-governance:8000`,
+`URL_IAM=http://platform-admin:8000/api/internal/iam`, `URL_GOVERNANCE=http://platform-governance:8000`,
 `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false`.
 MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-connectors:8000`,
 `CONNECTORS_MCP_INTERNAL_API_TOKEN=••••`, `CONNECTORS_MCP_DEFAULT_TENANT_ID=dataforall`,
@@ -222,7 +222,7 @@ MCP (porta 28000, 235 tools): `CONNECTORS_MCP_CONNECTORS_URL=http://platform-con
 `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, `INTERNAL_API_TOKEN=••••`,
 `NOTIFICATION_INTERNAL_TOKEN=••••` (**obrigatório**), `TRUSTED_PROXIES=[...]` (**obrigatório, não-vazio**),
 `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`, `KAFKA_ENABLED=false` (default é true! forçado OFF),
-`URL_GOVERNANCE=http://platform-governance:8000`, `URL_IAM=http://platform-admin:8000/api/v1/iam`,
+`URL_GOVERNANCE=http://platform-governance:8000`, `URL_IAM=http://platform-admin:8000/api/internal/iam`,
 `NOTIFICATION_SERVICE_URL=http://platform-notification:8000`.
 MCP (porta 7100, 117 tools): `ANALYTICS_MCP_ANALYTICS_URL=http://platform-analytics:8000`,
 `ANALYTICS_MCP_INTERNAL_API_TOKEN=••••`, `ANALYTICS_MCP_DEFAULT_TENANT_ID=dataforall`, `ANALYTICS_MCP_TWIN_ENFORCE=false`.
@@ -262,7 +262,7 @@ MCP (porta 28000, 9 tools, `/mcp/tools/list`): `MCP_HTTP_PORT=28000`, `CDC_INTER
 `ENV_PROFILE=local-hml` (**{runtime}-{app}**), `JWT_SECRET_KEY=••••` (obrigatório explícito), `JWT_ACCESS_TOKEN_EXPIRE_MINUTES=240`,
 `CREDENTIAL_ENCRYPTION_KEY=••••`, `FERNET_KEY=••••` (=CREDENTIAL_ENCRYPTION_KEY), `INTERNAL_API_TOKEN=••••`,
 `AGENTS_RUNTIME=lib`, `LAB_MODE=false`, `AUTH_DEV_BYPASS=false`, `URL_AUTH=http://platform-auth:8000/internal`,
-`URL_IAM=http://platform-admin:8000/api/v1/iam`, `RATE_LIMIT_STORAGE_URI`/`REDIS_URL=redis://:••••@redis:6379/0`,
+`URL_IAM=http://platform-admin:8000/api/internal/iam`, `RATE_LIMIT_STORAGE_URI`/`REDIS_URL=redis://:••••@redis:6379/0`,
 `KAFKA_ENABLED=false`. **LLM keys (OpenAI/Anthropic) são LAZY** (resolvidas do DB por tenant — não precisam no boot).
 Migrations rodam no boot (non-fatal, `alembic_version_agents_factory`, revisões 0001–0005). Health `:8000/api/health/live`.
 MCP (porta 7130, 10 tools, `Dockerfile.mcp`): `AGENTS_FACTORY_MCP_FACTORY_URL=http://platform-agents-factory:8000`,

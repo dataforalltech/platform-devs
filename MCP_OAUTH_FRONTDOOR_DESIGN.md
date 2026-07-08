@@ -1,6 +1,6 @@
 # Front-Door OAuth com Auto-Refresh — Claude Code Desktop → gateway `platform-mcp`
 
-> **Decisão de arquitetura (fixada):** o **auth-mcp (AS)** faz toda a UX OAuth (DCR / PKCE / login / refresh). No `/token`, em vez de assinar o token próprio, o AS **chama `POST /api/v1/twin/sessions` no platform-admin e devolve o Twin Token (`aud=mcp:gateway`) como `access_token`** — a **PONTE**. O **gateway** apenas passa a **anunciar** o PRM (RFC 9728) e o header `WWW-Authenticate` apontando pro AS. **A verificação do Twin Token no gateway não muda.**
+> **Decisão de arquitetura (fixada):** o **auth-mcp (AS)** faz toda a UX OAuth (DCR / PKCE / login / refresh). No `/token`, em vez de assinar o token próprio, o AS **chama `POST /api/internal/twin/sessions` no platform-admin e devolve o Twin Token (`aud=mcp:gateway`) como `access_token`** — a **PONTE**. O **gateway** apenas passa a **anunciar** o PRM (RFC 9728) e o header `WWW-Authenticate` apontando pro AS. **A verificação do Twin Token no gateway não muda.**
 
 Isso é possível porque o Twin Token emitido pelo admin já satisfaz, letra por letra, o contrato que o `TwinTokenVerifier` exige (RS256/EdDSA, `kid` no JWKS de `URL_ADMIN_TWIN_JWKS`, `aud=mcp:gateway`, `token_use="twin"`, `exp`, `jti`, `sub`, `tenant_id`). Ou seja: o access_token que o Claude Code carrega **é** um Twin Token válido — o gateway não sabe (nem precisa saber) que veio de um fluxo OAuth.
 
@@ -40,7 +40,7 @@ Isso é possível porque o Twin Token emitido pelo admin já satisfaz, letra por
         │ ── POST {AS}/oauth/token ───────────────────────────────► │                        │
         │     grant=authorization_code, code, code_verifier,        │  _grant_authorization_code
         │     client_id, resource=https://GW                        │  valida PKCE S256       │
-        │                              │                          │─ POST {ADMIN}/api/v1/twin/sessions ─►│
+        │                              │                          │─ POST {ADMIN}/api/internal/twin/sessions ─►│
         │                              │                          │   Authorization: Bearer <user JWT>  │
         │                              │                          │   X-Tenant-Id, X-Internal-Token     │
         │                              │                          │   body {agentId, audiences:[mcp:gateway]}
@@ -58,7 +58,7 @@ Isso é possível porque o Twin Token emitido pelo admin já satisfaz, letra por
         │  Twin exp em 900s → 401 no GW  OU  Date.now>exp-60s      │                          │
         │ ── POST {AS}/oauth/token ───────────────────────────────► │  _grant_refresh         │
         │     grant=refresh_token, refresh_token, client_id, resource│ take_refresh (rotaciona)│
-        │                              │                          │─ POST {ADMIN}/api/v1/twin/sessions (re-mint) ─►│
+        │                              │                          │─ POST {ADMIN}/api/internal/twin/sessions (re-mint) ─►│
         │                              │                          │◄─ novo TWIN JWT (15m) ──────────────│
         │ ◄─ {access_token: <novo TWIN>, refresh_token: <novo AS>} ─│                        │
         │  substitui credenciais, retoma chamadas ao GW            │                          │
@@ -127,7 +127,7 @@ O único gargalo de emissão de access token é `_mint_access(...)` em `authoriz
 
 #### Estratégia: substituir a mintagem local por uma chamada ao admin
 
-Em vez de `issue_jwt(...)` (assinar token próprio do AS), `_mint_access` passa a chamar `POST {ADMIN}/api/v1/twin/sessions` e devolver o Twin Token. Usar o `shared/twin_client.py` (já existe no repo).
+Em vez de `issue_jwt(...)` (assinar token próprio do AS), `_mint_access` passa a chamar `POST {ADMIN}/api/internal/twin/sessions` e devolver o Twin Token. Usar o `shared/twin_client.py` (já existe no repo).
 
 ```python
 # authorization_server.py — substitui o corpo de _mint_access (l.178-184)
@@ -179,20 +179,20 @@ O AS **já serve** `/.well-known/oauth-authorization-server` (l.202-216) com `au
 
 ### 2.3 `platform-admin` — pouca ou nenhuma mudança
 
-O endpoint `POST /api/v1/twin/sessions` **já suporta** exatamente o padrão S2S que o AS precisa:
+O endpoint `POST /api/internal/twin/sessions` **já suporta** exatamente o padrão S2S que o AS precisa:
 
-- Aceita `X-Internal-Token` (per-tenant, validado contra `PLATFORMS`) + `X-Tenant-Id` → `InternalTokenMiddleware`.
+- Aceita `X-Internal-Token` (per-tenant, validado contra `PLATFORMS`) + `X-Tenant-Id` → autorizado por `require_internal_token` (GW-18).
 - Ainda exige `Authorization: Bearer <user JWT da plataforma>` — o handler chama `_verified_claims` incondicionalmente e deriva `user_id` do `sub` verificado (`routers.py:113-125`).
 - `audiences=["mcp:gateway"]` no body → força o `aud` que o gateway exige (senão seria derivado das capabilities do purpose).
 - TTL do Twin Token = `TWIN_TOKEN_TTL_SECONDS` (default **900s**), configurável em `config.py:242`.
 
 **O que precisa existir/mudar:**
 
-1. **Par `X-Internal-Token` per-tenant para o AS.** Registrar o auth-mcp como plataforma interna em `ADMIN_DATAFORALL.PLATFORMS` para cada tenant que fará login. Sem isso o `InternalTokenMiddleware` rejeita com 401 `invalid_internal_token`. (Config/provisionamento, não código.)
-2. **User JWT da plataforma.** O admin **não** aceita identidade "confiada" só pelo internal token — ele re-verifica um user JWT (`decode_token`, `audience=JWT_AUDIENCE`, `sub` numérico). Portanto o AS **precisa** apresentar um user JWT válido do usuário. **Decisão de design aberta** (ver §4): ou o AS obtém esse JWT da própria plataforma no login, ou se afrouxa o admin para confiar em `internal_service_verified` + subject fornecido. **Recomendação:** *não* afrouxar o admin (mantém o guard confused-deputy IAM-001); em vez disso o AS obtém o user JWT no login.
+1. **Par `X-Internal-Token` per-tenant para o AS.** Registrar o auth-mcp como plataforma interna em `ADMIN_DATAFORALL.PLATFORMS` para cada tenant que fará login. Sem isso o `require_internal_token` rejeita com 401 `invalid_internal_token`. (Config/provisionamento, não código.)
+2. **User JWT da plataforma.** O admin **não** aceita identidade "confiada" só pelo internal token — ele re-verifica um user JWT (`decode_token`, `audience=JWT_AUDIENCE`, `sub` numérico). Portanto o AS **precisa** apresentar um user JWT válido do usuário: o AS obtém esse JWT da própria plataforma no login (ver §4). O antigo bypass por internal-token (afrouxar o admin para confiar em `internal_service_verified` + subject fornecido) **foi removido** (PP-04) e **não é mais uma opção** — o guard confused-deputy IAM-001 é mandatório.
 3. **TTL:** manter 900s. Não há refresh no admin (nem precisa) — o refresh vive no AS, que re-chama `/sessions`. Confirmado: **não existe rota de refresh/reissue do Twin Token** no admin; o padrão é re-mintar. Isso está alinhado.
 
-**Resumo:** admin idealmente **não muda código** — só provisionamento (internal token do AS por tenant). A única mudança de código *possível* seria afrouxar o guard para aceitar `user_id` fornecido pelo serviço quando `internal_service_verified=True` — mas isso **não é recomendado** (reduz a garantia anti-impersonação).
+**Resumo:** admin idealmente **não muda código** — só provisionamento (internal token do AS por tenant). Afrouxar o guard para aceitar `user_id` fornecido pelo serviço via `internal_service_verified` **não é mais possível**: o bypass por internal-token foi removido (PP-04) e o admin re-verifica sempre o user JWT (garantia anti-impersonação preservada).
 
 ---
 
@@ -245,7 +245,7 @@ Objetivo: **um login + um refresh funcionando end-to-end**, com o mínimo de par
 7. **Teste:** `GET /mcp` sem token → 401 com header correto; `GET /.well-known/oauth-protected-resource` → JSON válido. *(Verificação do Twin Token continua idêntica — regressão zero.)*
 
 **Fase 2 — PONTE no AS, só authorization_code (sem refresh ainda)**
-8. `shared/twin_client.py`: função `mint_twin_session(...)` (POST `/api/v1/twin/sessions` com os 3 headers + body `{agentId, audiences:["mcp:gateway"]}`).
+8. `shared/twin_client.py`: função `mint_twin_session(...)` (POST `/api/internal/twin/sessions` com os 3 headers + body `{agentId, audiences:["mcp:gateway"]}`).
 9. `_resolve_platform_user_jwt(subject, tenant)` + `_resolve_agent_for_client(...)` (hardcode do agente fixo `claude-code-desktop` no início).
 10. Substituir corpo de `_mint_access` (l.178-184) pela chamada à PONTE; ajustar `expires_in` no body do grant `authorization_code` (l.484-490).
 11. **Teste manual:** rodar o discovery→DCR→PKCE→token no Claude Code; confirmar que o `access_token` retornado é um Twin JWT (`token_use=twin`, `aud=mcp:gateway`) e que `GET /mcp` no gateway retorna 200.
