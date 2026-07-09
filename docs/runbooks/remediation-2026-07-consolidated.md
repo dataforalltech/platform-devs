@@ -52,7 +52,7 @@ Tabelas legadas de IAM/domínio (`adm_users`, `adm_domain`) sem `tenant_id` → 
 
 ## 5. RS256 — operadores + cliente
 
-- **platform-dataforall-admin** (operador): HS256 → **RS256** via `platform_auth.jwt_manager` compartilhado.
+- **platform-dataforall-admin** (operador): HS256 → **RS256** via `platform_auth.jwt_manager` compartilhado **no código (develop, fail-closed)**. ⚠️ **Mas o deploy ficou para trás:** o compose (`b4a2d6e`, 06-jul) e a imagem no box (built 06-jul) ainda são HS256 — a imagem develop atual **quebra no boot** com esse compose (`JWT_ALGORITHM must be 'RS256'`). Corrigir compose→RS256 + rebuild/redeploy (ver env-vars §5.1 e pendência abaixo).
 - **dataforall-customer-admin** (cliente + parceiro): estava HS256 → "alg not allowed" nos tokens RS256 do platform-auth. Fix: `RS256` + `JWT_JWKS_URL` (JWKS do platform-auth) + `aud=platform-services` + **mount da chave de assinatura** `jwt-auth.pem`→`/run/secrets/jwt_key.pem` (o serviço EMITE tokens de cliente; JWKS cobre só verificação). **Chave = a do platform-auth, `kid=platform-auth-1`** — reusada por admin+customer-admin. **Sem tocar no platform-auth.**
 
 ## 6. M3 — claim `partner_id` (tabela de identidade externa)
@@ -106,6 +106,7 @@ O repo `platform-devs` tinha **36.293 arquivos de `node_modules/` commitados (94
 
 - **CI da develop vermelho** (pré-existente, lint/scan) — bloqueia o pipeline automático; sanear pra `cd-dev` voltar. Posso diagnosticar.
 - **crm** config.py default `/api/v1/iam` (repo não-local) — coberto pelo compose; repontar no repo.
+- **⚠️ Operador RS256 não deployado (achado 09-jul):** o código de `platform-dataforall-admin` na develop é RS256 fail-closed, mas o compose de deploy e a imagem no box são HS256 de 06-jul. A imagem develop **não sobe** com o compose atual. Fix: compose→RS256 (espelhar customer-admin: chave `jwt-auth.pem` + JWKS + `JWT_KEY_ID`) e rebuild/redeploy. Até lá o operador roda HS256 (algorithm-confusion) e código pré-M5.
 - **RBAC-03** aud-por-serviço (operador reusa `aud=platform-services`, replayável) — diferido.
 - **Console de parceiro**: os fixes de gateway/provisão/seed foram no HML (via seed/migration) — replicar em outros ambientes via o seed + as migrations no onboarding.
 - **28 E2E do admin_mcp**: o arquivo testa `/mcp/tools/*` mas o servidor serve `/v1/*` (drift de teste) — reconciliar.

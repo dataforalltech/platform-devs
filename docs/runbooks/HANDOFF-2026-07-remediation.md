@@ -32,7 +32,8 @@
 2. **Console de parceiro em outros ambientes:** replicar via o seed (`register-partner-gateway-route.sh`) + rodar as migrations do customer-admin no onboarding de tenant; e a config RS256+chave no compose.
 3. **crm** config.py default `/api/v1/iam` (repo não-local) — coberto pelo compose; repontar no repo.
 4. **28 E2E do admin_mcp** testam `/mcp/tools/*` mas o servidor serve `/v1/*` (drift) — reconciliar.
-5. **RBAC-03** aud-por-serviço (operador reusa `aud=platform-services`) — diferido.
+5. **⚠️ Operador RS256 não deployado (achado 09-jul):** `platform-dataforall-admin` — código develop é RS256 fail-closed, mas compose + imagem no box são HS256 (06-jul). A imagem develop **quebra no boot** com o compose atual. Fix: compose→RS256 (espelhar customer-admin) + rebuild/redeploy. Detalhe: env-vars §5.1.
+6. **RBAC-03** aud-por-serviço (operador reusa `aud=platform-services`) — diferido.
 
 ## Riscos / cuidados
 
