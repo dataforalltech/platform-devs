@@ -55,6 +55,7 @@ Runbooks relacionados: [frontends-data4all-auth](runbooks/frontends-data4all-aut
 
 ## 🛡️ Segurança / Pentest
 
+- **📌 Consolidado (jul/2026):** [remediation-2026-07-consolidated](runbooks/remediation-2026-07-consolidated.md) — registro profundo (C1/F02/S2S/H1/RS256/M3/console de parceiro) · **[HANDOFF-2026-07-remediation](runbooks/HANDOFF-2026-07-remediation.md)** — passagem de bastão
 - **Remediação F02 (auth/S2S):** [f02-auth-s2s-remediation](runbooks/f02-auth-s2s-remediation.md) — o quê/porquê/contrato/PRs/validação/pendências
 - [pentest-frontends-2026-07](runbooks/pentest-frontends-2026-07.md) · [pentest-frontends-source-2026-07](runbooks/pentest-frontends-source-2026-07.md)
 - Contrato de auth vigente: ver a seção **🔐 Contrato de auth** no topo.
