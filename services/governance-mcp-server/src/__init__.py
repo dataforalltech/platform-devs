@@ -1,1 +1,0 @@
-"""Platform governance MCP package."""

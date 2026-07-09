@@ -1,5 +1,5 @@
 {
-  "_comment": "Working MCP ecosystem - 18 system MCPs",
+  "_comment": "DevTeam persona MCP servers (deste repo). Os sidecars data-plane (analytics/ml/monitor/datalake/dataquality/dai) vivem nos repos platform-* dos serviços; a infra/deploy foi migrada p/ platform-infra.",
   "mcpServers": {
     "architecture-mcp": {
       "command": "python3",
@@ -62,54 +62,6 @@
         "src.server.mcp_server"
       ],
       "cwd": "./security-mcp-server"
-    },
-    "datalake-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/datalake-mcp-server"
-    },
-    "ml-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/ml-mcp-server"
-    },
-    "analytics-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/analytics-mcp-server"
-    },
-    "monitor-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/monitor-mcp-server"
-    },
-    "dataquality-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/dataquality-mcp-server"
-    },
-    "dai-mcp-server": {
-      "command": "python3",
-      "args": [
-        "-m",
-        "src.server.mcp_server"
-      ],
-      "cwd": "./services/dai-mcp-server"
     }
   }
 }
