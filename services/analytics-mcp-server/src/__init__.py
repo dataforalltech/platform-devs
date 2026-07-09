@@ -1,1 +1,0 @@
-"""Analytics MCP Server package."""

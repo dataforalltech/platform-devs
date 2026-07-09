@@ -1,12 +1,12 @@
 # platform-devs
 
-MCP (Model Context Protocol) servers for the dataforalltech platform infrastructure.
+MCP (Model Context Protocol) servers do **DevTeam** da plataforma dataforalltech — personas-especialistas + servers de papel (infra/qa/deploy/governança) que dão ferramentas a agentes de IA.
 
-This repository contains 18 operational MCP servers (12 infrastructure + 6 service) that provide tools for AI agents to interact with platform services, CI/CD systems, governance, and infrastructure management. **Phase 5 consolidation complete** (2026-05-09).
+> **Escopo (revisado 2026-07-09):** a camada de **infra/deploy** (terraform, docker-compose HML, seeds, runbooks operacionais) foi migrada para [`platform-infra`](https://github.com/dataforalltech/platform-infra). Os **sidecars MCP de serviço** (analytics/ml/monitor/datalake/dataquality/dai/…) foram removidos — a fonte canônica é o `mcp/` de cada repo `platform-*`. Este repo mantém os MCP servers do DevTeam.
 
 ## Purpose
 
-The platform-devs repository is the single source of truth for all MCP servers supporting the dataforalltech platform ecosystem. These servers are complementary to the `platform-service-template` (which remains a reference/scaffold for building Core Services following the Trinity Pattern).
+O `platform-devs` hospeda os MCP servers do **DevTeam**: as personas (architecture, backend, frontend, devops, product-owner, product-manager, qa-engineer, security) e os servers de papel/infra (session, test, config, services, deploy, dev-twin, docs, pipeline, qa, infra, ai-governance, audit), além de `mcp-gateway/`, `platform-catalog/`, `knowledge-base-mcp/` e o runtime `platform-dev-agent/`. **Não** é mais o dono da infra/deploy (ver [`platform-infra`](https://github.com/dataforalltech/platform-infra)) nem dos sidecars de serviço (ver `platform-<x>/mcp`).
 
 ## Architecture
 
@@ -32,22 +32,14 @@ Located in repository root, accessible via central `.mcp.json`:
 11. **ai-governance-mcp-server** — Governance policies, decision validation, ecosystem rules
 12. **audit-mcp-server** — Audit logging and compliance tracking
 
-### Service Servers (6)
+### services/ (sidecars de serviço)
 
-Located in `services/` subdirectory, consolidating MCP servers from platform services:
-
-1. **auth-mcp-server** — JWT, OIDC, token management (from platform-auth)
-2. **admin-mcp-server** — Admin operations and dashboards (from platform-admin)
-3. **governance-mcp-server** — Governance workflows (from platform-governance)
-4. **scheduler-mcp-server** — Job scheduling and orchestration (from platform-scheduler)
-5. **connectors-mcp-server** — External integrations (from platform-connectors)
-6. **cache-mcp-server** — Cache operations and management (from platform-cache)
+Os sidecars que espelhavam um serviço (`admin`, `analytics`, `auth`, `connectors`, `dai`, `datalake`, `dataquality`, `governance`, `ml`, `monitor`, `pipeline`, `scheduler`) foram **removidos** — eram snapshots stale da Phase 5; a fonte canônica é o `mcp/` de cada repo `platform-<x>`. Permanece apenas **`cache-mcp-server`** (não há repo `platform-cache` correspondente).
 
 ## Central Configuration
 
-All MCPs are registered in the central `.mcp.json` file:
-- **Location:** `/home/dev/repos/platform-service-template/.mcp.json`
-- **Entries:** 18 MCPs with absolute paths to servers
+Os servers do DevTeam são registrados no `.mcp.json` na raiz deste repo:
+- **Entries:** 8 personas (paths relativos a `./`)
 - **Used by:** Claude Code for unified MCP discovery and tool invocation
 
 See [docs/mcp-discovery.md](./docs/mcp-discovery.md) for full discovery reference.
