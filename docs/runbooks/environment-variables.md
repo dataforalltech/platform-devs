@@ -13,7 +13,7 @@ não-secreto definido no compose/terraform.
 > e do product-sales: **crm** + **sales-partners** no tenant `sales`); front-door **772 tools / 24 serviços**; login e2e 200.
 > **Remediação de auth (07-07→07-09):** S2S migrado p/ `/api/internal/*` (contrato F02) — todo caller de IAM repontado;
 > RS256/JWKS no operador + cliente; **dataforall-customer-admin** (login de cliente + Console de Parceiro) e
-> **platform-dataforall-admin** (admin-plane, HS256) agora documentados na §5. Detalhe profundo:
+> **platform-dataforall-admin** (admin-plane; ⚠️ **drift HS256 no deploy** vs código RS256 — ver §5.1) agora documentados na §5. Detalhe profundo:
 > [remediation-2026-07-consolidated.md](remediation-2026-07-consolidated.md) · [HANDOFF-2026-07-remediation.md](HANDOFF-2026-07-remediation.md).
 > **Visão completa + handoff:** [HANDOFF.md](HANDOFF.md). Frontends/subdomínios na §7 abaixo.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
@@ -113,7 +113,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-auth | ✅ | mysql | release/1.4.0 | mcp | assina JWT; JWKS |
 | platform-admin | ✅ | mysql | develop | Dockerfile.admin-mcp (derivado) | IAM/usuários; **emite** JWT RS256 (assina c/ jwt-auth.pem) |
 | dataforall-customer-admin | ✅ | mysql (tenant-scoped) | develop | — | backend de cliente + **Console de Parceiro**; **emite** token de cliente no login (RS256, assina c/ jwt-auth.pem) |
-| platform-dataforall-admin | ✅ | mysql (ADMIN_DATAFORALL) | develop | — | admin-plane (gestão de clientes/plataformas); porta 25987; **HS256** (fora do mesh RS256/JWKS) |
+| platform-dataforall-admin | ⚠️ | mysql (ADMIN_DATAFORALL) | develop | — | admin-plane; porta 25987; **HS256 no deploy** (drift — código develop é RS256; imagem no box é de 06-jul; ver §5.1) |
 | platform-governance | ✅ | mysql | develop | mcp | ENV_PROFILE=hml; gov-mcp build defeito |
 | platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
 | platform-cdc | ✅ | mysql | develop | mcp/Dockerfile (raiz), 28000 | ENV_PROFILE=local-hml; Kafka/coord OFF; MCP 9 tools |
@@ -172,7 +172,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | `JWT_ISSUER` | `platform-auth` | |
 | `JWT_AUDIENCE` | `platform-services` | (auth assina com esse aud) |
 | `JWT_JWKS_URL` | `http://platform-auth:8000/internal/.well-known/jwks.json` | **verificação** (todos) |
-| `JWT_PRIVATE_KEY_PATH` | `/run/secrets/jwt_key.pem` | **só quem EMITE token** (auth, admin, customer-admin); + `JWT_KEY_ID=platform-auth-1` + mount `jwt-auth.pem`. `dataforall-admin` é exceção (HS256) |
+| `JWT_PRIVATE_KEY_PATH` | `/run/secrets/jwt_key.pem` | **só quem EMITE token** (auth, admin, customer-admin); + `JWT_KEY_ID=platform-auth-1` + mount `jwt-auth.pem`. `dataforall-admin`: deploy ainda HS256 (⚠️ drift — código develop é RS256) |
 | `INTERNAL_API_TOKEN` | `••••` | do `.env` |
 | `OTEL_TRACES_ENABLED` | `true` | |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | |
@@ -207,13 +207,17 @@ Porta 8000, health `/api/health/ready`. Tenant-scoped (resolve o DB do tenant pe
 o bakado usa `--max-requests` do gunicorn, inválido no uvicorn). É o backend do **Console de Parceiro** (`/api/v1/partner/*` roteado
 pelo gateway via `GATEWAY_MAPPING`); resolve `partner_id` da M3 (`adm_user_external_link`) de forma refresh-proof.
 
-### platform-dataforall-admin — específicos (admin-plane; **exceção HS256**)
+### platform-dataforall-admin — específicos (admin-plane; **⚠️ drift HS256 no deploy**)
 Container `platform-dataforall-admin` (name do compose: `dataforall-management`), porta **25987**, health `/api/health/live`.
 Backend de GESTÃO de clientes/plataformas; opera direto no `ADMIN_DATAFORALL` (mysql) — **sem** tenant-scoping (não usa PLATFORMS p/ resolver DB).
 `APP_ENV`/`ENV_PROFILE=hml`, `LOG_LEVEL=INFO`, `DB_*` e `ADMIN_DB_*` = `admin-mysql`/`ADMIN_DATAFORALL` (root).
-**`JWT_ALGORITHM=HS256`** + `JWT_SECRET_KEY=••••` (secret compartilhado) — **exceção ao mesh RS256/JWKS**: não valida via JWKS,
-não monta chave de assinatura e **não** define `URL_*` de S2S. `CORS_ALLOW_ORIGINS="*"` (nome/valor divergem do padrão `CORS_ALLOWED_ORIGINS`).
-> ⚠️ A consolidação da remediação (`remediation-2026-07-consolidated.md` §5) registrou "operador HS256→RS256"; o **compose deployado ainda é HS256** — reconciliar (caveat no [handoff](HANDOFF-2026-07-remediation.md)).
+**Deploy declara `JWT_ALGORITHM=HS256`** + `JWT_SECRET_KEY=••••` (secret compartilhado), sem chave RSA nem JWKS, e **sem** `URL_*` de S2S. `CORS_ALLOW_ORIGINS="*"`.
+> ⚠️ **Drift de deploy confirmado (investigado 09-jul).** O **código na `develop`** do repo já é **RS256 fail-closed** (commits `025cbef`+`aeb7151`, 08-jul, AUTH-10/M5):
+> o validator `_require_rs256_signing_material` (`app/core/config.py`) **rejeita HS256 no boot**. Mas o **compose** (`b4a2d6e`, 06-jul) e a **imagem no box**
+> (built 06-jul, rodando `Up 2 days (healthy)` com `JWT_ALGORITHM=HS256`) são **pré-RS256** — funcionam só por serem antigos. Consequência: (1) a imagem `:latest`
+> develop **quebra no boot** com este compose (`JWT_ALGORITHM must be 'RS256'`); (2) o operador ainda emite/valida em **HS256 (secret compartilhado)** — o risco de
+> algorithm-confusion que o M5 fechou permanece no HML. **Fix:** alinhar o compose ao RS256 (espelhar o customer-admin: `JWT_ALGORITHM=RS256`, `JWT_KEY_ID=platform-auth-1`,
+> `JWT_JWKS_URL`, `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem` + mount `jwt-auth.pem`, `JWT_ISSUER`, `JWT_AUDIENCE`) e rebuildar/redeployar a imagem develop.
 
 ### platform-governance (#4) — específicos
 `ENV_PROFILE=hml` (difere!), `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`,
