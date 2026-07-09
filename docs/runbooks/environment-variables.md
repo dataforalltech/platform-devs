@@ -9,8 +9,12 @@ Legenda de origem: **on-box** = gerado na EC2 no bring-up (`.env`); **SSM** = AW
 Parameter Store (cifrado KMS); **local** = ambiente Windows do operador; **fixo** = valor
 não-secreto definido no compose/terraform.
 
-> **Estado (2026-07-06):** ~18 APIs + 12 MCP no ar (inclui **lakehouse iceberg**, **scheduler**, **dai**, **db-vector**+pgvector,
+> **Estado (2026-07-09):** ~18 APIs + 13 MCP no ar (inclui **lakehouse iceberg**+MCP, **scheduler**, **dai**, **db-vector**+pgvector,
 > e do product-sales: **crm** + **sales-partners** no tenant `sales`); front-door **772 tools / 24 serviços**; login e2e 200.
+> **Remediação de auth (07-07→07-09):** S2S migrado p/ `/api/internal/*` (contrato F02) — todo caller de IAM repontado;
+> RS256/JWKS no operador + cliente; **dataforall-customer-admin** (login de cliente + Console de Parceiro) e
+> **platform-dataforall-admin** (admin-plane, HS256) agora documentados na §5. Detalhe profundo:
+> [remediation-2026-07-consolidated.md](remediation-2026-07-consolidated.md) · [HANDOFF-2026-07-remediation.md](HANDOFF-2026-07-remediation.md).
 > **Visão completa + handoff:** [HANDOFF.md](HANDOFF.md). Frontends/subdomínios na §7 abaixo.
 > Roster completo (subidos + pendentes) na §5.0. Guia operacional: [bring-up-from-scratch.md](bring-up-from-scratch.md).
 
@@ -57,8 +61,10 @@ containers se o arquivo sumir (ver runbook de erros C1).
 | `/dataforall-hml/openai/api-key` | `••••` (sk-proj) | SecureString | local (env Windows Machine) → db-vector embeddings |
 
 Chave RSA também em `s3://dataforall-hml-backups-011756140303/secrets/platform-auth-jwt.pem`
-e no Vault `kv/dataforall/platform-auth/jwt_private_key`. Montada nos containers auth/admin
-em `/run/secrets/jwt_key.pem` (chown 1000 + 600).
+e no Vault `kv/dataforall/platform-auth/jwt_private_key`. Montada nos containers que **assinam**
+tokens RS256 — **platform-auth**, **platform-admin** e **dataforall-customer-admin** (este emite
+tokens de cliente no login; reusa a mesma chave, `kid=platform-auth-1`) — em `/run/secrets/jwt_key.pem`
+(`JWT_PRIVATE_KEY_PATH`; chown 1000 + 600). Os demais serviços só **verificam** via JWKS (não montam a chave).
 
 ---
 
@@ -105,26 +111,28 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | platform-api-gateway | ✅ | — (lê ADMIN) | develop | gateway_mcp | resolve tenant por Host |
 | platform-mcp | ✅ | — (lê ADMIN) | develop | app (é o front-door) | 113 tools agregadas |
 | platform-auth | ✅ | mysql | release/1.4.0 | mcp | assina JWT; JWKS |
-| platform-admin | ✅ | mysql | develop | Dockerfile.admin-mcp (derivado) | IAM/usuários |
+| platform-admin | ✅ | mysql | develop | Dockerfile.admin-mcp (derivado) | IAM/usuários; **emite** JWT RS256 (assina c/ jwt-auth.pem) |
+| dataforall-customer-admin | ✅ | mysql (tenant-scoped) | develop | — | backend de cliente + **Console de Parceiro**; **emite** token de cliente no login (RS256, assina c/ jwt-auth.pem) |
+| platform-dataforall-admin | ✅ | mysql (ADMIN_DATAFORALL) | develop | — | admin-plane (gestão de clientes/plataformas); porta 25987; **HS256** (fora do mesh RS256/JWKS) |
 | platform-governance | ✅ | mysql | develop | mcp | ENV_PROFILE=hml; gov-mcp build defeito |
 | platform-notification | ✅ | mysql | develop | mcp | Kafka OFF; notif-mcp agregação pendente |
 | platform-cdc | ✅ | mysql | develop | mcp/Dockerfile (raiz), 28000 | ENV_PROFILE=local-hml; Kafka/coord OFF; MCP 9 tools |
 | platform-connectors | ✅ | mysql | develop | Dockerfile.mcp (raiz), 28000 | Fernet + OAUTH/WEBHOOK/FILE_PROXY secrets; MCP 235 tools |
 | platform-analytics | ✅ | mysql | develop | Dockerfile.mcp (raiz), 7100 | BI; NOTIFICATION_INTERNAL_TOKEN+TRUSTED_PROXIES; MCP 117 tools |
-| platform-communication | ✅ | mysql | develop | mcp/Dockerfile (própria img — K5 resolvido) | ENV_PROFILE=local-hml; CMD override (K6); MCP 65 tools |
+| platform-communication | ✅ | mysql | develop | mcp/ (K5: repo sem Dockerfile de MCP) | ENV_PROFILE=local-hml; CMD override (K6); **MCP PENDENTE** (K5 — `mcp/` não está na imagem da API) |
 | platform-ml | ✅ | mysql | develop | mcp/Dockerfile (7104) | **PULL** (img enxuta CPU-only); ENV_PROFILE=hml; alembic-inject (L3); MySQL-patch (L4); notif OFF (L2); MCP 71 tools |
 | platform-monitor | ✅ | mysql | develop | mcp/Dockerfile (28000, ctx=mcp/ — J6) | health `:9090`; **NÃO** usa ENV_PROFILE; migrations SQL (`apply_mysql_migrations.sh`, tabelas `mon_`); MCP 23 tools |
 | platform-agents-factory | ✅ | mysql | develop | Dockerfile.mcp (7130) | build; ENV_PROFILE=local-hml; LLM keys lazy; MCP 10 tools |
 | platform-datalake | ⬜ img✗ | mysql | develop | mcp | build falhou (git+ssh — tarefa de repo) |
 | platform-docextract | ⬜ img✗ | mysql | develop | mcp | build falhou (sem git no Dockerfile — tarefa de repo) |
 | platform-flow | ⬜ img✗ | mysql | develop | — | build falhou (git+ssh — tarefa de repo) |
-| platform-dai | ✅ | mysql | develop | Dockerfile.mcp (7120) | orquestrador de agentes IA; porta 5003; DOCS_ENABLED=true (MCP lê openapi); LLM keys lazy; 13 tabelas `dai_`; MCP 46 tools (PyJWT via workaround — K8) |
-| platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; MCP adiado (M4) |
+| platform-dai | ✅ | mysql | develop | Dockerfile.mcp (7120) | orquestrador de agentes IA; porta 5003; DOCS_ENABLED=true (MCP lê openapi); LLM keys lazy; 13 tabelas `dai_`; MCP 46 tools (**K8 resolvido** — PyJWT[crypto] no requirements.mcp.txt, commit b5475ff) |
+| platform-iceberg | ✅ (lakehouse) | — (JsonStore) | develop | local (não em develop) | **stack: MinIO+Polaris+Trino** (rede `iceberg-net`); API auth por `API_TOKEN`; SQL validado; **MCP sidecar `:7104` ativo** (`docker-compose.mcp.yml`, 13 tools) |
 | platform-pipeline | ⏳ aguardar | mysql | develop | mcp | **pending** (decisão do usuário — não subir agora) |
 | platform-db-vector | ✅ | postgres+**pgvector dedicado** | develop | — (só em feat/mcp-server) | RAG/vetores; porta 5004; `dbvec-postgres` (pgvector/pgvector:pg16); embeddings OpenAI; develop tinha 5 bugs (K9) |
 | platform-security | ⏳ aguardar | mysql | (repo não clonado local) | ? | **pending** (decisão do usuário — não subir agora) |
-| platform-crm | ✅ | mysql (**tenant sales**) | develop | mcp/ (:7100 v1) | product-sales; 75 tabelas `crm*` no tenant sales; MCP a subir |
-| platform-sales-partners | ✅ | mysql (**tenant sales**) | develop | Dockerfile.mcp (:7107) | product-sales; comissões; **migrations no tenant sales pendentes**; MCP a subir |
+| platform-crm | ✅ | mysql (**tenant sales**) | develop | mcp/ (:7100 v1) | product-sales; 75 tabelas `crm*` no tenant sales; **MCP sidecar `:7100` definido** (env `MCP_SERVICE_SERVICE_*`) |
+| platform-sales-partners | ✅ | mysql (**tenant sales**) | develop | Dockerfile.mcp (:7107) | product-sales; comissões; **MCP sidecar `:7107` definido**; migrations no tenant sales — conferir |
 | platform-crm-agent | ⏳ build falha | mysql | develop | mesma imagem (stdio) | product-sales; build `pip install` falhou — investigar |
 | platform-marketing | ⏳ TLS-blocked | mysql | develop | mcp/ (markai-mcp, 16 servers) | product-sales; boot pendura no TLS obrigatório (https S2S + DB_SSLMODE=require em hml) |
 | platform-marketing-agent | ⏳ build falha | mysql | develop | mesma imagem (stdio) | product-sales; Dockerfile `COPY /tests` inexistente (bug de repo) |
@@ -142,7 +150,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | `APP_ENV` | `hml` | |
 | `RUNTIME_ENV` | `local` | evita exigências cloud (Redis SSL/sentinel, Sentry, Kafka TLS, MFA) |
 | `ENVIRONMENT` | `staging` | derivado de APP_ENV |
-| `ENV_PROFILE` | `local-hml` | **exceção: governance usa `hml`** (`=APP_ENV`) |
+| `ENV_PROFILE` | `local-hml` | default; **usam `hml` (=APP_ENV): governance, connectors, analytics, ml, scheduler, dai, crm, sales-partners, marketing, customer-admin, dataforall-admin** (monitor não usa) |
 | `NETWORK_TOPOLOGY` | `docker` | |
 | `TZ` | `UTC` | |
 | `DOCS_ENABLED` | `false` | |
@@ -163,7 +171,8 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 | `JWT_ALGORITHM` | `RS256` | |
 | `JWT_ISSUER` | `platform-auth` | |
 | `JWT_AUDIENCE` | `platform-services` | (auth assina com esse aud) |
-| `JWT_JWKS_URL` | `http://platform-auth:8000/internal/.well-known/jwks.json` | |
+| `JWT_JWKS_URL` | `http://platform-auth:8000/internal/.well-known/jwks.json` | **verificação** (todos) |
+| `JWT_PRIVATE_KEY_PATH` | `/run/secrets/jwt_key.pem` | **só quem EMITE token** (auth, admin, customer-admin); + `JWT_KEY_ID=platform-auth-1` + mount `jwt-auth.pem`. `dataforall-admin` é exceção (HS256) |
 | `INTERNAL_API_TOKEN` | `••••` | do `.env` |
 | `OTEL_TRACES_ENABLED` | `true` | |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4318` | |
@@ -172,7 +181,7 @@ Pendentes seguem a **tabela comum (5.1)** ajustando o engine; specifics document
 ### platform-api-gateway (#2) — específicos
 `REDIS_URL=redis://:••••@redis:6379/0`, `REDIS_SSL=false`, `HEALTH_MONITORING_TOKEN=••••`,
 `TRUSTED_PROXIES=["127.0.0.1/32","10.0.0.0/8","172.16.0.0/12"]`, `URL_AUTH=http://platform-auth:8000/internal`,
-`URL_ADMIN=http://platform-admin:8000/api/v1`, `URL_IAM=http://platform-admin:8000/api/v1/iam`.
+`URL_ADMIN=http://platform-admin:8000/api/internal`, `URL_IAM=http://platform-admin:8000/api/internal/iam` (**F02 — S2S em `/api/internal`**).
 Porta publicada: `0.0.0.0:9999:8000` (frontend chega via host.docker.internal). Health: `:9090/health`.
 
 ### platform-auth (#3) — específicos
@@ -183,8 +192,28 @@ Porta publicada: `0.0.0.0:9999:8000` (frontend chega via host.docker.internal). 
 ### platform-admin (#5) — específicos
 `JWT_KEY_ID=platform-auth-1`, `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem` (MESMA chave do auth),
 `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, `URL_AUTH=http://platform-auth:8000/api/v1/auth`,
-`URL_IAM=http://platform-admin:8000/api/internal/iam` (self-call S2S). Health: `:9090/health/ready`. MCP: `ADMIN_MCP_ADMIN_URL`,
+`URL_IAM=http://platform-admin:8000/api/internal` (self-call S2S; **sem sufixo `/iam`** no compose). Health: `:9090/health/ready`. MCP: `ADMIN_MCP_ADMIN_URL`,
 `ADMIN_MCP_INTERNAL_API_TOKEN=••••`, `ADMIN_MCP_MCP_PORT=7100`.
+
+### dataforall-customer-admin — específicos (backend de cliente + Console de Parceiro)
+Porta 8000, health `/api/health/ready`. Tenant-scoped (resolve o DB do tenant pela `PLATFORMS` em runtime —
+`DB_HOST=tenant-mysql`, creds aqui, nome do DB vem da PLATFORMS). `APP_ENV`/`ENV_PROFILE=hml`, `ADMIN_DB_*=admin-mysql`.
+**EMITE token de cliente no login → RS256 com chave de ASSINATURA:** `JWT_ALGORITHM=RS256`, `JWT_KEY_ID=platform-auth-1`,
+`JWT_JWKS_URL=http://platform-auth:8000/internal/.well-known/jwks.json`, `JWT_PRIVATE_KEY_PATH=/run/secrets/jwt_key.pem`
+(**mount** `/opt/dataforall/deploy/secrets/jwt-auth.pem:/run/secrets/jwt_key.pem:ro` — a MESMA chave do platform-auth; o JWKS só cobre a verificação),
+`JWT_ISSUER=platform-auth`, `JWT_AUDIENCE=platform-services`, `JWT_SECRET_KEY=••••`.
+**S2S (F02):** `URL_AUTH=http://platform-auth:8000/internal`, `URL_IAM=http://platform-admin:8000/api/internal/iam`, `INTERNAL_API_TOKEN=••••`.
+`KAFKA_ENABLED=false`, `OTEL_TRACES_ENABLED=false`, `CORS_ALLOWED_ORIGINS=["https://admin.dataforall.tech"]`. **CMD override** (K6 —
+o bakado usa `--max-requests` do gunicorn, inválido no uvicorn). É o backend do **Console de Parceiro** (`/api/v1/partner/*` roteado
+pelo gateway via `GATEWAY_MAPPING`); resolve `partner_id` da M3 (`adm_user_external_link`) de forma refresh-proof.
+
+### platform-dataforall-admin — específicos (admin-plane; **exceção HS256**)
+Container `platform-dataforall-admin` (name do compose: `dataforall-management`), porta **25987**, health `/api/health/live`.
+Backend de GESTÃO de clientes/plataformas; opera direto no `ADMIN_DATAFORALL` (mysql) — **sem** tenant-scoping (não usa PLATFORMS p/ resolver DB).
+`APP_ENV`/`ENV_PROFILE=hml`, `LOG_LEVEL=INFO`, `DB_*` e `ADMIN_DB_*` = `admin-mysql`/`ADMIN_DATAFORALL` (root).
+**`JWT_ALGORITHM=HS256`** + `JWT_SECRET_KEY=••••` (secret compartilhado) — **exceção ao mesh RS256/JWKS**: não valida via JWKS,
+não monta chave de assinatura e **não** define `URL_*` de S2S. `CORS_ALLOW_ORIGINS="*"` (nome/valor divergem do padrão `CORS_ALLOWED_ORIGINS`).
+> ⚠️ A consolidação da remediação (`remediation-2026-07-consolidated.md` §5) registrou "operador HS256→RS256"; o **compose deployado ainda é HS256** — reconciliar (caveat no [handoff](HANDOFF-2026-07-remediation.md)).
 
 ### platform-governance (#4) — específicos
 `ENV_PROFILE=hml` (difere!), `JWT_SECRET_KEY=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`,
@@ -202,7 +231,7 @@ Porta publicada: `0.0.0.0:9999:8000` (frontend chega via host.docker.internal). 
 ### platform-notification — específicos
 `JWT_EXPECTED_ISSUER=platform-auth`, `JWT_EXPECTED_AUDIENCE=platform-services`, `JWT_SECRET_KEY=••••`,
 `CREDENTIAL_ENCRYPTION_KEY=••••`, `RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`,
-`KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENABLED=false`. Health: `:8000/api/health/ready`.
+`URL_IAM=http://platform-admin:8000/api/internal/iam` (**F02**), `KAFKA_ENABLED=false`, `KAFKA_CONSUMER_ENABLED=false`. Health: `:8000/api/health/ready`.
 MCP: `NOTIFICATION_MCP_NOTIFICATION_URL`, `NOTIFICATION_MCP_INTERNAL_API_TOKEN=••••`,
 `NOTIFICATION_MCP_DEFAULT_TENANT_ID=dataforall`, `NOTIFICATION_MCP_MCP_PORT=7100`.
 
@@ -328,6 +357,19 @@ API: `DB_ENGINE=postgresql`, `DB_HOST=dbvec-postgres`, `DB_PORT=5432`, `DB_USER=
 (`STORAGE_LOCAL_BASE_PATH=/app/data/storage`, volume). JWT RS256/JWKS. **`RATE_LIMIT_STORAGE_URI=memory://`** (K9 — evita dep redis).
 `KAFKA_ENABLED=false`. Sem MCP (não está em develop). Segredos: `DBVEC_PG_PASSWORD` (on-box), `OPENAI_API_KEY` (SSM).
 
+### platform-marketing — específicos (product-sales, tenant `sales`; **TLS em hml**)
+Porta 8000, health `:9090/api/health/live`. `APP_ENV`/`ENV_PROFILE=hml` (=APP_ENV), `DEPLOY_TARGET=docker`, `MARKETING_STORAGE_BACKEND=mysql`.
+DB tenant `sales` (mysql). **Difere do padrão: `DB_SSLMODE=require` e `ADMIN_DB_SSLMODE=require`** (validador hml exige TLS; MySQL 8 usa cert auto-assinado).
+Auth **RS256/JWKS** (issuer `platform-auth`, aud `platform-services`) — coerente com o mesh. **Segredos obrigatórios em hml:**
+`INTERNAL_API_TOKEN=••••`, `CREDENTIAL_ENCRYPTION_KEY=••••`, **`PII_PSEUDONYMISATION_KEY=••••`**, **`MCP_SERVICE_TOKEN=••••`**,
+`RATE_LIMIT_STORAGE_URI=redis://:••••@redis:6379/0`. **S2S via `https://`** (`URL_PLATFORM_CRM/ML/GOVERNANCE/SCHEDULER`, `URL_NOTIFICATION`,
+`URL_CUSTOMER_ADMIN`) — o validador exige `https://` em hml; como o interno é http sem TLS, as chamadas S2S ficam limitadas (LAZY — não afeta boot/health).
+`KAFKA_ENABLED=false`. MCP markai-mcp (imagem própria, 16 servers) — boot pendura no TLS obrigatório (ver roster §5.0).
+
+> **product-sales — crm & sales-partners** (sem subseção própria): seguem a **§5.1** com `ENV_PROFILE=hml`, DB no tenant `sales`,
+> `URL_IAM=http://platform-admin:8000/api/internal/iam` (F02) e `URL_AUTH=http://platform-auth:8000/internal`. Sidecars MCP próprios:
+> `platform-crm-mcp` (`:7100`, env_prefix `MCP_SERVICE_SERVICE_*`) e `platform-sales-partners-mcp` (`:7107`, env_prefix `MCP_SALES_PARTNERS_*`).
+
 ---
 
 ## 6. Infra containers (`deploy/docker-compose.infra.yml`)
@@ -352,10 +394,13 @@ atual + o de sales; +2 novos.** Cada subdomínio → um tenant no `PLATFORMS` (o
 |---|---|---|---|---|
 | `app.dataforall.tech` (atual) | `platform-dataforall-frontend` | plataforma toda | `dataforall` | ✅ no ar |
 | `sales.dataforall.tech` | `dataforall-sales-frontend` (product-sales) | platform-crm, platform-sales-partners | `sales` | frontend clonado; backend crm+sales-partners no ar; **borda a subir** |
-| `partner.dataforall.tech` | 2º frontend novo (a definir) | platform-sales-partners | a definir | ⏳ planejado |
+| `partner.dataforall.tech` | Console de Parceiro (frontend a confirmar) | **dataforall-customer-admin** (`/api/v1/partner/*`) | (tenant do parceiro) | ✅ **backend cabeado e validado** (`/api/v1/partner/dashboard → 200`); RS256 + M3 + rota `/partner` no gateway |
 | `admin.dataforall.tech` | 3º frontend novo (a definir) | platform-admin | a definir | ⏳ planejado |
 | `platform.dataforall.tech` | provável = o "atual" (a confirmar) | plataforma toda | `dataforall` | ⏳ planejado |
 
 > ⚠️ **A confirmar:** mapa exato subdomínio↔frontend↔tenant. Subir um frontend = (1) linha no
 > `PLATFORMS` (`domain`→`tenant_id`), (2) `server_block` no nginx da borda (SPA + `/api`→gateway,
-> preservando Host), (3) build do SPA (Vite). Detalhe e passos em [HANDOFF.md](HANDOFF.md) §3.
+> preservando Host), (3) build do SPA (Vite), **(4) registrar a rota de gateway no `GATEWAY_MAPPING`**
+> quando o backend não for o default do gateway (ex.: `/partner → dataforall-customer-admin:8000` via
+> [`deploy/seed/register-partner-gateway-route.sh`](../../deploy/seed/register-partner-gateway-route.sh); o
+> gateway cacheia o registry → `docker restart platform-api-gateway`). Detalhe e passos em [HANDOFF.md](HANDOFF.md) §3.
