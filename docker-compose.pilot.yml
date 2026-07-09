@@ -2,13 +2,16 @@
 # docker-compose.pilot.yml — Stack de deploy do PILOTO MCP (Security + OAuth)
 # ----------------------------------------------------------------------------
 # Implementa a topologia de MCP_SERVICE_STANDARD.md §4/§10:
-#   - SÓ o Caddy é público (80/443). Ele termina TLS e roteia por path.
+#   - O reverse-proxy/Caddy (borda pública 80/443, TLS/ACME, roteamento por
+#     path) e sua config vivem agora no repo platform-infra (deploy/Caddyfile).
+#     O serviço `caddy` deste arquivo está comentado (veja abaixo).
 #   - Os serviços de app (auth-mcp, security-mcp, mcp-gateway) vivem numa rede
 #     PRIVADA `mcp-private` (internal: true) — sem `ports:` publicados no host.
 #   - Segredos vêm por env (.env / secrets manager), zero hardcoded no git.
 #
 # Uso:
-#   cp deploy/.env.example .env   # e preencha os valores
+#   cp .env.example .env   # e preencha os valores (o .env.example de infra/borda
+#                          # vive no repo platform-infra)
 #   docker compose -f docker-compose.pilot.yml up -d
 #
 # Validar sintaxe:
@@ -18,39 +21,43 @@ version: '3.9'
 
 services:
   # --------------------------------------------------------------------------
+  # reverse-proxy/Caddy: config de infra vive em platform-infra (deploy/Caddyfile)
+  # Serviço comentado — o Caddyfile foi movido para o repo platform-infra e não
+  # existe mais neste repo; o mount `./deploy/Caddyfile` quebraria o `up`.
+  # --------------------------------------------------------------------------
   # CADDY — único serviço público. TLS/ACME + proxy reverso por path.
   # --------------------------------------------------------------------------
-  caddy:
-    image: caddy:2-alpine
-    container_name: pilot-caddy
-    restart: unless-stopped
-    ports:
-      # ÚNICAS portas publicadas no host em todo o stack.
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      # Persistência dos certificados ACME e da CA interna (evita re-emissão).
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      # Caddy fica nas DUAS redes: `edge` (borda) e `mcp-private` (para alcançar
-      # os upstreams). Só ele faz essa ponte.
-      - edge
-      - mcp-private
-    depends_on:
-      - auth-mcp
-      - security-mcp
-      - qa-engineer-mcp
-      - architecture-mcp
-      - backend-mcp
-      - frontend-mcp
-      - devops-mcp
-      - product-owner-mcp
-      - product-manager-mcp
-      - mcp-gateway
-    labels:
-      - "role=edge-proxy"
+  # caddy:
+  #   image: caddy:2-alpine
+  #   container_name: pilot-caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     # ÚNICAS portas publicadas no host em todo o stack.
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+  #     # Persistência dos certificados ACME e da CA interna (evita re-emissão).
+  #     - caddy_data:/data
+  #     - caddy_config:/config
+  #   networks:
+  #     # Caddy fica nas DUAS redes: `edge` (borda) e `mcp-private` (para alcançar
+  #     # os upstreams). Só ele faz essa ponte.
+  #     - edge
+  #     - mcp-private
+  #   depends_on:
+  #     - auth-mcp
+  #     - security-mcp
+  #     - qa-engineer-mcp
+  #     - architecture-mcp
+  #     - backend-mcp
+  #     - frontend-mcp
+  #     - devops-mcp
+  #     - product-owner-mcp
+  #     - product-manager-mcp
+  #     - mcp-gateway
+  #   labels:
+  #     - "role=edge-proxy"
 
   # --------------------------------------------------------------------------
   # AUTH-MCP — Authorization Server OAuth 2.1 (escuta na 7103). Rede privada.
