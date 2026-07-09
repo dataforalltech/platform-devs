@@ -81,6 +81,9 @@ services:
       ADMIN_MCP_ADMIN_URL: http://platform-admin:8000
       ADMIN_MCP_INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       ADMIN_MCP_MCP_PORT: "7100"
+      # Bearer S2S que o platform-mcp (front-door) apresenta em /v1/tools|/v1/call.
+      # DEVE casar com o additional_info.apiKey da rota no GATEWAY_MAPPING.
+      ADMIN_MCP_GATEWAY_TOKEN: ${INTERNAL_API_TOKEN:?defina em .env}
       ADMIN_MCP_TWIN_AUDIENCE: mcp:admin
       # ADMIN_MCP_TWIN_JWKS_URI vazio => tools guarded negadas; health/liveness OK
     healthcheck:

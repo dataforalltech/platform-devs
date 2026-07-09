@@ -4,7 +4,7 @@
 # do proprio backend) no tenant DB PLATFORM_DATAFORALL_CUSTOMER_ADMIN.
 # Login: POST /api/v1/auth/login em platform.d4all.com.br.
 # status='active_trial' (login rejeita 'pending_verification'). Idempotente por email.
-# Roda NO BOX. Senha sua (nao hardcoded; evite aspas simples na senha).
+# Roda NO BOX. Senha sua (nao hardcoded; passada via env, segura p/ qualquer char).
 #
 #   ./seed-customer-account.sh admin@platform.d4all.com.br 'SenhaForte!'
 set -uo pipefail
@@ -14,7 +14,9 @@ UPASS="${2:-}"
 [ -z "$UPASS" ] && { echo "senha vazia — abortando"; exit 1; }
 T=PLATFORM_DATAFORALL_CUSTOMER_ADMIN
 PW=$(grep '^MYSQL_ROOT_PASSWORD=' /opt/dataforall/deploy/.env | cut -d= -f2-)
-HASH=$(docker exec dataforall-customer-admin python -c "from argon2 import PasswordHasher; print(PasswordHasher().hash('$UPASS'))" 2>/dev/null | tr -d '\r')
+# Senha via env (SEED_PW) — nunca interpolar inline no python -c (shell expandiria $, `, \).
+HASH=$(docker exec -e SEED_PW="$UPASS" dataforall-customer-admin \
+  python -c "import os; from argon2 import PasswordHasher; print(PasswordHasher().hash(os.environ['SEED_PW']))" 2>/dev/null | tr -d '\r')
 [ -z "$HASH" ] && { echo "FALHA ao gerar hash Argon2id"; exit 1; }
 docker exec -i dataforall-tenant-mysql mysql -uroot -p"$PW" "$T" 2>&1 <<SQL | grep -viE 'insecure'
 INSERT INTO accounts (org_name, email, email_domain, password_hash, status, email_verified_at, is_active, is_deleted, id_environment, created_at, updated_at)

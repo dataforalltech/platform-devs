@@ -28,7 +28,11 @@ if [ "${EXISTS:-0}" -gt 0 ]; then
   echo "'$EMAIL' já existe no tenant '$T' — nada a fazer (idempotente)"; exit 0
 fi
 
-HASH=$(docker exec platform-admin python -c "from app.core.password import hash_password; print(hash_password('$UPASS'))" 2>/dev/null | tr -d '\r')
+# Senha via env (SEED_PW) lida por os.environ no container — NUNCA interpolar a
+# senha inline no `python -c`: chars como $, `, \ seriam expandidos pelo shell
+# antes do Python e o hash sairia de uma string diferente da senha real.
+HASH=$(docker exec -e SEED_PW="$UPASS" platform-admin \
+  python -c "import os; from app.core.password import hash_password; print(hash_password(os.environ['SEED_PW']))" 2>/dev/null | tr -d '\r')
 [ -z "$HASH" ] && { echo "FALHA ao gerar hash (platform-admin está no ar?)"; exit 1; }
 
 docker exec -i dataforall-tenant-mysql mysql -uroot -p"$PW" "$T" 2>&1 <<SQL | grep -iv insecure

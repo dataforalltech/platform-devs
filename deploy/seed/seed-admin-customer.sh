@@ -14,7 +14,9 @@ UPASS="${2:-}"
 [ -z "$UPASS" ] && { echo "senha vazia — abortando"; exit 1; }
 EMAIL=$(printf '%s' "$EMAIL" | tr 'A-Z' 'a-z')   # backend faz email.lower() no lookup
 PW=$(grep '^MYSQL_ROOT_PASSWORD=' /opt/dataforall/deploy/.env | cut -d= -f2-)
-HASH=$(docker exec platform-dataforall-admin python -c "from app.core.security import hash_password; print(hash_password('$UPASS'))" 2>/dev/null | tr -d '\r')
+# Senha via env (SEED_PW) — nunca interpolar inline no python -c (shell expandiria $, `, \).
+HASH=$(docker exec -e SEED_PW="$UPASS" platform-dataforall-admin \
+  python -c "import os; from app.core.security import hash_password; print(hash_password(os.environ['SEED_PW']))" 2>/dev/null | tr -d '\r')
 [ -z "$HASH" ] && { echo "FALHA ao gerar hash (platform-dataforall-admin no ar?)"; exit 1; }
 docker exec -i dataforall-admin-mysql mysql -uroot -p"$PW" ADMIN_DATAFORALL 2>&1 <<SQL | grep -viE 'insecure'
 INSERT INTO \`CUSTOMERS\` (email, name, password_hash, status)
