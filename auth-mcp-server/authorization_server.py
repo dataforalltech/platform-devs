@@ -49,6 +49,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from shared.mcp_auth import issue_jwt  # noqa: E402
 from shared.oauth_store import OAuthClient, make_store  # noqa: E402
 from shared.user_store import make_user_store  # noqa: E402
+from shared.twin_session_client import mint_twin_session, TwinSessionError  # noqa: E402
 from oidc_upstream import UpstreamOIDC, OIDCError  # noqa: E402
 
 ISSUER = os.getenv("AS_ISSUER", "http://localhost:7103")
@@ -56,6 +57,27 @@ KID = os.getenv("AS_KID", "auth-mcp-key-1")
 DEFAULT_TTL = int(os.getenv("AS_TOKEN_TTL", "3600"))
 CODE_TTL = int(os.getenv("AS_CODE_TTL", "300"))
 REFRESH_TTL = int(os.getenv("AS_REFRESH_TTL", str(30 * 24 * 3600)))
+
+# ── PONTE p/ Twin Token (D4.7 / MCP_OAUTH_FRONTDOOR_DESIGN.md §2.2) ──────────── #
+# Quando ADMIN_BASE_URL + ADMIN_INTERNAL_TOKEN estão setados, os grants interativos
+# (authorization_code / refresh_token) devolvem um TWIN TOKEN do platform-admin
+# (aud=mcp:gateway) como access_token — que o gateway platform-mcp aceita nativamente.
+# Sem isso, o AS mantém o comportamento legado (JWT local, aud=resource) — p/ os DevTeam MCPs.
+ADMIN_BASE_URL = os.getenv("ADMIN_BASE_URL", "").rstrip("/")
+ADMIN_INTERNAL_TOKEN = os.getenv("ADMIN_INTERNAL_TOKEN", "")
+TWIN_AGENT_ID = os.getenv("AS_TWIN_AGENT_ID", "claude-code-desktop")
+TWIN_AUDIENCES = [a for a in os.getenv("AS_TWIN_AUDIENCES", "mcp:gateway").split(",") if a]
+BRIDGE_TWIN = bool(ADMIN_BASE_URL and ADMIN_INTERNAL_TOKEN)
+
+# Chave da plataforma p/ mintar o user JWT que o admin RE-VERIFICA (sub numérico,
+# aud=PLATFORM_JWT_AUDIENCE). Não há bypass por internal-token (PP-04 / guard IAM-001):
+# a PONTE precisa apresentar um user JWT válido. Sem a chave, a PONTE falha explícito (R1).
+PLATFORM_JWT_KEY_FILE = os.getenv("PLATFORM_JWT_PRIVATE_KEY_FILE")
+PLATFORM_JWT_KEY_PEM = os.getenv("PLATFORM_JWT_PRIVATE_KEY_PEM")
+PLATFORM_JWT_ISSUER = os.getenv("PLATFORM_JWT_ISSUER", "platform-auth")
+PLATFORM_JWT_AUDIENCE = os.getenv("PLATFORM_JWT_AUDIENCE", "platform-services")
+PLATFORM_JWT_KID = os.getenv("PLATFORM_JWT_KID", "platform-auth-1")
+PLATFORM_JWT_TTL = int(os.getenv("PLATFORM_JWT_TTL", "300"))
 
 SUPPORTED_SCOPES = [
     "security:read", "security:scan", "security:model", "security:*",
@@ -175,13 +197,89 @@ def _b64url_sha256(verifier: str) -> str:
     return base64.urlsafe_b64encode(digest).rstrip(b"=").decode()
 
 
+def _seconds_until(iso_ts: str | None, default: int = DEFAULT_TTL) -> int:
+    """Segundos até um timestamp ISO-8601 (o `expiresAt` do admin). Fallback ao default.
+
+    Dispara o auto-refresh do Claude Code no tempo certo (`Date.now() > expires_at - 60s`).
+    """
+    if not iso_ts:
+        return default
+    from datetime import datetime, timezone
+    try:
+        exp = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+        if exp.tzinfo is None:
+            exp = exp.replace(tzinfo=timezone.utc)
+        return max(1, int(exp.timestamp() - time.time()))
+    except (ValueError, TypeError):
+        return default
+
+
+def _resolve_agent_for_client(client_id: str, scopes: list[str]) -> str:
+    """Mapeia o client DCR → agent_id aprovado no twin registry. Fase 2: agente fixo
+    (`AS_TWIN_AGENT_ID`). Endurecer depois com um mapa client_id→agent (R2 do design)."""
+    return TWIN_AGENT_ID
+
+
+def _platform_user_id(subject: str) -> str:
+    """Deriva o user_id NUMÉRICO da plataforma a partir do subject autenticado do AS.
+
+    O admin exige `sub` numérico (guard confused-deputy IAM-001). Aceita `user:<n>`,
+    `<n>`, ou um mapa configurável `AS_SUBJECT_USERID_MAP` (JSON subject→id). Sem mapeamento
+    → TwinSessionError (R1: identidade do AS ↔ user_id da plataforma é pré-requisito)."""
+    raw = subject.split(":", 1)[1] if ":" in subject else subject
+    if raw.isdigit():
+        return raw
+    _map = json.loads(os.getenv("AS_SUBJECT_USERID_MAP", "") or "{}")
+    if subject in _map:
+        return str(_map[subject])
+    raise TwinSessionError(0, f"subject '{subject}' não mapeia p/ user_id numérico da plataforma (R1)")
+
+
+def _resolve_platform_user_jwt(subject: str, tenant_id: str) -> str:
+    """Produz o user JWT da plataforma que o admin re-verifica no `/twin/sessions`
+    (sub numérico, aud=PLATFORM_JWT_AUDIENCE, iss=PLATFORM_JWT_ISSUER, RS256).
+
+    Requer a chave da plataforma (PLATFORM_JWT_PRIVATE_KEY_FILE/PEM). Sem ela a PONTE
+    não pode operar — falha explícita (nunca um fallback silencioso; PP-04)."""
+    pem: str | None = None
+    if PLATFORM_JWT_KEY_FILE and os.path.exists(PLATFORM_JWT_KEY_FILE):
+        with open(PLATFORM_JWT_KEY_FILE, "r", encoding="utf-8") as f:
+            pem = f.read()
+    elif PLATFORM_JWT_KEY_PEM:
+        pem = PLATFORM_JWT_KEY_PEM
+    if not pem:
+        raise TwinSessionError(0, "PLATFORM_JWT_PRIVATE_KEY_FILE/PEM ausente — PONTE não pode mintar user JWT (R1)")
+    now = int(time.time())
+    return jwt.encode(
+        {"iss": PLATFORM_JWT_ISSUER, "sub": _platform_user_id(subject),
+         "aud": PLATFORM_JWT_AUDIENCE, "tenant_id": tenant_id,
+         "iat": now, "nbf": now, "exp": now + PLATFORM_JWT_TTL},
+        pem, algorithm="RS256", headers={"kid": PLATFORM_JWT_KID},
+    )
+
+
 def _mint_access(subject: str, resource: str, scopes: list[str], tenant_id: str,
-                 client_id: str, role: str = "user") -> str:
-    return issue_jwt(
+                 client_id: str, role: str = "user", bridge: bool = True) -> tuple[str, int]:
+    """Emite o access token e o seu TTL (segundos).
+
+    Com a PONTE ativa (`BRIDGE_TWIN`) e `bridge=True` (grants interativos), devolve um
+    **Twin Token** do platform-admin (aud=`mcp:gateway`) — o token que o gateway
+    platform-mcp aceita nativamente, com TTL vindo do admin (`expiresAt`). Caso contrário
+    (PONTE off, ou `bridge=False` p/ client_credentials S2S), mantém o JWT local do AS."""
+    if BRIDGE_TWIN and bridge and not subject.startswith("svc:"):
+        user_jwt = _resolve_platform_user_jwt(subject, tenant_id)
+        agent_id = _resolve_agent_for_client(client_id, scopes)
+        resp = mint_twin_session(
+            admin_base_url=ADMIN_BASE_URL, user_jwt=user_jwt, tenant_id=tenant_id,
+            internal_token=ADMIN_INTERNAL_TOKEN, agent_id=agent_id, audiences=TWIN_AUDIENCES,
+        )
+        return resp["token"], _seconds_until(resp.get("expiresAt"))
+    token = issue_jwt(
         private_key_pem=PRIVATE_PEM, kid=KID, issuer=ISSUER, subject=subject,
         audience=resource, scopes=scopes, ttl_seconds=DEFAULT_TTL,
         extra_claims={"tenant_id": tenant_id, "client_id": client_id, "role": role},
     )
+    return token, DEFAULT_TTL
 
 
 def _gen_pkce() -> tuple[str, str]:
@@ -481,10 +579,10 @@ async def _grant_authorization_code(code, redirect_uri, code_verifier, client_id
         return JSONResponse({"error": "invalid_grant", "error_description": "PKCE falhou"}, 400)
 
     scopes = data["scope"].split()
-    access = _mint_access(data["subject"], data["resource"], scopes, data["tenant_id"],
-                          client_id, role=data.get("role", "user"))
+    access, expires_in = _mint_access(data["subject"], data["resource"], scopes, data["tenant_id"],
+                                      client_id, role=data.get("role", "user"))
     rt = _issue_refresh(data["subject"], data["resource"], scopes, data["tenant_id"], client_id)
-    body = {"access_token": access, "token_type": "Bearer", "expires_in": DEFAULT_TTL, "scope": " ".join(scopes)}
+    body = {"access_token": access, "token_type": "Bearer", "expires_in": expires_in, "scope": " ".join(scopes)}
     if rt:
         body["refresh_token"] = rt
     return body
@@ -500,9 +598,9 @@ async def _grant_refresh(refresh_token, scope):
     if scope:  # downscoping permitido, upscoping não
         requested = set(scope.split())
         scopes = [s for s in scopes if s in requested] or scopes
-    access = _mint_access(data["subject"], data["resource"], scopes, data["tenant_id"], data["client_id"])
+    access, expires_in = _mint_access(data["subject"], data["resource"], scopes, data["tenant_id"], data["client_id"])
     rt = _issue_refresh(data["subject"], data["resource"], scopes, data["tenant_id"], data["client_id"])
-    body = {"access_token": access, "token_type": "Bearer", "expires_in": DEFAULT_TTL, "scope": " ".join(scopes)}
+    body = {"access_token": access, "token_type": "Bearer", "expires_in": expires_in, "scope": " ".join(scopes)}
     if rt:
         body["refresh_token"] = rt
     return body
@@ -523,8 +621,9 @@ async def _grant_client_credentials(request, scope, resource, client_id, client_
     if not resource:
         raise HTTPException(400, {"error": "invalid_target", "error_description": "resource (RFC 8707) obrigatório"})
     granted = _authorized_scopes(scope, client.scopes)
-    access = _mint_access(client.subject, resource, granted, "default", client_id)
-    return {"access_token": access, "token_type": "Bearer", "expires_in": DEFAULT_TTL, "scope": " ".join(granted)}
+    # client_credentials é S2S (sem usuário) → não passa pela PONTE Twin; JWT local do AS.
+    access, expires_in = _mint_access(client.subject, resource, granted, "default", client_id, bridge=False)
+    return {"access_token": access, "token_type": "Bearer", "expires_in": expires_in, "scope": " ".join(granted)}
 
 
 @app.post("/oauth/introspect")
