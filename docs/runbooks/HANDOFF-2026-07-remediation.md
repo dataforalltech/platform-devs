@@ -11,7 +11,7 @@
 - **H1** (isolamento por tenant), **RS256** (operador + cliente), **M3** (`partner_id` via `adm_user_external_link`) — todos na develop.
 - **Console de Parceiro funcionando** (`/api/v1/partner/dashboard → 200`) — 6 camadas cabeadas (gateway route, M3, provisão, seed, RS256, refresh-proof).
 - **Limpeza `node_modules`** no platform-devs (38.396 → 2.103 arquivos rastreados).
-- **Imagens canônicas do develop** no ACR (:latest + :sha) e rodando no box: platform-admin(+mcp) `b1400d6`, dataforall-customer-admin `953ba5e`, platform-auth `f8d0057`, platform-notification(+mcp) `3b020ba`/`3917ce5`.
+- **Imagens canônicas do develop** no ACR (:latest + :sha) e rodando no box: platform-admin(+mcp) `b1400d6`, dataforall-customer-admin `953ba5e`, platform-auth `f8d0057`, platform-notification(+mcp) `3b020ba`/`3917ce5`, **platform-dataforall-admin `6cefacc`** (RS256, redeployado 09-jul).
 
 ## Como acessar / operar
 
@@ -32,8 +32,8 @@
 2. **Console de parceiro em outros ambientes:** replicar via o seed (`register-partner-gateway-route.sh`) + rodar as migrations do customer-admin no onboarding de tenant; e a config RS256+chave no compose.
 3. **crm** config.py default `/api/v1/iam` (repo não-local) — coberto pelo compose; repontar no repo.
 4. **28 E2E do admin_mcp** testam `/mcp/tools/*` mas o servidor serve `/v1/*` (drift) — reconciliar.
-5. **⚠️ Operador RS256 não deployado (achado 09-jul):** `platform-dataforall-admin` — código develop é RS256 fail-closed, mas compose + imagem no box são HS256 (06-jul). A imagem develop **quebra no boot** com o compose atual. Fix: compose→RS256 (espelhar customer-admin) + rebuild/redeploy. Detalhe: env-vars §5.1.
-6. **RBAC-03** aud-por-serviço (operador reusa `aud=platform-services`) — diferido.
+5. ✅ **Operador RS256 — resolvido 09-jul:** `platform-dataforall-admin` estava HS256 no deploy (compose+imagem 06-jul) vs código develop RS256 fail-closed. Corrigido: compose→RS256 (`c8db3d6`) + rebuild (`6cefacc`) + redeploy validado (boot RS256 healthy, aud segregada `service-clients`). Detalhe: env-vars §5.1.
+6. **RBAC-03** aud-por-serviço (o mesh reusa `aud=platform-services`; operador já é `service-clients`) — diferido.
 
 ## Riscos / cuidados
 
