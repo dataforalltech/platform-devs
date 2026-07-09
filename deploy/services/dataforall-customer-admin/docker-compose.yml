@@ -15,6 +15,10 @@ services:
     container_name: dataforall-customer-admin
     restart: unless-stopped
     networks: [platform-local]
+    volumes:
+      # Chave de ASSINATURA RS256 (reusa a do platform-auth, kid=platform-auth-1):
+      # o customer-admin EMITE tokens de cliente no login; JWKS cobre só a verificação.
+      - /opt/dataforall/deploy/secrets/jwt-auth.pem:/run/secrets/jwt_key.pem:ro
     # K6: o CMD bakado usa --max-requests (opcao do gunicorn, NAO do uvicorn) -> crash.
     # Override sem essas opcoes.
     command: ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-1} --loop uvloop --http httptools"]
@@ -47,6 +51,7 @@ services:
       JWT_ALGORITHM: RS256
       JWT_KEY_ID: platform-auth-1
       JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_key.pem
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina em .env}
       JWT_ISSUER: platform-auth
       JWT_AUDIENCE: platform-services
