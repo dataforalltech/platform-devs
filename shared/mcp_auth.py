@@ -262,8 +262,8 @@ def transport_security_from_env():
         return TransportSecuritySettings(enable_dns_rebinding_protection=False)
     return TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=hosts or None,
-        allowed_origins=origins or None,
+        allowed_hosts=hosts,
+        allowed_origins=origins,
     )
 
 

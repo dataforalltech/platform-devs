@@ -76,10 +76,13 @@ def _scope_for_request(method: str, tool: str | None) -> str | None:
 
 
 def build_mcp() -> FastMCP:
+    from shared.mcp_auth import transport_security_from_env
+
     mcp = FastMCP(
         name="backend-mcp",
         instructions=SYSTEM_PROMPT,
         stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
+        transport_security=transport_security_from_env(),
     )
     for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
         mcp.add_tool(fn, name=name)
@@ -94,6 +97,7 @@ def build_app(validators: list[Callable] | None = None):
     from shared.mcp_auth import (
         BearerAuthMiddleware,
         JwtValidator,
+        gateway_static_validators,
         protected_resource_metadata,
     )
 
@@ -116,7 +120,8 @@ def build_app(validators: list[Callable] | None = None):
     app = mcp.streamable_http_app()
 
     if validators is None:
-        validators = [
+        # Hop S2S do gateway (token estático via MCP_GATEWAY_STATIC_TOKEN) + JWKS/OAuth (clientes).
+        validators = gateway_static_validators(SCOPES_SUPPORTED) + [
             JwtValidator(
                 issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
             ).validate
