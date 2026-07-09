@@ -1,6 +1,6 @@
 # platform-dataforall-admin (dataforall-management) — ambiente enxuto.
 # Backend de GESTAO de clientes/plataformas (admin-plane). Opera direto no
-# ADMIN_DATAFORALL (mysql). JWT HS256 (JWT_SECRET_KEY compartilhado). Porta 25987,
+# ADMIN_DATAFORALL (mysql). JWT RS256 (assina c/ jwt-auth.pem kid=platform-auth-1, valida via JWKS). Porta 25987,
 # health /api/health/live. Sem tenant scoping (nao usa PLATFORMS para resolver DB).
 # Build: build-service.sh platform-dataforall-admin platform-dataforall-admin develop Dockerfile .
 name: dataforall-management
@@ -15,6 +15,10 @@ services:
     container_name: platform-dataforall-admin
     restart: unless-stopped
     networks: [platform-local]
+    volumes:
+      # Chave de ASSINATURA RS256 (reusa a do platform-auth, kid=platform-auth-1):
+      # o operador EMITE tokens (realm=operator); o JWKS cobre so a verificacao.
+      - /opt/dataforall/deploy/secrets/jwt-auth.pem:/run/secrets/jwt_key.pem:ro
     environment:
       APP_NAME: dataforall-management
       APP_ENV: hml
@@ -40,9 +44,17 @@ services:
       ADMIN_DB_NAME: ADMIN_DATAFORALL
       ADMIN_DB_USER: root
       ADMIN_DB_PASSWORD: ${MYSQL_ROOT_PASSWORD:?defina em .env}
-      # JWT HS256 (secret compartilhado do ambiente)
-      JWT_ALGORITHM: HS256
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina em .env}
+      # JWT RS256 (AUTH-10/M5) — o operador EMITE tokens (realm=operator) e valida via
+      # JWKS do platform-auth. Reusa a chave de assinatura jwt-auth.pem (kid=platform-auth-1),
+      # como o customer-admin. O codigo na develop e fail-closed: HS256 quebra no boot.
+      # Audience segregada (service-clients, default do repo) — NAO e o aud do mesh.
+      JWT_ALGORITHM: RS256
+      JWT_KEY_ID: platform-auth-1
+      JWT_JWKS_URL: http://platform-auth:8000/internal/.well-known/jwks.json
+      JWT_PRIVATE_KEY_PATH: /run/secrets/jwt_key.pem
+      JWT_ISSUER: platform-auth
+      JWT_AUDIENCE: service-clients
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina em .env} # legacy; UNUSED sob RS256
       # rate-limit em memoria (enxuto; sem redis dedicado)
       CORS_ALLOW_ORIGINS: "*"
     logging:
