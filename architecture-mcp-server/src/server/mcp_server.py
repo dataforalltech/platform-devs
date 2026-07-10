@@ -39,6 +39,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import Settings, get_settings
 from ..tools.architecture_tools import (
     generate_architecture,
@@ -262,7 +263,8 @@ def _build_http_app(settings: Settings) -> FastAPI:
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/006)
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
     http_app = _build_http_app(settings)
     _log.info("architecture_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # namespace canônico = name_microservice ('platform-architecture-mcp') menos o
@@ -24,6 +24,11 @@ NAMESPACE = "architecture-mcp"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+
+    # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
+    # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
+    # é gated por RUNTIME_ENV ∈ {local, cloud}.
+    runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
 
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
@@ -36,6 +41,28 @@ class Settings(BaseSettings):
     mcp_port: int = Field(default=7100, validation_alias="MCP_PORT")
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
+
+    @field_validator("runtime_env")
+    @classmethod
+    def _validate_runtime_env(cls, v: str) -> str:
+        v = (v or "local").strip().lower()
+        if v not in ("local", "cloud"):
+            raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
+        return v
+
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-006). Chamado em build_server().
+
+        - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
+        - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
+        """
+        if self.docs_enabled:
+            raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
+        if not self.mcp_twin_audience.startswith("mcp:"):
+            raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
+            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
 
 
 @lru_cache(maxsize=1)
