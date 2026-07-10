@@ -167,7 +167,7 @@ def _collect_fresh() -> dict[str, Any]:
         "hostname": platform.node(),
         "python": platform.python_version(),
         "cwd": os.getcwd(),
-        "user": os.getenv("USER") or os.getenv("USERNAME", "unknown"),
+        "user": os.getenv("USER") or os.getenv("USERNAME") or "unknown",
     }
 
     return {

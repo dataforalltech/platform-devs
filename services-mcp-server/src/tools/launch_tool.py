@@ -236,8 +236,9 @@ def _launch_uvicorn(
             env=env,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            # No Windows: CREATE_NEW_PROCESS_GROUP para nÃ£o herdar SIGINT
-            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0,
+            # No Windows: CREATE_NEW_PROCESS_GROUP para não herdar SIGINT.
+            # getattr: o atributo só existe no Windows; no Linux/CI resolve p/ 0 (sem flag).
+            creationflags=(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) if os.name == "nt" else 0),
         )
         _log.info("uvicorn spawned: name=%s pid=%d cmd=%s", name, proc.pid, " ".join(cmd))
         return {
