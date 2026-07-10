@@ -21,7 +21,7 @@ RUN useradd --uid 1000 --create-home appuser
 USER 1000
 
 EXPOSE 7100
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=5 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7100/v1/health',timeout=4).status==200 else 1)"
 
 CMD ["security-mcp"]
