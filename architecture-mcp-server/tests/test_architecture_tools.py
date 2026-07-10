@@ -200,33 +200,6 @@ def test_status_version_matches_pyproject():
     assert status()["version"] == declared
 
 
-# ── contrato de schema (mcp_server) ─────────────────────────────────────────── #
-def test_registered_tools_expose_expected_input_schemas():
-    """As tools agora recebem parâmetros; os schemas derivados batem com o contrato."""
-    import anyio
-
-    from src.server.mcp_server import (
-        TOOL_INPUT_SCHEMAS,
-        TOOL_REGISTRY,
-        assert_schema_contract,
-        build_mcp,
-    )
-
-    # Escopos preservados.
-    assert TOOL_REGISTRY["generate_c4_diagram"][1] == "architecture:write"
-    assert TOOL_REGISTRY["status"][1] == "architecture:read"
-
-    mcp = build_mcp()
-
-    async def _check():
-        # Não lança se assinatura e contrato documentado convergem.
-        await assert_schema_contract(mcp)
-        tools = {t.name: t for t in await mcp.list_tools()}
-        return tools
-
-    tools = anyio.run(_check)
-
-    assert set(tools) == set(TOOL_INPUT_SCHEMAS)
-    # generate_c4_diagram expõe os parâmetros derivados dos inputs.
-    c4_props = set(tools["generate_c4_diagram"].inputSchema.get("properties", {}))
-    assert {"system_name", "actors", "containers", "relationships"} <= c4_props
+# O contrato do servidor (schemas + campos de policy + PEP inner-token) agora é
+# validado em test_mcp_server.py (sidecar mcp_http, Model C). O contrato FastMCP
+# antigo (TOOL_REGISTRY/build_mcp/assert_schema_contract) foi aposentado.

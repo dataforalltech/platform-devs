@@ -210,63 +210,6 @@ class StaticTokenStore:
         raise AuthError(401, "invalid_token", "token estático inválido/expirado/revogado")
 
 
-def gateway_static_validators(scopes: list[str]) -> list[Callable[[str], "Principal"]]:
-    """Validador para o hop S2S gateway→backend Streamable HTTP.
-
-    Se ``MCP_GATEWAY_STATIC_TOKEN`` estiver setado, aceita esse token opaco como Bearer
-    (mesmo padrão dos sidecars REST via ``api_key``), com os ``scopes`` do próprio servidor.
-    O gateway (platform-mcp) o apresenta como ``Authorization: Bearer <token>`` ao descobrir
-    e chamar tools. Sem o env → [] (só JWKS/OAuth). Coexiste com o JwtValidator (fallback).
-    """
-    import os
-
-    tok = os.getenv("MCP_GATEWAY_STATIC_TOKEN", "").strip()
-    if not tok:
-        return []
-    store = StaticTokenStore(
-        [
-            StaticToken(
-                token_hash=StaticTokenStore.hash_token(tok),
-                subject="mcp-gateway",
-                scopes=list(scopes),
-                role="service",
-                tenant_id="dataforall",
-            )
-        ]
-    )
-    return [store.validate]
-
-
-def transport_security_from_env():
-    """``TransportSecuritySettings`` a partir de env, p/ o hop interno gateway→backend.
-
-    O FastMCP protege contra DNS-rebinding validando o header ``Host`` (default: só
-    localhost) — o gateway chega por ``host.docker.internal``/nome-de-serviço e leva **421
-    Misdirected Request**.
-    - ``MCP_ALLOWED_HOSTS`` / ``MCP_ALLOWED_ORIGINS`` (csv): libera hosts/origins específicos.
-    - ``MCP_DISABLE_DNS_REBINDING=1``: desliga a proteção (S2S interno atrás do gateway; o
-      Bearer estático ainda protege). Retorna ``None`` se nada setado (mantém o default do SDK).
-    """
-    import os
-
-    try:
-        from mcp.server.transport_security import TransportSecuritySettings
-    except Exception:
-        return None
-    hosts = [h.strip() for h in os.getenv("MCP_ALLOWED_HOSTS", "").split(",") if h.strip()]
-    origins = [o.strip() for o in os.getenv("MCP_ALLOWED_ORIGINS", "").split(",") if o.strip()]
-    disable = os.getenv("MCP_DISABLE_DNS_REBINDING", "").strip().lower() in ("1", "true", "yes")
-    if not hosts and not origins and not disable:
-        return None
-    if disable:
-        return TransportSecuritySettings(enable_dns_rebinding_protection=False)
-    return TransportSecuritySettings(
-        enable_dns_rebinding_protection=True,
-        allowed_hosts=hosts,
-        allowed_origins=origins,
-    )
-
-
 # ============================================================================
 # Protected Resource Metadata (RFC 9728)
 # ============================================================================
