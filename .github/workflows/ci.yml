@@ -126,8 +126,11 @@ jobs:
           cd ${{ matrix.server }}
           npm run build
 
+  # Supply-chain (STD-CICD-001): Test Doubles Policy (bloqueante), SAST, deps audit, SBOM.
+  # NOTA: bandit/semgrep/pip-audit rodam como advisory até haver baseline curado; o gate
+  # DURO hoje é o Test Doubles Policy (sem bypass de auth nos testes) — verificado limpo.
   security:
-    name: Security scan
+    name: Security scan (supply-chain — STD-CICD-001)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -137,10 +140,32 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Run bandit
+      - name: Test Doubles Policy (STD-QA-001 — BLOQUEANTE, sem bypass de auth)
+        run: python scripts/check_test_doubles.py
+
+      - name: Bandit SAST (advisory)
         run: |
           pip install bandit
-          bandit -r shared/ -f json || true
+          bandit -r shared/ scripts/ */src -ll || true
+
+      - name: pip-audit — CVEs de dependência (advisory até baseline)
+        run: |
+          pip install pip-audit
+          for d in architecture-mcp-server audit-mcp-server session-mcp-server; do
+            echo "== $d =="; ( cd "$d" && pip-audit --progress-spinner off || true )
+          done
+
+      - name: SBOM CycloneDX (gera + resumo no job)
+        run: |
+          pip install cyclonedx-bom
+          mkdir -p sbom
+          echo "## SBOM CycloneDX" >> "$GITHUB_STEP_SUMMARY"
+          for d in architecture-mcp-server audit-mcp-server; do
+            if ( cd "$d" && pip install -e . -q && cyclonedx-py environment -o "../sbom/$d.cdx.json" ); then
+              n=$(python -c "import json;print(len(json.load(open('sbom/$d.cdx.json')).get('components',[])))" 2>/dev/null || echo '?')
+              echo "- $d: $n componentes" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
 
   # Trava 401 por audiência divergente (STD-MCP-001): NAMESPACE em settings.py ==
   # audience no gateway/twin-gateway-services.entry.json == mcp:<ns> no gateway-mapping.sql.

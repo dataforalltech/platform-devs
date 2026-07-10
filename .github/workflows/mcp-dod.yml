@@ -37,10 +37,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install "mcp>=1.10" fastapi "uvicorn[standard]" python-multipart pyjwt cryptography bcrypt pytest pytest-asyncio pyyaml psycopg2-binary redis httpx
 
-      - name: Passo 1 - Gate estatico do DoD (§11)
-        run: python scripts/check_mcp_dod.py
+      # O gate estático §11 (scripts/check_mcp_dod.py) cobrava o padrão FastMCP/OAuth-PRM
+      # APOSENTADO — classificava os servers Model-C como "legado" e passava vazio. Retirado.
+      # DoD real hoje: Test Doubles Policy + audience-guard (ci.yml) + E2E Model-C + gateway.
+      - name: Passo 1 - Test Doubles Policy (STD-QA-001, sem bypass de auth)
+        run: python scripts/check_test_doubles.py
 
-      - name: Passo 2 - E2E do piloto OAuth (Security)
+      - name: Passo 2 - E2E Model-C (Security sidecar + Authorization Server)
         run: python tests/e2e/test_oauth_security_pilot.py
 
       - name: Passo 3 - Testes do gateway
