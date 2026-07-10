@@ -52,6 +52,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import PipelineSettings, get_settings
 from ..db.store import PipelineStore
 from ..tools import (
@@ -671,8 +672,9 @@ def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI
 def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
     """Inicializa o MCP Server (stdio), store, settings e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
-    store = PipelineStore()
+    settings.enforce_security_invariants()  # fail-fast STD-SEC-001/004/006
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
+    store = PipelineStore(dsn=settings.pg_dsn, minconn=settings.pg_min_conn, maxconn=settings.pg_max_conn)
     http_app = _build_http_app(store, settings)
     _log.info("pipeline_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
 

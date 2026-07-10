@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 from typing import Any
 
@@ -44,6 +45,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, Settings, get_settings
 from ..knowledge.audit_store import AuditStore
 from ..knowledge.governance_repository import GovernanceRepository
@@ -76,9 +78,8 @@ from ..tools import (
     validate_lib_change,
     validate_migration,
 )
-from ..utils.logger import get_logger, setup_logging
 
-_log = get_logger(__name__)
+_log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------- #
 # Enums reutilizados nos schemas de input das tools                      #
@@ -1072,7 +1073,8 @@ def _build_http_app(settings: Settings) -> FastAPI:
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
-    setup_logging(level=settings.log_level, fmt=settings.log_format)
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/006)
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
     http_app = _build_http_app(settings)
     _log.info("ai_governance_mcp_ready", extra={"extras": {"tools": len(_TOOL_SCHEMAS)}})
 

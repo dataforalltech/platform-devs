@@ -41,6 +41,8 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
+from ..config.secrets import load_secret
 from ..config.settings import Settings, get_settings
 from ..db.allocator_store import AllocatorPolicy, AllocatorStore
 from ..db.provisioner import ImmediateProvisioner, TerraformProvisioner
@@ -61,7 +63,7 @@ from ..tools import (
     terraform_show_plan,
     terraform_validate,
 )
-from ..utils.logger import get_logger, setup_logging
+from ..utils.logger import get_logger
 
 _log = get_logger(__name__)
 
@@ -625,13 +627,15 @@ def _build_allocator(settings: Settings) -> AllocatorStore:
         provisioner = ImmediateProvisioner()
         _log.info("provisioner_immediate", extra={"extras": {}})
 
+    # Segredo Fernet (cifra chaves SSH): Vault-fallback → env (STD-SEC-004).
+    lease_secret = load_secret("INFRA_LEASE_SECRET", env_fallback=settings.lease_secret)
     allocator = AllocatorStore(
         db_path=settings.db_path,
         policy=AllocatorPolicy(),
         provisioner=provisioner,
         tf_modules_root=settings.tf_modules_root,
         provision_timeout_sec=settings.provision_timeout_sec,
-        lease_secret=settings.lease_secret,
+        lease_secret=lease_secret,
     )
     _log.info(
         "allocator_ready",
@@ -649,7 +653,8 @@ def _build_allocator(settings: Settings) -> AllocatorStore:
 def build_server() -> tuple[Any, Settings, AllocatorStore, FastAPI]:
     """Inicializa o MCP Server (stdio), settings, o allocator e o sidecar HTTP."""
     settings = get_settings()
-    setup_logging(level=settings.log_level, fmt=settings.log_format)
+    settings.enforce_security_invariants()
+    configure_logging(settings)
     allocator = _build_allocator(settings)
     http_app = _build_http_app(settings, allocator)
     _log.info("infra_mcp_ready", extra={"extras": {"tools": len(_TOOL_SCHEMAS)}})

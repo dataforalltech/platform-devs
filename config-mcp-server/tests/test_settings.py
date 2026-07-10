@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from src.config.secrets import load_secret
 from src.config.settings import NAMESPACE, ConfigMcpSettings, Settings, get_settings
 
 
@@ -44,3 +47,90 @@ class TestSettings:
         s1 = get_settings()
         s2 = get_settings()
         assert s1 is s2
+
+
+class TestRuntimeEnv:
+    def test_default_local(self):
+        assert Settings(_env_file=None).runtime_env == "local"
+
+    def test_normalizes_case_and_whitespace(self):
+        assert Settings(RUNTIME_ENV="  CLOUD ", _env_file=None).runtime_env == "cloud"
+
+    def test_invalid_raises(self):
+        with pytest.raises(ValueError):
+            Settings(RUNTIME_ENV="prod", _env_file=None)
+
+
+class TestEnforceSecurityInvariants:
+    def _s(self, **kw):
+        base = {
+            "MCP_TWIN_AUDIENCE": "mcp:config-mcp",
+            "URL_ADMIN_TWIN_JWKS": "http://admin/jwks.json",
+            "CONFIG_MCP_MASTER_KEY": "k",
+            "_env_file": None,
+        }
+        base.update(kw)
+        return Settings(**base)
+
+    def test_local_ok(self):
+        self._s(RUNTIME_ENV="local").enforce_security_invariants()  # não levanta
+
+    def test_docs_enabled_rejected(self):
+        with pytest.raises(RuntimeError, match="STD-SEC-001"):
+            self._s(DOCS_ENABLED="true").enforce_security_invariants()
+
+    def test_bad_audience_rejected(self):
+        with pytest.raises(RuntimeError, match="STD-SEC-006"):
+            self._s(MCP_TWIN_AUDIENCE="config-mcp").enforce_security_invariants()
+
+    def test_cloud_requires_jwks(self):
+        with pytest.raises(RuntimeError, match="URL_ADMIN_TWIN_JWKS"):
+            self._s(RUNTIME_ENV="cloud", URL_ADMIN_TWIN_JWKS="").enforce_security_invariants()
+
+    def test_cloud_requires_master_key(self, monkeypatch):
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        monkeypatch.delenv("CONFIG_MCP_MASTER_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="STD-SEC-004"):
+            self._s(RUNTIME_ENV="cloud", CONFIG_MCP_MASTER_KEY="").enforce_security_invariants()
+
+    def test_cloud_ok_with_all(self):
+        self._s(RUNTIME_ENV="cloud").enforce_security_invariants()  # não levanta
+
+
+class TestLoadSecret:
+    def test_no_vault_returns_env_value(self, monkeypatch):
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field") == "from-field"
+
+    def test_resolve_master_key_uses_field(self, monkeypatch):
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        s = Settings(CONFIG_MCP_MASTER_KEY="abc", _env_file=None)
+        assert s.resolve_master_key() == "abc"
+
+    def test_vault_success(self, monkeypatch):
+        monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
+
+        class _FakeClient:
+            def get_secret(self, key):
+                return "from-vault"
+
+        fake_mod = type("m", (), {"VaultSecretsClient": _FakeClient})
+        monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
+        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field") == "from-vault"
+
+    def test_vault_unavailable_falls_back(self, monkeypatch):
+        # VAULT_ADDR setado mas a lib não existe → degradação graciosa p/ o env.
+        monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
+        monkeypatch.delitem(__import__("sys").modules, "platform_crypto", raising=False)
+        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field") == "from-field"
+
+    def test_vault_empty_falls_back(self, monkeypatch):
+        monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
+
+        class _EmptyClient:
+            def get_secret(self, key):
+                return ""
+
+        fake_mod = type("m", (), {"VaultSecretsClient": _EmptyClient})
+        monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
+        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field") == "from-field"

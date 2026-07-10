@@ -37,11 +37,14 @@ VALID_GATE_TYPES = {
 
 
 class PipelineStore:
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(self, dsn: str | None = None, *, minconn: int = 2, maxconn: int = 10) -> None:
+        # STD-SEC-004: o DSN (com a senha resolvida via env/Vault) vem das settings.
+        # Fallback local sem credencial p/ execução direta/testes (o pool é mockado
+        # nos testes; nenhum default com cara de segredo fica no código).
         self._pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=2,
-            maxconn=10,
-            dsn=os.getenv("PG_DSN", "postgresql://localhost/pipeline_mcp"),
+            minconn=minconn,
+            maxconn=maxconn,
+            dsn=dsn or os.getenv("PG_DSN", "postgresql://localhost/pipeline_mcp"),
         )
         self._lock = threading.Lock()
         self._migrate()

@@ -56,7 +56,7 @@ class InMemoryServiceStore:
     porém sem PostgreSQL — mantém as rows num dict em memória.
     """
 
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(self, db_path: str = ":memory:", dsn: str | None = None) -> None:
         self._rows: dict[str, dict[str, Any]] = {}
         self.closed = False
 

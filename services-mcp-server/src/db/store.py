@@ -20,11 +20,15 @@ def _now() -> str:
 
 
 class ServiceStore:
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(self, db_path: str = ":memory:", dsn: str | None = None) -> None:
+        # STD-SEC-004: sem credencial/host literal no código. A DSN vem (nesta
+        # ordem) de: PG_DSN (override de operador) → dsn resolvido nas settings
+        # (host/senha via env/Vault) → "" (libpq usa defaults locais).
+        resolved_dsn = os.getenv("PG_DSN") or dsn or ""
         self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=10,
-            dsn=os.getenv("PG_DSN", "postgresql://localhost/services_mcp"),
+            dsn=resolved_dsn,
         )
         self._lock = threading.Lock()
         self._migrate()

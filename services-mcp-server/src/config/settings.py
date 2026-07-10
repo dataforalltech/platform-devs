@@ -9,19 +9,54 @@ PostgreSQL via `ServiceStore`). O "backend" aqui é o próprio store (psycopg2),
 não um serviço REST — por isso NÃO há `ServiceApiClient`/`MCP_SERVICE_BASE_URL`/
 `MCP_SERVICE_TOKEN` (desvio justificado do esqueleto do template, que assume um
 backend HTTP). As tools recebem o `store` diretamente.
+
+Segredos (STD-SEC-004): NENHUM valor com cara de credencial/host de ambiente fica
+no código — host e senha do PostgreSQL vêm de env (ou Vault via ``load_secret``).
+Default vazio = exigido via env em cloud (ver ``enforce_security_invariants``).
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_log = logging.getLogger(__name__)
 
 # namespace canônico = name_microservice ('platform-services-mcp') menos o
 # prefixo 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
 NAMESPACE = "services-mcp"
+
+
+def load_secret(key: str, fallback: str = "") -> str:
+    """Resolve um segredo via Vault (STD-SEC-004), degradando p/ env com graça.
+
+    Só tenta o ``platform_crypto.VaultSecretsClient`` quando ``VAULT_ADDR`` está
+    setado; o import é LAZY (dentro do try) para não acoplar o boot ao Vault. Em
+    QUALQUER falha (Vault indisponível, import ausente, segredo vazio) degrada
+    para o valor de env (``fallback``) — o boot NUNCA quebra por causa do Vault.
+    Loga apenas a FONTE do segredo, nunca o valor.
+    """
+    vault_addr = os.getenv("VAULT_ADDR", "").strip()
+    if not vault_addr:
+        _log.debug("secret_source key=%s source=env", key)
+        return fallback
+    try:
+        from platform_crypto import VaultSecretsClient  # lazy: só quando há Vault
+
+        value = VaultSecretsClient(vault_addr).get_secret(key)
+        if value:
+            _log.info("secret_source key=%s source=vault", key)
+            return value
+        _log.warning("secret_empty_from_vault key=%s source=env", key)
+        return fallback
+    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
+        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
+        return fallback
 
 
 class ServicesSettings(BaseSettings):
@@ -30,6 +65,11 @@ class ServicesSettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="SERVICES_", env_file=".env", extra="ignore", case_sensitive=False
     )
+
+    # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
+    # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
+    # é gated por RUNTIME_ENV ∈ {local, cloud}. validation_alias ignora env_prefix.
+    runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
 
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
@@ -43,12 +83,65 @@ class ServicesSettings(BaseSettings):
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
 
+    # ── Backend PostgreSQL (prefixo SERVICES_) ────────────────────────────────
+    # STD-SEC-004: NENHUM valor com cara de credencial/host de ambiente fica no
+    # código — host e senha vêm de env (ou Vault). Default vazio = exigido via env.
+    pg_host: str = Field(default="", description="PostgreSQL host")
+    pg_port: int = Field(default=5432, description="PostgreSQL port")
+    pg_db: str = Field(default="services_mcp", description="PostgreSQL database name")
+    pg_user: str = Field(default="postgres", description="PostgreSQL user")
+    pg_password: str = Field(default="", description="PostgreSQL password (env/Vault, sem default)")
+
     # ── Registry / tuning das tools (usados diretamente pelo store e tools) ────
     db_path: str = str(Path.home() / ".services-mcp" / "registry.db")
     health_timeout: float = 3.0
     docker_timeout: int = 10  # seconds for docker CLI calls
     # Descoberta eager no boot é opt-in (docker ps + port scan são I/O pesado).
     sync_on_startup: bool = Field(default=False, validation_alias="SERVICES_SYNC_ON_STARTUP")
+
+    @field_validator("runtime_env")
+    @classmethod
+    def _validate_runtime_env(cls, v: str) -> str:
+        v = (v or "local").strip().lower()
+        if v not in ("local", "cloud"):
+            raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
+        return v
+
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> ServicesSettings:
+        """Resolve a senha do DB via Vault-fallback (env se Vault ausente)."""
+        self.pg_password = load_secret(f"{NAMESPACE}/pg_password", self.pg_password)
+        return self
+
+    @property
+    def pg_dsn(self) -> str:
+        """DSN libpq (keyword form) para o pool psycopg2 do ServiceStore."""
+        return (
+            f"host={self.pg_host} port={self.pg_port} dbname={self.pg_db} "
+            f"user={self.pg_user} password={self.pg_password}"
+        )
+
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006).
+
+        Chamado em build_server():
+        - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
+        - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica)
+          e a senha do DB DEVE vir de env/Vault (nunca de default no código).
+        """
+        if self.docs_enabled:
+            raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
+        if not self.mcp_twin_audience.startswith("mcp:"):
+            raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.pg_password:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: SERVICES_PG_PASSWORD é obrigatório em cloud "
+                    "(sem default no código; via env ou Vault)"
+                )
 
 
 # Alias de compatibilidade com o padrão canônico (architecture/audit usam `Settings`).

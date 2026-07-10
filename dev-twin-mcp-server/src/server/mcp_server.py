@@ -41,6 +41,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import DevTwinSettings, get_settings
 from ..db.token_store import TokenStore
 from ..knowledge.session import SessionManager
@@ -456,7 +457,8 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
 def build_server() -> tuple[Any, DevTwinSettings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
+    configure_logging(settings)  # logs estruturados JSON (STD-OBS-001)
     http_app = _build_http_app(settings)
     _log.info("dev_twin_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
 

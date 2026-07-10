@@ -1,4 +1,4 @@
-from .logger import get_logger, setup_logging
+from .logger import get_logger
 from .subprocess_runner import (
     BinaryNotFound,
     CommandResult,
@@ -9,7 +9,6 @@ from .validators import normalize_path, require_non_empty_string
 
 __all__ = [
     "get_logger",
-    "setup_logging",
     "run_command",
     "CommandResult",
     "CommandTimeout",
