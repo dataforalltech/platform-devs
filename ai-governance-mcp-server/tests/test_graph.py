@@ -281,9 +281,9 @@ def test_only_rag_service_provides_embeddings(repo):
     """Apenas dataforall-rag-service provê o contrato de embeddings — §49 explicit_non_responsibilities."""
     res = query_ecosystem_graph(repo, node_id="rag.embeddings.api", relation="provides_api", direction="in")
     sources = {e["from"] for e in res["results"]}
-    assert sources == {
-        "dataforall-rag-service"
-    }, f"embeddings deve ser owned somente por rag-service; encontrado: {sources}"
+    assert sources == {"dataforall-rag-service"}, (
+        f"embeddings deve ser owned somente por rag-service; encontrado: {sources}"
+    )
 
 
 def test_agents_factory_consumes_both_rag_apis(repo):

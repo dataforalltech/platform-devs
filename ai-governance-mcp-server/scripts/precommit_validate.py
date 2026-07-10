@@ -118,9 +118,7 @@ def _detect_flags(diff: str, files: list[str]) -> dict:
     precisamos duplicar essa lógica aqui.
     """
     file_names = {Path(p).name for p in files}
-    adds_dependency = bool(
-        file_names & {"pyproject.toml", "requirements.txt", "package.json", "poetry.lock"}
-    )
+    adds_dependency = bool(file_names & {"pyproject.toml", "requirements.txt", "package.json", "poetry.lock"})
     return {
         "changes_contracts": False,
         "adds_fallback": False,

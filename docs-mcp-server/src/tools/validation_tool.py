@@ -165,8 +165,7 @@ def validate_doc(
                     {
                         "severity": "error",
                         "message": (
-                            f"Status inválido '{status_val}'. "
-                            f"Valores válidos: {', '.join(valid_statuses)}"
+                            f"Status inválido '{status_val}'. Valores válidos: {', '.join(valid_statuses)}"
                         ),
                     }
                 )

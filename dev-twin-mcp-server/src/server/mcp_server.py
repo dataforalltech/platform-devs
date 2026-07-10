@@ -247,7 +247,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_tokens": {
         "description": (
-            "Admin — Lista metadados de usuários/tokens (sem exibir valores). " "Requer TWIN_ADMIN_TOKEN."
+            "Admin — Lista metadados de usuários/tokens (sem exibir valores). Requer TWIN_ADMIN_TOKEN."
         ),
         "capability": "dev-twin-mcp.list_tokens",
         "required_scope": "dev-twin-mcp:token:read",

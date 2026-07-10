@@ -5,12 +5,16 @@ on:
     paths:
       - '**/*.py'
       - 'pyproject.toml'
+      - '*-mcp-server/gateway/**'
+      - 'scripts/ci_assert_audience.py'
       - '.github/workflows/ci.yml'
   push:
     branches: [main, develop, 'feat/**']
     paths:
       - '**/*.py'
       - 'pyproject.toml'
+      - '*-mcp-server/gateway/**'
+      - '.github/workflows/ci.yml'
 
 jobs:
   test:
@@ -20,6 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         server: [
+          # system-MCPs (12)
           session-mcp-server,
           test-mcp-server,
           docs-mcp-server,
@@ -31,7 +36,16 @@ jobs:
           config-mcp-server,
           infra-mcp-server,
           ai-governance-mcp-server,
-          audit-mcp-server
+          audit-mcp-server,
+          # personas (8)
+          architecture-mcp-server,
+          backend-mcp-server,
+          devops-mcp-server,
+          frontend-mcp-server,
+          product-manager-mcp-server,
+          product-owner-mcp-server,
+          qa-engineer-mcp-server,
+          security-mcp-server
         ]
     steps:
       - uses: actions/checkout@v4
@@ -53,15 +67,15 @@ jobs:
           ruff check .
           ruff format . --check
       
-      - name: Type check with mypy
+      - name: Type check with mypy (bloqueante — STD-CICD-001)
         run: |
           cd ${{ matrix.server }}
-          mypy src/ || true
-      
+          mypy src/
+
       - name: Run tests
         run: |
           cd ${{ matrix.server }}
-          pytest -v --cov=src --cov-report=term-missing --cov-report=xml
+          pytest -v --cov=src --cov-report=term-missing --cov-report=xml --cov-fail-under=80
       
       - name: Upload coverage
         uses: codecov/codecov-action@v3
@@ -127,3 +141,63 @@ jobs:
         run: |
           pip install bandit
           bandit -r shared/ -f json || true
+
+  # Trava 401 por audiência divergente (STD-MCP-001): NAMESPACE em settings.py ==
+  # audience no gateway/twin-gateway-services.entry.json == mcp:<ns> no gateway-mapping.sql.
+  audience-guard:
+    name: Audience guard (STD-MCP-001)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: ci-assert-audience (20 servers)
+        run: python scripts/ci_assert_audience.py
+
+  # Prova que o registro DECLARATIVO no banco (gateway-mapping.sql) EXECUTA de fato
+  # contra um MySQL efêmero — 2x, para provar idempotência (schema guard + ON DUPLICATE KEY).
+  db-register:
+    name: DB register (gateway-mapping idempotente)
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: testpw
+          MYSQL_DATABASE: ADMIN_DATAFORALL
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptestpw"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: base GATEWAY_MAPPING (mínima; colunas mcp_http vêm do próprio .sql)
+        run: |
+          mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL -e "
+            CREATE TABLE IF NOT EXISTS GATEWAY_MAPPING (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              name_microservice VARCHAR(255) NOT NULL UNIQUE,
+              internal_url VARCHAR(500) NULL,
+              health_path VARCHAR(255) DEFAULT '/api/health/ready',
+              timeout_seconds FLOAT DEFAULT 30,
+              additional_info JSON NULL,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );"
+      - name: executa cada gateway/gateway-mapping.sql (2x = idempotência)
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in */gateway/gateway-mapping.sql; do
+            found=1
+            echo "== aplica $f =="
+            mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL < "$f"
+            mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL < "$f"
+          done
+          [ "$found" = 1 ] || { echo "nenhum gateway-mapping.sql encontrado"; exit 1; }
+      - name: rotas mcp_http registradas
+        run: |
+          mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL -e \
+            "SELECT name_microservice,kind,mcp_url,call_style FROM GATEWAY_MAPPING WHERE kind='mcp_http' ORDER BY name_microservice;"

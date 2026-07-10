@@ -299,7 +299,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_service": {
         "description": (
-            "Atualizacampos de um servico existente. " "Pelo menos um campo deve ser informado alem do name."
+            "Atualizacampos de um servico existente. Pelo menos um campo deve ser informado alem do name."
         ),
         "schema": {
             "type": "object",
@@ -389,7 +389,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "scan_processes": {
         "description": (
-            "Usapsutil paralistar processos em LISTEN. " "Retornalistade processos com pid, nome e porta."
+            "Usapsutil paralistar processos em LISTEN. Retornalistade processos com pid, nome e porta."
         ),
         "schema": {
             "type": "object",

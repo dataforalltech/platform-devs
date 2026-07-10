@@ -208,15 +208,14 @@ def validate_agent_decision(
             "Fallback sem observabilidade é silencioso."
         )
         required_actions.append(
-            "Adicionar log.warning('fallback_triggered', ...), métrica de fallback e alerta. "
-            "Ver fallback.md."
+            "Adicionar log.warning('fallback_triggered', ...), métrica de fallback e alerta. Ver fallback.md."
         )
         approved = False
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _HARDCODED_PATTERNS):
         violations.append(
-            "Valor que parece credencial/URL/token hardcoded na proposta. " "Proibido pelo AGENTS.md §2."
+            "Valor que parece credencial/URL/token hardcoded na proposta. Proibido pelo AGENTS.md §2."
         )
         required_actions.append("Mover o valor para configuração (env var via Settings tipado / cofre).")
         approved = False
@@ -266,7 +265,7 @@ def validate_agent_decision(
         if not consumers_mentioned:
             violations.append("changes_contracts=True mas a proposta não cita consumidores impactados.")
             required_actions.append(
-                "Listar consumidores afetados (grep no monorepo + lista de serviços). " "Ver contracts.md."
+                "Listar consumidores afetados (grep no monorepo + lista de serviços). Ver contracts.md."
             )
             risk = _bump_risk(risk, "high")
         else:

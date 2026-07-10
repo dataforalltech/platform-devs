@@ -136,7 +136,9 @@ def cost_estimate_infracost(
         "hard_stop_reason": (
             f"delta {monthly_diff:+.2f} USD excede ±{threshold_usd}"
             if hard_stop_usd
-            else f"delta {pct:+.1f}% excede ±{threshold_pct}%" if hard_stop_pct else None
+            else f"delta {pct:+.1f}% excede ±{threshold_pct}%"
+            if hard_stop_pct
+            else None
         ),
         "breakdown": breakdown,
         "command": _cmd_summary(result),

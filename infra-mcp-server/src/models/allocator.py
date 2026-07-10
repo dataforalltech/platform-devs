@@ -115,7 +115,7 @@ class VMLease(BaseModel):
     connection_hint: str | None = Field(
         default=None,
         description=(
-            "Phase 2a: simulado (None ou string mock). " "Phase 2c: contém endpoint/IP + ssh key reference."
+            "Phase 2a: simulado (None ou string mock). Phase 2c: contém endpoint/IP + ssh key reference."
         ),
     )
 

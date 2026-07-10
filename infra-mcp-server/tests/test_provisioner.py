@@ -308,9 +308,7 @@ class TestTerraformProvisionerMocked:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.1:22"}}'
 
         with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = lambda cmd, **kw: (
-                self._ok(output_json) if "output" in cmd else self._ok()
-            )
+            mock_run.side_effect = lambda cmd, **kw: self._ok(output_json) if "output" in cmd else self._ok()
 
             prov.provision(
                 spec="cpu-small",

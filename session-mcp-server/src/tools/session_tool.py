@@ -132,7 +132,7 @@ def start_session(
         "tool": "mcp__deploy-mcp__create_branch",
         "args": {"repo": repo, "branch": branch_name, "from_ref": base},
         "rationale": (
-            "Crie a branch da sessão antes de qualquer commit. " "Use confirm_branch_created após o sucesso."
+            "Crie a branch da sessão antes de qualquer commit. Use confirm_branch_created após o sucesso."
         ),
     }
     # Sugestões pendentes para esse repo (cross-repo queue)
@@ -383,8 +383,7 @@ def _handle_transition(result: Any, task_id: int, allowed_from: tuple[str, ...])
         return {
             "error": "invalid_transition",
             "details": (
-                f"Transição não permitida: tarefa está em '{result}', "
-                f"esperado um de {sorted(allowed_from)}."
+                f"Transição não permitida: tarefa está em '{result}', esperado um de {sorted(allowed_from)}."
             ),
             "current_status": result,
         }

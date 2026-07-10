@@ -348,9 +348,9 @@ def test_url_var_map_resolves_to_existing_yaml_services():
     data = yaml.safe_load(yaml_path.read_text(encoding="utf-8"))
     yaml_ids = {n["id"] for n in data.get("nodes") or []}
     for url_var, service_id in scanner._URL_VAR_TO_SERVICE.items():
-        assert (
-            service_id in yaml_ids
-        ), f"{url_var} mapeia para {service_id} mas esse id não existe no ecosystem.yaml"
+        assert service_id in yaml_ids, (
+            f"{url_var} mapeia para {service_id} mas esse id não existe no ecosystem.yaml"
+        )
 
 
 @pytest.fixture

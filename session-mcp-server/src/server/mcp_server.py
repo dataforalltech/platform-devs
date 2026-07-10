@@ -330,7 +330,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "get_session": {
         "description": (
-            "Retorna dados completos de uma sessão: " "metadados, último checkpoint e contagem de artefatos."
+            "Retorna dados completos de uma sessão: metadados, último checkpoint e contagem de artefatos."
         ),
         "schema": {
             "type": "object",
@@ -357,8 +357,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "end_session": {
         "description": (
-            "Encerra sessão como completed. Falha se houver tarefas abertas. "
-            "actor + rationale obrigatórios."
+            "Encerra sessão como completed. Falha se houver tarefas abertas. actor + rationale obrigatórios."
         ),
         "schema": {
             "type": "object",
@@ -499,7 +498,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "cancel_task": {
         "description": (
-            "Cancela uma tarefa (de 'pending' ou 'in_progress'). " "actor + reason obrigatórios (governança)."
+            "Cancela uma tarefa (de 'pending' ou 'in_progress'). actor + reason obrigatórios (governança)."
         ),
         "schema": {
             "type": "object",

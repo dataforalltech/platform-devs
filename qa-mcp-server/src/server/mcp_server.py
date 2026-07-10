@@ -76,8 +76,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "run_unit_tests": {
         "description": (
-            "Roda testes unitários (pytest/jest) com cobertura opcional. "
-            "Detecta framework automaticamente."
+            "Roda testes unitários (pytest/jest) com cobertura opcional. Detecta framework automaticamente."
         ),
         "capability": "qa-mcp.run_unit_tests",
         "required_scope": "qa-mcp:test:write",
@@ -392,7 +391,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "run_type_check": {
         "description": (
-            "Type checking com mypy (Python) ou tsc (TypeScript). " "Retorna erros e warnings por arquivo."
+            "Type checking com mypy (Python) ou tsc (TypeScript). Retorna erros e warnings por arquivo."
         ),
         "capability": "qa-mcp.run_type_check",
         "required_scope": "qa-mcp:analysis:read",

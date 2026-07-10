@@ -256,8 +256,7 @@ def generate_qa_report(
     cov = categories.get("coverage", {})
     if cov.get("score", 100) < settings.coverage_threshold:
         recommendations.append(
-            f"Improve test coverage: {cov.get('summary', '')} "
-            f"(threshold: {settings.coverage_threshold:.0f}%)"
+            f"Improve test coverage: {cov.get('summary', '')} (threshold: {settings.coverage_threshold:.0f}%)"
         )
     unit = categories.get("unit", {})
     if unit.get("score", 100) < 100:

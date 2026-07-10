@@ -615,7 +615,7 @@ class AllocatorStore:
             lease = self._row_to_lease(row)
             if lease.owner != owner:
                 raise AllocatorStoreError(
-                    f"owner {owner!r} não é o titular do lease {lease_id!r} " f"(titular: {lease.owner!r})"
+                    f"owner {owner!r} não é o titular do lease {lease_id!r} (titular: {lease.owner!r})"
                 )
             if lease.status != "ACTIVE":
                 raise AllocatorStoreError(
@@ -709,14 +709,12 @@ class AllocatorStore:
                 )
                 # Ativa leases PENDING desta VM
                 self._con.execute(
-                    "UPDATE leases SET status='ACTIVE', connection_hint=? "
-                    "WHERE vm_id=? AND status='PENDING'",
+                    "UPDATE leases SET status='ACTIVE', connection_hint=? WHERE vm_id=? AND status='PENDING'",
                     (connection_hint, vm_id),
                 )
                 # Se algum lease ativo é exclusivo, registrar o lock na VM
                 excl = self._con.execute(
-                    "SELECT lease_id FROM leases "
-                    "WHERE vm_id=? AND exclusive=1 AND status='ACTIVE' LIMIT 1",
+                    "SELECT lease_id FROM leases WHERE vm_id=? AND exclusive=1 AND status='ACTIVE' LIMIT 1",
                     (vm_id,),
                 ).fetchone()
                 if excl:
@@ -766,7 +764,7 @@ class AllocatorStore:
                     (vm_id,),
                 )
                 self._con.execute(
-                    "UPDATE leases SET status='EXPIRED', released_at=? " "WHERE vm_id=? AND status='PENDING'",
+                    "UPDATE leases SET status='EXPIRED', released_at=? WHERE vm_id=? AND status='PENDING'",
                     (now_str, vm_id),
                 )
                 # Phase 2f: chave SSH deletada — VM falhou, acesso impossível de qualquer forma
@@ -899,8 +897,7 @@ class AllocatorStore:
             (vm_id, spec, _dt_to_str(now)),
         )
         self._con.execute(
-            "INSERT INTO vm_keys (vm_id, encrypted_private_key, public_key, created_at) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO vm_keys (vm_id, encrypted_private_key, public_key, created_at) VALUES (?, ?, ?, ?)",
             (vm_id, encrypted, public_openssh, _dt_to_str(now)),
         )
         return (
@@ -1018,7 +1015,7 @@ class AllocatorStore:
                 )
                 if row["exclusive"]:
                     self._con.execute(
-                        "UPDATE vms SET exclusive_locked_by=NULL " "WHERE vm_id=? AND exclusive_locked_by=?",
+                        "UPDATE vms SET exclusive_locked_by=NULL WHERE vm_id=? AND exclusive_locked_by=?",
                         (row["vm_id"], row["lease_id"]),
                     )
                 _log.info("lease_expired_gc", extra={"extras": {"lease_id": row["lease_id"]}})

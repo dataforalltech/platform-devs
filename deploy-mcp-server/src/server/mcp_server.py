@@ -327,8 +327,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_workflow_runs": {
         "description": (
-            "Lista runs recentes de workflows. "
-            "Use após trigger_workflow para encontrar o run_id do dispatch."
+            "Lista runs recentes de workflows. Use após trigger_workflow para encontrar o run_id do dispatch."
         ),
         "schema": {
             "type": "object",

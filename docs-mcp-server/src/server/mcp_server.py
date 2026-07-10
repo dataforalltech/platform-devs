@@ -298,8 +298,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "check_doc_standards": {
         "description": (
-            "Verifica padrões documentais (completeness, validity, quality). "
-            "Retorna score 0-100 e grade A-F."
+            "Verifica padrões documentais (completeness, validity, quality). Retorna score 0-100 e grade A-F."
         ),
         "capability": "docs-mcp.check_doc_standards",
         "required_scope": "docs-mcp:audit:read",

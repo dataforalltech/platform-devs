@@ -53,7 +53,7 @@ _TEMPLATE_CATALOG: list[dict] = [
         "name": "cd-dev",
         "file": "cd-dev.yml",
         "description": (
-            "Continuous Delivery → DEV. " "Build + push ACR (dev-<sha7>, develop-latest) + Portainer DEV."
+            "Continuous Delivery → DEV. Build + push ACR (dev-<sha7>, develop-latest) + Portainer DEV."
         ),
         "required_secrets": [
             "TOKEN_GITHUB",
@@ -165,7 +165,7 @@ def scaffold_pipeline(
                 "error": "ValidationError",
                 "tool": "scaffold_pipeline",
                 "details": (
-                    f"Templates inválidos: {invalid}. " f"Use get_pipeline_templates para ver os disponíveis."
+                    f"Templates inválidos: {invalid}. Use get_pipeline_templates para ver os disponíveis."
                 ),
             }
 

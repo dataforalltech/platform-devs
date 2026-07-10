@@ -176,7 +176,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_credentials": {
         "description": (
-            "Lista namespaces e chaves disponíveis no store. " "Nunca exibe valores — apenas as chaves."
+            "Lista namespaces e chaves disponíveis no store. Nunca exibe valores — apenas as chaves."
         ),
         "capability": "config-mcp.list_credentials",
         "required_scope": "config-mcp:credential:read",

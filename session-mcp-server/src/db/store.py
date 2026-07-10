@@ -439,7 +439,7 @@ class SessionStore:
             if open_rows:
                 return [self._row_to_task(r) for r in open_rows]
             self._conn.execute(
-                "UPDATE sessions SET status = 'completed', ended_at = ?, " "last_updated_at = ? WHERE id = ?",
+                "UPDATE sessions SET status = 'completed', ended_at = ?, last_updated_at = ? WHERE id = ?",
                 (now, now, session_id),
             )
             if summary:
@@ -466,8 +466,7 @@ class SessionStore:
         context_json = json.dumps(context, ensure_ascii=False) if context else None
         with self._lock:
             cur = self._conn.execute(
-                "INSERT INTO checkpoints (session_id, summary, context_json, created_at) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO checkpoints (session_id, summary, context_json, created_at) VALUES (?, ?, ?, ?)",
                 (session_id, summary, context_json, now),
             )
             self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
@@ -903,7 +902,7 @@ class SessionStore:
         """Conta sugestões pendentes para um repositório."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT COUNT(*) AS n FROM suggestions " "WHERE target_repo = ? AND status = 'pending'",
+                "SELECT COUNT(*) AS n FROM suggestions WHERE target_repo = ? AND status = 'pending'",
                 (target_repo,),
             ).fetchone()
             return row["n"] if row else 0
