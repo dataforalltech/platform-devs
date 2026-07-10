@@ -31,9 +31,11 @@ class SecurityChecker:
                 "name": "no_hardcoded_credentials",
                 "required": True,
                 "passed": len(found_creds) == 0,
-                "details": f"Found {len(found_creds)} credential patterns"
-                if found_creds
-                else "No hardcoded credentials detected",
+                "details": (
+                    f"Found {len(found_creds)} credential patterns"
+                    if found_creds
+                    else "No hardcoded credentials detected"
+                ),
             }
         )
 

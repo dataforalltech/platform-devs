@@ -71,9 +71,7 @@ def test_query_neighbors_outbound(repo):
 
 
 def test_query_neighbors_inbound(repo):
-    res = query_ecosystem_graph(
-        repo, node_id="platform-core-lib", direction="in", relation="uses_lib"
-    )
+    res = query_ecosystem_graph(repo, node_id="platform-core-lib", direction="in", relation="uses_lib")
     sources = {e["from"] for e in res["results"]}
     assert "dataforall-agents-factory" in sources
     assert "dataforall-rag-service" in sources
@@ -143,13 +141,9 @@ def test_dependencies_max_depth_validation(repo):
     # max_depth só é validado/relevante quando include_transitive=True (ver schema
     # da tool em mcp_server.py). Sem include_transitive, a profundidade é forçada a 1.
     with pytest.raises(ValueError):
-        find_dependencies_of(
-            repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=0
-        )
+        find_dependencies_of(repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=0)
     with pytest.raises(ValueError):
-        find_dependencies_of(
-            repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=10
-        )
+        find_dependencies_of(repo, node_id="dataforall-rag-service", include_transitive=True, max_depth=10)
 
 
 # --------------------------- get_service_metadata --------------------------- #
@@ -177,9 +171,7 @@ def test_metadata_for_unknown_node(repo):
 def test_platform_cdc_runs_on_port_8017(repo):
     """Canônica em AGENTS.md §47 e DEVOPS_STANDARDS §3: cdc=8017, NOT 8018.
     Memória do projeto tinha 8018 errado — o grafo é a fonte da verdade agora."""
-    res = query_ecosystem_graph(
-        repo, node_id="platform-cdc", relation="runs_on_port", direction="out"
-    )
+    res = query_ecosystem_graph(repo, node_id="platform-cdc", relation="runs_on_port", direction="out")
     targets = {e["to"] for e in res["results"]}
     assert "port-8017" in targets
 
@@ -194,9 +186,7 @@ def test_platform_api_gateway_runs_on_port_8018(repo):
 
 
 def test_platform_admin_uses_port_8002_only(repo):
-    res = query_ecosystem_graph(
-        repo, node_id="platform-admin", relation="runs_on_port", direction="out"
-    )
+    res = query_ecosystem_graph(repo, node_id="platform-admin", relation="runs_on_port", direction="out")
     targets = {e["to"] for e in res["results"]}
     assert "port-8002" in targets
     assert "port-8017" not in targets
@@ -267,9 +257,7 @@ def test_each_active_service_has_port(repo):
     for service in res["results"]:
         if service.get("port") is None:
             continue
-        edges = query_ecosystem_graph(
-            repo, node_id=service["id"], relation="runs_on_port", direction="out"
-        )
+        edges = query_ecosystem_graph(repo, node_id=service["id"], relation="runs_on_port", direction="out")
         assert edges["total"] >= 1, f"{service['id']} declara port mas não tem aresta runs_on_port"
 
 
@@ -278,16 +266,12 @@ def test_no_two_services_share_a_port(repo):
     # limit alto: há 22 portas; sem isto a query pagina (default 20) e omite portas.
     res = query_ecosystem_graph(repo, kind="port", limit=1000)
     for port in res["results"]:
-        edges = query_ecosystem_graph(
-            repo, node_id=port["id"], relation="runs_on_port", direction="in"
-        )
+        edges = query_ecosystem_graph(repo, node_id=port["id"], relation="runs_on_port", direction="in")
         assert edges["total"] <= 1, f"{port['id']} compartilhada por: {edges['results']}"
 
 
 def test_platform_auth_owns_jwt_and_jwks(repo):
-    res = query_ecosystem_graph(
-        repo, node_id="platform-auth", relation="provides_api", direction="out"
-    )
+    res = query_ecosystem_graph(repo, node_id="platform-auth", relation="provides_api", direction="out")
     targets = {e["to"] for e in res["results"]}
     assert "auth.jwt.api" in targets
     assert "auth.jwks.api" in targets
@@ -295,13 +279,11 @@ def test_platform_auth_owns_jwt_and_jwks(repo):
 
 def test_only_rag_service_provides_embeddings(repo):
     """Apenas dataforall-rag-service provê o contrato de embeddings — §49 explicit_non_responsibilities."""
-    res = query_ecosystem_graph(
-        repo, node_id="rag.embeddings.api", relation="provides_api", direction="in"
-    )
+    res = query_ecosystem_graph(repo, node_id="rag.embeddings.api", relation="provides_api", direction="in")
     sources = {e["from"] for e in res["results"]}
-    assert sources == {"dataforall-rag-service"}, (
-        f"embeddings deve ser owned somente por rag-service; encontrado: {sources}"
-    )
+    assert sources == {
+        "dataforall-rag-service"
+    }, f"embeddings deve ser owned somente por rag-service; encontrado: {sources}"
 
 
 def test_agents_factory_consumes_both_rag_apis(repo):
@@ -325,18 +307,17 @@ def test_deprecated_services_have_canonical_redirect(repo):
     deprecated = query_ecosystem_graph(repo, status="deprecated")
     for dep in deprecated["results"]:
         meta = get_service_metadata(repo, node_id=dep["id"])
-        assert meta["canonical_redirect"] is not None, (
-            f"{dep['id']} é deprecado mas não tem deprecated_by"
-        )
+        assert meta["canonical_redirect"] is not None, f"{dep['id']} é deprecado mas não tem deprecated_by"
 
 
 def test_db_vector_used_only_by_rag_layer(repo):
     """platform-db-vector é privada da camada RAG — só rag-service e agents-factory."""
     res = find_consumers_of(repo, node_id="platform-db-vector")
     consumer_ids = {c["id"] for c in res["consumers"]}
-    assert consumer_ids == {"dataforall-rag-service", "dataforall-agents-factory"}, (
-        f"platform-db-vector tem consumidores inesperados: {consumer_ids}"
-    )
+    assert consumer_ids == {
+        "dataforall-rag-service",
+        "dataforall-agents-factory",
+    }, f"platform-db-vector tem consumidores inesperados: {consumer_ids}"
 
 
 # --------------------------- graph unavailability --------------------------- #

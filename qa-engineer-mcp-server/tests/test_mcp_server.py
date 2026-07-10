@@ -8,6 +8,7 @@ os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
 qa-engineer-mcp é compute-only e NÃO tem tool tokenless (_EXEMPT_TOOLS vazio):
 o branch exempt é exercitado via monkeypatch de _EXEMPT_TOOLS.
 """
+
 from __future__ import annotations
 
 import json

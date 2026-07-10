@@ -1,6 +1,32 @@
-"""Servidor MCP services  -  32 tools para registro e monitoramento de servicos.
+"""Servidor MCP services — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Tools:
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:services-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3). As tools de services não o consomem (é só p/
+     governança), então o dispatcher o remove antes de chamar a função.
+  4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: services-mcp é **stateful** (registry de serviços em PostgreSQL via
+``ServiceStore``), então o dispatcher recebe (store, settings) e injeta ambos nas
+tools — preservando a lógica original de src/tools/.
+
+Tools (32):
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
   PortMap (2):    get_port_map, find_by_port
   Discovery (4):  scan_docker, scan_processes, check_health, check_all_health
@@ -11,19 +37,19 @@ Tools:
   Infra (3):      register_infra, scan_infra, sync_infra_env
   Brokers (3):    kafka_status, redis_status, sync_broker_urls
   Logs (2):       get_service_logs, search_logs
-
-Streaming (HTTP sidecar):
-  GET /v1/services/{name}/logs/stream?lines=50&grep=<pattern>&timestamps=false
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from typing import Any
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
@@ -114,13 +140,12 @@ SCOPE_FOR_TOOL: dict[str, str] = {
     "get_service_logs": "services:read",
     "search_logs": "services:read",
 }
-SCOPES_SUPPORTED = ["services:read", "services:write"]
 
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+# #
 # Schemas                                                                      #
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+# #
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
-    # â"€â"€ Registry â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Registry  #
     "register_service": {
         "description": (
             "Registraou atualizaum servico no registry local. "
@@ -274,8 +299,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "update_service": {
         "description": (
-            "Atualizacampos de um servico existente. "
-            "Pelo menos um campo deve ser informado alem do name."
+            "Atualizacampos de um servico existente. " "Pelo menos um campo deve ser informado alem do name."
         ),
         "schema": {
             "type": "object",
@@ -315,7 +339,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â"€â"€ PortMap â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # PortMap  #
     "get_port_map": {
         "description": (
             "Retornamapade portaâ†’ servico paratodos os servicos registrados com porta. "
@@ -343,7 +367,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â"€â"€ Discovery â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Discovery  #
     "scan_docker": {
         "description": (
             "Executa`docker ps` e sincronizacontainers em execucaoo no registry. "
@@ -365,8 +389,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "scan_processes": {
         "description": (
-            "Usapsutil paralistar processos em LISTEN. "
-            "Retornalistade processos com pid, nome e porta."
+            "Usapsutil paralistar processos em LISTEN. " "Retornalistade processos com pid, nome e porta."
         ),
         "schema": {
             "type": "object",
@@ -422,7 +445,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â"€â"€ Composite â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Composite  #
     "service_status": {
         "description": (
             "Retornadados do servico + health check em umaunicachamada. "
@@ -488,7 +511,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â"€â"€ Gateway â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Gateway  #
     "get_gateway_map": {
         "description": (
             "Retornao MAPPING_GATEWAY  -  mapade todos os servicos com URLs internae externa. "
@@ -546,12 +569,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "properties": {
                 "port_ranges": {
                     "type": "string",
-                    "description": "Ranges de portaseparados por virgula. Ex: '8000-8100,27100-27130'. Default: PORT_SCAN_RANGES env ou '8000-8100'.",
+                    "description": "Ranges de portaseparados por virgula. Ex: '8000-8100,27100-27130'. Default: PORT_SCAN_RANGES env ou '8000-8100'.",  # noqa: E501
                 },
                 "service_names": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Listade nomes de servicos pararesolver viaDNS. Default: SERVICE_NAMES env.",
+                    "description": "Listade nomes de servicos pararesolver viaDNS. Default: SERVICE_NAMES env.",  # noqa: E501
                 },
                 "include_docker": {
                     "type": "boolean",
@@ -572,12 +595,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # â"€â"€ Launch â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Launch  #
     "launch_service": {
         "description": (
             "Sobe um servico viauvicorn, docker run ou docker-compose e registrano registry. "
             "Apos o start faz polling no health_path ate wait_timeout segundos. "
-            "Modos: 'uvicorn' (requer app), 'docker' (requer image), 'docker-compose' (usacompose_file/compose_service). "
+            "Modos: 'uvicorn' (requer app), 'docker' (requer image), 'docker-compose' (usacompose_file/compose_service). "  # noqa: E501
             "Retorna: started, healthy, ready_in_ms, attempts, external_url, pid/container_id."
         ),
         "schema": {
@@ -677,7 +700,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "stop_service": {
         "description": (
             "Paraum servico registrado. "
-            "Detectaautomaticamente o tipo: docker/docker-compose â†' docker stop; process/uvicorn â†' SIGTERM no PID. "
+            "Detectaautomaticamente o tipo: docker/docker-compose â†' docker stop; process/uvicorn â†' SIGTERM no PID. "  # noqa: E501
             "Atualizastatus=stopped no registry apos parar."
         ),
         "schema": {
@@ -701,7 +724,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
-    # â"€â"€ Env â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Env  #
     "read_env_file": {
         "description": (
             "Le um arquivo .env e retornaas variaveis como dict. "
@@ -718,7 +741,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "key_filter": {
                     "type": "string",
-                    "description": "Substring parafiltrar chaves (case-insensitive). Ex: 'URL' retornaapenas vars URL_*.",
+                    "description": "Substring parafiltrar chaves (case-insensitive). Ex: 'URL' retornaapenas vars URL_*.",  # noqa: E501
                 },
             },
         },
@@ -765,7 +788,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "url_map": {
                     "type": "object",
                     "additionalProperties": {"type": "string"},
-                    "description": 'Mapeamento explicito {ENV_VAR: service_name}. Ex: {"URL_ADMIN": "platform-admin"}.',
+                    "description": 'Mapeamento explicito {ENV_VAR: service_name}. Ex: {"URL_ADMIN": "platform-admin"}.',  # noqa: E501
                 },
                 "url_suffix": {
                     "type": "string",
@@ -827,12 +850,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "keys": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Chaves explicitas a redact (ex: [JWT_SECRET_KEY]). Se omitido, usa auto_detect.",
+                    "description": "Chaves explicitas a redact (ex: [JWT_SECRET_KEY]). Se omitido, usa auto_detect.",  # noqa: E501
                 },
                 "auto_detect": {
                     "type": "boolean",
                     "default": True,
-                    "description": "Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: true.",
+                    "description": "Detectar automaticamente vars *KEY, *SECRET, *PASSWORD, *TOKEN. Default: true.",  # noqa: E501
                 },
                 "dry_run": {
                     "type": "boolean",
@@ -870,11 +893,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "port": {
                     "type": "integer",
-                    "description": "Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379, kafka:9092).",
+                    "description": "Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379, kafka:9092).",  # noqa: E501
                 },
                 "host_port": {
                     "type": "integer",
-                    "description": "Porta mapeada no host para acesso externo (Kafka EXTERNAL listener). Ex: 9094.",
+                    "description": "Porta mapeada no host para acesso externo (Kafka EXTERNAL listener). Ex: 9094.",  # noqa: E501
                 },
                 "environment": {
                     "type": "string",
@@ -952,7 +975,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "kafka_status": {
         "description": (
             "Verifica conectividade TCP com o broker Kafka. "
-            "Se bootstrap_servers nao for passado, busca no registry (type='kafka' ou nome 'kafka'/'platform-kafka'). "
+            "Se bootstrap_servers nao for passado, busca no registry (type='kafka' ou nome 'kafka'/'platform-kafka'). "  # noqa: E501
             "Retorna lista de brokers com reachable=true/false e latencia em ms."
         ),
         "schema": {
@@ -1076,87 +1099,219 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 
 
 # Garante que todo tool declarado tem um escopo mínimo mapeado (least privilege).
-assert set(_TOOL_SCHEMAS.keys()) == set(SCOPE_FOR_TOOL.keys()), (
+assert set(_TOOL_SCHEMAS.keys()) == set(SCOPE_FOR_TOOL.keys()), (  # noqa: S101 — invariante de config
     "SCOPE_FOR_TOOL deve cobrir exatamente as tools de _TOOL_SCHEMAS: "
     f"faltam={set(_TOOL_SCHEMAS) - set(SCOPE_FOR_TOOL)} "
     f"sobram={set(SCOPE_FOR_TOOL) - set(_TOOL_SCHEMAS)}"
 )
 
+# ── Policy metadata por tool (STD-MCP-001 CI-2) ───────────────────────────────
+# O gateway NÃO deriva policy por nome: cada tool declara, além de description/
+# schema, os 4 campos de política que são emitidos em /mcp/tools/list:
+#   capability     — id estável <namespace>.<tool>
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# A ação (read|write) é derivada do SCOPE_FOR_TOOL já existente (least privilege).
+NAMESPACE = "services-mcp"
 
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
-# HTTP API (sidecar paradiscovery por outros MCPs, ex: dev-twin)            #
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
-def _build_http_app(store: ServiceStore) -> FastAPI:
-    from fastapi.responses import StreamingResponse
+# resource_type por tool (mesma taxonomia usada no gateway/README).
+_RESOURCE_TYPE: dict[str, str] = {
+    # Registry / Composite tocam o recurso lógico "service"
+    "register_service": "service",
+    "get_service": "service",
+    "list_services": "service",
+    "update_service": "service",
+    "unregister_service": "service",
+    "service_status": "service",
+    "list_environments": "service",
+    "reload_service": "service",
+    # PortMap
+    "get_port_map": "portmap",
+    "find_by_port": "portmap",
+    # Discovery
+    "scan_docker": "discovery",
+    "scan_processes": "discovery",
+    "check_health": "discovery",
+    "check_all_health": "discovery",
+    # Gateway
+    "get_gateway_map": "gateway",
+    "update_service_gateway": "gateway",
+    "sync_registry": "gateway",
+    # Launch (lifecycle)
+    "launch_service": "lifecycle",
+    "stop_service": "lifecycle",
+    # Env (configuration)
+    "read_env_file": "env",
+    "set_env_var": "env",
+    "sync_service_urls": "env",
+    "audit_env_files": "env",
+    "redact_env_secrets": "env",
+    # Infra
+    "register_infra": "infra",
+    "scan_infra": "infra",
+    "sync_infra_env": "infra",
+    # Brokers
+    "kafka_status": "broker",
+    "redis_status": "broker",
+    "sync_broker_urls": "broker",
+    # Logs
+    "get_service_logs": "logs",
+    "search_logs": "logs",
+}
 
-    from ..tools.log_tool import _resolve_log_source, _stream_docker_logs, _stream_file_logs
+# data_domain por tool.
+_DATA_DOMAIN: dict[str, str] = {
+    **{
+        t: "configuration"
+        for t in (
+            "read_env_file",
+            "set_env_var",
+            "sync_service_urls",
+            "audit_env_files",
+            "redact_env_secrets",
+        )
+    },  # noqa: E501
+    **{t: "observability" for t in ("get_service_logs", "search_logs")},
+}
 
-    app = FastAPI(title="services-mcp API", version="0.1.0", docs_url="/docs")
+
+def _action_for(tool: str) -> str:
+    """read|write derivado do least-privilege scope já mapeado (SCOPE_FOR_TOOL)."""
+    return "write" if SCOPE_FOR_TOOL[tool].endswith(":write") else "read"
+
+
+# Injeta os 4 campos de policy em cada meta de _TOOL_SCHEMAS (o gateway lê estes
+# campos em /mcp/tools/list). resource_type default = "service"; data_domain
+# default = "infrastructure".
+for _tool, _meta in _TOOL_SCHEMAS.items():
+    _rtype = _RESOURCE_TYPE.get(_tool, "service")
+    _meta["capability"] = f"{NAMESPACE}.{_tool}"
+    _meta["required_scope"] = f"{NAMESPACE}:{_rtype}:{_action_for(_tool)}"
+    _meta["resource_type"] = _rtype
+    _meta["data_domain"] = _DATA_DOMAIN.get(_tool, "infrastructure")
+
+# Campos de policy repassados no /mcp/tools/list.
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
+
+# Tools encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless). services-mcp
+# não expõe tool pública/tokenless: TODA execução exige inner token válido.
+_EXEMPT_TOOLS: frozenset[str] = frozenset()
+# Denylist fail-safe: tools que nunca devem sair pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+
+
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
+
+def _verify_inner_token(twin_token: str, settings: ServicesSettings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:services-mcp).
+
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:services-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
+    )
+
+
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
+
+def _build_http_app(settings: ServicesSettings, store: ServiceStore) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="services-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "services-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
         try:
-            count = len(store.list_all())
-        except Exception as exc:  # noqa: BLE001
-            return {"status": "degraded", "error": str(exc)}
-        return {"status": "ok", "service": "services-mcp", "registered_services": count}
-
-    @app.get("/v1/services/{name}/logs/stream")
-    async def stream_logs(
-        name: str,
-        lines: int = 50,
-        grep: str | None = None,
-        timestamps: bool = False,
-    ):
-        """SSE endpoint — stream de logs em tempo real para um servico registrado."""
-        svc = store.get(name)
-        if svc is None:
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=404, detail=f"Servico nao encontrado: {name}")
-
-        source_info = _resolve_log_source(svc)
-        source = source_info["source"]
-        target = source_info["target"]
-
-        if source == "docker":
-            gen = _stream_docker_logs(target, lines=lines, grep=grep, timestamps=timestamps)
-        elif source == "file":
-            gen = _stream_file_logs(target, lines=lines, grep=grep)
-        else:
-
-            async def _no_source():
-                yield 'data: {"error": "no_log_source", "detail": "Servico nao possui fonte de log configurada."}\n\n'
-
-            gen = _no_source()
-
-        return StreamingResponse(gen, media_type="text/event-stream")
-
-    @app.get("/")
-    def root() -> dict[str, str]:
-        return {"service": "services-mcp", "docs": "/docs", "health": "/v1/health"}
+            payload = _dispatch(name, arguments, store, settings)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
     return app
 
 
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
-# Server                                                                       #
-# â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
-def build_server() -> tuple[Any, ServiceStore, ServicesSettings, FastAPI]:
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Any, ServicesSettings, ServiceStore, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    store = ServiceStore(settings)
-    http_app = _build_http_app(store)
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    store = ServiceStore(settings.db_path)
+    http_app = _build_http_app(settings, store)
+    _log.info("services_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
 
-    _log.info("services_mcp_ready")
-
-    # Sincronizagateway no startup (non-blocking  -  ignoraerros)
-    try:
-        _log.info("sync_registry starting...")
-        result = sync_registry(store, include_docker=True, probe_health=False)
-        _log.info("sync_registry done: upserted=%d", result.get("total_upserted", 0))
-    except Exception as exc:  # noqa: BLE001
-        _log.warning("sync_registry startup failed (ignored): %s", exc)
+    # Descoberta eager no boot é opt-in (docker ps + port scan são I/O pesado).
+    if getattr(settings, "sync_on_startup", False):
+        try:
+            result = sync_registry(store, include_docker=True, probe_health=False)
+            _log.info("sync_registry done: upserted=%d", result.get("total_upserted", 0))
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("sync_registry startup failed (ignored): %s", exc)
 
     server: Server = Server("services-mcp-server")
 
@@ -1170,39 +1325,31 @@ def build_server() -> tuple[Any, ServiceStore, ServicesSettings, FastAPI]:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
-        _log.info("tool_called: %s keys=%s", name, sorted(args.keys()))
         try:
-            payload = _dispatch(name, args, settings, store)
+            payload = _dispatch(name, args, store, settings)
         except KeyError:
-            payload = {"error": "UnknownTool", "tool": name}
-            _log.error("unknown_tool: %s", name)
+            payload = {"error": "unknown_tool", "tool": name}
         except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(exc), "tool": name}
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
             _log.exception("tool_internal_error: %s", name)
-
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
+    return server, settings, store, http_app
 
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
 
-    return server, store, settings, http_app
+# ── Dispatcher (stateful: store + settings injetados nas tools) ───────────────
 
 
 def _dispatch(
     name: str,
     args: dict[str, Any],
-    settings: ServicesSettings,
     store: ServiceStore,
+    settings: ServicesSettings,
 ) -> dict:
-    # â"€â"€ Registry â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # tenant_id é injetado pelo PEP nos args (INV-3) só p/ governança; as tools de
+    # services não o consomem, então é removido antes da chamada.
+    args = {k: v for k, v in args.items() if k != "tenant_id"}
+    # ── Registry ──────────────────────────────────────────────────────────────
     if name == "register_service":
         return register_service(
             store,
@@ -1233,27 +1380,23 @@ def _dispatch(
         return update_service(store, name=args["name"], **update_args)
     if name == "unregister_service":
         return unregister_service(store, name=args["name"])
-    # â"€â"€ PortMap â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # PortMap  #
     if name == "get_port_map":
         return get_port_map(store)
     if name == "find_by_port":
         return find_by_port(store, port=args["port"])
-    # â"€â"€ Discovery â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Discovery  #
     if name == "scan_docker":
         return scan_docker(store, timeout=args.get("timeout", settings.docker_timeout))
     if name == "scan_processes":
         return scan_processes(store, min_port=args.get("min_port", 1024))
     if name == "check_health":
-        return check_health(
-            store, name=args["name"], timeout=args.get("timeout", settings.health_timeout)
-        )
+        return check_health(store, name=args["name"], timeout=args.get("timeout", settings.health_timeout))
     if name == "check_all_health":
         return check_all_health(store, timeout=args.get("timeout", settings.health_timeout))
-    # â"€â"€ Composite â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Composite  #
     if name == "service_status":
-        return service_status(
-            store, name=args["name"], timeout=args.get("timeout", settings.health_timeout)
-        )
+        return service_status(store, name=args["name"], timeout=args.get("timeout", settings.health_timeout))
     if name == "list_environments":
         return list_environments(store)
     if name == "reload_service":
@@ -1263,7 +1406,7 @@ def _dispatch(
             wait_seconds=args.get("wait_seconds", 3.0),
             health_timeout=args.get("health_timeout", settings.health_timeout),
         )
-    # â"€â"€ Gateway â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Gateway  #
     if name == "get_gateway_map":
         return get_gateway_map(store)
     if name == "update_service_gateway":
@@ -1285,7 +1428,7 @@ def _dispatch(
             probe_health=args.get("probe_health", True),
             docker_timeout=args.get("docker_timeout", 10),
         )
-    # â"€â"€ Launch â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Launch  #
     if name == "launch_service":
         return launch_service(
             store,
@@ -1315,7 +1458,7 @@ def _dispatch(
             mode=args.get("mode"),
             timeout=args.get("timeout", 10),
         )
-    # â"€â"€ Env â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€ #
+    # Env  #
     if name == "read_env_file":
         return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
     if name == "set_env_var":
@@ -1405,36 +1548,41 @@ def _dispatch(
     raise KeyError(name)
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+# ── Entry point ───────────────────────────────────────────────────────────────
 
-    Preserva build_server() (Server de baixo nível + _dispatch com store/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware,
-    com escopo mínimo por ferramenta (SCOPE_FOR_TOOL).
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    server, _store, _settings, _http = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("SERVICES_RESOURCE", "http://localhost:7107/mcp"),
-        prm_url=os.getenv(
-            "SERVICES_PRM_URL",
-            "http://localhost:7107/.well-known/oauth-protected-resource",
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, _store, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
     )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7107")))
+        _server, settings, _store, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

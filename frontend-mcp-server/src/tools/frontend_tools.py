@@ -46,9 +46,7 @@ def _server_version() -> str:
 # ──────────────────────────────────────────────────────────────────────────── #
 # 1) React component scaffold — derivado do nome/variante
 # ──────────────────────────────────────────────────────────────────────────── #
-def generate_react_component(
-    name: str = "Component", variant: str = "functional"
-) -> dict[str, Any]:
+def generate_react_component(name: str = "Component", variant: str = "functional") -> dict[str, Any]:
     """Gera o scaffold de um componente React a partir do nome e da variante."""
     name = (name or "Component").strip() or "Component"
     variant = (variant or "functional").strip() or "functional"

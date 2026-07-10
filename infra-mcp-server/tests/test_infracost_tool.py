@@ -117,18 +117,14 @@ def test_infracost_custom_thresholds(monkeypatch, fake_settings, tmp_path):
 
 
 def test_infracost_plan_not_found(fake_settings, tmp_path):
-    res = infracost_tool.cost_estimate_infracost(
-        fake_settings, plan_path=str(tmp_path / "nope.tfplan")
-    )
+    res = infracost_tool.cost_estimate_infracost(fake_settings, plan_path=str(tmp_path / "nope.tfplan"))
     assert res["error"] == "plan_not_found"
 
 
 def test_infracost_invalid_json(monkeypatch, fake_settings, tmp_path):
     plan = tmp_path / "x.tfplan"
     plan.write_text("binary")
-    monkeypatch.setattr(
-        infracost_tool, "run_command", lambda *a, **kw: _mock_result(stdout="not json")
-    )
+    monkeypatch.setattr(infracost_tool, "run_command", lambda *a, **kw: _mock_result(stdout="not json"))
     res = infracost_tool.cost_estimate_infracost(fake_settings, plan_path=str(plan))
     assert res["error"] == "invalid_json"
 

@@ -31,7 +31,7 @@ import subprocess
 import time
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 from ..db.store import ServiceStore
 
@@ -234,9 +234,11 @@ async def _stream_file_logs(
         yield 'data: {"error": "tail not found"}\n\n'
         return
 
+    # proc.stdout nunca é None: criado com stdout=PIPE acima. cast é no-op em runtime.
+    stdout = cast(asyncio.StreamReader, proc.stdout)
     try:
         while True:
-            line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=30)
+            line_bytes = await asyncio.wait_for(stdout.readline(), timeout=30)
             if not line_bytes:
                 break
             line = line_bytes.decode(errors="replace").rstrip()
@@ -283,9 +285,7 @@ def get_service_logs(
     t0 = time.monotonic()
 
     if source == "docker":
-        ok, log_lines = _docker_logs(
-            target, lines=lines, since=since, grep=grep, timestamps=timestamps
-        )
+        ok, log_lines = _docker_logs(target, lines=lines, since=since, grep=grep, timestamps=timestamps)
     elif source == "file":
         ok, log_lines = _file_logs(target, lines=lines, grep=grep)
     elif source == "journald":

@@ -17,8 +17,9 @@ class Encryptor:
             self._fernet = Fernet(key.encode() if isinstance(key, str) else key)
         except (ValueError, Exception) as exc:
             raise EncryptionError(
-                f"Chave Fernet inválida: {exc}. "
-                'Gere uma com: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+                f"Chave Fernet inválida: {exc}. Gere uma com: "
+                'python -c "from cryptography.fernet import Fernet; '
+                'print(Fernet.generate_key().decode())"'
             ) from exc
 
     def encrypt(self, value: str) -> str:

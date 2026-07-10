@@ -7,16 +7,12 @@ from src.tools.gate_tool import add_gate_result, clear_gates, get_gate_status
 
 class TestAddGateResult:
     def test_invalid_gate_type(self, registered_store):
-        result = add_gate_result(
-            registered_store, service="svc-a", env="dev", gate_type="bogus", passed=True
-        )
+        result = add_gate_result(registered_store, service="svc-a", env="dev", gate_type="bogus", passed=True)
         assert result["error"] == "invalid_gate_type"
         assert "qa_tests" in result["valid_types"]
 
     def test_service_not_found(self, store):
-        result = add_gate_result(
-            store, service="ghost", env="dev", gate_type="qa_tests", passed=True
-        )
+        result = add_gate_result(store, service="ghost", env="dev", gate_type="qa_tests", passed=True)
         assert result == {"error": "not_found", "service": "ghost"}
 
     def test_records_gate(self, registered_store):

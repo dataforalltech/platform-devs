@@ -1,13 +1,23 @@
-"""Fixtures compartilhadas para todos os testes do deploy-mcp-server."""
+"""Fixtures compartilhadas para todos os testes do deploy-mcp-server.
+
+Garante que a raiz do deploy-mcp-server esteja no sys.path (permite `from src...`
+mesmo quando o pytest é invocado de outro cwd, sem depender de `pip install -e .`).
+"""
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.config.settings import DeploySettings
-from src.knowledge.github_client import GitHubClient
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from src.config.settings import DeploySettings  # noqa: E402
+from src.knowledge.github_client import GitHubClient  # noqa: E402
 
 
 @pytest.fixture

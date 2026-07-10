@@ -132,9 +132,7 @@ class TestReadEnvFile:
 
 class TestAuditEnvFiles:
     def test_detects_hardcoded_secret_and_noncanonical(self, store, tmp_path):
-        (tmp_path / ".env.weird").write_text(
-            "JWT_SECRET_KEY=realsecretvalue\nPORT=8000\n", encoding="utf-8"
-        )
+        (tmp_path / ".env.weird").write_text("JWT_SECRET_KEY=realsecretvalue\nPORT=8000\n", encoding="utf-8")
         result = audit_env_files(store, directory=str(tmp_path))
         assert result["hardcoded_secrets_count"] == 1
         secret = result["hardcoded_secrets"][0]

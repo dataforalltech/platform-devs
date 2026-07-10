@@ -197,9 +197,7 @@ class TestListLocalRepos:
     def test_filter_name(self, settings_with_root, tmp_path):
         _make_git_repo(tmp_path, "platform-auth")
         _make_git_repo(tmp_path, "other-svc")
-        result = list_local_repos(
-            settings_with_root, filter_name="platform", include_git_info=False
-        )
+        result = list_local_repos(settings_with_root, filter_name="platform", include_git_info=False)
         assert result["total"] == 1
         assert result["repos"][0]["name"] == "platform-auth"
 

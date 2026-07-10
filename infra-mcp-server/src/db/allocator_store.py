@@ -34,6 +34,7 @@ Thread-safety:
 
 from __future__ import annotations
 
+import functools
 import sqlite3
 import threading
 import uuid
@@ -176,7 +177,8 @@ class AllocatorStore:
     # Schema                                                               #
     # ------------------------------------------------------------------ #
     def _init_schema(self) -> None:
-        self._con.executescript("""
+        self._con.executescript(
+            """
             CREATE TABLE IF NOT EXISTS vms (
                 vm_id                TEXT PRIMARY KEY,
                 spec                 TEXT NOT NULL,
@@ -230,7 +232,8 @@ class AllocatorStore:
             CREATE INDEX IF NOT EXISTS idx_leases_vm_id  ON leases(vm_id);
             CREATE INDEX IF NOT EXISTS idx_leases_status ON leases(status);
             CREATE INDEX IF NOT EXISTS idx_queued_status ON queued_requests(status, priority, created_at);
-        """)
+        """
+        )
         # Migrations idempotentes para bancos criados em fases anteriores
         for ddl in [
             "ALTER TABLE vms ADD COLUMN connection_hint TEXT",
@@ -364,10 +367,7 @@ class AllocatorStore:
                         for vm in preemptable:
                             self._schedule_destroy(vm["vm_id"], vm["spec"])
                         # Recheck após preemption
-                        if (
-                            self._current_cost_per_hour() + spec_cost
-                            <= self.policy.max_cost_usd_per_hour
-                        ):
+                        if self._current_cost_per_hour() + spec_cost <= self.policy.max_cost_usd_per_hour:
                             can_provision = True
 
                 if not can_provision:
@@ -445,9 +445,7 @@ class AllocatorStore:
         # Re-lê lease: ImmediateProvisioner já atualizou → ACTIVE;
         # TerraformProvisioner ainda está em background → PENDING.
         with self._lock:
-            row = self._con.execute(
-                "SELECT * FROM leases WHERE lease_id = ?", (lease_id,)
-            ).fetchone()
+            row = self._con.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
             final_lease = self._row_to_lease(row) if row else lease
 
         return AllocationDecision(
@@ -462,9 +460,7 @@ class AllocatorStore:
     def get_lease(self, lease_id: str) -> VMLease | None:
         with self._lock:
             self._gc_expired()
-            row = self._con.execute(
-                "SELECT * FROM leases WHERE lease_id = ?", (lease_id,)
-            ).fetchone()
+            row = self._con.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
             return self._row_to_lease(row) if row else None
 
     def release_lease(self, lease_id: str, by: str | None = None) -> VMLease:
@@ -472,9 +468,7 @@ class AllocatorStore:
 
         with self._lock:
             self._gc_expired()
-            row = self._con.execute(
-                "SELECT * FROM leases WHERE lease_id = ?", (lease_id,)
-            ).fetchone()
+            row = self._con.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
             if row is None:
                 raise LeaseNotFound(f"lease_id {lease_id!r} não existe")
             lease = self._row_to_lease(row)
@@ -490,9 +484,7 @@ class AllocatorStore:
                     "UPDATE leases SET status='RELEASED', released_at=? WHERE lease_id=?",
                     (now_str, lease_id),
                 )
-                vm_terminated = self._detach_lease_from_vm_tx(
-                    lease_id, lease.vm_id, lease.exclusive
-                )
+                vm_terminated = self._detach_lease_from_vm_tx(lease_id, lease.vm_id, lease.exclusive)
                 self._con.execute("COMMIT")
             except Exception:
                 self._con.execute("ROLLBACK")
@@ -504,9 +496,7 @@ class AllocatorStore:
 
             if vm_terminated:
                 # Lê spec da VM para passar ao destroy (safe: dentro do lock, apenas leitura)
-                vm_row = self._con.execute(
-                    "SELECT spec FROM vms WHERE vm_id=?", (lease.vm_id,)
-                ).fetchone()
+                vm_row = self._con.execute("SELECT spec FROM vms WHERE vm_id=?", (lease.vm_id,)).fetchone()
                 if vm_row:
                     self._schedule_destroy(lease.vm_id, vm_row["spec"])
 
@@ -520,8 +510,8 @@ class AllocatorStore:
                 vm_id=new_vm.vm_id,
                 modules_root=self._tf_modules_root,
                 timeout_sec=self._provision_timeout_sec,
-                on_ready=lambda hint, vid=new_vm.vm_id: self._on_vm_ready(vid, hint),
-                on_failed=lambda err, vid=new_vm.vm_id: self._on_vm_failed(vid, err),
+                on_ready=functools.partial(self._on_vm_ready, new_vm.vm_id),
+                on_failed=functools.partial(self._on_vm_failed, new_vm.vm_id),
                 extra_tf_vars={"ssh_public_key": pub_key},
             )
 
@@ -532,16 +522,12 @@ class AllocatorStore:
             raise AllocatorStoreError("additional_min deve ser > 0")
         with self._lock:
             self._gc_expired()
-            row = self._con.execute(
-                "SELECT * FROM leases WHERE lease_id = ?", (lease_id,)
-            ).fetchone()
+            row = self._con.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
             if row is None:
                 raise LeaseNotFound(f"lease_id {lease_id!r} não existe")
             lease = self._row_to_lease(row)
             if lease.status not in ("PENDING", "ACTIVE"):
-                raise AllocatorStoreError(
-                    f"lease em status {lease.status!r} não pode ser estendido"
-                )
+                raise AllocatorStoreError(f"lease em status {lease.status!r} não pode ser estendido")
             if lease.extension_count >= self.policy.max_extensions_per_lease:
                 raise AllocatorStoreError(
                     f"lease atingiu max_extensions ({self.policy.max_extensions_per_lease})"
@@ -623,16 +609,13 @@ class AllocatorStore:
                 ou chave não disponível (VM provisionada antes da Phase 2f).
         """
         with self._lock:
-            row = self._con.execute(
-                "SELECT * FROM leases WHERE lease_id = ?", (lease_id,)
-            ).fetchone()
+            row = self._con.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
             if row is None:
                 raise LeaseNotFound(f"lease_id {lease_id!r} não existe")
             lease = self._row_to_lease(row)
             if lease.owner != owner:
                 raise AllocatorStoreError(
-                    f"owner {owner!r} não é o titular do lease {lease_id!r} "
-                    f"(titular: {lease.owner!r})"
+                    f"owner {owner!r} não é o titular do lease {lease_id!r} " f"(titular: {lease.owner!r})"
                 )
             if lease.status != "ACTIVE":
                 raise AllocatorStoreError(
@@ -651,9 +634,7 @@ class AllocatorStore:
             from .ssh_key import decrypt_private_key  # noqa: PLC0415
 
             try:
-                return decrypt_private_key(
-                    bytes(key_row["encrypted_private_key"]), self._fernet_key
-                )
+                return decrypt_private_key(bytes(key_row["encrypted_private_key"]), self._fernet_key)
             except Exception as exc:  # noqa: BLE001
                 raise AllocatorStoreError(
                     f"Falha ao decifrar chave SSH para VM {lease.vm_id!r}: {exc}"
@@ -763,8 +744,8 @@ class AllocatorStore:
                 vm_id=new_vm.vm_id,
                 modules_root=self._tf_modules_root,
                 timeout_sec=self._provision_timeout_sec,
-                on_ready=lambda hint, vid=new_vm.vm_id: self._on_vm_ready(vid, hint),
-                on_failed=lambda err, vid=new_vm.vm_id: self._on_vm_failed(vid, err),
+                on_ready=functools.partial(self._on_vm_ready, new_vm.vm_id),
+                on_failed=functools.partial(self._on_vm_failed, new_vm.vm_id),
                 extra_tf_vars={"ssh_public_key": pub_key},
             )
 
@@ -785,8 +766,7 @@ class AllocatorStore:
                     (vm_id,),
                 )
                 self._con.execute(
-                    "UPDATE leases SET status='EXPIRED', released_at=? "
-                    "WHERE vm_id=? AND status='PENDING'",
+                    "UPDATE leases SET status='EXPIRED', released_at=? " "WHERE vm_id=? AND status='PENDING'",
                     (now_str, vm_id),
                 )
                 # Phase 2f: chave SSH deletada — VM falhou, acesso impossível de qualquer forma
@@ -815,8 +795,8 @@ class AllocatorStore:
                 vm_id=new_vm.vm_id,
                 modules_root=self._tf_modules_root,
                 timeout_sec=self._provision_timeout_sec,
-                on_ready=lambda hint, vid=new_vm.vm_id: self._on_vm_ready(vid, hint),
-                on_failed=lambda err, vid=new_vm.vm_id: self._on_vm_failed(vid, err),
+                on_ready=functools.partial(self._on_vm_ready, new_vm.vm_id),
+                on_failed=functools.partial(self._on_vm_failed, new_vm.vm_id),
                 extra_tf_vars={"ssh_public_key": pub_key},
             )
 
@@ -861,10 +841,7 @@ class AllocatorStore:
                 f"spec {request.spec!r} exige aprovação humana out-of-band. "
                 "Setar request.human_approved=True após aprovação registrada."
             )
-        if (
-            request.spec not in self.policy.spec_whitelist_no_approval
-            and not request.human_approved
-        ):
+        if request.spec not in self.policy.spec_whitelist_no_approval and not request.human_approved:
             return (
                 f"spec {request.spec!r} não está na whitelist sem-aprovação "
                 f"({sorted(self.policy.spec_whitelist_no_approval)}). "
@@ -900,9 +877,7 @@ class AllocatorStore:
         return self._row_to_vm(row) if row else None
 
     def _get_vm_connection_hint(self, vm_id: str) -> str | None:
-        row = self._con.execute(
-            "SELECT connection_hint FROM vms WHERE vm_id=?", (vm_id,)
-        ).fetchone()
+        row = self._con.execute("SELECT connection_hint FROM vms WHERE vm_id=?", (vm_id,)).fetchone()
         return row["connection_hint"] if row else None
 
     def _start_provisioning(self, spec: str) -> tuple[VMInfo, str]:
@@ -1043,31 +1018,34 @@ class AllocatorStore:
                 )
                 if row["exclusive"]:
                     self._con.execute(
-                        "UPDATE vms SET exclusive_locked_by=NULL "
-                        "WHERE vm_id=? AND exclusive_locked_by=?",
+                        "UPDATE vms SET exclusive_locked_by=NULL " "WHERE vm_id=? AND exclusive_locked_by=?",
                         (row["vm_id"], row["lease_id"]),
                     )
                 _log.info("lease_expired_gc", extra={"extras": {"lease_id": row["lease_id"]}})
 
             # Coleta VMs que ficaram órfãs após expirar os leases (dentro da transação)
-            orphan_vms = self._con.execute("""
+            orphan_vms = self._con.execute(
+                """
                 SELECT vm_id, spec FROM vms
                 WHERE status IN ('PROVISIONING','READY')
                   AND vm_id NOT IN (
                       SELECT DISTINCT vm_id FROM leases
                       WHERE status IN ('PENDING','ACTIVE')
                   )
-            """).fetchall()
+            """
+            ).fetchall()
 
             if orphan_vms:
-                self._con.execute("""
+                self._con.execute(
+                    """
                     UPDATE vms SET status='TERMINATED'
                     WHERE status IN ('PROVISIONING','READY')
                       AND vm_id NOT IN (
                           SELECT DISTINCT vm_id FROM leases
                           WHERE status IN ('PENDING','ACTIVE')
                       )
-                """)
+                """
+                )
                 # Phase 2f: remove chaves SSH das VMs órfãs terminadas
                 orphan_ids = [r["vm_id"] for r in orphan_vms]
                 placeholders = ",".join("?" * len(orphan_ids))
@@ -1086,9 +1064,7 @@ class AllocatorStore:
             self._schedule_destroy(vm_row["vm_id"], vm_row["spec"])
 
     def _current_cost_per_hour(self) -> float:
-        rows = self._con.execute(
-            "SELECT spec FROM vms WHERE status IN ('PROVISIONING','READY')"
-        ).fetchall()
+        rows = self._con.execute("SELECT spec FROM vms WHERE status IN ('PROVISIONING','READY')").fetchall()
         return sum(SPEC_COST_USD_PER_HOUR.get(r["spec"], 0.0) for r in rows)
 
     # ------------------------------------------------------------------ #

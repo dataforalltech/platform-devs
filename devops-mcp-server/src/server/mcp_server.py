@@ -24,6 +24,7 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
 NOTA: devops-mcp é compute-only (gera artefatos a partir dos inputs; não há
 backend REST), por isso não há ServiceApiClient — as tools são chamadas diretamente.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -86,10 +87,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "devops-mcp:k8s_manifest:write",
         "resource_type": "k8s_manifest",
         "data_domain": "devops",
-        "schema": _schema({
-            "application": dict(_STR, description="Nome da aplicação."),
-            "replicas": dict(_INT, description="Número de réplicas (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "application": dict(_STR, description="Nome da aplicação."),
+                "replicas": dict(_INT, description="Número de réplicas (opcional)."),
+            }
+        ),
     },
     "generate_dockerfile": {
         "description": "Generate optimized Dockerfile.",
@@ -97,10 +100,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "devops-mcp:dockerfile:write",
         "resource_type": "dockerfile",
         "data_domain": "devops",
-        "schema": _schema({
-            "application": dict(_STR, description="Nome da aplicação."),
-            "runtime": dict(_STR, description="Runtime base (ex. python:3.11; opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "application": dict(_STR, description="Nome da aplicação."),
+                "runtime": dict(_STR, description="Runtime base (ex. python:3.11; opcional)."),
+            }
+        ),
     },
     "generate_github_actions_pipeline": {
         "description": "Generate GitHub Actions CI/CD pipeline.",
@@ -108,9 +113,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "devops-mcp:pipeline:write",
         "resource_type": "pipeline",
         "data_domain": "devops",
-        "schema": _schema({
-            "application": dict(_STR, description="Nome da aplicação."),
-        }),
+        "schema": _schema(
+            {
+                "application": dict(_STR, description="Nome da aplicação."),
+            }
+        ),
     },
     "generate_helm_chart": {
         "description": "Generate Helm Chart for Kubernetes deployment.",
@@ -118,9 +125,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "devops-mcp:helm_chart:write",
         "resource_type": "helm_chart",
         "data_domain": "devops",
-        "schema": _schema({
-            "app_name": dict(_STR, description="Nome da aplicação/chart."),
-        }),
+        "schema": _schema(
+            {
+                "app_name": dict(_STR, description="Nome da aplicação/chart."),
+            }
+        ),
     },
 }
 
@@ -134,6 +143,7 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
 
 def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:devops-mcp).
@@ -151,13 +161,14 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     return jwt.decode(
         twin_token,
         signing_key.key,
-        algorithms=["RS256"],                         # RS256 exclusivo (STD-SEC-001)
-        audience=settings.mcp_twin_audience,          # a falha de integração nº 1
-        options={"require": ["exp", "aud", "jti"]},   # sem jti → rejeita (JTI_REQUIRED)
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
 
 # ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
+
 
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
@@ -182,12 +193,13 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
+
 def _build_http_app(settings: Settings) -> FastAPI:
     """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
     app = FastAPI(
         title="devops-mcp API",
         version="0.1.0",
-        docs_url="/docs" if settings.docs_enabled else None,   # false em todo ambiente
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
@@ -249,6 +261,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
+
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
@@ -281,6 +294,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 async def _run() -> None:
     import uvicorn

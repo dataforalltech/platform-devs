@@ -25,6 +25,7 @@ NOTA: qa-engineer-mcp é compute-only (gera artefatos de teste/QA a partir dos
 inputs; não há backend REST), por isso não há ServiceApiClient — as tools são
 chamadas diretamente.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -93,10 +94,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:requirement:read",
         "resource_type": "requirement",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "requirement": dict(_STR, description="Requisito de qualidade a analisar."),
-            "context": dict(_OBJ, description="Contexto adicional (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "requirement": dict(_STR, description="Requisito de qualidade a analisar."),
+                "context": dict(_OBJ, description="Contexto adicional (opcional)."),
+            }
+        ),
     },
     "classify_bug_severity": {
         "description": "Classifica severidade de bug (P1–P4) por impacto e frequência, com SLA.",
@@ -104,11 +107,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:bug_severity:read",
         "resource_type": "bug_severity",
         "data_domain": "operational",
-        "schema": _schema({
-            "description": dict(_STR, description="Descrição do bug."),
-            "impact": dict(_STR, description="Impacto (critical/high/medium/low)."),
-            "frequency": dict(_STR, description="Frequência (always/often/sometimes/rarely)."),
-        }),
+        "schema": _schema(
+            {
+                "description": dict(_STR, description="Descrição do bug."),
+                "impact": dict(_STR, description="Impacto (critical/high/medium/low)."),
+                "frequency": dict(_STR, description="Frequência (always/often/sometimes/rarely)."),
+            }
+        ),
     },
     "validate_story_testability": {
         "description": "Valida a testabilidade de uma user story e seus critérios de aceite.",
@@ -116,10 +121,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:story:read",
         "resource_type": "story",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "story": dict(_STR, description="User story a validar."),
-            "acceptance_criteria": dict(_STR_ARR, description="Critérios de aceite (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "story": dict(_STR, description="User story a validar."),
+                "acceptance_criteria": dict(_STR_ARR, description="Critérios de aceite (opcional)."),
+            }
+        ),
     },
     "review_test_coverage": {
         "description": "Revisa a cobertura de testes de um módulo e aponta gaps e recomendações.",
@@ -127,10 +134,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:test_coverage:read",
         "resource_type": "test_coverage",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "module": dict(_STR, description="Módulo avaliado."),
-            "current_coverage": dict(_NUM, description="Cobertura atual em % (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "module": dict(_STR, description="Módulo avaliado."),
+                "current_coverage": dict(_NUM, description="Cobertura atual em % (opcional)."),
+            }
+        ),
     },
     # ── Geração de artefatos / testes (:write) ─────────────────────────────────
     "generate_test_plan": {
@@ -139,11 +148,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:test_plan:write",
         "resource_type": "test_plan",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "scope": dict(_STR, description="Escopo (full/partial; opcional)."),
-            "team": dict(_STR, description="Time responsável (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "scope": dict(_STR, description="Escopo (full/partial; opcional)."),
+                "team": dict(_STR, description="Time responsável (opcional)."),
+            }
+        ),
     },
     "generate_test_cases": {
         "description": "Gera casos de teste estruturados para uma funcionalidade.",
@@ -151,11 +162,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:test_case:write",
         "resource_type": "test_case",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "test_type": dict(_STR, description="Tipo de teste (functional/...; opcional)."),
-            "count": dict(_INT, description="Quantidade de casos (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "test_type": dict(_STR, description="Tipo de teste (functional/...; opcional)."),
+                "count": dict(_INT, description="Quantidade de casos (opcional)."),
+            }
+        ),
     },
     "generate_gherkin_scenarios": {
         "description": "Gera cenários Gherkin (BDD) para uma funcionalidade.",
@@ -163,10 +176,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:gherkin:write",
         "resource_type": "gherkin",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "scenarios": dict(_STR_ARR, description="Cenários a converter (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "scenarios": dict(_STR_ARR, description="Cenários a converter (opcional)."),
+            }
+        ),
     },
     "generate_e2e_tests": {
         "description": "Gera testes end-to-end (Playwright/Cypress) para uma funcionalidade.",
@@ -174,11 +189,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:e2e_test:write",
         "resource_type": "e2e_test",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "framework": dict(_STR, description="Framework (playwright/cypress; opcional)."),
-            "base_url": dict(_STR, description="URL base da app (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "framework": dict(_STR, description="Framework (playwright/cypress; opcional)."),
+                "base_url": dict(_STR, description="URL base da app (opcional)."),
+            }
+        ),
     },
     "generate_api_tests": {
         "description": "Gera testes de API (pytest+httpx) para um endpoint.",
@@ -186,11 +203,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:api_test:write",
         "resource_type": "api_test",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "endpoint": dict(_STR, description="Path do endpoint."),
-            "method": dict(_STR, description="Método HTTP (opcional)."),
-            "base_url": dict(_STR, description="URL base da API (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "endpoint": dict(_STR, description="Path do endpoint."),
+                "method": dict(_STR, description="Método HTTP (opcional)."),
+                "base_url": dict(_STR, description="URL base da API (opcional)."),
+            }
+        ),
     },
     "generate_unit_tests": {
         "description": "Gera testes unitários (pytest/vitest) para um módulo.",
@@ -198,10 +217,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:unit_test:write",
         "resource_type": "unit_test",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "module": dict(_STR, description="Módulo alvo."),
-            "language": dict(_STR, description="Linguagem (python/typescript; opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "module": dict(_STR, description="Módulo alvo."),
+                "language": dict(_STR, description="Linguagem (python/typescript; opcional)."),
+            }
+        ),
     },
     "generate_playwright_tests": {
         "description": "Gera testes E2E em Playwright para uma funcionalidade.",
@@ -209,10 +230,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:playwright_test:write",
         "resource_type": "playwright_test",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "base_url": dict(_STR, description="URL base da app (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "base_url": dict(_STR, description="URL base da app (opcional)."),
+            }
+        ),
     },
     "generate_cypress_tests": {
         "description": "Gera testes E2E em Cypress para uma funcionalidade.",
@@ -220,10 +243,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:cypress_test:write",
         "resource_type": "cypress_test",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "base_url": dict(_STR, description="URL base da app (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "base_url": dict(_STR, description="URL base da app (opcional)."),
+            }
+        ),
     },
     "generate_postman_collection": {
         "description": "Gera coleção Postman com requests e testes para uma API.",
@@ -231,11 +256,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:postman_collection:write",
         "resource_type": "postman_collection",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "api_name": dict(_STR, description="Nome da API/coleção."),
-            "base_url": dict(_STR, description="URL base da API (opcional)."),
-            "endpoints": dict(_STR_ARR, description="Endpoints (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "api_name": dict(_STR, description="Nome da API/coleção."),
+                "base_url": dict(_STR, description="URL base da API (opcional)."),
+                "endpoints": dict(_STR_ARR, description="Endpoints (opcional)."),
+            }
+        ),
     },
     "generate_bug_report": {
         "description": "Gera relatório de bug estruturado com passos e severidade.",
@@ -243,11 +270,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:bug_report:write",
         "resource_type": "bug_report",
         "data_domain": "operational",
-        "schema": _schema({
-            "title": dict(_STR, description="Título do bug."),
-            "steps": dict(_STR_ARR, description="Passos para reproduzir (opcional)."),
-            "severity": dict(_STR, description="Severidade (P1–P4; opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "title": dict(_STR, description="Título do bug."),
+                "steps": dict(_STR_ARR, description="Passos para reproduzir (opcional)."),
+                "severity": dict(_STR, description="Severidade (P1–P4; opcional)."),
+            }
+        ),
     },
     "generate_quality_gate": {
         "description": "Gera quality gate de CI com thresholds e config bloqueante.",
@@ -255,10 +284,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:quality_gate:write",
         "resource_type": "quality_gate",
         "data_domain": "operational",
-        "schema": _schema({
-            "service": dict(_STR, description="Serviço alvo."),
-            "thresholds": dict(_OBJ, description="Thresholds do gate (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "service": dict(_STR, description="Serviço alvo."),
+                "thresholds": dict(_OBJ, description="Thresholds do gate (opcional)."),
+            }
+        ),
     },
     "generate_uat_checklist": {
         "description": "Gera checklist de UAT com itens e stakeholders.",
@@ -266,10 +297,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:uat_checklist:write",
         "resource_type": "uat_checklist",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "feature": dict(_STR, description="Funcionalidade alvo."),
-            "stakeholders": dict(_STR_ARR, description="Stakeholders (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Funcionalidade alvo."),
+                "stakeholders": dict(_STR_ARR, description="Stakeholders (opcional)."),
+            }
+        ),
     },
     "generate_k6_performance_test": {
         "description": "Gera teste de performance k6 para um endpoint.",
@@ -277,11 +310,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:performance_test:write",
         "resource_type": "performance_test",
         "data_domain": "operational",
-        "schema": _schema({
-            "endpoint": dict(_STR, description="Endpoint alvo (URL)."),
-            "vus": dict(_INT, description="Usuários virtuais (opcional)."),
-            "duration": dict(_STR, description="Duração do teste (ex. 30s; opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "endpoint": dict(_STR, description="Endpoint alvo (URL)."),
+                "vus": dict(_INT, description="Usuários virtuais (opcional)."),
+                "duration": dict(_STR, description="Duração do teste (ex. 30s; opcional)."),
+            }
+        ),
     },
     "generate_regression_suite": {
         "description": "Gera suíte de regressão para um serviço.",
@@ -289,10 +324,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:regression_suite:write",
         "resource_type": "regression_suite",
         "data_domain": "qa-engineer",
-        "schema": _schema({
-            "service": dict(_STR, description="Serviço alvo."),
-            "test_cases": dict(_STR_ARR, description="Casos base da suíte (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "service": dict(_STR, description="Serviço alvo."),
+                "test_cases": dict(_STR_ARR, description="Casos base da suíte (opcional)."),
+            }
+        ),
     },
     "generate_smoke_test_suite": {
         "description": "Gera suíte de smoke test pós-deploy para um serviço.",
@@ -300,10 +337,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "qa-engineer-mcp:smoke_suite:write",
         "resource_type": "smoke_suite",
         "data_domain": "operational",
-        "schema": _schema({
-            "service": dict(_STR, description="Serviço alvo."),
-            "endpoints": dict(_STR_ARR, description="Endpoints de smoke (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "service": dict(_STR, description="Serviço alvo."),
+                "endpoints": dict(_STR_ARR, description="Endpoints de smoke (opcional)."),
+            }
+        ),
     },
 }
 
@@ -317,6 +356,7 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
 
 def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:qa-engineer-mcp).
@@ -334,13 +374,14 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     return jwt.decode(
         twin_token,
         signing_key.key,
-        algorithms=["RS256"],                         # RS256 exclusivo (STD-SEC-001)
-        audience=settings.mcp_twin_audience,          # a falha de integração nº 1
-        options={"require": ["exp", "aud", "jti"]},   # sem jti → rejeita (JTI_REQUIRED)
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
 
 # ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
+
 
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
@@ -351,7 +392,8 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
         )
     if name == "classify_bug_severity":
         return classify_bug_severity(
-            description=args.get("description", ""), impact=args.get("impact", "medium"),
+            description=args.get("description", ""),
+            impact=args.get("impact", "medium"),
             frequency=args.get("frequency", "sometimes"),
         )
     if name == "validate_story_testability":
@@ -364,82 +406,74 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
         )
     if name == "generate_test_plan":
         return generate_test_plan(
-            feature=args.get("feature", ""), scope=args.get("scope", "full"),
+            feature=args.get("feature", ""),
+            scope=args.get("scope", "full"),
             team=args.get("team"),
         )
     if name == "generate_test_cases":
         return generate_test_cases(
-            feature=args.get("feature", ""), test_type=args.get("test_type", "functional"),
+            feature=args.get("feature", ""),
+            test_type=args.get("test_type", "functional"),
             count=args.get("count", 5),
         )
     if name == "generate_gherkin_scenarios":
-        return generate_gherkin_scenarios(
-            feature=args.get("feature", ""), scenarios=args.get("scenarios")
-        )
+        return generate_gherkin_scenarios(feature=args.get("feature", ""), scenarios=args.get("scenarios"))
     if name == "generate_e2e_tests":
         return generate_e2e_tests(
-            feature=args.get("feature", ""), framework=args.get("framework", "playwright"),
+            feature=args.get("feature", ""),
+            framework=args.get("framework", "playwright"),
             base_url=args.get("base_url"),
         )
     if name == "generate_api_tests":
         return generate_api_tests(
-            endpoint=args.get("endpoint", ""), method=args.get("method", "GET"),
+            endpoint=args.get("endpoint", ""),
+            method=args.get("method", "GET"),
             base_url=args.get("base_url"),
         )
     if name == "generate_unit_tests":
-        return generate_unit_tests(
-            module=args.get("module", ""), language=args.get("language", "python")
-        )
+        return generate_unit_tests(module=args.get("module", ""), language=args.get("language", "python"))
     if name == "generate_playwright_tests":
-        return generate_playwright_tests(
-            feature=args.get("feature", ""), base_url=args.get("base_url")
-        )
+        return generate_playwright_tests(feature=args.get("feature", ""), base_url=args.get("base_url"))
     if name == "generate_cypress_tests":
-        return generate_cypress_tests(
-            feature=args.get("feature", ""), base_url=args.get("base_url")
-        )
+        return generate_cypress_tests(feature=args.get("feature", ""), base_url=args.get("base_url"))
     if name == "generate_postman_collection":
         return generate_postman_collection(
-            api_name=args.get("api_name", ""), base_url=args.get("base_url"),
+            api_name=args.get("api_name", ""),
+            base_url=args.get("base_url"),
             endpoints=args.get("endpoints"),
         )
     if name == "generate_bug_report":
         return generate_bug_report(
-            title=args.get("title", ""), steps=args.get("steps"),
+            title=args.get("title", ""),
+            steps=args.get("steps"),
             severity=args.get("severity", "P2"),
         )
     if name == "generate_quality_gate":
-        return generate_quality_gate(
-            service=args.get("service", ""), thresholds=args.get("thresholds")
-        )
+        return generate_quality_gate(service=args.get("service", ""), thresholds=args.get("thresholds"))
     if name == "generate_uat_checklist":
-        return generate_uat_checklist(
-            feature=args.get("feature", ""), stakeholders=args.get("stakeholders")
-        )
+        return generate_uat_checklist(feature=args.get("feature", ""), stakeholders=args.get("stakeholders"))
     if name == "generate_k6_performance_test":
         return generate_k6_performance_test(
-            endpoint=args.get("endpoint", ""), vus=args.get("vus", 10),
+            endpoint=args.get("endpoint", ""),
+            vus=args.get("vus", 10),
             duration=args.get("duration", "30s"),
         )
     if name == "generate_regression_suite":
-        return generate_regression_suite(
-            service=args.get("service", ""), test_cases=args.get("test_cases")
-        )
+        return generate_regression_suite(service=args.get("service", ""), test_cases=args.get("test_cases"))
     if name == "generate_smoke_test_suite":
-        return generate_smoke_test_suite(
-            service=args.get("service", ""), endpoints=args.get("endpoints")
-        )
+        return generate_smoke_test_suite(service=args.get("service", ""), endpoints=args.get("endpoints"))
     raise KeyError(name)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
 
 def _build_http_app(settings: Settings) -> FastAPI:
     """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
     app = FastAPI(
         title="qa-engineer-mcp API",
         version="0.1.0",
-        docs_url="/docs" if settings.docs_enabled else None,   # false em todo ambiente
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
@@ -501,6 +535,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
+
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
@@ -533,6 +568,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 async def _run() -> None:
     import uvicorn

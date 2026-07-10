@@ -242,9 +242,7 @@ def test_optimize_query_reflects_query_and_database():
 
 # ── review_backend_code ───────────────────────────────────────────────────────
 def test_review_backend_code_custom_focus():
-    result = review_backend_code(
-        code="def f(): pass", language="python", focus=["security", "readability"]
-    )
+    result = review_backend_code(code="def f(): pass", language="python", focus=["security", "readability"])
     assert result["language"] == "python"
     assert result["focus_areas"] == ["security", "readability"]
     assert result["issues"] == []

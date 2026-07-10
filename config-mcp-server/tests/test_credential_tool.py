@@ -9,9 +9,7 @@ from src.tools.credential_tool import set_credential, set_credential_secure
 
 class TestSetCredentialDescription:
     def test_set_credential_with_description(self, store):
-        result = set_credential(
-            store, "credentials.acr", "ACR_USER", "u", description="ACR admin user"
-        )
+        result = set_credential(store, "credentials.acr", "ACR_USER", "u", description="ACR admin user")
         assert result["success"] is True
         assert result["description"] == "ACR admin user"
         assert store.get("credentials.acr", "ACR_USER") == "u"

@@ -68,7 +68,7 @@ def collect_physical_info() -> dict[str, Any]:
             for addr in addrs:
                 if addr.family == socket.AF_INET and not addr.address.startswith("127."):
                     net[iface] = addr.address
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110 — rede é informativa; ausência não é erro
         pass
 
     return {"os": os_info, "cpu": cpu, "ram": ram, "disks": disks, "network": net}

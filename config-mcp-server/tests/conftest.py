@@ -1,11 +1,22 @@
-"""Fixtures para testes do config-mcp-server."""
+"""Fixtures + sys.path shim para os testes do config-mcp-server.
+
+Garante que a raiz do config-mcp-server esteja no sys.path (permite `from src...`
+mesmo quando o pytest é invocado de outro cwd, sem depender de `pip install -e .`).
+"""
 
 from __future__ import annotations
 
-import pytest
+import sys
+from pathlib import Path
 
-from src.knowledge.encryptor import Encryptor
-from src.knowledge.store import ConfigStore
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+import pytest  # noqa: E402
+
+from src.knowledge.encryptor import Encryptor  # noqa: E402
+from src.knowledge.store import ConfigStore  # noqa: E402
 
 
 @pytest.fixture()

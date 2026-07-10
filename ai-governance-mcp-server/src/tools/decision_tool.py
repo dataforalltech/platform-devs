@@ -216,12 +216,9 @@ def validate_agent_decision(
 
     if _matches_any(blob, _HARDCODED_PATTERNS):
         violations.append(
-            "Valor que parece credencial/URL/token hardcoded na proposta. "
-            "Proibido pelo AGENTS.md §2."
+            "Valor que parece credencial/URL/token hardcoded na proposta. " "Proibido pelo AGENTS.md §2."
         )
-        required_actions.append(
-            "Mover o valor para configuração (env var via Settings tipado / cofre)."
-        )
+        required_actions.append("Mover o valor para configuração (env var via Settings tipado / cofre).")
         approved = False
         risk = _bump_risk(risk, "critical")
 
@@ -238,9 +235,7 @@ def validate_agent_decision(
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _MOCK_IN_PROD_PATTERNS):
-        violations.append(
-            "Mock/Fake/Stub aparentemente em código produtivo. Proibido pelo AGENTS.md §2."
-        )
+        violations.append("Mock/Fake/Stub aparentemente em código produtivo. Proibido pelo AGENTS.md §2.")
         required_actions.append("Remover mock de código produtivo. Mocks só em código de teste.")
         approved = False
         risk = _bump_risk(risk, "critical")
@@ -261,9 +256,7 @@ def validate_agent_decision(
             violations.append(
                 f"Possível cross-layer fix detectado ({layer_pair}). Resolva na camada responsável."
             )
-            required_actions.append(
-                "Identificar a camada certa para a correção e refazer a proposta."
-            )
+            required_actions.append("Identificar a camada certa para a correção e refazer a proposta.")
             risk = _bump_risk(risk, "high")
 
     if flag_contracts:
@@ -271,12 +264,9 @@ def validate_agent_decision(
             r"(consumidor|consumer|cliente do serviço|client of)", blob, re.IGNORECASE
         )
         if not consumers_mentioned:
-            violations.append(
-                "changes_contracts=True mas a proposta não cita consumidores impactados."
-            )
+            violations.append("changes_contracts=True mas a proposta não cita consumidores impactados.")
             required_actions.append(
-                "Listar consumidores afetados (grep no monorepo + lista de serviços). "
-                "Ver contracts.md."
+                "Listar consumidores afetados (grep no monorepo + lista de serviços). " "Ver contracts.md."
             )
             risk = _bump_risk(risk, "high")
         else:
@@ -298,17 +288,13 @@ def validate_agent_decision(
             )
             risk = _bump_risk(risk, "high")
         else:
-            recommendations.append(
-                "Documente a dependência no PR (motivação, versão fixa, licença)."
-            )
+            recommendations.append("Documente a dependência no PR (motivação, versão fixa, licença).")
 
     if _matches_any(blob, _SCOPE_DRIFT_PATTERNS):
         violations.append(
             "Indicação de alteração fora do escopo da tarefa ('de quebra', 'aproveitei para...')."
         )
-        required_actions.append(
-            "Reduzir o PR ao escopo declarado. Refactors amplos vão em PR dedicado."
-        )
+        required_actions.append("Reduzir o PR ao escopo declarado. Refactors amplos vão em PR dedicado.")
         risk = _bump_risk(risk, "high")
 
     if _matches_any(blob, _PREMATURE_ABSTRACTION_PATTERNS):
@@ -330,9 +316,7 @@ def validate_agent_decision(
             )
             risk = _bump_risk(risk, "high")
         if not re.search(r"(log\.|metric|metrica|métrica|trace)", blob, re.IGNORECASE):
-            violations.append(
-                "Camada 'integrations' afetada sem observabilidade declarada (log/métrica)."
-            )
+            violations.append("Camada 'integrations' afetada sem observabilidade declarada (log/métrica).")
             required_actions.append("Adicionar log estruturado e métrica. Ver observability.md.")
             risk = _bump_risk(risk, "high")
 
@@ -342,15 +326,11 @@ def validate_agent_decision(
                 "Operação destrutiva em banco (DROP/TRUNCATE/DELETE FROM) detectada. "
                 "Não pode ir em código de aplicação."
             )
-            required_actions.append(
-                "Mover operação destrutiva para runbook controlado. Ver database.md."
-            )
+            required_actions.append("Mover operação destrutiva para runbook controlado. Ver database.md.")
             risk = _bump_risk(risk, "critical")
             approved = False
         if not re.search(r"(migration|alembic|reversível|reversivel)", blob, re.IGNORECASE):
-            recommendations.append(
-                "Alterações em banco devem ir por migration versionada e reversível."
-            )
+            recommendations.append("Alterações em banco devem ir por migration versionada e reversível.")
             risk = _bump_risk(risk, "medium")
 
     if "security" in layers and flag_security:
@@ -361,14 +341,10 @@ def validate_agent_decision(
     # Sinais informativos                                                 #
     # ------------------------------------------------------------------ #
     if not files:
-        notes.append(
-            "affected_files vazio — tarefas reais sempre têm um conjunto limitado de arquivos."
-        )
+        notes.append("affected_files vazio — tarefas reais sempre têm um conjunto limitado de arquivos.")
         risk = _bump_risk(risk, "medium")
     if len(files) > 30:
-        notes.append(
-            f"affected_files muito grande ({len(files)}). PRs grandes são mais arriscados."
-        )
+        notes.append(f"affected_files muito grande ({len(files)}). PRs grandes são mais arriscados.")
         risk = _bump_risk(risk, "medium")
 
     if not violations:

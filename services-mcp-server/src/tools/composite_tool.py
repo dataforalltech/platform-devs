@@ -105,7 +105,9 @@ def reload_service(
                         pass
 
             if killed_pids:
-                reload_output = f"Processos terminados (PIDs: {killed_pids}). Aguarda reinício pelo process manager."
+                reload_output = (
+                    f"Processos terminados (PIDs: {killed_pids}). Aguarda reinício pelo process manager."
+                )
             else:
                 error = f"Nenhum processo encontrado na porta {port}."
         except ImportError:
@@ -132,7 +134,7 @@ def reload_service(
                 except Exception:  # noqa: BLE001
                     continue
             if not reload_output:
-                error = "Nenhum endpoint de reload respondeu (tentei /reload, /__reload, /actuator/restart, /api/reload)."
+                error = "Nenhum endpoint de reload respondeu (tentei /reload, /__reload, /actuator/restart, /api/reload)."  # noqa: E501
         except Exception as exc:  # noqa: BLE001
             error = str(exc)
 

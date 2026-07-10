@@ -164,9 +164,7 @@ def validate_migration(repo: GovernanceRepository, content: str) -> dict:
     noop_downgrade = bool(_NOOP_DOWNGRADE_RE.search(content))
 
     if not has_downgrade:
-        issues.append(
-            "Função downgrade() ausente. Toda migration precisa de downgrade reversível. §29."
-        )
+        issues.append("Função downgrade() ausente. Toda migration precisa de downgrade reversível. §29.")
         checks["has_reversible_downgrade"] = False
     elif noop_downgrade:
         warnings.append(

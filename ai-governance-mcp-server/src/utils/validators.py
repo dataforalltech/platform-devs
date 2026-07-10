@@ -65,9 +65,7 @@ def normalize_contract_type(value: object | None) -> str:
     if lowered is None:
         raise ValueError("contract_type é obrigatório")
     if lowered not in VALID_CONTRACT_TYPES:
-        raise ValueError(
-            f"contract_type inválido: {value!r}. Opções: {sorted(VALID_CONTRACT_TYPES)}"
-        )
+        raise ValueError(f"contract_type inválido: {value!r}. Opções: {sorted(VALID_CONTRACT_TYPES)}")
     return lowered
 
 

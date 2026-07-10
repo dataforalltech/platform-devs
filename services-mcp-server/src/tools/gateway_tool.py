@@ -34,7 +34,7 @@ from ..db.store import ServiceStore
 
 _log = logging.getLogger(__name__)
 
-# â”€â”€ Contexto de execuÃ§Ã£o â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Contexto de execuÃ§Ã£o
 
 
 def _is_docker() -> bool:
@@ -42,9 +42,7 @@ def _is_docker() -> bool:
     return Path("/.dockerenv").exists() or os.getenv("RUNNING_IN_DOCKER", "") == "1"
 
 
-def _derive_internal_url(
-    name: str, port: int | None, container_name: str | None = None
-) -> str | None:
+def _derive_internal_url(name: str, port: int | None, container_name: str | None = None) -> str | None:
     """Deriva a URL interna Docker a partir do nome do serviÃ§o/container.
 
     Dentro do Docker, o hostname do serviÃ§o Ã© o nome do container na rede.
@@ -93,7 +91,7 @@ def _probe_url(url: str, timeout: float = 2.0) -> bool:
         return False
 
 
-# â”€â”€ Tools pÃºblicas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Tools pÃºblicas
 
 
 def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
@@ -116,9 +114,7 @@ def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
         name = row["name"]
         port = row.get("port")
         host = row.get("host") or "localhost"
-        internal_url = row.get("internal_url") or _derive_internal_url(
-            name, port, row.get("container_name")
-        )
+        internal_url = row.get("internal_url") or _derive_internal_url(name, port, row.get("container_name"))
         external_url = row.get("url") or _derive_external_url(host, port)
 
         active_url = internal_url if in_docker else external_url
@@ -169,9 +165,7 @@ def update_service_gateway(
     # Resolver valores: usa os fornecidos ou deriva dos existentes
     effective_port = port or row.get("port")
     effective_host = host or row.get("host") or "localhost"
-    effective_internal = internal_url or _derive_internal_url(
-        name, effective_port, row.get("container_name")
-    )
+    effective_internal = internal_url or _derive_internal_url(name, effective_port, row.get("container_name"))
     effective_external = external_url or _derive_external_url(effective_host, effective_port)
 
     # Probe (opcional) â€” verifica qual URL responde
@@ -254,26 +248,27 @@ def sync_registry(
         "gateway_updated": 0,
     }
 
-    # â”€â”€ 1. Scan Docker â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # 1. Scan Docker  #
     docker_upserted = 0
     if include_docker:
         docker_result = _scan_docker_with_gateway(store, timeout=docker_timeout)
         results["docker_scan"] = docker_result
         docker_upserted = docker_result.get("upserted", 0)
 
-    # â”€â”€ 2. Scan de portas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
-    raw_ranges = port_ranges or os.getenv("PORT_SCAN_RANGES", "8000-8100")
+    # 2. Scan de portas  #
+    env_ranges = os.getenv("PORT_SCAN_RANGES", "8000-8100")
+    raw_ranges = port_ranges or env_ranges
     port_result = _scan_port_ranges(store, raw_ranges, probe=probe_health)
     results["port_scan"] = port_result
 
-    # â”€â”€ 3. Scan por nomes de serviÃ§os â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # 3. Scan por nomes de serviÃ§os  #
     names_env = os.getenv("SERVICE_NAMES", "")
     names_list = service_names or ([n.strip() for n in names_env.split(",") if n.strip()])
     if names_list:
         name_result = _scan_by_names(store, names_list, probe=probe_health)
         results["name_scan"] = name_result
 
-    # â”€â”€ Totais â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # Totais  #
     results["total_upserted"] = (
         docker_upserted + port_result.get("found", 0) + (results["name_scan"] or {}).get("found", 0)
     )
@@ -286,7 +281,7 @@ def sync_registry(
     return results
 
 
-# â”€â”€ Helpers internos â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Helpers internos
 
 
 def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:

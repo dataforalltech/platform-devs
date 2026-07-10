@@ -1,34 +1,31 @@
-# docker-compose.yml — exercise local da imagem.
+# docker-compose.yml — exercício local da imagem (sidecar mcp_http, Model C).
 #
-# NÃO é o modo de uso primário do MCP — clientes (Claude Code/Desktop) spawnam
-# o container via `docker run -i` por sessão (ver Dockerfile e OPERATIONS §6).
+# NÃO é o modo de uso primário: em produção o container roda na rede do
+# platform-mcp-gateway, que fala HTTP em /mcp/tools/* (ver gateway/ e OPERATIONS).
 #
-# Esse compose serve para:
-# - Validar que `docker build` produziu uma imagem que sobe e responde.
+# Este compose serve para:
+# - Validar que `docker build` produziu uma imagem que sobe e responde no /v1/health.
 # - Smoke local sem precisar configurar client.
 #
-# Uso:
-#   docker compose -f ai-governance-mcp-server/docker-compose.yml build
-#   docker compose -f ai-governance-mcp-server/docker-compose.yml run --rm mcp \
-#       python -c "from src.knowledge.governance_repository import GovernanceRepository; \
-#                  from pathlib import Path; \
-#                  print(GovernanceRepository(kb_path=Path('/app/knowledge-base')).ecosystem.stats())"
+# Uso (o build context é a RAIZ do repo — o Dockerfile copia ai-governance-mcp-server/...):
+#   docker compose -f ai-governance-mcp-server/docker-compose.yml up --build
+#   curl http://localhost:7100/v1/health
 
 services:
   mcp:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: ai-governance-mcp-server/Dockerfile
     image: ai-governance-mcp-server:local
-    # stdio MCP exige stdin aberto; sem isso o servidor sai imediatamente.
-    stdin_open: true
-    tty: false
     environment:
+      MCP_PORT: "7100"
+      DOCS_ENABLED: "false"
       GOVERNANCE_LOG_LEVEL: DEBUG
       GOVERNANCE_LOG_FORMAT: json
+      # HTTP-only p/ o exercício local (sem stdio); o gateway usa este mesmo modo.
+      MCP_HTTP_ONLY: "1"
+    ports:
+      - "7100:7100"
     volumes:
-      # Persiste sugestões fora do container — se rodar via compose com
-      # múltiplos invocations, cada um vê o histórico do anterior.
+      # Persiste sugestões fora do container entre execuções.
       - ./knowledge-base/suggestions:/app/knowledge-base/suggestions:rw
-    # Sem ports — stdio. Não há HTTP nesta versão.
-    # Sem restart policy — container é efêmero por design.

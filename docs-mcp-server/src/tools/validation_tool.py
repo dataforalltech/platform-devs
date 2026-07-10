@@ -231,9 +231,7 @@ def check_links(
             "tool": "check_links",
         }
 
-    should_check_external = (
-        check_external if check_external is not None else settings.check_external_links
-    )
+    should_check_external = check_external if check_external is not None else settings.check_external_links
     doc_dir = fpath.parent
 
     # Extract headings/anchors in this document
@@ -502,9 +500,7 @@ def lint_markdown(
                         "line": lineno,
                         "severity": "warning",
                         "rule": "heading-skip",
-                        "message": (
-                            f"h{last_heading_level}→h{level} salta h{last_heading_level + 1}"
-                        ),
+                        "message": (f"h{last_heading_level}→h{level} salta h{last_heading_level + 1}"),
                     }
                 )
             last_heading_level = level

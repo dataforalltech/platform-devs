@@ -145,6 +145,6 @@ class TestScaffoldPipeline:
             content = yml_file.read_text(encoding="utf-8")
             parsed = yaml.safe_load(content)
             assert parsed is not None, f"{yml_file.name} não é YAML válido"
-            assert "name" in parsed or "on" in parsed, (
-                f"{yml_file.name} não parece um GitHub Actions workflow"
-            )
+            assert (
+                "name" in parsed or "on" in parsed
+            ), f"{yml_file.name} não parece um GitHub Actions workflow"

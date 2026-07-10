@@ -135,9 +135,7 @@ def test_visual_regression_baseline_created(store, settings, tmp_path):
     page.screenshot.side_effect = fake_screenshot
 
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = visual_regression(
-            store, settings, url="http://example.com", baseline_name="homepage"
-        )
+        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
     assert result["action"] == "baseline_created"
     assert result["match"] is True
     assert "run_id" in result
@@ -187,9 +185,7 @@ def test_visual_regression_match(store, settings, tmp_path):
         mock_image_mod.LANCZOS = 1
         mock_chops.difference.return_value = mock_diff
 
-        result = visual_regression(
-            store, settings, url="http://example.com", baseline_name="homepage"
-        )
+        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
 
     assert result["match"] is True
     assert result["diff_pct"] <= 2.0
@@ -239,9 +235,7 @@ def test_visual_regression_mismatch(store, settings, tmp_path):
         mock_image_mod.LANCZOS = 1
         mock_chops.difference.return_value = mock_diff
 
-        result = visual_regression(
-            store, settings, url="http://example.com", baseline_name="homepage"
-        )
+        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
 
     assert result["match"] is False
     assert result["diff_pct"] > 2.0

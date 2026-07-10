@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-docs-mcp",
+    "namespace": "docs-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-docs-mcp:7100",
+    "audience": "mcp:docs-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

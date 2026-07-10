@@ -5,6 +5,7 @@ Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
 _verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
 os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
 """
+
 from __future__ import annotations
 
 import json
@@ -255,9 +256,7 @@ def test_stdio_server_handlers(monkeypatch):
 
     async def _drive():
         list_handler = server.request_handlers[ListToolsRequest]
-        tools_result = await list_handler(
-            ListToolsRequest(method="tools/list")
-        )
+        tools_result = await list_handler(ListToolsRequest(method="tools/list"))
         names = {t.name for t in tools_result.root.tools}
 
         call_handler = server.request_handlers[CallToolRequest]

@@ -1,16 +1,46 @@
-"""Servidor MCP QA — 14 tools para testes, análise e qualidade."""
+"""Servidor MCP do qa-mcp — sidecar kind=mcp_http, GATEWAY-READY (Model C).
+
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:qa-mcp) via JWKS do
+     platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O inner
+     token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3).
+  4. _EXEMPT_TOOLS (status, sem token) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: qa-mcp executa testes/análises e PERSISTE runs num store PostgreSQL local
+(QAStore) — não fala com um backend REST, então não há ServiceApiClient. O store é
+construído em build_server() e injetado no sidecar (_build_http_app(settings, store)).
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 from typing import Any
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from ..config.settings import QASettings, get_settings
+from ..config.settings import NAMESPACE, QASettings, get_settings
 from ..db.store import QAStore
 from ..tools.analysis_tool import (
     analyze_complexity,
@@ -24,15 +54,35 @@ from ..tools.browser_tool import check_accessibility, screenshot_page, visual_re
 from ..tools.report_tool import generate_qa_report, get_coverage_report
 from ..tools.test_tool import run_e2e_tests, run_unit_tests
 
-# ---------------------------------------------------------------------- #
-# Schemas                                                                 #
-# ---------------------------------------------------------------------- #
+_log = logging.getLogger(__name__)
+
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara, além de description/schema, os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties (senão a validação no front-door
+# é fail-open). Execuções/geração de artefatos usam :write; análise/relatório :read.
+# ─────────────────────────────────────────────────────────────────────────────
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "status": {
+        "description": "Retorna o status real do servidor (nome, versão, nº de tools).",
+        "capability": "qa-mcp.status",
+        "required_scope": "qa-mcp:status:read",
+        "resource_type": "status",
+        "data_domain": "operational",
+        "schema": {"type": "object", "additionalProperties": False, "properties": {}},
+    },
     "run_unit_tests": {
         "description": (
             "Roda testes unitários (pytest/jest) com cobertura opcional. "
             "Detecta framework automaticamente."
         ),
+        "capability": "qa-mcp.run_unit_tests",
+        "required_scope": "qa-mcp:test:write",
+        "resource_type": "test_run",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -61,6 +111,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Roda testes E2E via Playwright (test_*.py ou *.spec.ts). "
             "Detecta tipo de arquivo e usa comando correto."
         ),
+        "capability": "qa-mcp.run_e2e_tests",
+        "required_scope": "qa-mcp:test:write",
+        "resource_type": "test_run",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -92,6 +146,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Testa endpoints HTTP com verificação de status e chaves de resposta. "
             "Suporta GET, POST, PUT, DELETE com headers e body customizados."
         ),
+        "capability": "qa-mcp.run_api_tests",
+        "required_scope": "qa-mcp:test:write",
+        "resource_type": "test_run",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -132,6 +190,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Gera e executa matriz de testes: cada cenário × payload é um caso. "
             "Ideal para testar variações de input em endpoints."
         ),
+        "capability": "qa-mcp.generate_test_matrix",
+        "required_scope": "qa-mcp:test:write",
+        "resource_type": "test_run",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -173,6 +235,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Tira screenshot de uma página via Playwright. "
             "Suporta viewports desktop/tablet/mobile e captura de elemento por selector."
         ),
+        "capability": "qa-mcp.screenshot_page",
+        "required_scope": "qa-mcp:screenshot:write",
+        "resource_type": "screenshot",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -200,6 +266,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Verifica acessibilidade via Playwright + axe-core. "
             "Suporta WCAG2A, WCAG2AA, WCAG2AAA. Retorna violations, passes e incomplete."
         ),
+        "capability": "qa-mcp.check_accessibility",
+        "required_scope": "qa-mcp:accessibility:read",
+        "resource_type": "accessibility_report",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -219,6 +289,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Compara screenshot atual com baseline via Pillow. "
             "Cria baseline se não existir. Retorna diff em % de pixels."
         ),
+        "capability": "qa-mcp.visual_regression",
+        "required_scope": "qa-mcp:visual:write",
+        "resource_type": "visual_diff",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -252,6 +326,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Análise estática com ruff (Python) ou eslint (JS/TS). "
             "Detecta framework automaticamente. Suporta fix automático."
         ),
+        "capability": "qa-mcp.run_linter",
+        "required_scope": "qa-mcp:analysis:read",
+        "resource_type": "analysis",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -276,6 +354,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Scan de segurança com bandit (Python) ou npm audit (JS/TS). "
             "Classifica por severity: HIGH, MEDIUM, LOW."
         ),
+        "capability": "qa-mcp.run_security_scan",
+        "required_scope": "qa-mcp:security:read",
+        "resource_type": "security_scan",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -295,6 +377,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Verifica vulnerabilidades em dependências com pip-audit/safety (Python) "
             "ou npm audit (Node). Detecta tipo de projeto automaticamente."
         ),
+        "capability": "qa-mcp.check_dependencies",
+        "required_scope": "qa-mcp:dependency:read",
+        "resource_type": "dependency_scan",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -306,9 +392,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "run_type_check": {
         "description": (
-            "Type checking com mypy (Python) ou tsc (TypeScript). "
-            "Retorna erros e warnings por arquivo."
+            "Type checking com mypy (Python) ou tsc (TypeScript). " "Retorna erros e warnings por arquivo."
         ),
+        "capability": "qa-mcp.run_type_check",
+        "required_scope": "qa-mcp:analysis:read",
+        "resource_type": "analysis",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -328,6 +417,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Analisa complexidade ciclomática com radon (Python) ou grep simples (JS/TS). "
             "Identifica hotspots acima do threshold."
         ),
+        "capability": "qa-mcp.analyze_complexity",
+        "required_scope": "qa-mcp:analysis:read",
+        "resource_type": "analysis",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -335,7 +428,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "repo_path": {"type": "string"},
                 "threshold": {
                     "type": "integer",
-                    "description": "CC máximo antes de considerar complexo (default: settings.complexity_threshold)",
+                    "description": "CC máximo antes de considerar complexo (default: complexity_threshold)",
                 },
             },
             "required": ["repo_path"],
@@ -346,6 +439,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Lê relatório de cobertura de testes. "
             "Python: coverage.json; Jest: coverage/coverage-summary.json."
         ),
+        "capability": "qa-mcp.get_coverage_report",
+        "required_scope": "qa-mcp:coverage:read",
+        "resource_type": "coverage_report",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -365,6 +462,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Gera relatório QA agregado com score 0-100 e grade A-F. "
             "Pondera: unit_tests 30%, security 25%, linter 20%, coverage 15%, dependencies 10%."
         ),
+        "capability": "qa-mcp.generate_qa_report",
+        "required_scope": "qa-mcp:report:read",
+        "resource_type": "qa_report",
+        "data_domain": "quality",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -381,100 +482,58 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+# status é encaminhada SEM inner token (CI-7 exempt_tools — só tokenless).
+_EXEMPT_TOOLS: frozenset[str] = frozenset({"status"})
+# Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
 
-# ---------------------------------------------------------------------- #
-# Escopo por ferramenta (least privilege)                                 #
-# análise/relatório -> qa:read ; execução de testes/geração -> qa:write   #
-# ---------------------------------------------------------------------- #
-SCOPE_FOR_TOOL: dict[str, str] = {
-    # execução de testes / geração de artefatos -> write
-    "run_unit_tests": "qa:write",
-    "run_e2e_tests": "qa:write",
-    "run_api_tests": "qa:write",
-    "generate_test_matrix": "qa:write",
-    "screenshot_page": "qa:write",
-    "visual_regression": "qa:write",
-    # análise estática / relatórios -> read
-    "check_accessibility": "qa:read",
-    "run_linter": "qa:read",
-    "run_security_scan": "qa:read",
-    "check_dependencies": "qa:read",
-    "run_type_check": "qa:read",
-    "analyze_complexity": "qa:read",
-    "get_coverage_report": "qa:read",
-    "generate_qa_report": "qa:read",
-}
-SCOPES_SUPPORTED = ["qa:read", "qa:write"]
-
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
-    "SCOPE_FOR_TOOL cobre todas as tools"
-)
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-# ---------------------------------------------------------------------- #
-# Server                                                                  #
-# ---------------------------------------------------------------------- #
-def _build_http_app() -> FastAPI:
-    app = FastAPI(title="Qa API", version="0.1.0", docs_url="/docs")
-
-    @app.get("/v1/health")
-    def health() -> dict:
-        return {"status": "ok", "service": "qa-mcp"}
-
-    return app
+def _status() -> dict[str, Any]:
+    """Status real do servidor (compute-only, sem store)."""
+    return {
+        "status": "ok",
+        "service": NAMESPACE,
+        "version": "0.1.0",
+        "tools": len(_TOOL_SCHEMAS),
+    }
 
 
-def build_server() -> tuple[Any, ...]:
-    settings = get_settings()
-    http_app = _build_http_app()
-
-    store = QAStore(db_path=settings.db_path)
-
-    server: Server = Server("qa-mcp-server")
-
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(
-                name=name,
-                description=meta["description"],
-                inputSchema=meta["schema"],
-            )
-            for name, meta in _TOOL_SCHEMAS.items()
-        ]
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, settings, store)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(exc), "tool": name}
-
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
-
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
-
-    return server, settings, store, http_app
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
 
-def _dispatch(
-    name: str,
-    args: dict[str, Any],
-    settings: QASettings,
-    store: QAStore,
-) -> dict:
+def _verify_inner_token(twin_token: str, settings: QASettings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:qa-mcp).
+
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:qa-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
+    )
+
+
+# ── Dispatcher (tenant_id injetado pelo PEP; store persiste os runs) ──────────
+
+
+def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QAStore) -> dict:
+    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
+    args (INV-3) mas as tools de QA não o consomem (governança só)."""
+    if name == "status":
+        return _status()
     # ---- test_tool ----
     if name == "run_unit_tests":
         return run_unit_tests(
@@ -593,34 +652,144 @@ def _dispatch(
     raise KeyError(name)
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
-    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware.
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    server, _settings, _store, _http = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("QA_RESOURCE", "http://localhost:7109/mcp"),
-        prm_url=os.getenv(
-            "QA_PRM_URL", "http://localhost:7109/.well-known/oauth-protected-resource"
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="qa-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": NAMESPACE, "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments, settings, store)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Server, QASettings, QAStore, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    store = QAStore(db_path=settings.db_path)
+    http_app = _build_http_app(settings, store)
+    _log.info("qa_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+
+    server: Server = Server("qa-mcp-server")
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
+            for name, meta in _TOOL_SCHEMAS.items()
+        ]
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        args = arguments or {}
+        try:
+            payload = _dispatch(name, args, settings, store)
+        except KeyError:
+            payload = {"error": "unknown_tool", "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            _log.exception("tool_internal_error: %s", name)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    return server, settings, store, http_app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, _store, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7109")))
+        _server, settings, _store, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

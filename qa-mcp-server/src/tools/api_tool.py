@@ -153,18 +153,12 @@ def generate_test_matrix(
             endpoint = scenario.get("endpoint", "/")
             method = scenario.get("method", "GET").upper()
             payloads: list[dict] = scenario.get("payloads") or [{}]
-            expected_statuses: list[int] = scenario.get("expected_statuses") or [200] * len(
-                payloads
-            )
-            expected_keys_list: list[list[str]] = scenario.get("expected_keys") or [[]] * len(
-                payloads
-            )
+            expected_statuses: list[int] = scenario.get("expected_statuses") or [200] * len(payloads)
+            expected_keys_list: list[list[str]] = scenario.get("expected_keys") or [[]] * len(payloads)
 
             for idx, payload in enumerate(payloads):
                 exp_status = expected_statuses[idx] if idx < len(expected_statuses) else 200
-                exp_keys: list[str] = (
-                    expected_keys_list[idx] if idx < len(expected_keys_list) else []
-                )
+                exp_keys: list[str] = expected_keys_list[idx] if idx < len(expected_keys_list) else []
 
                 t0 = time.monotonic()
                 actual_status = -1

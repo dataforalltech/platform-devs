@@ -744,9 +744,7 @@ class TestAllocatorDestroyIntegration:
 
         # Faz o lease expirar no passado
         past = _dt_to_str(now_utc() - timedelta(hours=2))
-        store._con.execute(
-            "UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id)
-        )
+        store._con.execute("UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id))
 
         # Qualquer operação dispara _gc_expired
         store.get_lease(d.lease.lease_id)

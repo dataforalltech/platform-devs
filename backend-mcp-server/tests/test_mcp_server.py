@@ -5,6 +5,7 @@ Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
 _verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
 os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
 """
+
 from __future__ import annotations
 
 import json
@@ -253,9 +254,7 @@ def test_dispatch_routes_all_tools():
         "generate_database_schema", {"entity": "user", "attributes": [], "database": "pg"}
     )
     assert "router_name" in M._dispatch("generate_fastapi_router", {"name": "u", "base_path": "/u"})
-    assert "controller_name" in M._dispatch(
-        "generate_nestjs_controller", {"name": "U", "base_path": "/u"}
-    )
+    assert "controller_name" in M._dispatch("generate_nestjs_controller", {"name": "U", "base_path": "/u"})
     assert "migration_name" in M._dispatch(
         "generate_migration", {"title": "init", "operations": [], "database": "pg"}
     )
@@ -293,9 +292,7 @@ def test_verify_inner_token_uses_jwks_and_decode(monkeypatch):
     captured: dict = {}
 
     def _fake_decode(token, key, algorithms, audience, options):
-        captured.update(
-            token=token, key=key, algorithms=algorithms, audience=audience, options=options
-        )
+        captured.update(token=token, key=key, algorithms=algorithms, audience=audience, options=options)
         return {"tenant_id": "T-1", "jti": "j"}
 
     monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWKClient)

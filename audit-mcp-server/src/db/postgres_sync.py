@@ -222,9 +222,7 @@ class AuditPostgresSync:
             logger.error(f"Failed to get audit: {e}")
             return None
 
-    def list_audits(
-        self, service: str | None = None, environment: str | None = None
-    ) -> list | None:
+    def list_audits(self, service: str | None = None, environment: str | None = None) -> list | None:
         """
         Query PostgreSQL for audits.
         """

@@ -81,9 +81,7 @@ class PipelinePostgresSync:
             logger.error(f"Failed to sync pipeline registered: {e}")
             return False
 
-    def sync_pipeline_env_updated(
-        self, service: str, to_env: str, version: str | None = None
-    ) -> bool:
+    def sync_pipeline_env_updated(self, service: str, to_env: str, version: str | None = None) -> bool:
         """
         Sync when pipeline is promoted to new environment.
         """
@@ -154,7 +152,7 @@ class PipelinePostgresSync:
 
             self.adapter.sync_to_postgres("promotions", pg_data)
             logger.debug(
-                f"Synced promotion: {promotion_data['service']} {promotion_data['from_env']}→{promotion_data['to_env']}"
+                f"Synced promotion: {promotion_data['service']} {promotion_data['from_env']}→{promotion_data['to_env']}"  # noqa: E501
             )
             return True
 
@@ -188,9 +186,7 @@ class PipelinePostgresSync:
             logger.error(f"Failed to sync promotion completed: {e}")
             return False
 
-    def sync_promotion_approved(
-        self, promotion_id: int, approved_by: str, approved_at: str
-    ) -> bool:
+    def sync_promotion_approved(self, promotion_id: int, approved_by: str, approved_at: str) -> bool:
         """
         Sync when promotion is approved.
         """

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Any, cast
 
 from ..config.settings import Settings
 from ..utils.subprocess_runner import (
@@ -44,12 +45,8 @@ def cost_estimate_infracost(
             "tool": "cost_estimate_infracost",
         }
 
-    threshold_usd = (
-        delta_usd_threshold if delta_usd_threshold is not None else _DEFAULT_DELTA_USD_THRESHOLD
-    )
-    threshold_pct = (
-        delta_pct_threshold if delta_pct_threshold is not None else _DEFAULT_DELTA_PCT_THRESHOLD
-    )
+    threshold_usd = delta_usd_threshold if delta_usd_threshold is not None else _DEFAULT_DELTA_USD_THRESHOLD
+    threshold_pct = delta_pct_threshold if delta_pct_threshold is not None else _DEFAULT_DELTA_PCT_THRESHOLD
 
     try:
         result = run_command(
@@ -139,9 +136,7 @@ def cost_estimate_infracost(
         "hard_stop_reason": (
             f"delta {monthly_diff:+.2f} USD excede ±{threshold_usd}"
             if hard_stop_usd
-            else f"delta {pct:+.1f}% excede ±{threshold_pct}%"
-            if hard_stop_pct
-            else None
+            else f"delta {pct:+.1f}% excede ±{threshold_pct}%" if hard_stop_pct else None
         ),
         "breakdown": breakdown,
         "command": _cmd_summary(result),
@@ -150,7 +145,8 @@ def cost_estimate_infracost(
 
 def _safe_float(v: object | None) -> float | None:
     try:
-        return float(v) if v is not None else None
+        # v vem de JSON não-tipado (str/num); coerção intencional — não-floatável cai no except.
+        return float(cast(Any, v)) if v is not None else None
     except (TypeError, ValueError):
         return None
 

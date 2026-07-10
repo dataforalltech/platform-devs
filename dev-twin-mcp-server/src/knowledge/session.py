@@ -84,9 +84,7 @@ class SessionManager:
     def require(cls) -> UserSession:
         with cls._lock:
             if cls._current is None:
-                raise RuntimeError(
-                    "Nenhuma sessão autenticada. Chame authenticate(token) primeiro."
-                )
+                raise RuntimeError("Nenhuma sessão autenticada. Chame authenticate(token) primeiro.")
             return cls._current
 
     @classmethod

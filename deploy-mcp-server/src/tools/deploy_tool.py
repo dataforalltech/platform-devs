@@ -80,9 +80,7 @@ def deploy(
             return {
                 "error": "ValidationError",
                 "tool": "deploy",
-                "details": (
-                    f"environment='{environment}' exige ref explícito. Exemplo: {cfg['ref_hint']}"
-                ),
+                "details": (f"environment='{environment}' exige ref explícito. Exemplo: {cfg['ref_hint']}"),
             }
 
         target_repo = repo or service
@@ -131,9 +129,7 @@ def get_deploy_status(
             }
 
         target_repo = repo or service
-        runs = client.list_workflow_runs(
-            target_repo, workflow_id=cfg["workflow"], limit=min(limit, 20)
-        )
+        runs = client.list_workflow_runs(target_repo, workflow_id=cfg["workflow"], limit=min(limit, 20))
         return {
             "service": service,
             "environment": environment,

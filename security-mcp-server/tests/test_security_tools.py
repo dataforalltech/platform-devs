@@ -32,10 +32,10 @@ def test_review_code_flags_multiple_severities_and_sorts():
     code = "\n".join(
         [
             "import hashlib",
-            "hashlib.md5(data)",                          # medium — hash fraco
-            "token = random.random()",                    # low — PRNG
-            'query = "SELECT * FROM t WHERE x=" + inp',   # high — SQLi
-            'os.system("ls " + request.path)',            # critical — cmd injection
+            "hashlib.md5(data)",  # medium — hash fraco
+            "token = random.random()",  # low — PRNG
+            'query = "SELECT * FROM t WHERE x=" + inp',  # high — SQLi
+            'os.system("ls " + request.path)',  # critical — cmd injection
         ]
     )
     result = review_secure_code(code=code, language="python")
@@ -163,8 +163,8 @@ def test_mask_short_and_long_values():
 
 
 def test_cvss_roundup_exact_and_rounded():
-    assert _cvss_roundup(1.0) == 1.0        # múltiplo exato de 10000 → curto-circuito
-    assert _cvss_roundup(0.123456) == 0.2   # arredonda para cima (0.1 step)
+    assert _cvss_roundup(1.0) == 1.0  # múltiplo exato de 10000 → curto-circuito
+    assert _cvss_roundup(0.123456) == 0.2  # arredonda para cima (0.1 step)
 
 
 def test_severity_rating_all_bands():
@@ -189,9 +189,7 @@ def test_threat_model_defaults_components():
 
 
 def test_threat_model_uses_custom_components_and_scope():
-    result = generate_threat_model(
-        system="IoT Hub", scope="somente ingestão", components=["Ingest Worker"]
-    )
+    result = generate_threat_model(system="IoT Hub", scope="somente ingestão", components=["Ingest Worker"])
     assert result["components"] == ["Ingest Worker"]
     assert result["threat_count"] == 6
     assert result["scope"] == "somente ingestão"
@@ -237,9 +235,7 @@ def test_security_controls_defaults_full_catalog():
 
 
 def test_security_controls_custom_categories_with_unknown_fallback():
-    result = generate_security_controls(
-        system="Core", threat_categories=["authentication", "custom_control"]
-    )
+    result = generate_security_controls(system="Core", threat_categories=["authentication", "custom_control"])
     assert result["control_count"] == 2
     by_id = {c["id"]: c for c in result["controls"]}
     assert by_id["SC01"]["name"].startswith("Autenticação")
@@ -253,10 +249,10 @@ def test_scan_dependencies_parses_manifest_and_flags():
         [
             "# comentário deve ser ignorado",
             "",
-            "fastapi==0.104.0",       # 0.x → flag pre-1.0
-            "requests>=2.31.0",       # range aberto
-            "leftpad v1.2.3",         # cai no segundo regex (fallback)
-            "totally invalid line",   # não casa nenhum regex
+            "fastapi==0.104.0",  # 0.x → flag pre-1.0
+            "requests>=2.31.0",  # range aberto
+            "leftpad v1.2.3",  # cai no segundo regex (fallback)
+            "totally invalid line",  # não casa nenhum regex
             "numpy==1.26.0",
         ]
     )

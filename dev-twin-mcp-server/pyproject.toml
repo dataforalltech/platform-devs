@@ -1,34 +1,34 @@
 [project]
-name = "dev-twin-mcp-server"
+name = "dev-twin-mcp"
 version = "0.1.0"
-description = "MCP Dev-Twin — identidade, autenticação e contexto de sessão para agentes IA."
-requires-python = ">=3.11"
+description = "MCP sidecar (kind=mcp_http, Model C) do dev-twin — identidade/sessão de agentes, gateway-ready."
+requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team" }]
 dependencies = [
     "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
-    "fastapi>=0.111.0,<1.0",
-    "uvicorn[standard]>=0.29.0,<1.0",
-    "httpx>=0.27.0,<1.0",
-    "psycopg2-binary>=2.9",
-    "pyjwt>=2.8.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pyjwt[crypto]>=2.8.0",
     "cryptography>=42.0.0",
+    "psycopg2-binary>=2.9",
     "bcrypt>=4.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0,<9.0",
-    "pytest-asyncio>=0.23.0,<1.0",
-    "pytest-mock>=3.14.0,<4.0",
-    "pytest-cov>=4.0.0,<5.0",
-    "ruff>=0.4.0,<1.0",
+    "pytest>=8.0",
+    "pytest-cov>=4.0",
+    "httpx>=0.27",          # requerido pelo fastapi.testclient
+    "ruff>=0.5",
+    "mypy>=1.10",
+    "black>=24.0",
 ]
 
 [project.scripts]
-dev-twin-mcp-server = "src.server.mcp_server:main"
+dev-twin-mcp = "src.server.mcp_server:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -41,16 +41,30 @@ include = ["src*"]
 [tool.setuptools.package-dir]
 "" = "."
 
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-addopts = "-ra -q"
-
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+line-length = 110
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]
+select = ["E", "F", "I", "UP", "B", "S"]
+# S104 (bind 0.0.0.0): justificado no código (ingress só via gateway, INV-1).
+ignore = ["S104"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106"]        # assert + valores de token/senha fake em testes
+"tests/conftest.py" = ["S101", "S105", "S106", "E402"]  # + imports após o sys.path shim
+# TokenStore/SessionManager: subprocess git (S603/S607), continue defensivo (S112),
+# e captura ampla justificada (BLE já suprimida no código com noqa).
+"src/knowledge/session.py" = ["S603", "S607", "S110", "S112"]
+"src/db/token_store.py" = ["S110", "S112"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+omit = ["src/**/__init__.py"]

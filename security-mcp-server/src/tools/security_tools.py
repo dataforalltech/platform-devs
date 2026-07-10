@@ -135,10 +135,10 @@ def review_secure_code(code: str = "", language: str = "python") -> dict[str, An
         "issues_found": len(findings),
         "severity_counts": counts,
         "issues": findings,
-        "verdict": "reprovado"
-        if counts["critical"] or counts["high"]
-        else ("atenção" if findings else "aprovado"),
-        "note": "Análise heurística por padrões — complemente com SAST dedicado (Semgrep/CodeQL) e revisão manual.",
+        "verdict": (
+            "reprovado" if counts["critical"] or counts["high"] else ("atenção" if findings else "aprovado")
+        ),
+        "note": "Análise heurística por padrões — complemente com SAST dedicado (Semgrep/CodeQL) e revisão manual.",  # noqa: E501
         "status": "reviewed",
     }
 
@@ -213,11 +213,13 @@ def scan_secrets(content: str = "", filename: str = "") -> dict[str, Any]:
         "findings": findings,
         "recommendation": (
             "Remova segredos do código; use um secrets manager (Vault/KMS/Secrets Manager), "
-            "rotacione qualquer credencial exposta e adicione varredura de segredos no CI (gitleaks/trufflehog)."
+            "rotacione qualquer credencial exposta e adicione varredura de segredos no CI (gitleaks/trufflehog)."  # noqa: E501
         ),
-        "status": "critical"
-        if any(f["severity"] == "critical" for f in findings)
-        else ("findings" if findings else "clean"),
+        "status": (
+            "critical"
+            if any(f["severity"] == "critical" for f in findings)
+            else ("findings" if findings else "clean")
+        ),
     }
 
 
@@ -379,9 +381,11 @@ def generate_threat_model(
                     "security_dimension": dim,
                     "threat": desc,
                     "recommended_mitigation": mitig,
-                    "default_severity": "high"
-                    if category in ("Elevation of Privilege", "Information Disclosure")
-                    else "medium",
+                    "default_severity": (
+                        "high"
+                        if category in ("Elevation of Privilege", "Information Disclosure")
+                        else "medium"
+                    ),
                 }
             )
             tid += 1
@@ -424,15 +428,10 @@ def map_attack_surface(
     ]
 
     exposed = [
-        e
-        for e in endpoints
-        if str(e.get("authentication", "")).lower()
-        in ("optional", "none", "public", "")
+        e for e in endpoints if str(e.get("authentication", "")).lower() in ("optional", "none", "public", "")
     ]
     public_integrations = [
-        i
-        for i in integrations
-        if str(i.get("exposure", "")).lower() in ("public", "external")
+        i for i in integrations if str(i.get("exposure", "")).lower() in ("public", "external")
     ]
 
     return {
@@ -519,9 +518,7 @@ def generate_security_controls(
 # ============================================================================
 
 
-def scan_dependency_risks(
-    manifest: str = "", ecosystem: str = "python"
-) -> dict[str, Any]:
+def scan_dependency_risks(manifest: str = "", ecosystem: str = "python") -> dict[str, Any]:
     """Extrai dependências de um manifest e sinaliza riscos heurísticos.
 
     Sem acesso a um feed de CVE em runtime, sinaliza padrões de risco (versões
@@ -540,9 +537,7 @@ def scan_dependency_risks(
             line,
         )
         if not m:
-            m = re.match(
-                r"^([A-Za-z0-9_.\-@/]+)[=<>~^ ]+v?([0-9][0-9A-Za-z.\-]*)", line
-            )
+            m = re.match(r"^([A-Za-z0-9_.\-@/]+)[=<>~^ ]+v?([0-9][0-9A-Za-z.\-]*)", line)
         if m:
             name, version = m.group(1), m.group(2)
             risk_flags = []
@@ -564,14 +559,16 @@ def scan_dependency_risks(
         "dependencies": deps,
         "hygiene": {
             "unpinned_or_range_specs": unpinned,
-            "recommendation": "Fixe versões (lockfile), habilite Dependabot/Renovate e rode SCA (osv-scanner/Trivy) no CI.",
+            "recommendation": "Fixe versões (lockfile), habilite Dependabot/Renovate e rode SCA (osv-scanner/Trivy) no CI.",  # noqa: E501
         },
-        "next_step": "Correlacione o inventário com OSV.dev / NVD para CVEs e com licenças para risco jurídico.",
+        "next_step": "Correlacione o inventário com OSV.dev / NVD para CVEs e com licenças para risco jurídico.",  # noqa: E501
         "status": "scanned",
     }
 
 
-# ============================================================================
+# noqa: E501
+
+# ============================================================================  # noqa: E501
 # 7. Compliance mapping (frameworks reais)
 # ============================================================================
 
@@ -647,9 +644,7 @@ _COMPLIANCE_FRAMEWORKS = {
 }
 
 
-def analyze_compliance(
-    framework: str = "owasp", context: dict | None = None
-) -> dict[str, Any]:
+def analyze_compliance(framework: str = "owasp", context: dict | None = None) -> dict[str, Any]:
     """Avalia conformidade contra um framework. `context` marca controles atendidos.
 
     context = {"satisfied": ["A01", "A02"]} → marca esses controles como conformes.
@@ -668,9 +663,7 @@ def analyze_compliance(
     gaps = []
     for ctrl_id, desc in fw["controls"]:
         is_ok = ctrl_id.lower() in satisfied
-        controls.append(
-            {"id": ctrl_id, "control": desc, "status": "compliant" if is_ok else "gap"}
-        )
+        controls.append({"id": ctrl_id, "control": desc, "status": "compliant" if is_ok else "gap"})
         if not is_ok:
             gaps.append({"id": ctrl_id, "control": desc})
 
@@ -782,9 +775,7 @@ def harden_headers(current_headers: dict | None = None) -> dict[str, Any]:
 
     dangerous = []
     if "server" in current or "x-powered-by" in current:
-        dangerous.append(
-            "Remova headers Server/X-Powered-By (fingerprinting da stack)."
-        )
+        dangerous.append("Remova headers Server/X-Powered-By (fingerprinting da stack).")
 
     return {
         "present_secure_headers": present,

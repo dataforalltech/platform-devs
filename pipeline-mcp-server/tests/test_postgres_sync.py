@@ -68,9 +68,7 @@ class TestDisabledNoOp:
 
     def test_promotion_created(self, disabled_sync):
         assert (
-            disabled_sync.sync_promotion_created(
-                {"service": "s", "from_env": "dev", "to_env": "homol"}
-            )
+            disabled_sync.sync_promotion_created({"service": "s", "from_env": "dev", "to_env": "homol"})
             is True
         )
 
@@ -104,9 +102,7 @@ class TestDisabledNoOp:
 # ─────────────────────────────────────────────────────────────────────────── #
 class TestEnabledSuccess:
     def test_pipeline_registered_calls_adapter(self, sync):
-        ok = sync.sync_pipeline_registered(
-            {"service": "svc", "repo": "org/svc", "base_branch": "develop"}
-        )
+        ok = sync.sync_pipeline_registered({"service": "svc", "repo": "org/svc", "base_branch": "develop"})
         assert ok is True
         sync.adapter.sync_to_postgres.assert_called_once()
         table, data = sync.adapter.sync_to_postgres.call_args.args
@@ -136,9 +132,7 @@ class TestEnabledSuccess:
         assert data["to_env"] == "homol"
 
     def test_promotion_completed(self, sync):
-        assert (
-            sync.sync_promotion_completed(9, "success", completed_at="2026-01-01T00:00:00Z") is True
-        )
+        assert sync.sync_promotion_completed(9, "success", completed_at="2026-01-01T00:00:00Z") is True
         sql, params = sync.adapter.query_postgres.call_args.args
         assert params == ("success", "2026-01-01T00:00:00Z", 9)
 
@@ -222,9 +216,7 @@ class TestExceptionsReturnFalse:
         assert boom.sync_pipeline_blocked("s", "r", "a") is False
 
     def test_promotion_created(self, boom):
-        assert (
-            boom.sync_promotion_created({"service": "s", "from_env": "d", "to_env": "h"}) is False
-        )
+        assert boom.sync_promotion_created({"service": "s", "from_env": "d", "to_env": "h"}) is False
 
     def test_promotion_completed(self, boom):
         assert boom.sync_promotion_completed(1, "s") is False

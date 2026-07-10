@@ -304,10 +304,7 @@ class TerraformProvisioner:
             # Escreve override do backend (idempotente: mesmo conteúdo)
             override_file = module_dir / "_backend_override.tf"
             override_content = _BACKEND_TEMPLATE.format(backend_type=self._backend_type)
-            if (
-                not override_file.exists()
-                or override_file.read_text(encoding="utf-8") != override_content
-            ):
+            if not override_file.exists() or override_file.read_text(encoding="utf-8") != override_content:
                 override_file.write_text(override_content, encoding="utf-8")
                 _log.info(
                     "backend_override_written",
@@ -337,9 +334,7 @@ class TerraformProvisioner:
                 timeout=timeout_sec,
             )
             if r.returncode != 0:
-                on_failed(
-                    f"terraform init (backend={self._backend_type}) falhou:\n{r.stderr[:2000]}"
-                )
+                on_failed(f"terraform init (backend={self._backend_type}) falhou:\n{r.stderr[:2000]}")
                 return False
         return True
 
@@ -750,9 +745,12 @@ class TerraformProvisioner:
         on_failed: OnFailed,
     ) -> None:
         if self._backend_type == "local":
-            self._run_destroy_local(
-                spec, vm_id, module_dir, state_file, timeout_sec, on_done, on_failed
-            )
+            if state_file is None:
+                # Backend local sempre define state_file em schedule_destroy; ausência
+                # significaria nada a destruir → resposta idempotente (como no skip de state).
+                on_done()
+                return
+            self._run_destroy_local(spec, vm_id, module_dir, state_file, timeout_sec, on_done, on_failed)
         else:
             self._run_destroy_remote(spec, vm_id, module_dir, timeout_sec, on_done, on_failed)
 

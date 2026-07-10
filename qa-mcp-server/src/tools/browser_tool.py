@@ -255,7 +255,7 @@ def visual_regression(
 
         # Resize to same dimensions if needed
         if img_current.size != img_baseline.size:
-            img_current = img_current.resize(img_baseline.size, Image.LANCZOS)
+            img_current = img_current.resize(img_baseline.size, Image.Resampling.LANCZOS)
 
         diff = ImageChops.difference(img_current, img_baseline)
         diff_data = list(diff.getdata())

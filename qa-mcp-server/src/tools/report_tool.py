@@ -86,16 +86,12 @@ def get_coverage_report(
                 totals = data.get("totals", {})
                 lines_covered = totals.get("covered_lines", 0)
                 lines_total = totals.get("num_statements", 0)
-                overall_pct = (
-                    round(lines_covered / lines_total * 100, 2) if lines_total > 0 else 0.0
-                )
+                overall_pct = round(lines_covered / lines_total * 100, 2) if lines_total > 0 else 0.0
                 for fname, fdata in (data.get("files") or {}).items():
                     fsum = fdata.get("summary", {})
                     flines_total = fsum.get("num_statements", 0)
                     flines_covered = fsum.get("covered_lines", 0)
-                    fpct = (
-                        round(flines_covered / flines_total * 100, 2) if flines_total > 0 else 0.0
-                    )
+                    fpct = round(flines_covered / flines_total * 100, 2) if flines_total > 0 else 0.0
                     modules.append({"file": fname, "coverage_pct": fpct})
             except (json.JSONDecodeError, KeyError):
                 pass

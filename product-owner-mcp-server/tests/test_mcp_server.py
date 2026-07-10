@@ -5,6 +5,7 @@ Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
 e _verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado — os
 testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
 """
+
 from __future__ import annotations
 
 import json
@@ -208,25 +209,18 @@ def test_call_internal_error_is_wrapped(client: TestClient, monkeypatch):
 
 # ── _dispatch cobre as 17 tools + KeyError ────────────────────────────────────
 def test_dispatch_routes_all_tools():
-    assert "root_cause_hypotheses" in M._dispatch(
-        "analyze_product_problem", {"problem_statement": "X"}
+    assert "root_cause_hypotheses" in M._dispatch("analyze_product_problem", {"problem_statement": "X"})
+    assert (
+        M._dispatch("calculate_rice_score", {"reach": 10, "impact": 1, "confidence": 1, "effort": 1})["score"]
+        == 10.0
     )
-    assert M._dispatch(
-        "calculate_rice_score", {"reach": 10, "impact": 1, "confidence": 1, "effort": 1}
-    )["score"] == 10.0
-    assert "prioritized_items" in M._dispatch(
-        "prioritize_backlog", {"items": [{"name": "A", "score": 5}]}
-    )
+    assert "prioritized_items" in M._dispatch("prioritize_backlog", {"items": [{"name": "A", "score": 5}]})
     assert "total_risks" in M._dispatch("map_product_risks", {"feature": "F", "risks": []})
     assert "stages" in M._dispatch("map_user_journey", {"persona": "Ana", "steps": ["a"]})
     assert M._dispatch("map_user_personas", {"personas": ["P"]})["count"] == 1
-    assert "research_questions" in M._dispatch(
-        "generate_discovery_questions", {"hypothesis": "H"}
-    )
+    assert "research_questions" in M._dispatch("generate_discovery_questions", {"hypothesis": "H"})
     assert "mvp_scope" in M._dispatch("define_mvp_scope", {"product": "P", "features": ["a"]})
-    assert "kpis" in M._dispatch(
-        "define_product_metrics", {"product": "P", "objectives": ["o"]}
-    )
+    assert "kpis" in M._dispatch("define_product_metrics", {"product": "P", "objectives": ["o"]})
     assert "vision" in M._dispatch(
         "define_product_vision", {"product": "P", "target_audience": "a", "problem": "b"}
     )
@@ -235,13 +229,9 @@ def test_dispatch_routes_all_tools():
         "generate_go_to_market_brief",
         {"product": "P", "target_segment": "s", "value_proposition": "v"},
     )
-    assert "tech_requirements" in M._dispatch(
-        "generate_handoff_to_architecture", {"feature": "F"}
-    )
+    assert "tech_requirements" in M._dispatch("generate_handoff_to_architecture", {"feature": "F"})
     assert "wireframes_brief" in M._dispatch("generate_handoff_to_design", {"feature": "F"})
-    assert "definition_of_ready" in M._dispatch(
-        "generate_handoff_to_engineering", {"feature": "F"}
-    )
+    assert "definition_of_ready" in M._dispatch("generate_handoff_to_engineering", {"feature": "F"})
     assert "phases" in M._dispatch("generate_release_plan", {"product": "P", "features": ["f"]})
     assert M._dispatch("generate_user_stories", {"feature": "F"})["count"] >= 1
     with pytest.raises(KeyError):

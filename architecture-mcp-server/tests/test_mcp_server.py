@@ -5,6 +5,7 @@ Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
 _verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
 os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
 """
+
 from __future__ import annotations
 
 import json

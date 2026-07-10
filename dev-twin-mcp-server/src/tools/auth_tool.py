@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+from dataclasses import replace as dc_replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -66,9 +67,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         name=record["name"],
         email=record["email"],
         role=record["role"],
-        scopes=record["scopes"]
-        if isinstance(record["scopes"], list)
-        else json.loads(record["scopes"]),
+        scopes=record["scopes"] if isinstance(record["scopes"], list) else json.loads(record["scopes"]),
         environment=record["environment"],
         tenant_id=record.get("tenant_id"),
         authenticated_at=datetime.now(UTC).isoformat(),
@@ -106,9 +105,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         "env_config_loaded": env_config_loaded,
         "env_vars_count": env_vars_count,
         "active_env_namespace": f"env.{session.environment}",
-        "message": (
-            f"Bem-vindo, {session.name}! Use get_twin_context() para contexto completo (git, OS)."
-        ),
+        "message": (f"Bem-vindo, {session.name}! Use get_twin_context() para contexto completo (git, OS)."),
     }
 
 
@@ -154,7 +151,9 @@ def get_twin_context() -> dict[str, Any]:
     if not session.context:
         context = collect_environment_context()
         SessionManager.update_context(context)
-        session = SessionManager.get()  # re-fetch após update
+        # Reflete o contexto atualizado no ref local (equivale ao re-fetch, mas
+        # mantém o tipo estreitado como UserSession em vez de UserSession | None).
+        session = dc_replace(session, context=context)
 
     tenant_namespaces = [f"tenants.{session.tenant_id}"] if session.tenant_id else []
     return {

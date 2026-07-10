@@ -1,7 +1,8 @@
-# CI das personas MCP (sidecars mcp_http, Model C) — STD-CICD-001 / STD-QA-001 / STD-MCP-001.
-# lint-mcp (ruff+black) + test-mcp (pytest --cov=src --cov-fail-under=80) + audience-guard.
+# CI dos 20 MCP servers (8 personas + 12 system-MCPs; sidecars mcp_http, Model C) —
+# STD-CICD-001 / STD-QA-001 / STD-MCP-001 / STD-SEC-006.
+# lint (ruff+black 110) + mypy bloqueante + pytest --cov-fail-under=80 + audience-guard + db-register.
 # NOTA STD-CICD-001: actions de terceiros DEVEM ser pinadas por SHA (aqui em tag por brevidade).
-name: mcp-personas-ci
+name: mcp-servers-ci
 
 on:
   pull_request:
@@ -19,6 +20,7 @@ jobs:
       fail-fast: false
       matrix:
         server:
+          # personas (8)
           - architecture-mcp-server
           - backend-mcp-server
           - devops-mcp-server
@@ -27,6 +29,19 @@ jobs:
           - product-owner-mcp-server
           - qa-engineer-mcp-server
           - security-mcp-server
+          # system-MCPs (12)
+          - ai-governance-mcp-server
+          - audit-mcp-server
+          - config-mcp-server
+          - deploy-mcp-server
+          - dev-twin-mcp-server
+          - docs-mcp-server
+          - infra-mcp-server
+          - pipeline-mcp-server
+          - qa-mcp-server
+          - services-mcp-server
+          - session-mcp-server
+          - test-mcp-server
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -39,10 +54,10 @@ jobs:
         working-directory: ${{ matrix.server }}
         run: |
           ruff check src tests
-          black --check src tests
-      - name: types — mypy (advisory por ora; STD-CICD-001 exige bloqueante)
+          black --check --line-length 110 src tests
+      - name: types — mypy (bloqueante — STD-CICD-001)
         working-directory: ${{ matrix.server }}
-        run: mypy src || true
+        run: mypy src
       - name: test-mcp — pytest cov>=80%
         working-directory: ${{ matrix.server }}
         run: pytest -q --cov=src --cov-report=term-missing --cov-fail-under=80
@@ -56,3 +71,49 @@ jobs:
           python-version: "3.12"
       - name: ci-assert-audience (STD-MCP-001 — trava 401 audience mismatch)
         run: python scripts/ci_assert_audience.py
+
+  # Prova que o registro DECLARATIVO no banco (gateway-mapping.sql) EXECUTA de fato
+  # contra um MySQL efêmero — 2x, para provar idempotência (schema guard + ON DUPLICATE KEY).
+  db-register:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: testpw
+          MYSQL_DATABASE: ADMIN_DATAFORALL
+        ports:
+          - "3306:3306"
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -ptestpw"
+          --health-interval=5s --health-timeout=5s --health-retries=15
+    steps:
+      - uses: actions/checkout@v4
+      - name: base GATEWAY_MAPPING (mínima; as colunas mcp_http vêm do próprio .sql)
+        run: |
+          mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL -e "
+            CREATE TABLE IF NOT EXISTS GATEWAY_MAPPING (
+              id INT AUTO_INCREMENT PRIMARY KEY,
+              name_microservice VARCHAR(255) NOT NULL UNIQUE,
+              internal_url VARCHAR(500) NULL,
+              health_path VARCHAR(255) DEFAULT '/api/health/ready',
+              timeout_seconds FLOAT DEFAULT 30,
+              additional_info JSON NULL,
+              created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+              updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            );"
+      - name: executa cada gateway/gateway-mapping.sql (2x = idempotência)
+        run: |
+          shopt -s nullglob
+          found=0
+          for f in */gateway/gateway-mapping.sql; do
+            found=1
+            echo "== aplica $f =="
+            mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL < "$f"
+            mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL < "$f"
+          done
+          [ "$found" = 1 ] || { echo "nenhum gateway-mapping.sql encontrado"; exit 1; }
+      - name: rotas mcp_http registradas
+        run: |
+          mysql -h 127.0.0.1 -uroot -ptestpw ADMIN_DATAFORALL -e \
+            "SELECT name_microservice,kind,mcp_url,call_style FROM GATEWAY_MAPPING WHERE kind='mcp_http' ORDER BY name_microservice;"

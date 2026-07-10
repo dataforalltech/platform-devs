@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-session-mcp",
+    "namespace": "session-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-session-mcp:7100",
+    "audience": "mcp:session-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

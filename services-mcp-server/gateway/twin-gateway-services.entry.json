@@ -1,0 +1,15 @@
+[
+  {
+    "name": "platform-services-mcp",
+    "namespace": "services-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-services-mcp:7100",
+    "audience": "mcp:services-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "callStyle": "mcp",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

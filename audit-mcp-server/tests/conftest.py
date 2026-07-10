@@ -4,8 +4,13 @@ Nenhum teste toca I/O externo: o PostgreSQL é substituído por um
 ``FakeAuditStore`` em memória que replica a API pública de ``AuditStore``.
 Os testes que exercitam o código SQL real de ``AuditStore`` usam um pool
 psycopg2 mockado (ver ``tests/test_store.py``).
+
+Garante ainda que a raiz do audit-mcp-server esteja no sys.path (permite
+``from src...`` mesmo quando o pytest é invocado de outro cwd, sem depender de
+``pip install -e .``).
 """
 
+import sys
 import tempfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -13,7 +18,11 @@ from typing import Any
 
 import pytest
 
-from src.config.settings import AuditSettings
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from src.config.settings import AuditSettings  # noqa: E402
 
 
 def _now() -> str:

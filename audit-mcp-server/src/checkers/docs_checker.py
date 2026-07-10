@@ -25,9 +25,7 @@ class DocsChecker:
                 "name": "has_readme",
                 "required": True,
                 "passed": (repo / "README.md").exists(),
-                "details": "README.md present"
-                if (repo / "README.md").exists()
-                else "README.md not found",
+                "details": "README.md present" if (repo / "README.md").exists() else "README.md not found",
             }
         )
 
@@ -37,9 +35,9 @@ class DocsChecker:
                 "name": "has_changelog",
                 "required": False,
                 "passed": (repo / "CHANGELOG.md").exists(),
-                "details": "CHANGELOG.md present"
-                if (repo / "CHANGELOG.md").exists()
-                else "CHANGELOG.md not found",
+                "details": (
+                    "CHANGELOG.md present" if (repo / "CHANGELOG.md").exists() else "CHANGELOG.md not found"
+                ),
             }
         )
 
@@ -53,9 +51,11 @@ class DocsChecker:
                 "name": "has_runbook",
                 "required": is_required_for_prod,
                 "passed": runbook_path.exists(),
-                "details": f"Runbook present (required for {env})"
-                if runbook_path.exists()
-                else f"docs/runbook.md not found (required for {env})",
+                "details": (
+                    f"Runbook present (required for {env})"
+                    if runbook_path.exists()
+                    else f"docs/runbook.md not found (required for {env})"
+                ),
             }
         )
 
@@ -69,9 +69,11 @@ class DocsChecker:
                 "name": "has_rollback_plan",
                 "required": is_required_for_prod,
                 "passed": rollback_path.exists(),
-                "details": f"Rollback plan present (required for {env})"
-                if rollback_path.exists()
-                else f"docs/rollback.md not found (required for {env})",
+                "details": (
+                    f"Rollback plan present (required for {env})"
+                    if rollback_path.exists()
+                    else f"docs/rollback.md not found (required for {env})"
+                ),
             }
         )
 
@@ -81,9 +83,11 @@ class DocsChecker:
                 "name": "has_adr",
                 "required": False,
                 "passed": (repo / "docs" / "decisions").exists(),
-                "details": "docs/decisions/ directory present"
-                if (repo / "docs" / "decisions").exists()
-                else "docs/decisions/ not found",
+                "details": (
+                    "docs/decisions/ directory present"
+                    if (repo / "docs" / "decisions").exists()
+                    else "docs/decisions/ not found"
+                ),
             }
         )
 
@@ -96,9 +100,11 @@ class DocsChecker:
                 "name": "has_env_vars_documented",
                 "required": env != "dev",
                 "passed": has_env_docs,
-                "details": "Environment variables documented"
-                if has_env_docs
-                else "Environment variables not documented",
+                "details": (
+                    "Environment variables documented"
+                    if has_env_docs
+                    else "Environment variables not documented"
+                ),
             }
         )
 

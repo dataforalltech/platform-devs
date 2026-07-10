@@ -1,6 +1,6 @@
-"""Servidor MCP deploy — 24 tools para Git, PR, GitHub Actions, pipeline CI/CD, ACR e workspace local.
+"""Servidor MCP deploy — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Tools:
+24 tools para Git, PR, GitHub Actions, pipeline CI/CD, ACR e workspace local:
   Git (4):            list_repos, create_branch, list_branches, commit_files
   PR (4):             create_pr, get_pr, merge_pr, list_prs
   Workflow (4):       trigger_workflow, list_workflow_runs, get_workflow_run, cancel_workflow_run
@@ -9,19 +9,46 @@ Tools:
   ACR (3):            setup_repo, acr_build, list_acr_images
   Healthcheck (1):    ensure_all_repos_healthy
   Local Workspace (4): get_repos_root, set_repos_root, list_local_repos, clone_repo
+
+Implementa o contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:deploy-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3).
+  4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: deploy-mcp fala com um BACKEND (GitHub REST API + ACR) via o GitHubClient
+(src/knowledge/github_client.py) — o cliente de backend do serviço (Bearer = PAT).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from typing import Any
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from ..config.settings import DeploySettings, get_settings
+from ..config.settings import NAMESPACE, DeploySettings, get_settings
 from ..knowledge.github_client import GitHubClient
 from ..tools import (
     acr_build,
@@ -749,62 +776,273 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Escopos por ferramenta (least privilege)                                     #
-# ─────────────────────────────────────────────────────────────────────────── #
-# read  = consultas/status/healthcheck (não altera estado remoto).
-# write = ação que MUTA estado (git, PR, deploy, push ACR, workflow, clone) —
-#         SENSÍVEIS: podem alterar repositórios, disparar deploys ou publicar imagens.
-SCOPE_FOR_TOOL: dict[str, str] = {
-    # ── deploy:read — consultas/status/healthcheck ─────────────────────────── #
-    "list_repos": "deploy:read",
-    "list_branches": "deploy:read",
-    "get_pr": "deploy:read",
-    "list_prs": "deploy:read",
-    "list_workflow_runs": "deploy:read",
-    "get_workflow_run": "deploy:read",
-    "get_deploy_status": "deploy:read",
-    "get_pipeline_templates": "deploy:read",
-    "list_acr_images": "deploy:read",
-    "ensure_all_repos_healthy": "deploy:write",  # SENSÍVEL: dry_run=false por default MUTA (scaffold/trigger/setup_repo)
-    "get_repos_root": "deploy:read",
-    "list_local_repos": "deploy:read",
-    # ── deploy:write — ações que MUTAM estado (SENSÍVEIS) ──────────────────── #
-    "create_branch": "deploy:write",  # SENSÍVEL: git — cria branch no repo remoto
-    "commit_files": "deploy:write",  # SENSÍVEL: git commit/push — altera conteúdo do repo
-    "create_pr": "deploy:write",  # SENSÍVEL: cria Pull Request
-    "merge_pr": "deploy:write",  # SENSÍVEL: merge — integra código na base
-    "cancel_workflow_run": "deploy:write",  # SENSÍVEL: cancela execução de workflow em curso
-    "trigger_workflow": "deploy:write",  # SENSÍVEL: dispara workflow (workflow_dispatch)
-    "deploy": "deploy:write",  # SENSÍVEL: dispara deploy para um ambiente
-    "scaffold_pipeline": "deploy:write",  # SENSÍVEL: commit de workflows no repo alvo
-    "setup_repo": "deploy:write",  # SENSÍVEL: grava GitHub Actions secrets no repo
-    "acr_build": "deploy:write",  # SENSÍVEL: docker build + push de imagem para o ACR
-    "set_repos_root": "deploy:write",  # SENSÍVEL: persiste config no config-mcp / cria diretório
-    "clone_repo": "deploy:write",  # SENSÍVEL: clona repo (escreve no filesystem local)
+# ── Policy metadata (STD-MCP-001 CI-2) ────────────────────────────────────────
+# Cada tool declara os 4 campos de política, injetados em _TOOL_SCHEMAS abaixo:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução dominio:tipo:acao (least-privilege, 3 seg.)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação)
+# Verbo :read = consulta/status (não muta estado remoto); :write = MUTA (git, PR,
+# deploy, push ACR, workflow, clone, persiste config) — SENSÍVEIS.
+_POLICY: dict[str, dict[str, str]] = {
+    # ── Git ──────────────────────────────────────────────────────────────────
+    "list_repos": {
+        "required_scope": f"{NAMESPACE}:repo:read",
+        "resource_type": "repo",
+        "data_domain": "source_control",
+    },
+    "create_branch": {
+        "required_scope": f"{NAMESPACE}:branch:write",
+        "resource_type": "branch",
+        "data_domain": "source_control",
+    },
+    "list_branches": {
+        "required_scope": f"{NAMESPACE}:branch:read",
+        "resource_type": "branch",
+        "data_domain": "source_control",
+    },
+    "commit_files": {
+        "required_scope": f"{NAMESPACE}:commit:write",
+        "resource_type": "commit",
+        "data_domain": "source_control",
+    },
+    # ── PR ───────────────────────────────────────────────────────────────────
+    "create_pr": {
+        "required_scope": f"{NAMESPACE}:pr:write",
+        "resource_type": "pull_request",
+        "data_domain": "source_control",
+    },
+    "get_pr": {
+        "required_scope": f"{NAMESPACE}:pr:read",
+        "resource_type": "pull_request",
+        "data_domain": "source_control",
+    },
+    "merge_pr": {
+        "required_scope": f"{NAMESPACE}:pr:write",
+        "resource_type": "pull_request",
+        "data_domain": "source_control",
+    },
+    "list_prs": {
+        "required_scope": f"{NAMESPACE}:pr:read",
+        "resource_type": "pull_request",
+        "data_domain": "source_control",
+    },
+    # ── Workflow ─────────────────────────────────────────────────────────────
+    "trigger_workflow": {
+        "required_scope": f"{NAMESPACE}:workflow:write",
+        "resource_type": "workflow",
+        "data_domain": "cicd",
+    },
+    "list_workflow_runs": {
+        "required_scope": f"{NAMESPACE}:workflow:read",
+        "resource_type": "workflow",
+        "data_domain": "cicd",
+    },
+    "get_workflow_run": {
+        "required_scope": f"{NAMESPACE}:workflow:read",
+        "resource_type": "workflow",
+        "data_domain": "cicd",
+    },
+    "cancel_workflow_run": {
+        "required_scope": f"{NAMESPACE}:workflow:write",
+        "resource_type": "workflow",
+        "data_domain": "cicd",
+    },
+    # ── Deploy ───────────────────────────────────────────────────────────────
+    "deploy": {
+        "required_scope": f"{NAMESPACE}:deployment:write",
+        "resource_type": "deployment",
+        "data_domain": "cicd",
+    },
+    "get_deploy_status": {
+        "required_scope": f"{NAMESPACE}:deployment:read",
+        "resource_type": "deployment",
+        "data_domain": "cicd",
+    },
+    # ── Pipeline ─────────────────────────────────────────────────────────────
+    "scaffold_pipeline": {
+        "required_scope": f"{NAMESPACE}:pipeline:write",
+        "resource_type": "pipeline",
+        "data_domain": "cicd",
+    },
+    "get_pipeline_templates": {
+        "required_scope": f"{NAMESPACE}:pipeline:read",
+        "resource_type": "pipeline",
+        "data_domain": "cicd",
+    },
+    # ── ACR ──────────────────────────────────────────────────────────────────
+    "setup_repo": {
+        "required_scope": f"{NAMESPACE}:repo:write",
+        "resource_type": "repo",
+        "data_domain": "cicd",
+    },
+    "acr_build": {
+        "required_scope": f"{NAMESPACE}:image:write",
+        "resource_type": "image",
+        "data_domain": "artifact",
+    },
+    "list_acr_images": {
+        "required_scope": f"{NAMESPACE}:image:read",
+        "resource_type": "image",
+        "data_domain": "artifact",
+    },
+    # ── Healthcheck ──────────────────────────────────────────────────────────
+    "ensure_all_repos_healthy": {
+        "required_scope": f"{NAMESPACE}:deployment:write",
+        "resource_type": "deployment",
+        "data_domain": "cicd",
+    },
+    # ── Local workspace ──────────────────────────────────────────────────────
+    "get_repos_root": {
+        "required_scope": f"{NAMESPACE}:workspace:read",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
+    "set_repos_root": {
+        "required_scope": f"{NAMESPACE}:workspace:write",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
+    "list_local_repos": {
+        "required_scope": f"{NAMESPACE}:workspace:read",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
+    "clone_repo": {
+        "required_scope": f"{NAMESPACE}:workspace:write",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
 }
-SCOPES_SUPPORTED = ["deploy:read", "deploy:write"]
 
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
-    "SCOPE_FOR_TOOL cobre todas as tools"
-)
+assert set(_POLICY.keys()) == set(_TOOL_SCHEMAS.keys()), "_POLICY cobre todas as tools"  # noqa: S101
+
+# Injeta capability + os 3 campos de policy em cada entrada de _TOOL_SCHEMAS,
+# para que /mcp/tools/list os emita (o gateway lê estes campos, CI-2).
+for _name, _meta in _TOOL_SCHEMAS.items():
+    _meta["capability"] = f"{NAMESPACE}.{_name}"
+    _meta.update(_POLICY[_name])
+
+# Tools encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless). deploy-mcp
+# não tem tool de status/health (o liveness é o endpoint /v1/health), então vazio.
+_EXEMPT_TOOLS: frozenset[str] = frozenset()
+# Denylist fail-safe: tools que retornam segredo NUNCA saem pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Server                                                                       #
-# ─────────────────────────────────────────────────────────────────────────── #
-def build_server() -> tuple[Any, ...]:
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
+
+def _verify_inner_token(twin_token: str, settings: DeploySettings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:deploy-mcp).
+
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:deploy-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
+    )
+
+
+# ── HTTP Sidecar (health + bridge governado /mcp/tools/*) ─────────────────────
+
+
+def _build_http_app(settings: DeploySettings, client: GitHubClient | None = None) -> FastAPI:
+    """Cria o sidecar HTTP. O GitHubClient (backend do serviço) é construído a
+    partir das settings quando não injetado (testes passam um mock)."""
+    if client is None:
+        client = GitHubClient(settings)
+
+    app = FastAPI(
+        title="deploy-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "deploy-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments, settings, client)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+def build_server() -> tuple[Any, DeploySettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings, o GitHubClient e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
 
     client = GitHubClient(settings)
+    http_app = _build_http_app(settings, client)
     _log.info(
-        "deploy_mcp_ready",
-        extra={
-            "github_org": settings.github_org,
-            "acr_registry": settings.acr_registry,
-            "acr_namespace": settings.acr_namespace,
-        },
+        "deploy_mcp_ready tools=%d github_org=%s acr_registry=%s",
+        len(_TOOL_SCHEMAS),
+        settings.github_org,
+        settings.acr_registry,
     )
 
     server: Server = Server("deploy-mcp-server")
@@ -819,19 +1057,27 @@ def build_server() -> tuple[Any, ...]:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
-        _log.info("tool_called: %s keys=%s", name, sorted(args.keys()))
         try:
             payload = _dispatch(name, args, settings, client)
         except KeyError:
             payload = {"error": "unknown_tool", "tool": name}
-            _log.error("unknown_tool: %s", name)
         except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(exc), "tool": name}
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
             _log.exception("tool_internal_error: %s", name)
-
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, settings, client
+    return server, settings, http_app
+
+
+def _arg(args: dict[str, Any], key: str, default: Any = None) -> Any:
+    """Extrai um argumento cru do payload MCP.
+
+    Retorna ``Any`` (preservando o default ``None`` quando ausente) para as
+    ferramentas cujos parametros sao obrigatorios no inputSchema — o valor cru
+    vem do cliente MCP e a validacao acontece na camada de tools/backend. Isso
+    mantem a semantica atual (mesmo default) sem estreitar o tipo para o mypy.
+    """
+    return args.get(key, default)
 
 
 def _dispatch(
@@ -851,22 +1097,22 @@ def _dispatch(
     if name == "create_branch":
         return create_branch(
             client,
-            repo=args.get("repo"),
-            branch=args.get("branch"),
+            repo=_arg(args, "repo"),
+            branch=_arg(args, "branch"),
             from_ref=args.get("from_ref", "develop"),
         )
     if name == "list_branches":
         return list_branches(
             client,
-            repo=args.get("repo"),
+            repo=_arg(args, "repo"),
             filter_name=args.get("filter_name"),
         )
     if name == "commit_files":
         return commit_files(
             client,
-            repo=args.get("repo"),
-            branch=args.get("branch"),
-            message=args.get("message"),
+            repo=_arg(args, "repo"),
+            branch=_arg(args, "branch"),
+            message=_arg(args, "message"),
             files=args.get("files", []),
             author_name=args.get("author_name"),
             author_email=args.get("author_email"),
@@ -875,22 +1121,22 @@ def _dispatch(
     if name == "create_pr":
         return create_pr(
             client,
-            repo=args.get("repo"),
-            title=args.get("title"),
+            repo=_arg(args, "repo"),
+            title=_arg(args, "title"),
             body=args.get("body", ""),
-            head=args.get("head"),
+            head=_arg(args, "head"),
             base=args.get("base"),
             labels=args.get("labels"),
             reviewers=args.get("reviewers"),
             draft=args.get("draft", False),
         )
     if name == "get_pr":
-        return get_pr(client, repo=args.get("repo"), pr_number=args.get("pr_number"))
+        return get_pr(client, repo=_arg(args, "repo"), pr_number=_arg(args, "pr_number"))
     if name == "merge_pr":
         return merge_pr(
             client,
-            repo=args.get("repo"),
-            pr_number=args.get("pr_number"),
+            repo=_arg(args, "repo"),
+            pr_number=_arg(args, "pr_number"),
             method=args.get("method", "squash"),
             commit_title=args.get("commit_title"),
             commit_message=args.get("commit_message"),
@@ -898,7 +1144,7 @@ def _dispatch(
     if name == "list_prs":
         return list_prs(
             client,
-            repo=args.get("repo"),
+            repo=_arg(args, "repo"),
             state=args.get("state", "open"),
             base=args.get("base"),
             author=args.get("author"),
@@ -907,47 +1153,47 @@ def _dispatch(
     if name == "trigger_workflow":
         return trigger_workflow(
             client,
-            repo=args.get("repo"),
-            workflow_id=args.get("workflow_id"),
-            ref=args.get("ref"),
+            repo=_arg(args, "repo"),
+            workflow_id=_arg(args, "workflow_id"),
+            ref=_arg(args, "ref"),
             inputs=args.get("inputs"),
         )
     if name == "list_workflow_runs":
         return list_workflow_runs(
             client,
-            repo=args.get("repo"),
-            workflow_id=args.get("workflow_id"),
-            branch=args.get("branch"),
+            repo=_arg(args, "repo"),
+            workflow_id=_arg(args, "workflow_id"),
+            branch=_arg(args, "branch"),
             status=args.get("status"),
             limit=args.get("limit", 10),
         )
     if name == "get_workflow_run":
-        return get_workflow_run(client, repo=args.get("repo"), run_id=args.get("run_id"))
+        return get_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
     if name == "cancel_workflow_run":
-        return cancel_workflow_run(client, repo=args.get("repo"), run_id=args.get("run_id"))
+        return cancel_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
     # ── Deploy ────────────────────────────────────────────────────────────── #
     if name == "deploy":
         return deploy(
             client,
-            service=args.get("service"),
-            environment=args.get("environment"),
-            ref=args.get("ref"),
-            repo=args.get("repo"),
+            service=_arg(args, "service"),
+            environment=_arg(args, "environment"),
+            ref=_arg(args, "ref"),
+            repo=_arg(args, "repo"),
             inputs=args.get("inputs"),
         )
     if name == "get_deploy_status":
         return get_deploy_status(
             client,
-            service=args.get("service"),
-            environment=args.get("environment"),
-            repo=args.get("repo"),
+            service=_arg(args, "service"),
+            environment=_arg(args, "environment"),
+            repo=_arg(args, "repo"),
             limit=args.get("limit", 5),
         )
     # ── Pipeline ──────────────────────────────────────────────────────────── #
     if name == "scaffold_pipeline":
         return scaffold_pipeline(
             client,
-            repo=args.get("repo"),
+            repo=_arg(args, "repo"),
             templates=args.get("templates"),
             branch=args.get("branch", "develop"),
             commit_message=args.get("commit_message"),
@@ -959,16 +1205,16 @@ def _dispatch(
         return setup_repo(
             client,
             settings,
-            repo=args.get("repo"),
-            image_name=args.get("image_name"),
+            repo=_arg(args, "repo"),
+            image_name=_arg(args, "image_name"),
             portainer_webhook=args.get("portainer_webhook"),
             github_token=args.get("github_token"),
         )
     if name == "acr_build":
         return acr_build(
             settings,
-            repo_path=args.get("repo_path"),
-            image_name=args.get("image_name"),
+            repo_path=_arg(args, "repo_path"),
+            image_name=_arg(args, "image_name"),
             tag=args.get("tag"),
             dockerfile=args.get("dockerfile", "Dockerfile"),
             push=args.get("push", True),
@@ -977,7 +1223,7 @@ def _dispatch(
         return list_acr_images(
             client,
             settings,
-            service_name=args.get("service_name"),
+            service_name=_arg(args, "service_name"),
             limit=args.get("limit", 20),
         )
     # ── Healthcheck ───────────────────────────────────────────────────────────── #
@@ -1014,7 +1260,7 @@ def _dispatch(
             client,
             settings,
             repo=args["repo"],
-            branch=args.get("branch"),
+            branch=_arg(args, "branch"),
             repos_root=args.get("repos_root"),
             target_dir=args.get("target_dir"),
             depth=args.get("depth"),
@@ -1023,36 +1269,41 @@ def _dispatch(
     raise KeyError(name)
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+# ── Entry point ───────────────────────────────────────────────────────────────
 
-    Preserva build_server() (Server de baixo nível + _dispatch com client/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware com
-    escopo por ferramenta (least privilege via SCOPE_FOR_TOOL).
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    server, _settings, _client = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("DEPLOY_RESOURCE", "http://localhost:7110/mcp"),
-        prm_url=os.getenv(
-            "DEPLOY_PRM_URL",
-            "http://localhost:7110/.well-known/oauth-protected-resource",
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
     )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7110")))
+        _server, settings, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

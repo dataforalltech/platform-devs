@@ -435,9 +435,7 @@ def create_checklist(
         items=items,
         plan_id=plan_id,
     )
-    result["hint"] = (
-        f"Use run_checklist(checklist_id='{result['checklist_id']}') para iniciar uma execução."
-    )
+    result["hint"] = f"Use run_checklist(checklist_id='{result['checklist_id']}') para iniciar uma execução."
     return result
 
 

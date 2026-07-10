@@ -24,6 +24,7 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
 NOTA: security-mcp é compute-only (analisa/gera artefatos a partir dos inputs; não há
 backend REST), por isso não há ServiceApiClient — as tools são chamadas diretamente.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -83,10 +84,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:code:read",
         "resource_type": "code",
         "data_domain": "security",
-        "schema": _schema({
-            "code": dict(_STR, description="Código a revisar."),
-            "language": dict(_STR, description="Linguagem (python/typescript/...)."),
-        }),
+        "schema": _schema(
+            {
+                "code": dict(_STR, description="Código a revisar."),
+                "language": dict(_STR, description="Linguagem (python/typescript/...)."),
+            }
+        ),
     },
     "scan_secrets": {
         "description": "Detecta segredos hardcoded em texto/código. Sempre mascara o valor.",
@@ -94,10 +97,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:secrets:read",
         "resource_type": "secrets",
         "data_domain": "security",
-        "schema": _schema({
-            "content": dict(_STR, description="Conteúdo/texto a varrer."),
-            "filename": dict(_STR, description="Nome do arquivo de origem (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "content": dict(_STR, description="Conteúdo/texto a varrer."),
+                "filename": dict(_STR, description="Nome do arquivo de origem (opcional)."),
+            }
+        ),
     },
     "scan_dependency_risks": {
         "description": "Extrai dependências de um manifest e sinaliza riscos heurísticos.",
@@ -105,10 +110,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:dependency:read",
         "resource_type": "dependency",
         "data_domain": "security",
-        "schema": _schema({
-            "manifest": dict(_STR, description="Conteúdo do manifest de dependências."),
-            "ecosystem": dict(_STR, description="Ecossistema (python/npm/...)."),
-        }),
+        "schema": _schema(
+            {
+                "manifest": dict(_STR, description="Conteúdo do manifest de dependências."),
+                "ecosystem": dict(_STR, description="Ecossistema (python/npm/...)."),
+            }
+        ),
     },
     "calculate_cvss": {
         "description": "Calcula CVSS v3.1 base score a partir de um vetor.",
@@ -116,9 +123,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:cvss:read",
         "resource_type": "cvss",
         "data_domain": "security",
-        "schema": _schema({
-            "vector": dict(_STR, description="Vetor CVSS 3.1 (ex: CVSS:3.1/AV:N/AC:L/...)."),
-        }),
+        "schema": _schema(
+            {
+                "vector": dict(_STR, description="Vetor CVSS 3.1 (ex: CVSS:3.1/AV:N/AC:L/...)."),
+            }
+        ),
     },
     "harden_headers": {
         "description": "Analisa headers HTTP atuais e recomenda hardening (OWASP Secure Headers).",
@@ -126,9 +135,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:headers:read",
         "resource_type": "headers",
         "data_domain": "security",
-        "schema": _schema({
-            "current_headers": dict(_OBJ, description="Headers HTTP atuais (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "current_headers": dict(_OBJ, description="Headers HTTP atuais (opcional)."),
+            }
+        ),
     },
     "check_password_policy": {
         "description": "Avalia uma política de senha contra NIST SP 800-63B.",
@@ -136,9 +147,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:password_policy:read",
         "resource_type": "password_policy",
         "data_domain": "security",
-        "schema": _schema({
-            "policy": dict(_OBJ, description="Política de senha a avaliar (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "policy": dict(_OBJ, description="Política de senha a avaliar (opcional)."),
+            }
+        ),
     },
     "analyze_compliance": {
         "description": "Avalia conformidade contra um framework. `context` marca controles atendidos.",
@@ -146,10 +159,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:compliance:read",
         "resource_type": "compliance",
         "data_domain": "security",
-        "schema": _schema({
-            "framework": dict(_STR, description="Framework (owasp/lgpd/soc2/iso27001/pci-dss)."),
-            "context": dict(_OBJ, description="Contexto com controles atendidos (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "framework": dict(_STR, description="Framework (owasp/lgpd/soc2/iso27001/pci-dss)."),
+                "context": dict(_OBJ, description="Contexto com controles atendidos (opcional)."),
+            }
+        ),
     },
     "map_attack_surface": {
         "description": "Mapeia a superfície de ataque; aceita endpoints/integrações reais.",
@@ -157,11 +172,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:attack_surface:read",
         "resource_type": "attack_surface",
         "data_domain": "security",
-        "schema": _schema({
-            "system": dict(_STR, description="Nome do sistema."),
-            "endpoints": dict(_ARR, description="Endpoints expostos (opcional)."),
-            "integrations": dict(_ARR, description="Integrações (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "system": dict(_STR, description="Nome do sistema."),
+                "endpoints": dict(_ARR, description="Endpoints expostos (opcional)."),
+                "integrations": dict(_ARR, description="Integrações (opcional)."),
+            }
+        ),
     },
     # ── Geração de artefatos (:write) ──────────────────────────────────────────
     "generate_threat_model": {
@@ -170,11 +187,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:threat_model:write",
         "resource_type": "threat_model",
         "data_domain": "security",
-        "schema": _schema({
-            "system": dict(_STR, description="Nome do sistema."),
-            "scope": dict(_STR, description="Escopo da avaliação (opcional)."),
-            "components": dict(_ARR, description="Componentes do sistema (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "system": dict(_STR, description="Nome do sistema."),
+                "scope": dict(_STR, description="Escopo da avaliação (opcional)."),
+                "components": dict(_ARR, description="Componentes do sistema (opcional)."),
+            }
+        ),
     },
     "generate_security_controls": {
         "description": "Gera controles técnicos e processuais, mapeados por categoria de ameaça.",
@@ -182,10 +201,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:security_controls:write",
         "resource_type": "security_controls",
         "data_domain": "security",
-        "schema": _schema({
-            "system": dict(_STR, description="Nome do sistema."),
-            "threat_categories": dict(_ARR, description="Categorias de ameaça/controle (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "system": dict(_STR, description="Nome do sistema."),
+                "threat_categories": dict(_ARR, description="Categorias de ameaça/controle (opcional)."),
+            }
+        ),
     },
     "generate_incident_response_plan": {
         "description": "Gera um runbook de resposta a incidentes seguindo o ciclo NIST SP 800-61.",
@@ -193,10 +214,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "security-mcp:incident_response:write",
         "resource_type": "incident_response",
         "data_domain": "operational",
-        "schema": _schema({
-            "incident_type": dict(_STR, description="Tipo de incidente (data_breach/...)."),
-            "severity": dict(_STR, description="Severidade (critical/high/medium/low)."),
-        }),
+        "schema": _schema(
+            {
+                "incident_type": dict(_STR, description="Tipo de incidente (data_breach/...)."),
+                "severity": dict(_STR, description="Severidade (critical/high/medium/low)."),
+            }
+        ),
     },
     # ── Liveness tokenless (_EXEMPT_TOOLS) ─────────────────────────────────────
     "status": {
@@ -221,6 +244,7 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
+
 def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:security-mcp).
 
@@ -237,25 +261,22 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     return jwt.decode(
         twin_token,
         signing_key.key,
-        algorithms=["RS256"],                         # RS256 exclusivo (STD-SEC-001)
-        audience=settings.mcp_twin_audience,          # a falha de integração nº 1
-        options={"require": ["exp", "aud", "jti"]},   # sem jti → rejeita (JTI_REQUIRED)
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
 
 # ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
 
+
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
     args (INV-3) mas as tools compute-only não o consomem."""
     if name == "review_secure_code":
-        return review_secure_code(
-            code=args.get("code", ""), language=args.get("language", "python")
-        )
+        return review_secure_code(code=args.get("code", ""), language=args.get("language", "python"))
     if name == "scan_secrets":
-        return scan_secrets(
-            content=args.get("content", ""), filename=args.get("filename", "")
-        )
+        return scan_secrets(content=args.get("content", ""), filename=args.get("filename", ""))
     if name == "scan_dependency_risks":
         return scan_dependency_risks(
             manifest=args.get("manifest", ""), ecosystem=args.get("ecosystem", "python")
@@ -267,17 +288,17 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     if name == "check_password_policy":
         return check_password_policy(policy=args.get("policy"))
     if name == "analyze_compliance":
-        return analyze_compliance(
-            framework=args.get("framework", "owasp"), context=args.get("context")
-        )
+        return analyze_compliance(framework=args.get("framework", "owasp"), context=args.get("context"))
     if name == "map_attack_surface":
         return map_attack_surface(
             system=args.get("system", "system"),
-            endpoints=args.get("endpoints"), integrations=args.get("integrations"),
+            endpoints=args.get("endpoints"),
+            integrations=args.get("integrations"),
         )
     if name == "generate_threat_model":
         return generate_threat_model(
-            system=args.get("system", "system"), scope=args.get("scope", ""),
+            system=args.get("system", "system"),
+            scope=args.get("scope", ""),
             components=args.get("components"),
         )
     if name == "generate_security_controls":
@@ -297,12 +318,13 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
+
 def _build_http_app(settings: Settings) -> FastAPI:
     """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
     app = FastAPI(
         title="security-mcp API",
         version="0.1.0",
-        docs_url="/docs" if settings.docs_enabled else None,   # false em todo ambiente
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
@@ -364,6 +386,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
+
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
@@ -396,6 +419,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 async def _run() -> None:
     import uvicorn

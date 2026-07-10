@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Any, Protocol
 
 from ..checkers.docs_checker import DocsChecker
 from ..checkers.lint_checker import LintChecker
@@ -8,6 +9,13 @@ from ..checkers.structure_checker import StructureChecker
 from ..checkers.test_checker import TestChecker
 from ..config.settings import AuditSettings
 from ..db.store import AuditStore
+
+
+class _Checker(Protocol):
+    """Interface estrutural comum dos checkers (todos expõem run estático)."""
+
+    @staticmethod
+    def run(repo_path: str, env: str = "dev") -> dict[str, Any]: ...
 
 
 def run_audit(
@@ -46,13 +54,14 @@ def run_audit(
         all_items = []
         scores = []
 
-        for checker_cls in [
+        checkers: list[type[_Checker]] = [
             StructureChecker,
             TestChecker,
             SecurityChecker,
             DocsChecker,
             LintChecker,
-        ]:
+        ]
+        for checker_cls in checkers:
             result = checker_cls.run(resolved_path, env)
             for item in result["items"]:
                 all_items.append(item)
@@ -89,9 +98,9 @@ def run_audit(
             "passed": score >= policy["min_score"],
             "status": status,
             "checklist_count": len(all_items),
-            "approvals_required": 0
-            if status == "auto_approved"
-            else approval_rule.get("required_approvals", 1),
+            "approvals_required": (
+                0 if status == "auto_approved" else approval_rule.get("required_approvals", 1)
+            ),
         }
     except Exception as e:
         return {"error": "InternalError", "details": str(e), "tool": "run_audit"}

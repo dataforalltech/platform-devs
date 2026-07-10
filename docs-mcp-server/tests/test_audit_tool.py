@@ -13,9 +13,7 @@ from src.tools.audit_tool import (
     get_audit_history,
 )
 
-_README = (
-    "# Test Service\n\n## Installation\n\nRun pip install.\n\n## Usage\n\nImport and use.\n"
-) * 5
+_README = ("# Test Service\n\n## Installation\n\nRun pip install.\n\n## Usage\n\nImport and use.\n") * 5
 
 _CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
 

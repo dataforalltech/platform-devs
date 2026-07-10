@@ -168,9 +168,7 @@ def test_search_docs_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
 
 def test_get_doc_tree_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch(
-        "get_doc_tree", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store
-    )
+    result = _dispatch("get_doc_tree", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
     assert result["summary"]["total_files"] == 2
 
 
@@ -197,17 +195,13 @@ def test_lint_markdown_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
 
 def test_check_doc_standards_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch(
-        "check_doc_standards", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store
-    )
+    result = _dispatch("check_doc_standards", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
     assert "overall_score" in result
 
 
 def test_audit_repo_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch(
-        "audit_repo", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store
-    )
+    result = _dispatch("audit_repo", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
     assert "audit_id" in result
 
 
@@ -224,8 +218,6 @@ def test_find_stale_docs_dispatch_ok(dispatch_store, dispatch_settings, tmp_path
 
 def test_generate_doc_report_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch(
-        "generate_doc_report", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store
-    )
+    result = _dispatch("generate_doc_report", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
     assert "score" in result
     assert "trend" in result

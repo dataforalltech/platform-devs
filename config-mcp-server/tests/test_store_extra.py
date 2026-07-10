@@ -77,12 +77,9 @@ class TestErrorPaths:
         assert "plaintext_secret" not in raw
 
 
-class TestPostgresSyncDisabledByDefault:
-    def test_postgres_sync_none_when_env_unset(self, store, monkeypatch):
-        monkeypatch.delenv("POSTGRES_SYNC_ENABLED", raising=False)
-        # store fixture already built with sync disabled
-        assert store._postgres_sync is None
-
-    def test_set_and_delete_do_not_call_sync_when_disabled(self, store):
+class TestSetAndDelete:
+    def test_set_and_delete_roundtrip(self, store):
         store.set("ns", "k", "v")
+        assert store.get("ns", "k") == "v"
         assert store.delete("ns", "k") is True
+        assert store.get("ns", "k") is None

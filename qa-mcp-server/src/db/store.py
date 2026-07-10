@@ -44,7 +44,8 @@ class QAStore:
     def _migrate(self) -> None:
         with self._get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS test_runs (
                         id          SERIAL PRIMARY KEY,
                         repo_path   TEXT,
@@ -56,10 +57,14 @@ class QAStore:
                         summary     TEXT NOT NULL DEFAULT '{}',
                         details     TEXT NOT NULL DEFAULT '{}'
                     );
-                """)
-                cur.execute("""
-                    CREATE INDEX IF NOT EXISTS idx_runs_repo ON test_runs(repo_path, run_type, started_at DESC);
-                """)
+                """
+                )
+                cur.execute(
+                    """
+                    CREATE INDEX IF NOT EXISTS idx_runs_repo
+                        ON test_runs(repo_path, run_type, started_at DESC);
+                """
+                )
 
     def save_run(
         self,

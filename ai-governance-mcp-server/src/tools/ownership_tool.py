@@ -86,9 +86,7 @@ def get_service_ownership(repo: GovernanceRepository, service_name: str) -> dict
     node_id = _resolve_service(g, service_name)
     if node_id is None:
         # Tenta listar serviços disponíveis para ajudar
-        available = sorted(
-            nid for nid, data in g.graph.nodes(data=True) if data.get("kind") == "service"
-        )
+        available = sorted(nid for nid, data in g.graph.nodes(data=True) if data.get("kind") == "service")
         return {
             "service_name": service_name,
             "found": False,
@@ -300,9 +298,7 @@ def check_scope(
         required_actions.append("Dividir em PRs menores, um por responsabilidade.")
         risk = _bump(risk, "high")
     elif len(files) > 15:
-        drift_indicators.append(
-            f"Volume elevado: {len(files)} arquivos. Verifique se todos são necessários."
-        )
+        drift_indicators.append(f"Volume elevado: {len(files)} arquivos. Verifique se todos são necessários.")
         recommendations.append("Considere commits atômicos ou PRs separados.")
         risk = _bump(risk, "medium")
 
@@ -347,9 +343,7 @@ def check_scope(
     if files:
         suspicious = _files_suspicious_for_task(task_description.lower(), files)
         if suspicious:
-            drift_indicators.append(
-                f"Arquivos possivelmente fora do escopo declarado: {suspicious[:5]}."
-            )
+            drift_indicators.append(f"Arquivos possivelmente fora do escopo declarado: {suspicious[:5]}.")
             recommendations.append(
                 "Confirme que cada arquivo é necessário para a tarefa. "
                 "Refactors de oportunidade devem ir em PR separado."

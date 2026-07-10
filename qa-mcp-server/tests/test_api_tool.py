@@ -42,9 +42,7 @@ def test_run_api_tests_all_pass(store, settings):
         {"path": "/health", "expect_status": 200},
     ]
     with patch("httpx.Client", return_value=_FakeClient(responses)):
-        result = run_api_tests(
-            store, settings, base_url="http://localhost:8000", endpoints=endpoints
-        )
+        result = run_api_tests(store, settings, base_url="http://localhost:8000", endpoints=endpoints)
 
     assert result["total"] == 3
     assert result["passed"] == 3
@@ -61,9 +59,7 @@ def test_run_api_tests_one_fail(store, settings):
         {"path": "/fail", "expect_status": 200},
     ]
     with patch("httpx.Client", return_value=_FakeClient(responses)):
-        result = run_api_tests(
-            store, settings, base_url="http://localhost:8000", endpoints=endpoints
-        )
+        result = run_api_tests(store, settings, base_url="http://localhost:8000", endpoints=endpoints)
 
     assert result["failed"] == 1
     assert result["results"][1]["passed"] is False
@@ -74,9 +70,7 @@ def test_run_api_tests_expect_keys_missing(store, settings):
     responses = [_mock_response(200, {"status": "ok"})]
     endpoints = [{"path": "/users/1", "expect_status": 200, "expect_keys": ["id", "name"]}]
     with patch("httpx.Client", return_value=_FakeClient(responses)):
-        result = run_api_tests(
-            store, settings, base_url="http://localhost:8000", endpoints=endpoints
-        )
+        result = run_api_tests(store, settings, base_url="http://localhost:8000", endpoints=endpoints)
 
     assert result["failed"] == 1
     assert "missing" in result["results"][0]["failure_reason"]
@@ -95,9 +89,7 @@ def test_run_api_tests_timeout(store, settings):
 
     endpoints = [{"path": "/slow", "expect_status": 200}]
     with patch("httpx.Client", return_value=_TimeoutClient()):
-        result = run_api_tests(
-            store, settings, base_url="http://localhost:8000", endpoints=endpoints
-        )
+        result = run_api_tests(store, settings, base_url="http://localhost:8000", endpoints=endpoints)
 
     assert result["failed"] == 1
     assert "timed out" in result["results"][0]["failure_reason"]
@@ -134,9 +126,7 @@ def test_generate_test_matrix_success(store, settings):
         _mock_response(200),
     ]
     with patch("httpx.Client", return_value=_FakeClient(responses)):
-        result = generate_test_matrix(
-            store, settings, base_url="http://localhost:8000", scenarios=scenarios
-        )
+        result = generate_test_matrix(store, settings, base_url="http://localhost:8000", scenarios=scenarios)
 
     assert result["total_cases"] == 3
     assert result["passed"] == 3
@@ -155,9 +145,7 @@ def test_generate_test_matrix_wrong_status(store, settings):
         }
     ]
     with patch("httpx.Client", return_value=_FakeClient(responses)):
-        result = generate_test_matrix(
-            store, settings, base_url="http://localhost:8000", scenarios=scenarios
-        )
+        result = generate_test_matrix(store, settings, base_url="http://localhost:8000", scenarios=scenarios)
 
     assert result["failed"] == 1
     assert result["matrix"][0]["passed"] is False

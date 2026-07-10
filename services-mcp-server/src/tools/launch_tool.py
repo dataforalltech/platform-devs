@@ -30,14 +30,14 @@ from ..db.store import ServiceStore
 
 _log = logging.getLogger(__name__)
 
-# â”€â”€ Constantes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Constantes
 
 _DEFAULT_WAIT_TIMEOUT = 30  # segundos esperando o serviÃ§o responder
 _DEFAULT_CHECK_INTERVAL = 1.0  # intervalo entre tentativas de health
 _DEFAULT_HEALTH_TIMEOUT = 2.0  # timeout por requisiÃ§Ã£o HTTP de health
 
 
-# â”€â”€ Entry point pÃºblico â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Entry point pÃºblico
 
 
 def launch_service(
@@ -92,7 +92,7 @@ def launch_service(
     if not isinstance(port, int) or not (1 <= port <= 65535):
         return {"error": "ValidationError", "details": f"port invÃ¡lido: {port!r}"}
 
-    # â”€â”€ Executa o start no modo correto â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # Executa o start no modo correto  #
     if mode == "uvicorn":
         if not app:
             return {
@@ -132,7 +132,7 @@ def launch_service(
     if "error" in start_result:
         return start_result
 
-    # â”€â”€ Aguarda o serviÃ§o responder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # Aguarda o serviÃ§o responder  #
     external_url = f"http://{host}:{port}"
     health_result = _wait_healthy(
         url=external_url,
@@ -142,7 +142,7 @@ def launch_service(
         http_timeout=_DEFAULT_HEALTH_TIMEOUT,
     )
 
-    # â”€â”€ Registra no store â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ #
+    # Registra no store  #
     svc_type = "process" if mode == "uvicorn" else "docker"
     internal_url = (
         f"http://{container_name or name}:{container_port or port}"
@@ -198,7 +198,7 @@ def launch_service(
     }
 
 
-# â”€â”€ Helpers de start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Helpers de start
 
 
 def _launch_uvicorn(
@@ -359,7 +359,7 @@ def _get_compose_container_id(service: str, cwd: Path | None) -> str | None:
         return None
 
 
-# â”€â”€ Health check com polling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Health check com polling
 
 
 def _wait_healthy(
@@ -405,7 +405,7 @@ def _wait_healthy(
     }
 
 
-# â”€â”€ stop_service (complementar) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# stop_service (complementar)
 
 
 def stop_service(
@@ -464,9 +464,7 @@ def stop_service(
                 result["error"] = str(exc)
     else:
         result["stopped"] = False
-        result["error"] = (
-            f"tipo '{svc_type}' nÃ£o suportado para stop. Use mode='docker' ou mode='process'"
-        )
+        result["error"] = f"tipo '{svc_type}' nÃ£o suportado para stop. Use mode='docker' ou mode='process'"
 
     if result.get("stopped"):
         store.upsert(name, {"status": "stopped"})

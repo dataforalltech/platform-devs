@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-infra-mcp",
+    "namespace": "infra-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-infra-mcp:7100",
+    "audience": "mcp:infra-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

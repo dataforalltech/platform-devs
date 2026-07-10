@@ -189,17 +189,17 @@ def ensure_all_repos_healthy(
             if needs_ci:
                 # Se workflow não existe: scaffoldar
                 if repo["ci_status"] in ("no_workflow", "no_runs"):
-                    scaffold_result = scaffold_pipeline(
-                        client, name, templates=["ci", "cd-dev"], branch=ref
-                    )
+                    scaffold_result = scaffold_pipeline(client, name, templates=["ci", "cd-dev"], branch=ref)
                     actions_taken.append(
                         {
                             "repo": name,
                             "action": "scaffold_pipeline",
                             "templates": ["ci", "cd-dev"],
-                            "result": "ok"
-                            if scaffold_result.get("committed")
-                            else scaffold_result.get("error", "error"),
+                            "result": (
+                                "ok"
+                                if scaffold_result.get("committed")
+                                else scaffold_result.get("error", "error")
+                            ),
                         }
                     )
                     time.sleep(5)  # aguarda propagação do commit
@@ -212,9 +212,9 @@ def ensure_all_repos_healthy(
                         "action": "trigger_ci",
                         "workflow": workflow_id,
                         "ref": ref,
-                        "result": "dispatched"
-                        if not trigger_result.get("error")
-                        else trigger_result.get("error"),
+                        "result": (
+                            "dispatched" if not trigger_result.get("error") else trigger_result.get("error")
+                        ),
                     }
                 )
 
@@ -248,9 +248,7 @@ def ensure_all_repos_healthy(
                     {
                         "repo": name,
                         "action": "setup_repo",
-                        "result": "ok"
-                        if setup_result.get("success")
-                        else setup_result.get("errors"),
+                        "result": "ok" if setup_result.get("success") else setup_result.get("errors"),
                     }
                 )
 
@@ -261,33 +259,23 @@ def ensure_all_repos_healthy(
                         "action": "trigger_cd",
                         "workflow": cd_workflow_id,
                         "ref": ref,
-                        "result": "dispatched"
-                        if not cd_result.get("error")
-                        else cd_result.get("error"),
+                        "result": "dispatched" if not cd_result.get("error") else cd_result.get("error"),
                     }
                 )
                 repo["acr_status"] = "triggered"
                 repo["remediation"] = (repo["remediation"] or "") + "_acr_triggered"
 
     # ── Fase 4: summary ─────────────────────────────────────────────────────── #
-    healthy = sum(
-        1 for r in repos_report if r["health"] == "HEALTHY" or r.get("remediation") == "ci_success"
-    )
+    healthy = sum(1 for r in repos_report if r["health"] == "HEALTHY" or r.get("remediation") == "ci_success")
     ci_failing = sum(
-        1
-        for r in repos_report
-        if r["ci_status"] in ("failing", "no_workflow", "no_runs", "timeout")
+        1 for r in repos_report if r["ci_status"] in ("failing", "no_workflow", "no_runs", "timeout")
     )
     acr_missing = sum(1 for r in repos_report if r["acr_status"] in ("missing", "error"))
     remediated = sum(
-        1
-        for r in repos_report
-        if r.get("remediation") and "success" in (r.get("remediation") or "")
+        1 for r in repos_report if r.get("remediation") and "success" in (r.get("remediation") or "")
     )
     remediation_failed = sum(
-        1
-        for r in repos_report
-        if r.get("remediation") and "timeout" in (r.get("remediation") or "")
+        1 for r in repos_report if r.get("remediation") and "timeout" in (r.get("remediation") or "")
     )
 
     return {

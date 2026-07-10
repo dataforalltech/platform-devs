@@ -46,7 +46,5 @@ def service_record(row: dict) -> dict[str, Any]:
         "registered_at": row.get("registered_at"),
         "last_seen": row.get("last_seen"),
         "last_check_at": row.get("last_check_at"),
-        "last_check_ok": bool(row["last_check_ok"])
-        if row.get("last_check_ok") is not None
-        else None,
+        "last_check_ok": bool(row["last_check_ok"]) if row.get("last_check_ok") is not None else None,
     }

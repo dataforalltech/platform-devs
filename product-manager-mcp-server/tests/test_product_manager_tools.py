@@ -20,9 +20,7 @@ from src.tools.product_manager_tools import (
 
 # ── generate_feature_spec — saída derivada dos inputs ────────────────────────── #
 def test_feature_spec_uses_custom_feature_and_objective():
-    result = generate_feature_spec(
-        feature="Dark Mode", objective="Reduce eye strain at night"
-    )
+    result = generate_feature_spec(feature="Dark Mode", objective="Reduce eye strain at night")
     assert result["title"] == "Feature Spec: Dark Mode"
     assert result["feature"] == "Dark Mode"
     # objective fornecido é preservado (não sobrescrito pelo default derivado).
