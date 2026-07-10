@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-product-owner-mcp",
+    "namespace": "product-owner-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-product-owner-mcp:7100",
+    "audience": "mcp:product-owner-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

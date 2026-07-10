@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-security-mcp",
+    "namespace": "security-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-security-mcp:7100",
+    "audience": "mcp:security-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": ["status"],
+    "excludeTools": []
+  }
+]

@@ -1,5 +1,9 @@
 # MCP Construction Guide
 
+> ⚠️ **DEPRECATED (2026-07-10).** Descreve o modelo **stdio-only**, que CONTRADIZ o padrão
+> atual (sidecar HTTP `mcp_http`, Model C). Não seguir. Canônico:
+> [docs/MCP_COMPLIANCE.md](docs/MCP_COMPLIANCE.md) → hub `platform-service-template/docs/standards/STD-MCP-001`.
+
 ## Overview
 
 Model Context Protocol (MCP) é um padrão aberto para comunicação entre clients e servidores especializados via JSON-RPC 2.0. Este guia documenta como construir MCPs que funcionam corretamente em Claude Code, baseado em 18 system MCPs (Python) e 8 devteam MCPs (Node.js/TypeScript).
