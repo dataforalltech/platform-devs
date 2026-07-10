@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PYTHONPATH=/app \
-    MCP_PORT=7124 \
+    MCP_PORT=7100 \
     DOCS_ENABLED=false
 
 WORKDIR /app
@@ -20,8 +20,8 @@ RUN pip install --no-cache-dir .
 RUN useradd --uid 1000 --create-home appuser
 USER 1000
 
-EXPOSE 7124
+EXPOSE 7100
 HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=5 \
-  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7124/v1/health',timeout=4).status==200 else 1)"
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:7100/v1/health',timeout=4).status==200 else 1)"
 
 CMD ["qa-engineer-mcp"]
