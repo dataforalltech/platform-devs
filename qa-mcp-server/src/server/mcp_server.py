@@ -40,6 +40,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, QASettings, get_settings
 from ..db.store import QAStore
 from ..tools.analysis_tool import (
@@ -725,8 +726,9 @@ def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
 def build_server() -> tuple[Server, QASettings, QAStore, FastAPI]:
     """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
-    store = QAStore(db_path=settings.db_path)
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
+    store = QAStore(db_path=settings.db_path, dsn=settings.pg_dsn or None)
     http_app = _build_http_app(settings, store)
     _log.info("qa_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
 

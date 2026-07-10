@@ -15,8 +15,10 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .secrets import load_secret
 
 # namespace canônico = name_microservice ('platform-session-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
@@ -33,6 +35,11 @@ class SessionSettings(BaseSettings):
         case_sensitive=False,
     )
 
+    # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
+    # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
+    # é gated por RUNTIME_ENV ∈ {local, cloud}. validation_alias ignora env_prefix.
+    runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
+
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
     # nº 1 é audiência divergente → 401). validation_alias ignora env_prefix.
@@ -47,12 +54,20 @@ class SessionSettings(BaseSettings):
 
     # ── Backend de sessões (prefixo SESSION_) ─────────────────────────────────
     # O SessionStore é SQLite embarcado (hermético); as settings PostgreSQL abaixo
-    # ficam prontas para o dual-write da Fase 2 (ver POSTGRES_INTEGRATION.md).
-    pg_host: str = Field(default="claude-dev", description="PostgreSQL host")
+    # ficam prontas para o dual-write da Fase 2. STD-SEC-004: NENHUM default com cara
+    # de credencial no código — host/senha vêm do ambiente (ou do Vault via
+    # ``load_secret``); a senha nunca tem valor real hardcoded.
+    pg_host: str = Field(default="", description="PostgreSQL host (env: SESSION_PG_HOST)")
     pg_port: int = Field(default=5432, description="PostgreSQL port")
     pg_db: str = Field(default="app", description="PostgreSQL database name")
     pg_user: str = Field(default="postgres", description="PostgreSQL user")
-    pg_password: str = Field(default="postgres_password_local_dev", description="PostgreSQL password")
+    # Senha resolvida por load_secret: Vault (se VAULT_ADDR) → env → "" (fail-closed).
+    pg_password: str = Field(
+        default_factory=lambda: load_secret(
+            f"{NAMESPACE}/pg_password", env_var="SESSION_PG_PASSWORD", default=""
+        ),
+        description="PostgreSQL password (Vault/env — sem default no código)",
+    )
     pg_min_conn: int = Field(default=2, description="Minimum pool connections")
     pg_max_conn: int = Field(default=10, description="Maximum pool connections")
 
@@ -71,6 +86,36 @@ class SessionSettings(BaseSettings):
             f"host={self.pg_host} port={self.pg_port} dbname={self.pg_db} "
             f"user={self.pg_user} password={self.pg_password}"
         )
+
+    @field_validator("runtime_env")
+    @classmethod
+    def _validate_runtime_env(cls, v: str) -> str:
+        v = (v or "local").strip().lower()
+        if v not in ("local", "cloud"):
+            raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
+        return v
+
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006). Chamado em build_server().
+
+        - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
+        - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
+        - Em cloud, a credencial do backend (senha do Postgres) é obrigatória — nunca
+          um default hardcoded (STD-SEC-004); deve vir do Vault/env via ``load_secret``.
+        """
+        if self.docs_enabled:
+            raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
+        if not self.mcp_twin_audience.startswith("mcp:"):
+            raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.pg_password:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: credencial do backend (SESSION_PG_PASSWORD "
+                    "ou Vault) é obrigatória em cloud — nunca use default hardcoded"
+                )
 
 
 # Alias de compatibilidade com o padrão canônico (architecture usa `Settings`).

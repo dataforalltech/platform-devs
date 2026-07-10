@@ -42,6 +42,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import Settings, get_settings
 from ..knowledge.encryptor import Encryptor
 from ..knowledge.store import ConfigStore
@@ -701,7 +702,7 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, 
 def _build_store(settings: Settings) -> ConfigStore:
     """Constrói o ConfigStore e valida a master key imediatamente (fail-fast)."""
     try:
-        encryptor = Encryptor(settings.master_key)
+        encryptor = Encryptor(settings.resolve_master_key())
         encryptor.decrypt(encryptor.encrypt("_health_check_"))
     except Exception as exc:  # noqa: BLE001 — chave ausente/inválida = boot inviável
         _log.critical("invalid_or_missing_master_key — abortando.")
@@ -783,7 +784,8 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings, o ConfigStore e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    settings.enforce_security_invariants()  # fail-fast (STD-SEC-001/004/006)
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
     store = _build_store(settings)
     http_app = _build_http_app(settings, store)
     _log.info("config_mcp_ready tools=%d store=%s", len(_TOOL_SCHEMAS), settings.store_path)

@@ -38,6 +38,12 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
+    # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
+    # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
+    # é gated por RUNTIME_ENV ∈ {local, cloud}. validation_alias absoluto (sem o
+    # prefixo GOVERNANCE_) para casar com o contrato compartilhado dos sidecars.
+    runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
+
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
     # nº 1 é audiência divergente → 401). validation_alias absoluto (sem prefixo
@@ -75,6 +81,14 @@ class Settings(BaseSettings):
     search_max_limit: int = Field(default=20, ge=1, le=100)
     search_default_limit: int = Field(default=5, ge=1, le=50)
     search_snippet_length: int = Field(default=400, ge=80, le=4000)
+
+    @field_validator("runtime_env")
+    @classmethod
+    def _validate_runtime_env(cls, v: str) -> str:
+        v = (v or "local").strip().lower()
+        if v not in ("local", "cloud"):
+            raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
+        return v
 
     @field_validator("log_level")
     @classmethod
@@ -122,6 +136,24 @@ class Settings(BaseSettings):
         if self.audit_path is not None:
             return self.audit_path
         return self.kb_path / "audit" / "decisions.jsonl"
+
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-006). Chamado em build_server().
+
+        - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
+        - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
+
+        ai-governance-mcp é compute-only sobre a knowledge-base em filesystem — não há
+        backend/credencial de DB a exigir (STD-SEC-004 é satisfeito por ausência de
+        segredo no código; os únicos campos de storage são paths, não credenciais).
+        """
+        if self.docs_enabled:
+            raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
+        if not self.mcp_twin_audience.startswith("mcp:"):
+            raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
+            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
 
 
 @lru_cache(maxsize=1)

@@ -1,90 +1,69 @@
-# DevOps — DevOps/Platform Engineering MCP Server
+# devops-mcp-server
 
-**DevOps** é um agente especialista em DevOps, Cloud Engineering, Platform Engineering e Observabilidade, responsável por transformar aplicações em ambientes seguros, escaláveis, resilientes, monitoráveis e prontos para produção.
+Sidecar **MCP** (`kind=mcp_http`, **Model C** / inner Twin Token) da persona **DevOps** do
+DevTeam, agregado pelo MCP Gateway central (`platform-mcp`). Persona **compute-only**:
+gera artefatos de DevOps/infra a partir dos inputs — não há backend REST/Trinity a chamar.
 
-## Filosofia
+Implementa o contrato de integração:
+- `STD-MCP-001` — MCP Gateway Integration Contract (CI-1..CI-11)
+- `STD-SEC-006` — Token Model C (inner Twin Token)
+- `STD-SEC-001` — RS256 exclusivo, Swagger/OpenAPI nunca exposto
+- `STD-SEC-004` — um único `.env`, discriminador `RUNTIME_ENV`
+- `STD-OBS-001` — logging estruturado (JSON)
 
-```
-PixelFera desenha a experiência.
-Frontend constrói a interface.
-Backend sustenta a lógica.
-DevOps coloca tudo de pé e mantém saudável.
-```
+## Arquitetura
 
-## Conhecimentos
+Transporte duplo: **stdio** (MCP nativo) + **sidecar HTTP** (`:MCP_PORT`, default `7100`).
 
-### DevOps
-- CI/CD (GitHub Actions, GitLab CI)
-- Docker, Docker Compose
-- Kubernetes, Helm
-- Terraform, Pulumi
-- Blue/Green, Canary, Rollback
+| Rota | Descrição |
+|------|-----------|
+| `GET /v1/health` | liveness (sem token) |
+| `GET /mcp/tools/list` | catálogo governado, com metadados de policy (`capability`, `required_scope`, `resource_type`, `data_domain`) |
+| `POST /mcp/tools/call` | execução — inner Twin Token obrigatório (exceto tools exempt) |
 
-### Cloud
-- AWS (ECS, Lambda, API Gateway, SQS)
-- GCP (Cloud Run, GKE, Pub/Sub)
-- Azure
+Segurança (defense in depth): o gateway já verifica o front token; este sidecar
+**re-verifica o inner Twin Token** na própria audiência (`mcp:devops-mcp`), RS256 via
+JWKS do `platform-admin`, `jti` obrigatório, fail-closed. O `tenant_id` vem SEMPRE dos
+claims do token verificado — nunca de argumento do cliente (SEC-035 / INV-3).
 
-### Observabilidade
-- Logs estruturados
-- Métricas (Prometheus, Grafana)
-- Tracing (OpenTelemetry)
-- Alertas e health checks
-- SLO/SLA/SLI
+## Tools
 
-### Segurança
-- IAM, RBAC
-- Secrets management
-- Scanning de vulnerabilidades
-- Least privilege
-- Network policies
+| Tool | Scope | Descrição |
+|------|-------|-----------|
+| `status` | `devops-mcp:status:read` | liveness stub (exempt / tokenless) |
+| `generate_kubernetes_manifest` | `devops-mcp:k8s_manifest:write` | Deployment, Service, ConfigMap |
+| `generate_dockerfile` | `devops-mcp:dockerfile:write` | Dockerfile otimizado |
+| `generate_github_actions_pipeline` | `devops-mcp:pipeline:write` | pipeline CI/CD GitHub Actions |
+| `generate_helm_chart` | `devops-mcp:helm_chart:write` | Helm Chart |
 
-## 19 Tools
+## Configuração
 
-1. **analyze_infrastructure_requirement** — Análise de requisito
-2. **generate_dockerfile** — Dockerfile otimizado
-3. **generate_docker_compose** — Docker Compose
-4. **generate_github_actions_pipeline** — Pipeline GitHub Actions
-5. **generate_gitlab_ci_pipeline** — Pipeline GitLab CI
-6. **generate_kubernetes_manifest** — Manifest Kubernetes
-7. **generate_helm_chart** — Helm Chart
-8. **generate_terraform_module** — Módulo Terraform
-9. **generate_cloud_run_deploy** — Deploy Cloud Run
-10. **generate_gke_deploy** — Deploy GKE
-11. **generate_iam_policy** — Política IAM
-12. **generate_secret_strategy** — Estratégia de secrets
-13. **generate_observability_plan** — Plano de observabilidade
-14. **generate_prometheus_rules** — Regras Prometheus
-15. **generate_grafana_dashboard** — Dashboard Grafana
-16. **generate_runbook** — Runbook de incident response
-17. **review_devops_config** — Revisão DevOps
-18. **review_cloud_security** — Revisão segurança cloud
-19. **generate_release_checklist** — Checklist de release
+Copie `.env.example` para `.env` (gitignored) e ajuste. Variáveis principais:
 
-## Instalação
+- `RUNTIME_ENV` — `local` | `cloud` (em `cloud`, `URL_ADMIN_TWIN_JWKS` é obrigatório)
+- `MCP_TWIN_AUDIENCE` — `mcp:devops-mcp` (audiência exata do inner token)
+- `URL_ADMIN_TWIN_JWKS` — JWKS do emissor do twin token
+- `MCP_PORT` — porta do sidecar HTTP (default `7100`)
+- `DOCS_ENABLED` — `false` em todo ambiente (invariante STD-SEC-001)
+
+## Desenvolvimento
 
 ```bash
 cd devops-mcp-server
-npm install
-npm run build
-```
+pip install -e ".[dev]"
 
-## Teste
-
-```bash
-npm test
+python -m ruff format .
+python -m ruff check .
+python -m mypy src
+python -m pytest -q --cov=src --cov-fail-under=80
 ```
 
 ## Execução
 
 ```bash
-npm start
+devops-mcp                # stdio + sidecar HTTP
+MCP_HTTP_ONLY=1 devops-mcp # só o sidecar HTTP (uso típico atrás do gateway)
 ```
 
-## Uso
-
-Acesse via `/mcp` no Claude Code e selecione **devops-mcp-server** para acessar todas as 19 tools.
-
-## Slogan
-
-**DevOps: se está em produção, está sob controle.**
+Em produção o server sobe como container atrás do gateway; o ingress externo é
+exclusivamente via `platform-mcp` (INV-1).

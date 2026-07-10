@@ -48,6 +48,7 @@ from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
+from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, DeploySettings, get_settings
 from ..knowledge.github_client import GitHubClient
 from ..tools import (
@@ -1033,7 +1034,8 @@ def _build_http_app(settings: DeploySettings, client: GitHubClient | None = None
 def build_server() -> tuple[Any, DeploySettings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings, o GitHubClient e o sidecar HTTP."""
     settings = get_settings()
-    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
+    configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
 
     client = GitHubClient(settings)
     http_app = _build_http_app(settings, client)

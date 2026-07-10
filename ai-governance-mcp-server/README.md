@@ -28,9 +28,20 @@ MCP é a **fonte central de verdade** para:
 O servidor **não** altera código, **não** acessa repositórios, **não**
 roda em nome do agente. Ele só fornece informação operacional estruturada.
 
+## Arquitetura (sidecar Model C)
+
+Roda como **sidecar `kind=mcp_http`** atrás do `platform-mcp-gateway` (Model C):
+fala MCP via **stdio** e expõe um sidecar HTTP interno (`:MCP_PORT`, default `7100`)
+com `GET /v1/health`, `GET /mcp/tools/list` (catálogo governado com metadados de
+policy) e `POST /mcp/tools/call`. Chamadas não-exempt re-verificam o **inner Twin
+Token** (RS256 via JWKS do `platform-admin`, `aud=mcp:ai-governance-mcp`) e derivam
+o `tenant_id` sempre das claims — nunca de argumento do cliente (STD-SEC-006 /
+STD-MCP-001). É **compute-only** sobre a knowledge-base em filesystem: não há backend
+REST nem credencial de banco. Detalhes de integração em [`gateway/`](gateway/).
+
 ## Instalação
 
-Pré-requisito: Python ≥ 3.11.
+Pré-requisito: Python ≥ 3.12.
 
 ```bash
 cd ai-governance-mcp-server

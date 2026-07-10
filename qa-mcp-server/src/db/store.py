@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -12,7 +11,13 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
+from ..config.secrets import load_secret
+
 _log = logging.getLogger(__name__)
+
+# DSN de conveniência para DEV LOCAL apenas (sem senha embutida — STD-SEC-004). Em
+# cloud, PG_DSN é obrigatório (enforce_security_invariants) e resolvido via Vault→env.
+_LOCAL_DEV_DSN = "postgresql://localhost/qa_mcp"
 
 
 def _now() -> str:
@@ -20,11 +25,13 @@ def _now() -> str:
 
 
 class QAStore:
-    def __init__(self, db_path: str = ":memory:") -> None:
+    def __init__(self, db_path: str = ":memory:", dsn: str | None = None) -> None:
+        # STD-SEC-004: a credencial NUNCA é hard-coded; resolvida via Vault→env.
+        resolved = dsn or load_secret("qa-mcp/pg-dsn", env_var="PG_DSN", default=_LOCAL_DEV_DSN)
         self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=2,
             maxconn=10,
-            dsn=os.getenv("PG_DSN", "postgresql://localhost/qa_mcp"),
+            dsn=resolved,
         )
         self._lock = threading.Lock()
         self._migrate()

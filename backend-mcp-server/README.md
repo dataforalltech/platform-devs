@@ -1,88 +1,81 @@
-# Backend — Backend Engineering MCP Server
+# backend-mcp — Backend Engineering MCP Server
 
-**Backend** é um agente especialista em Backend Engineering, responsável por transformar requisitos, regras de negócio e integrações em APIs seguras, escaláveis, observáveis e fáceis de manter.
+Persona especialista em **Backend Engineering**: transforma requisitos, regras de
+negócio e integrações em artefatos de API seguros, escaláveis e observáveis.
 
-## Filosofia
+Sidecar **kind=mcp_http (Model C)**, gateway-ready, conforme:
+- `STD-MCP-001` — contrato de integração com o MCP Gateway central (platform-mcp).
+- `STD-SEC-006` — inner Twin Token (audiência `mcp:backend-mcp`, RS256 via JWKS do admin).
+- `STD-SEC-001/004` — RS256 exclusivo, `/docs` desabilitado, um único `.env` (`RUNTIME_ENV`).
+- `STD-OBS-001` — logging estruturado JSON.
 
-```
-PixelFera desenha a experiência.
-Frontend constrói a interface.
-Backend sustenta a operação por trás.
-```
+Persona **compute-only**: gera os artefatos a partir dos inputs — não há backend
+REST/Trinity a chamar, portanto sem `ServiceApiClient`.
 
-## Conhecimentos
+## Transporte
 
-### Arquitetura
-- APIs REST, GraphQL, WebSockets
-- Microserviços, modular, Clean Architecture, DDD, Event-driven
-- Filas, mensageria, jobs assíncronos
-- Cache, rate limiting, circuit breakers
+- **stdio** (MCP primário).
+- **HTTP sidecar** (`:MCP_PORT`, default `7100`):
+  - `GET  /v1/health` — liveness (sem token).
+  - `GET  /mcp/tools/list` — catálogo governado (com `capability`/`required_scope`/`resource_type`/`data_domain`).
+  - `POST /mcp/tools/call` — execução; exige o inner Twin Token (exceto `_EXEMPT_TOOLS`), tenant vindo sempre dos claims.
 
-### Linguagens
-- Python (FastAPI, Flask)
-- Node.js (NestJS, Express)
-- TypeScript
-- Java / Spring Boot (opcional)
-- Go (opcional)
+`MCP_HTTP_ONLY=1` sobe apenas o sidecar HTTP (uso típico atrás do gateway).
 
-### Dados
-- PostgreSQL, MySQL, MongoDB, Redis, BigQuery
-- Modelagem relacional e NoSQL
-- Migrations, índices, otimização de queries
-- Transações, consistência
+## Tools (13)
 
-### Segurança
-- JWT, OAuth2, RBAC, IAM
-- Criptografia, validação, sanitização
-- Logs seguros sem vazar secrets
-- OWASP API Security
+Leitura / análise (`:read`):
+- `analyze_backend_requirement` — analisa requisito e identifica entidades, permissões, integrações.
+- `review_backend_code` — revisa código (segurança, performance, padrões, erros).
+- `optimize_query` — otimiza query (índices, joins, N+1).
 
-### Cloud
-- Docker, Kubernetes
-- AWS (ECS, Lambda, API Gateway, SQS, Secrets Manager)
-- GCP (Cloud Run, GKE, Pub/Sub)
+Geração de artefatos (`:write`):
+- `generate_api_contract` — contrato de API (schemas, endpoints, status codes).
+- `generate_auth_policy` — política de autenticação/autorização (`data_domain=security`).
+- `generate_database_schema` — schema com índices e constraints.
+- `generate_fastapi_router` — router FastAPI com validação.
+- `generate_nestjs_controller` — controller NestJS.
+- `generate_migration` — migration idempotente e reversível.
+- `generate_repository_layer` — repository com CRUD.
+- `generate_service_layer` — serviço com regra de negócio.
+- `generate_openapi_spec` — especificação OpenAPI.
+- `map_integration_flow` — fluxo de integração com sistemas externos (auth, erros, retry).
 
-## 14 Tools
+## Configuração
 
-1. **analyze_backend_requirement** — Análise de requisito de negócio
-2. **generate_api_contract** — Geração de contrato de API
-3. **generate_fastapi_router** — Router FastAPI completo
-4. **generate_nestjs_controller** — Controller NestJS
-5. **generate_service_layer** — Serviço com regra de negócio
-6. **generate_repository_layer** — Repository com operações CRUD
-7. **generate_database_schema** — Schema com índices e constraints
-8. **generate_migration** — Migration idempotente e reversível
-9. **generate_auth_policy** — Política de autenticação e autorização
-10. **generate_backend_tests** — Testes unitários, integração, E2E
-11. **review_backend_code** — Revisão de código
-12. **optimize_query** — Otimização de queries
-13. **generate_openapi_spec** — Especificação OpenAPI
-14. **map_integration_flow** — Fluxo de integração com sistemas externos
+Copie `.env.example` para `.env` (gitignored) e ajuste. Discriminador de ambiente: `RUNTIME_ENV ∈ {local, cloud}`.
 
-## Instalação
+| Variável | Descrição |
+|----------|-----------|
+| `RUNTIME_ENV` | `local` ou `cloud` (em `cloud`, `URL_ADMIN_TWIN_JWKS` é obrigatório). |
+| `MCP_TWIN_AUDIENCE` | Audiência exata do inner token: `mcp:backend-mcp`. |
+| `URL_ADMIN_TWIN_JWKS` | JWKS do platform-admin (emissor do twin token). |
+| `MCP_PORT` | Porta do sidecar HTTP (default `7100`). |
+| `DOCS_ENABLED` | Deve ser `false` em todo ambiente (STD-SEC-001). |
+| `MCP_SERVICE_LOG_LEVEL` | Nível de log (default `INFO`). |
+
+## Desenvolvimento
 
 ```bash
 cd backend-mcp-server
-npm install
-npm run build
-```
-
-## Teste
-
-```bash
-npm test
+pip install -e ".[dev]"
+python -m ruff format .
+python -m ruff check .
+python -m mypy src
+python -m pytest -q --cov=src --cov-fail-under=80
 ```
 
 ## Execução
 
 ```bash
-npm start
+backend-mcp            # stdio + sidecar HTTP
+MCP_HTTP_ONLY=1 backend-mcp   # apenas sidecar HTTP
 ```
 
-## Uso
+## Docker
 
-Acesse via `/mcp` no Claude Code e selecione **backend-mcp-server** para acessar todas as 14 tools.
+Build com contexto na raiz do repo (mesma convenção dos demais servers):
 
-## Slogan
-
-**Backend: onde a regra vira API e o caos vira serviço.**
+```bash
+docker build -f backend-mcp-server/Dockerfile -t backend-mcp .
+```
