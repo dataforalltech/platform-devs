@@ -152,6 +152,13 @@ activemq-data/
 # SageMath parsed files
 *.sage.py
 
+# SQLite runtime databases (nao versionar estado de runtime)
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
 # Environments
 .env
 .envrc
