@@ -81,7 +81,8 @@ class TokenStore:
         """Cria tabela de tokens se não existir."""
         with self._get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS agent_tokens (
                         id SERIAL PRIMARY KEY,
                         token TEXT UNIQUE NOT NULL,
@@ -98,16 +99,13 @@ class TokenStore:
                         last_used_at TIMESTAMPTZ,
                         expires_at TIMESTAMPTZ
                     )
-                """)
+                """
+                )
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_agent_tokens_prefix ON agent_tokens(token_prefix)"
                 )
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_agent_tokens_user_id ON agent_tokens(user_id)"
-                )
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_agent_tokens_active ON agent_tokens(active)"
-                )
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_agent_tokens_user_id ON agent_tokens(user_id)")
+                cur.execute("CREATE INDEX IF NOT EXISTS idx_agent_tokens_active ON agent_tokens(active)")
                 cur.execute(
                     "CREATE INDEX IF NOT EXISTS idx_agent_tokens_tenant_id ON agent_tokens(tenant_id)"
                 )

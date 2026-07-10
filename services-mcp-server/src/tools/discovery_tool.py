@@ -197,12 +197,7 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
 
         # Runtime: tenta inspect primeiro, depois Command do docker ps, depois imagem
         ps_command = cdata.get("Command", "")
-        runtime = (
-            inspect.get("runtime")
-            or _detect_runtime(ps_command)
-            or _detect_runtime(image)
-            or "docker"
-        )
+        runtime = inspect.get("runtime") or _detect_runtime(ps_command) or _detect_runtime(image) or "docker"
         if runtime == "unknown":
             runtime = "docker"
 

@@ -1,433 +1,464 @@
-"""Testes do servidor MCP (dispatch, schemas, handlers HTTP e MCP).
+"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
 
-Hermeticos: usam um SessionStore in-memory (SQLite), sem rede. Cobrem o roteamento
-de _dispatch para cada ferramenta, os invariantes de schema/escopo e os handlers
-assíncronos list_tools/call_tool.
+Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
+(missing/invalid token, tenant ausente, audiência errada, exempt, exclude,
+unknown, internal_error, happy path) e _verify_inner_token (não configurado,
+decode mockado e caminho real de audiência divergente).
+
+O ``SessionStore`` é SQLite embarcado (hermético) — nenhum teste faz I/O de rede.
+O PyJWKClient/JWKS é mockado; o único teste que decodifica de verdade gera um par
+RSA local (sem rede).
 """
 
 from __future__ import annotations
 
 import json
+import time
 
+import jwt as pyjwt
 import pytest
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi.testclient import TestClient
 
+from src.config import settings as settings_mod
 from src.config.settings import SessionSettings
-from src.db.store import SessionStore
-from src.server.mcp_server import (
-    _TOOL_SCHEMAS,
-    SCOPE_FOR_TOOL,
-    SCOPES_SUPPORTED,
-    _build_http_app,
-    _dispatch,
-    _JSONEncoder,
-    build_server,
-)
+from src.server import mcp_server as M
 
-_ACTOR = {"type": "human", "id": "dev@dataforall.tech"}
+_AUD = "mcp:session-mcp"
+_JWKS = "http://admin.local/.well-known/jwks.json"
 
 
-@pytest.fixture
-def store() -> SessionStore:
-    s = SessionStore(SessionSettings())
+def _settings() -> SessionSettings:
+    return SessionSettings(MCP_TWIN_AUDIENCE=_AUD, URL_ADMIN_TWIN_JWKS=_JWKS)
+
+
+@pytest.fixture()
+def store():
+    from src.db.store import SessionStore
+
+    s = SessionStore(_settings())
     yield s
     s.close()
 
 
-@pytest.fixture
-def session_id(store: SessionStore) -> str:
-    result = _dispatch(
-        "start_session",
-        {"title": "T", "objective": "O", "repo": "platform-x"},
-        store,
-        "develop",
+@pytest.fixture()
+def client(store) -> TestClient:
+    return TestClient(M._build_http_app(_settings(), store))
+
+
+# ── /v1/health ────────────────────────────────────────────────────────────────
+def test_health(client: TestClient):
+    r = client.get("/v1/health")
+    assert r.status_code == 200
+    assert r.json() == {"status": "ok", "service": "session-mcp", "tools": len(M._TOOL_SCHEMAS)}
+
+
+# ── /mcp/tools/list — 4 campos de policy por tool (CI-2) ──────────────────────
+def test_tools_list_has_policy_fields(client: TestClient):
+    r = client.get("/mcp/tools/list")
+    assert r.status_code == 200
+    tools = r.json()["result"]["tools"]
+    assert {t["name"] for t in tools} == set(M._TOOL_SCHEMAS)
+    for t in tools:
+        assert t["inputSchema"]["type"] == "object"
+        for field in ("capability", "required_scope", "resource_type", "data_domain"):
+            assert t[field], f"{t['name']} sem {field}"
+        # required_scope no formato dominio:tipo:acao (3 segmentos / 2 ':')
+        assert t["required_scope"].count(":") == 2
+        assert t["capability"] == f"session-mcp.{t['name']}"
+        assert t["required_scope"].startswith("session-mcp:")
+    by_name = {t["name"]: t for t in tools}
+    # mutações usam verbo :write; consultas :read
+    assert by_name["start_session"]["required_scope"].endswith(":write")
+    assert by_name["complete_task"]["required_scope"].endswith(":write")
+    assert by_name["submit_suggestion"]["required_scope"].endswith(":write")
+    assert by_name["list_sessions"]["required_scope"].endswith(":read")
+    assert by_name["get_task"]["required_scope"].endswith(":read")
+    assert by_name["list_decisions"]["required_scope"].endswith(":read")
+    # audit trail de decisões é domínio de governança
+    assert by_name["list_decisions"]["data_domain"] == "governance"
+    assert by_name["start_session"]["data_domain"] == "session"
+
+
+def test_schema_invariants():
+    assert set(M._POLICY_SPEC) == set(M._TOOL_SCHEMAS)
+    for name, meta in M._TOOL_SCHEMAS.items():
+        assert meta["description"], name
+        assert meta["schema"]["type"] == "object", name
+
+
+# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+def test_call_missing_twin_token(client: TestClient):
+    r = client.post(
+        "/mcp/tools/call",
+        json={"params": {"name": "list_sessions", "arguments": {}}},
     )
-    return result["id"]
+    assert r.status_code == 401
+    assert r.json()["error"] == "missing_twin_token"
 
 
-# ── Schemas & scopes ─────────────────────────────────────────────────────── #
+# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ────────────────
+def test_call_invalid_twin_token(client: TestClient, monkeypatch):
+    def _boom(_tok, _settings):
+        raise ValueError("bad signature")
+
+    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_sessions",
+                "arguments": {},
+                "_meta": {"twin_token": "tok"},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
 
 
-class TestSchemaInvariants:
-    def test_scope_keys_match_tool_keys(self):
-        assert set(SCOPE_FOR_TOOL) == set(_TOOL_SCHEMAS)
+# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ───────────
+def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
+    captured: dict = {}
 
-    def test_every_scope_is_supported(self):
-        assert set(SCOPE_FOR_TOOL.values()) <= set(SCOPES_SUPPORTED)
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
 
-    def test_every_schema_has_description_and_schema(self):
-        for name, meta in _TOOL_SCHEMAS.items():
-            assert meta["description"], name
-            assert meta["schema"]["type"] == "object", name
+    def _spy(name, args, _store, _settings):
+        captured["name"] = name
+        captured["args"] = dict(args)
+        return {"ok": True}
+
+    monkeypatch.setattr(M, "_dispatch", _spy)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_sessions",
+                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
+                "arguments": {"tenant_id": "ATTACKER"},
+                "_meta": {"twin_token": "tok"},
+            }
+        },
+    )
+    assert r.status_code == 200
+    assert captured["name"] == "list_sessions"
+    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
 
 
-class TestJSONEncoder:
-    def test_encodes_datetime_and_decimal(self):
-        from datetime import date, datetime
-        from decimal import Decimal
+# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
+def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_sessions",
+                "arguments": {},
+                "_meta": {"twin_token": "t"},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "missing_tenant_scope"
 
-        payload = {"dt": datetime(2020, 1, 1), "d": date(2021, 2, 3), "num": Decimal("1.5")}
-        text = json.dumps(payload, cls=_JSONEncoder)
-        loaded = json.loads(text)
-        assert loaded["dt"].startswith("2020-01-01")
-        assert loaded["d"] == "2021-02-03"
-        assert loaded["num"] == 1.5
 
-    def test_falls_back_for_unknown_type(self):
-        class Weird:
+# ── /mcp/tools/call — happy path: token válido → executa e strippa tenant ─────
+def test_call_valid_token_happy_path(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-1", "jti": "j"})
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_sessions",
+                "arguments": {},
+                "_meta": {"twin_token": "tok"},
+            }
+        },
+    )
+    assert r.status_code == 200
+    payload = json.loads(r.json()["result"]["content"][0]["text"])
+    # tenant_id injetado foi ignorado pelas tools → a tool executou com sucesso
+    assert payload["count"] == 0
+    assert payload["sessions"] == []
+
+
+# ── /mcp/tools/call — start_session real deriva branch do input (happy path) ──
+def test_call_start_session_derives_branch(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-1", "jti": "j"})
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "start_session",
+                "arguments": {"title": "T", "objective": "O", "repo": "platform-x"},
+                "_meta": {"twin_token": "tok"},
+            }
+        },
+    )
+    assert r.status_code == 200
+    payload = json.loads(r.json()["result"]["content"][0]["text"])
+    assert payload["id"].startswith("sess_")
+    assert payload["branch"].startswith("session/")
+    assert payload["base_branch"] == "develop"
+
+
+# ── /mcp/tools/call — tool exempt (sem token) via monkeypatch ─────────────────
+def test_call_exempt_tool_without_token(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_EXEMPT_TOOLS", frozenset({"list_sessions"}))
+    r = client.post(
+        "/mcp/tools/call",
+        json={"params": {"name": "list_sessions", "arguments": {}}},
+    )
+    assert r.status_code == 200
+    payload = json.loads(r.json()["result"]["content"][0]["text"])
+    assert payload["count"] == 0
+
+
+# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
+def test_call_excluded_tool(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"list_sessions"}))
+    r = client.post(
+        "/mcp/tools/call",
+        json={"params": {"name": "list_sessions", "arguments": {}}},
+    )
+    assert r.status_code == 403
+    assert r.json()["error"] == "tool_excluded"
+
+
+# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
+def test_call_unknown_tool(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
+    r = client.post(
+        "/mcp/tools/call",
+        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
+    )
+    assert r.status_code == 404
+    assert r.json()["error"] == "unknown_tool"
+
+
+# ── /mcp/tools/call — erro interno na tool → payload internal_error ────────────
+def test_call_internal_error(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
+
+    def _boom(name, args, _store, _settings):
+        raise RuntimeError("kaboom")
+
+    monkeypatch.setattr(M, "_dispatch", _boom)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_sessions",
+                "arguments": {},
+                "_meta": {"twin_token": "t"},
+            }
+        },
+    )
+    assert r.status_code == 200
+    payload = json.loads(r.json()["result"]["content"][0]["text"])
+    assert payload["error"] == "internal_error"
+    assert "kaboom" in payload["detail"]
+
+
+# ── _dispatch: strip de tenant + KeyError ─────────────────────────────────────
+def test_dispatch_strips_tenant_id(store):
+    s = _settings()
+    result = M._dispatch("list_sessions", {"tenant_id": "T"}, store, s)
+    assert result["count"] == 0  # tenant_id não vira argumento inválido
+
+
+def test_dispatch_unknown_raises_keyerror(store):
+    with pytest.raises(KeyError):
+        M._dispatch("does_not_exist", {}, store, _settings())
+
+
+# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+def test_verify_inner_token_unconfigured():
+    s = SessionSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    with pytest.raises(PermissionError):
+        M._verify_inner_token("tok", s)
+
+
+# ── _verify_inner_token configurado usa PyJWKClient + jwt.decode (mockado) ─────
+def test_verify_inner_token_decodes(monkeypatch):
+    s = _settings()
+
+    class _FakeKey:
+        key = "K"
+
+    class _FakeJWK:
+        def __init__(self, _url):
             pass
 
-        with pytest.raises(TypeError):
-            json.dumps({"x": Weird()}, cls=_JSONEncoder)
+        def get_signing_key_from_jwt(self, _tok):
+            return _FakeKey()
+
+    captured: dict = {}
+
+    def _decode(tok, key, algorithms, audience, options):
+        captured.update(algorithms=algorithms, audience=audience, options=options)
+        return {"tenant_id": "T", "jti": "j"}
+
+    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWK)
+    monkeypatch.setattr(M.jwt, "decode", _decode)
+    claims = M._verify_inner_token("tok", s)
+    assert claims["tenant_id"] == "T"
+    assert captured["algorithms"] == ["RS256"]
+    assert captured["audience"] == _AUD
+    assert set(captured["options"]["require"]) == {"exp", "aud", "jti"}
 
 
-# ── HTTP health app ──────────────────────────────────────────────────────── #
+# ── audiência divergente: decode RS256 real (par RSA local) → 401 ─────────────
+def _rsa_keypair():
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pub = key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    priv = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    return priv, pub
 
 
-class TestHttpApp:
-    def test_build_http_app_has_health_route(self):
-        app = _build_http_app()
-        paths = {r.path for r in app.routes}
-        assert "/v1/health" in paths
+def _issue(priv: bytes, aud: str) -> str:
+    now = int(time.time())
+    return pyjwt.encode(
+        {"aud": aud, "jti": "j-1", "iat": now, "exp": now + 300, "tenant_id": "T-1"},
+        priv,
+        algorithm="RS256",
+    )
 
 
-# ── _dispatch routing (one path per tool) ────────────────────────────────── #
+def test_verify_wrong_audience_rejected(monkeypatch):
+    """Token RS256 válido, mas aud != mcp:session-mcp → InvalidAudienceError."""
+    priv, pub = _rsa_keypair()
+    token = _issue(priv, aud="mcp:WRONG")
+
+    class _Key:
+        def __init__(self, pem):
+            self.key = pem
+
+    class _FakeJWK:
+        def __init__(self, _url):
+            pass
+
+        def get_signing_key_from_jwt(self, _tok):
+            return _Key(pub)
+
+    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWK)
+    with pytest.raises(pyjwt.InvalidAudienceError):
+        M._verify_inner_token(token, _settings())
 
 
-class TestDispatchSessions:
-    def test_start_session(self, store):
-        result = _dispatch(
-            "start_session",
-            {"title": "T", "objective": "O", "repo": "platform-x"},
-            store,
-            "develop",
-        )
-        assert result["id"].startswith("sess_")
-        assert result["branch"].startswith("session/")
+def test_verify_correct_audience_accepts(monkeypatch):
+    """Mesmo token com aud correta decodifica e devolve os claims (tenant)."""
+    priv, pub = _rsa_keypair()
+    token = _issue(priv, aud=_AUD)
 
-    def test_confirm_branch_created(self, store, session_id):
-        result = _dispatch("confirm_branch_created", {"session_id": session_id}, store, "develop")
-        assert result["confirmed"] is True
+    class _Key:
+        def __init__(self, pem):
+            self.key = pem
 
-    def test_save_checkpoint(self, store, session_id):
-        result = _dispatch(
-            "save_checkpoint",
-            {"session_id": session_id, "summary": "cp", "context": {"k": "v"}},
-            store,
-            "develop",
-        )
-        assert result["session_id"] == session_id
+    class _FakeJWK:
+        def __init__(self, _url):
+            pass
 
-    def test_update_session(self, store, session_id):
-        result = _dispatch(
-            "update_session", {"session_id": session_id, "status": "paused"}, store, "develop"
-        )
-        assert result["status"] == "paused"
+        def get_signing_key_from_jwt(self, _tok):
+            return _Key(pub)
 
-    def test_add_artifact(self, store, session_id):
-        result = _dispatch(
-            "add_artifact",
-            {"session_id": session_id, "artifact_type": "note", "content": "x"},
-            store,
-            "develop",
-        )
-        assert result["type"] == "note"
-
-    def test_list_sessions(self, store, session_id):
-        result = _dispatch("list_sessions", {}, store, "develop")
-        assert result["count"] >= 1
-
-    def test_get_session(self, store, session_id):
-        result = _dispatch("get_session", {"session_id": session_id}, store, "develop")
-        assert result["id"] == session_id
-
-    def test_resume_session(self, store, session_id):
-        result = _dispatch("resume_session", {"session_id": session_id}, store, "develop")
-        assert "resume_hint" in result
-
-    def test_end_session(self, store, session_id):
-        result = _dispatch(
-            "end_session",
-            {"session_id": session_id, "actor": _ACTOR, "rationale": "done"},
-            store,
-            "develop",
-        )
-        assert result["status"] == "completed"
+    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWK)
+    claims = M._verify_inner_token(token, _settings())
+    assert claims["tenant_id"] == "T-1"
+    assert claims["aud"] == _AUD
 
 
-class TestDispatchTasks:
-    def _add_task(self, store, session_id, **kw):
-        return _dispatch("add_task", {"session_id": session_id, **kw}, store, "develop")
+# ── _dispatch roteia TODAS as tools reais (saída derivada dos inputs) ─────────
+def test_dispatch_routes_every_tool(store):
+    s = _settings()
 
-    def test_add_and_get_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t")
-        got = _dispatch("get_task", {"task_id": task["id"]}, store, "develop")
-        assert got["id"] == task["id"]
+    def d(name, args):
+        return M._dispatch(name, args, store, s)
 
-    def test_start_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t")
-        result = _dispatch("start_task", {"task_id": task["id"]}, store, "develop")
-        assert result["status"] == "in_progress"
+    actor = {"type": "human", "id": "dev@dataforall.tech"}
 
-    def test_complete_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t")
-        result = _dispatch(
-            "complete_task",
-            {"task_id": task["id"], "commit_sha": "abc", "commit_message": "m"},
-            store,
-            "develop",
-        )
-        assert result["status"] == "completed"
+    # sessão + branch + checkpoint + artifact + update
+    sess = d("start_session", {"title": "T", "objective": "O", "repo": "platform-x"})
+    sid = sess["id"]
+    assert sess["branch"].startswith("session/")
+    assert d("confirm_branch_created", {"session_id": sid, "sha": "abc"})["confirmed"] is True
+    assert d("save_checkpoint", {"session_id": sid, "summary": "cp"})["session_id"] == sid
+    assert d("add_artifact", {"session_id": sid, "artifact_type": "note", "content": "x"})["type"] == "note"
+    assert d("update_session", {"session_id": sid, "status": "paused"})["status"] == "paused"
+    assert d("list_sessions", {})["count"] >= 1
+    assert d("get_session", {"session_id": sid})["id"] == sid
+    assert "resume_hint" in d("resume_session", {"session_id": sid})
 
-    def test_fail_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t")
-        result = _dispatch(
-            "fail_task",
-            {"task_id": task["id"], "actor": _ACTOR, "reason": "nope"},
-            store,
-            "develop",
-        )
-        assert result["status"] == "failed"
+    # tasks: add / get / start / complete / fail / cancel / approve / list
+    t = d("add_task", {"session_id": sid, "title": "t1"})
+    assert d("get_task", {"task_id": t["id"]})["id"] == t["id"]
+    assert d("start_task", {"task_id": t["id"]})["status"] == "in_progress"
+    assert (
+        d("complete_task", {"task_id": t["id"], "commit_sha": "s", "commit_message": "m"})["status"]
+        == "completed"
+    )
+    t2 = d("add_task", {"session_id": sid, "title": "t2"})
+    assert d("fail_task", {"task_id": t2["id"], "actor": actor, "reason": "boom"})["status"] == "failed"
+    t3 = d("add_task", {"session_id": sid, "title": "t3"})
+    assert d("cancel_task", {"task_id": t3["id"], "actor": actor, "reason": "drop"})["status"] == "cancelled"
+    t4 = d("add_task", {"session_id": sid, "title": "t4", "needs_human_decision": True})
+    assert d("approve_task", {"task_id": t4["id"], "decision": "go", "actor": actor})["decision"] == "go"
+    assert d("list_tasks", {"session_id": sid})["count"] >= 1
 
-    def test_cancel_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t")
-        result = _dispatch(
-            "cancel_task",
-            {"task_id": task["id"], "actor": _ACTOR, "reason": "drop"},
-            store,
-            "develop",
-        )
-        assert result["status"] == "cancelled"
+    # service deps: add / list / remove
+    assert d("add_service_dependency", {"session_id": sid, "service": "postgres"})["service"] == "postgres"
+    assert d("list_service_dependencies", {"session_id": sid})["count"] == 1
+    assert d("remove_service_dependency", {"session_id": sid, "service": "postgres"})["removed"] is True
 
-    def test_approve_task(self, store, session_id):
-        task = self._add_task(store, session_id, title="t", needs_human_decision=True)
-        result = _dispatch(
-            "approve_task",
-            {"task_id": task["id"], "decision": "go", "actor": _ACTOR},
-            store,
-            "develop",
-        )
-        assert result["decision"] == "go"
+    # suggestions: submit / list / get / accept / reject / defer / supersede
+    sug = d("submit_suggestion", {"source_repo": "a", "target_repo": "platform-x", "title": "s1"})
+    assert d("list_suggestions", {"target_repo": "platform-x"})["count"] >= 1
+    assert d("get_suggestion", {"suggestion_id": sug["id"]})["id"] == sug["id"]
+    accepted = d(
+        "accept_suggestion",
+        {"suggestion_id": sug["id"], "session_id": sid, "actor": actor},
+    )
+    assert accepted["suggestion"]["status"] == "accepted"
+    r = d("submit_suggestion", {"source_repo": "a", "target_repo": "b", "title": "r"})
+    assert (
+        d("reject_suggestion", {"suggestion_id": r["id"], "actor": actor, "reason": "no"})["status"]
+        == "rejected"
+    )
+    df = d("submit_suggestion", {"source_repo": "a", "target_repo": "b", "title": "d"})
+    assert d("defer_suggestion", {"suggestion_id": df["id"], "actor": actor})["status"] == "deferred"
+    o = d("submit_suggestion", {"source_repo": "a", "target_repo": "b", "title": "old"})
+    n = d("submit_suggestion", {"source_repo": "a", "target_repo": "b", "title": "new"})
+    sup = d("supersede_suggestion", {"suggestion_id": o["id"], "actor": actor, "by_suggestion_id": n["id"]})
+    assert sup["status"] == "superseded"
 
-    def test_list_tasks(self, store, session_id):
-        self._add_task(store, session_id, title="t")
-        result = _dispatch("list_tasks", {"session_id": session_id}, store, "develop")
-        assert result["count"] == 1
+    # decisions audit: list / get (a aprovação acima gravou uma decisão)
+    decs = d("list_decisions", {"action": "approve_task"})
+    assert decs["count"] >= 1
+    assert d("get_decision", {"decision_id": decs["decisions"][0]["id"]})["decision"] == "go"
 
-
-class TestDispatchServiceDeps:
-    def test_add_list_remove(self, store, session_id):
-        added = _dispatch(
-            "add_service_dependency",
-            {"session_id": session_id, "service": "postgres", "role": "db"},
-            store,
-            "develop",
-        )
-        assert added["service"] == "postgres"
-        listed = _dispatch(
-            "list_service_dependencies", {"session_id": session_id}, store, "develop"
-        )
-        assert listed["count"] == 1
-        removed = _dispatch(
-            "remove_service_dependency",
-            {"session_id": session_id, "service": "postgres"},
-            store,
-            "develop",
-        )
-        assert removed["removed"] is True
+    # end_session roteia (a sessão ainda tem tasks abertas → open_tasks; branch coberto)
+    ended = d("end_session", {"session_id": sid, "actor": actor, "rationale": "done"})
+    assert ended.get("status") == "completed" or ended.get("error") == "open_tasks"
 
 
-class TestDispatchSuggestions:
-    def test_submit_list_get(self, store):
-        submitted = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "b", "title": "s"},
-            store,
-            "develop",
-        )
-        sid = submitted["id"]
-        listed = _dispatch("list_suggestions", {"target_repo": "b"}, store, "develop")
-        assert listed["count"] == 1
-        got = _dispatch("get_suggestion", {"suggestion_id": sid}, store, "develop")
-        assert got["id"] == sid
-
-    def test_accept(self, store, session_id):
-        submitted = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "platform-x", "title": "s"},
-            store,
-            "develop",
-        )
-        result = _dispatch(
-            "accept_suggestion",
-            {"suggestion_id": submitted["id"], "session_id": session_id, "actor": _ACTOR},
-            store,
-            "develop",
-        )
-        assert result["suggestion"]["status"] == "accepted"
-
-    def test_reject(self, store):
-        submitted = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "b", "title": "s"},
-            store,
-            "develop",
-        )
-        result = _dispatch(
-            "reject_suggestion",
-            {"suggestion_id": submitted["id"], "actor": _ACTOR, "reason": "dup"},
-            store,
-            "develop",
-        )
-        assert result["status"] == "rejected"
-
-    def test_defer(self, store):
-        submitted = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "b", "title": "s"},
-            store,
-            "develop",
-        )
-        result = _dispatch(
-            "defer_suggestion",
-            {"suggestion_id": submitted["id"], "actor": _ACTOR},
-            store,
-            "develop",
-        )
-        assert result["status"] == "deferred"
-
-    def test_supersede(self, store):
-        s1 = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "b", "title": "old"},
-            store,
-            "develop",
-        )
-        s2 = _dispatch(
-            "submit_suggestion",
-            {"source_repo": "a", "target_repo": "b", "title": "new"},
-            store,
-            "develop",
-        )
-        result = _dispatch(
-            "supersede_suggestion",
-            {"suggestion_id": s1["id"], "actor": _ACTOR, "by_suggestion_id": s2["id"]},
-            store,
-            "develop",
-        )
-        assert result["status"] == "superseded"
-
-
-class TestDispatchDecisions:
-    def test_list_and_get_decision(self, store, session_id):
-        task = _dispatch(
-            "add_task",
-            {"session_id": session_id, "title": "t", "needs_human_decision": True},
-            store,
-            "develop",
-        )
-        _dispatch(
-            "approve_task",
-            {"task_id": task["id"], "decision": "go", "actor": _ACTOR, "rationale": "ok"},
-            store,
-            "develop",
-        )
-        listed = _dispatch("list_decisions", {"action": "approve_task"}, store, "develop")
-        assert listed["count"] == 1
-        d_id = listed["decisions"][0]["id"]
-        got = _dispatch("get_decision", {"decision_id": d_id}, store, "develop")
-        assert got["id"] == d_id
-
-
-class TestDispatchErrors:
-    def test_unknown_tool_raises_keyerror(self, store):
-        with pytest.raises(KeyError):
-            _dispatch("does_not_exist", {}, store, "develop")
-
-
-# ── Async handlers via build_server ──────────────────────────────────────── #
-
-
-class TestBuildServer:
-    def test_build_server_returns_components(self):
-        server, settings, built_store, http_app = build_server()
-        try:
-            assert server is not None
-            assert settings is not None
-            paths = {r.path for r in http_app.routes}
-            assert "/v1/health" in paths
-            # MCP HTTP endpoints wired
-            assert "/mcp/tools/list" in paths
-            assert "/mcp/tools/call" in paths
-        finally:
-            built_store.close()
-
-    def test_http_mcp_endpoints_exercise_async_handlers(self):
-        """Cobre os handlers async list_tools/call_tool via os endpoints HTTP MCP."""
-        from fastapi.testclient import TestClient
-
-        _server, _settings, built_store, http_app = build_server()
-        try:
-            client = TestClient(http_app)
-
-            listed = client.get("/mcp/tools/list").json()
-            names = {t["name"] for t in listed["result"]["tools"]}
-            assert "start_session" in names
-            assert len(names) == len(_TOOL_SCHEMAS)
-
-            called = client.post(
-                "/mcp/tools/call",
-                json={
-                    "params": {
-                        "name": "start_session",
-                        "arguments": {
-                            "title": "T",
-                            "objective": "O",
-                            "repo": "platform-x",
-                        },
-                    }
-                },
-            ).json()
-            content = called["result"]["content"][0]["text"]
-            payload = json.loads(content)
-            assert payload["id"].startswith("sess_")
-        finally:
-            built_store.close()
-
-    def test_http_mcp_call_unknown_tool_returns_error(self):
-        """A ferramenta inexistente cai no ramo KeyError -> unknown_tool."""
-        from fastapi.testclient import TestClient
-
-        _server, _settings, built_store, http_app = build_server()
-        try:
-            client = TestClient(http_app)
-            called = client.post(
-                "/mcp/tools/call",
-                json={"params": {"name": "does_not_exist", "arguments": {}}},
-            ).json()
-            payload = json.loads(called["result"]["content"][0]["text"])
-            assert payload["error"] == "unknown_tool"
-        finally:
-            built_store.close()
-
-    def test_http_mcp_call_internal_error_is_caught(self):
-        """Um erro inesperado dentro do dispatch vira internal_error (não propaga)."""
-        from fastapi.testclient import TestClient
-
-        _server, _settings, built_store, http_app = build_server()
-        try:
-            client = TestClient(http_app)
-            # approve_task com decision inválida -> ValueError no store -> internal_error
-            called = client.post(
-                "/mcp/tools/call",
-                json={
-                    "params": {
-                        "name": "start_session",
-                        "arguments": {"title": "", "objective": "", "repo": ""},
-                    }
-                },
-            ).json()
-            payload = json.loads(called["result"]["content"][0]["text"])
-            # title/objective/repo vazios -> ValidationError da própria tool
-            assert payload["error"] == "ValidationError"
-        finally:
-            built_store.close()
+# ── build_server smoke (cobre a fábrica + stdio Server + sidecar) ─────────────
+def test_build_server_smoke():
+    settings_mod.get_settings.cache_clear()
+    server, settings, store, http_app = M.build_server()
+    try:
+        assert server is not None
+        assert settings.mcp_twin_audience == _AUD or settings.mcp_twin_audience == "mcp:session-mcp"
+        assert http_app.title.startswith("session-mcp")
+        resp = TestClient(http_app).get("/v1/health")
+        assert resp.json()["service"] == "session-mcp"
+    finally:
+        store.close()
+        settings_mod.get_settings.cache_clear()

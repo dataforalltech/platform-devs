@@ -12,7 +12,7 @@ import psycopg2
 import psycopg2.extras
 import psycopg2.pool
 
-from ..config.settings import TestSettings
+from ..config.settings import Settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 class TestStore:
     """PostgreSQL thread-safe test store com connection pool."""
 
-    def __init__(self, settings: TestSettings) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.settings = settings
         self._pool = psycopg2.pool.ThreadedConnectionPool(
             minconn=settings.pg_min_conn,
@@ -366,9 +366,7 @@ class TestStore:
 
         return {"run_id": run_id, "checklist_id": checklist_id, "items": [dict(i) for i in items]}
 
-    def check_item(
-        self, run_id: str, item_id: int, status: str, notes: str | None = None
-    ) -> dict[str, Any]:
+    def check_item(self, run_id: str, item_id: int, status: str, notes: str | None = None) -> dict[str, Any]:
         """Registra resultado de item da checklist."""
         now = self._now()
         with self._get_conn() as conn:
@@ -570,9 +568,7 @@ class TestStore:
                         "failed_count": len(failed),
                         "open_findings_count": len(open_findings),
                         "critical_findings": critical_count,
-                        "ready_to_ship": len(not_executed) == 0
-                        and len(failed) == 0
-                        and critical_count == 0,
+                        "ready_to_ship": len(not_executed) == 0 and len(failed) == 0 and critical_count == 0,
                     },
                 }
 

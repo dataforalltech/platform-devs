@@ -60,9 +60,7 @@ def run_linter(
         tool_name = "ruff"
 
     try:
-        rc, stdout, stderr = _run_subprocess(
-            cmd, cwd=repo_path, timeout=settings.subprocess_timeout
-        )
+        rc, stdout, stderr = _run_subprocess(cmd, cwd=repo_path, timeout=settings.subprocess_timeout)
     except FileNotFoundError as exc:
         hint = "pip install ruff" if tool_name == "ruff" else "npm install eslint"
         return {
@@ -189,9 +187,7 @@ def run_security_scan(
         tool_name = "bandit"
 
     try:
-        rc, stdout, stderr = _run_subprocess(
-            cmd, cwd=repo_path, timeout=settings.subprocess_timeout
-        )
+        rc, stdout, stderr = _run_subprocess(cmd, cwd=repo_path, timeout=settings.subprocess_timeout)
     except FileNotFoundError as exc:
         hint = "pip install bandit" if tool_name == "bandit" else "npm install"
         return {
@@ -308,17 +304,13 @@ def check_dependencies(
         fw = "python"
 
     try:
-        rc, stdout, stderr = _run_subprocess(
-            cmd, cwd=repo_path, timeout=settings.subprocess_timeout
-        )
+        rc, stdout, stderr = _run_subprocess(cmd, cwd=repo_path, timeout=settings.subprocess_timeout)
     except FileNotFoundError:
         if tool_name == "pip-audit":
             # fallback to safety
             try:
                 cmd2 = ["safety", "check", "--json"]
-                rc, stdout, stderr = _run_subprocess(
-                    cmd2, cwd=repo_path, timeout=settings.subprocess_timeout
-                )
+                rc, stdout, stderr = _run_subprocess(cmd2, cwd=repo_path, timeout=settings.subprocess_timeout)
                 tool_name = "safety"
             except FileNotFoundError as exc2:
                 return {
@@ -390,9 +382,11 @@ def check_dependencies(
                         "version": info.get("range", "unknown"),
                         "vuln_id": info.get("name", ""),
                         "description": info.get("title", ""),
-                        "fix_version": info.get("fixAvailable", {}).get("version", "unknown")
-                        if isinstance(info.get("fixAvailable"), dict)
-                        else "unknown",
+                        "fix_version": (
+                            info.get("fixAvailable", {}).get("version", "unknown")
+                            if isinstance(info.get("fixAvailable"), dict)
+                            else "unknown"
+                        ),
                     }
                 )
         except (json.JSONDecodeError, KeyError):
@@ -442,9 +436,7 @@ def run_type_check(
         tool_name = "mypy"
 
     try:
-        rc, stdout, stderr = _run_subprocess(
-            cmd, cwd=repo_path, timeout=settings.subprocess_timeout
-        )
+        rc, stdout, stderr = _run_subprocess(cmd, cwd=repo_path, timeout=settings.subprocess_timeout)
     except FileNotFoundError as exc:
         hint = "pip install mypy" if tool_name == "mypy" else "npm install typescript"
         return {
@@ -556,7 +548,7 @@ def analyze_complexity(
         tool_name = "grep_count"
         p = Path(repo_path)
         extensions = ["*.js", "*.ts", "*.jsx", "*.tsx"]
-        files = []
+        files: list[Path] = []
         for ext in extensions:
             files.extend(p.rglob(ext))
 

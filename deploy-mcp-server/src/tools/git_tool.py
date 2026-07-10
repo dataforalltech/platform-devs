@@ -26,9 +26,7 @@ def list_repos(
         include_archived: Inclui repos arquivados. Default: False.
     """
     try:
-        repos = client.list_repos(
-            org=org, filter_name=filter_name, include_archived=include_archived
-        )
+        repos = client.list_repos(org=org, filter_name=filter_name, include_archived=include_archived)
         return {"repos": repos, "count": len(repos)}
     except GitHubClientError as exc:
         return _error("list_repos", exc)

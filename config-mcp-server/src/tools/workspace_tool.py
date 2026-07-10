@@ -57,7 +57,10 @@ def _validate_path(value: str) -> str | None:
     """Retorna mensagem de erro se o caminho nao existir, None se ok."""
     p = Path(value).expanduser()
     if not p.exists():
-        return f"Caminho nao existe: {p}. Crie o diretorio primeiro ou use set_workspace_config com create_dir=true."
+        return (
+            f"Caminho nao existe: {p}. Crie o diretorio primeiro ou use "
+            "set_workspace_config com create_dir=true."
+        )
     if not p.is_dir():
         return f"Caminho existe mas nao e um diretorio: {p}"
     return None
@@ -86,9 +89,7 @@ def get_workspace_config(
             "key": key.upper(),
             "value": value,
             "found": value is not None,
-            "source": "store"
-            if store.get(WORKSPACE_NS, key.upper()) is not None
-            else "env_fallback",
+            "source": "store" if store.get(WORKSPACE_NS, key.upper()) is not None else "env_fallback",
         }
 
     # Todas as chaves
@@ -223,8 +224,8 @@ def list_workspace_config(
         "total": len(rows),
         "missing_canonical": missing,
         "setup_tip": (
-            "Configure as chaves ausentes com set_workspace_config. Minimo recomendado: REPOS_ROOT."
-        )
-        if missing
-        else None,
+            ("Configure as chaves ausentes com set_workspace_config. Minimo recomendado: REPOS_ROOT.")
+            if missing
+            else None
+        ),
     }

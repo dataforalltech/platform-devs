@@ -12,7 +12,7 @@ Essa limitação está documentada no campo ``_meta.limitation`` de cada saída 
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +48,7 @@ def _as_str_list(value: Any) -> list[str]:
 
 
 def _now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _server_version() -> str:
@@ -302,9 +302,7 @@ _NFR_HINTS: list[tuple[str, tuple[str, ...]]] = [
 ]
 
 
-def _match_hints(
-    text: str, hints: list[tuple[str, tuple[str, ...]]]
-) -> list[dict[str, Any]]:
+def _match_hints(text: str, hints: list[tuple[str, tuple[str, ...]]]) -> list[dict[str, Any]]:
     lowered = text.lower()
     matched: list[dict[str, Any]] = []
     for label, keywords in hints:
@@ -364,8 +362,7 @@ def generate_solution_blueprint(
     # Cada requisito vira um componente na camada de negócio; camadas de borda
     # e dados listam os requisitos como capacidades que devem suportar.
     business_components = [
-        {"name": f"{_slug(item)[:40] or 'capability'}_service", "requirement": item}
-        for item in req_items
+        {"name": f"{_slug(item)[:40] or 'capability'}_service", "requirement": item} for item in req_items
     ]
     layers = [
         {
@@ -524,8 +521,7 @@ def generate_architecture(
         tactics.append(
             {
                 "quality_attribute": qa,
-                "tactic": tactic
-                or "Definir tática específica (não coberta por heurística)",
+                "tactic": tactic or "Definir tática específica (não coberta por heurística)",
                 "heuristic_matched": tactic is not None,
             }
         )

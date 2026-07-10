@@ -1,233 +1,330 @@
-"""Architecture MCP Server — Streamable HTTP (SDK oficial) + auth (padrão da plataforma).
+"""Servidor MCP do architecture — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Conforme MCP_SERVICE_STANDARD.md:
-- Transporte: Streamable HTTP via FastMCP (conexão nativa do Claude Code, sem wrapper).
-- Auth: middleware Bearer valida tokens do auth-mcp (JWKS) e aplica escopo por ferramenta.
-- Publica /.well-known/oauth-protected-resource (RFC 9728) para disparar o fluxo OAuth do cliente.
-- Health público; qualquer rota /mcp sem token válido responde 401.
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:architecture-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3).
+  4. _EXEMPT_TOOLS (health/status, sem token) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: architecture-mcp é compute-only (gera artefatos a partir dos inputs; não há
+backend REST), por isso não há ServiceApiClient — as tools são chamadas diretamente.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import os
-from typing import Any, Callable
+from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from mcp.server import Server
+from mcp.types import TextContent, Tool
 
-from src.prompts.system_prompt import SYSTEM_PROMPT
-from src.tools.architecture_tools import (
-    generate_solution_blueprint,
-    generate_c4_diagram,
+from ..config.settings import Settings, get_settings
+from ..tools.architecture_tools import (
     generate_architecture,
+    generate_c4_diagram,
+    generate_solution_blueprint,
     status,
 )
 
-# ── Configuração (env) ──────────────────────────────────────────────────── #
-RESOURCE = os.getenv("ARCHITECTURE_RESOURCE", "http://localhost:7118/mcp")
-AS_ISSUER = os.getenv("AS_ISSUER", "http://localhost:7103")
-AS_JWKS_URL = os.getenv("AS_JWKS_URL", f"{AS_ISSUER}/.well-known/jwks.json")
-RESOURCE_METADATA_URL = os.getenv(
-    "ARCHITECTURE_PRM_URL", "http://localhost:7118/.well-known/oauth-protected-resource"
-)
+_log = logging.getLogger(__name__)
 
-# ── Registro de ferramentas: (fn, scope mínimo, sensitive) ─────────────────── #
-# Escopos:
-#   architecture:read  → verificação de status / leitura (não gera artefatos)
-#   architecture:write → geração de blueprints, diagramas C4 e designs de arquitetura
-# Nenhuma ferramenta é destrutiva/irreversível, então sensitive=False em todas.
-TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
-    # Geração de artefatos de arquitetura
-    "generate_solution_blueprint": (
-        generate_solution_blueprint,
-        "architecture:write",
-        False,
-    ),
-    "generate_c4_diagram": (generate_c4_diagram, "architecture:write", False),
-    "generate_architecture": (generate_architecture, "architecture:write", False),
-    # Leitura / status
-    "status": (status, "architecture:read", False),
-}
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara, além de description/schema, os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties (senão a validação no front-door
+# é fail-open). Geradores usam verbo :write (produzem artefato); status é :read.
+# ─────────────────────────────────────────────────────────────────────────────
+_STR_ARRAY = {"type": "array", "items": {"type": ["string", "object"]}}
 
-SCOPES_SUPPORTED = ["architecture:read", "architecture:write"]
-
-# ── JSON input schemas (fonte de verdade documentada) ──────────────────────── #
-# O FastMCP deriva o inputSchema real de cada tool a partir das anotações de tipo
-# da função (ver build_mcp/list_tools). Este dicionário documenta o contrato
-# esperado — os campos e os obrigatórios — e é validado contra os schemas
-# derivados em _assert_schema_contract() no build, garantindo que assinatura e
-# contrato não divirjam. Cada tool recebe parâmetros (antes recebiam nenhum).
-TOOL_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    "status": {
+        "description": "Retorna o status real do servidor (nome, versão, nº de tools).",
+        "capability": "architecture-mcp.status",
+        "required_scope": "architecture-mcp:status:read",
+        "resource_type": "status",
+        "data_domain": "operational",
+        "schema": {"type": "object", "additionalProperties": False, "properties": {}},
+    },
     "generate_c4_diagram": {
-        "type": "object",
-        "properties": {
-            "system_name": {
-                "type": "string",
-                "description": "Nome do software system em foco",
-            },
-            "actors": {
-                "type": "array",
-                "description": "Pessoas/sistemas externos (str ou {name,type,description})",
-                "items": {"type": ["string", "object"]},
-            },
-            "containers": {
-                "type": "array",
-                "description": "Aplicações/serviços internos (str ou {name,technology,description})",
-                "items": {"type": ["string", "object"]},
-            },
-            "relationships": {
-                "type": "array",
-                "description": "Arestas {source,target,description,technology} ou 'A -> B'",
-                "items": {"type": ["string", "object"]},
+        "description": "Constrói um modelo C4 (System Context + Container) a partir dos inputs.",
+        "capability": "architecture-mcp.generate_c4_diagram",
+        "required_scope": "architecture-mcp:diagram:write",
+        "resource_type": "diagram",
+        "data_domain": "architecture",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "system_name": {"type": "string", "description": "Nome do software system."},
+                "actors": dict(_STR_ARRAY, description="Pessoas/sistemas externos."),
+                "containers": dict(_STR_ARRAY, description="Aplicações/serviços internos."),
+                "relationships": dict(_STR_ARRAY, description="Arestas {source,target} ou 'A -> B'."),
             },
         },
-        "required": [],
     },
     "generate_solution_blueprint": {
-        "type": "object",
-        "properties": {
-            "requirements": {
-                "type": "string",
-                "description": "Requisitos funcionais/de negócio (texto livre)",
-            },
-            "solution_name": {"type": "string", "description": "Nome da solução"},
-            "context": {
-                "type": "string",
-                "description": "Contexto adicional (domínio, org)",
-            },
-            "constraints": {
-                "type": "array",
-                "description": "Restrições técnicas/organizacionais",
-                "items": {"type": "string"},
+        "description": "Deriva um blueprint de solução estruturado a partir dos requisitos.",
+        "capability": "architecture-mcp.generate_solution_blueprint",
+        "required_scope": "architecture-mcp:blueprint:write",
+        "resource_type": "blueprint",
+        "data_domain": "architecture",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "requirements": {"type": "string", "description": "Requisitos funcionais/de negócio."},
+                "solution_name": {"type": "string", "description": "Nome da solução."},
+                "context": {"type": "string", "description": "Contexto adicional (domínio/org)."},
+                "constraints": {"type": "array", "items": {"type": "string"}},
             },
         },
-        "required": [],
     },
     "generate_architecture": {
-        "type": "object",
-        "properties": {
-            "domain": {"type": "string", "description": "Domínio/negócio-alvo"},
-            "constraints": {
-                "type": "array",
-                "description": "Restrições técnicas/organizacionais",
-                "items": {"type": "string"},
-            },
-            "quality_attributes": {
-                "type": "array",
-                "description": "Atributos de qualidade priorizados",
-                "items": {"type": "string"},
-            },
-            "architecture_name": {
-                "type": "string",
-                "description": "Nome opcional; default derivado do domínio",
+        "description": "Deriva uma proposta de arquitetura a partir de domínio e restrições.",
+        "capability": "architecture-mcp.generate_architecture",
+        "required_scope": "architecture-mcp:architecture:write",
+        "resource_type": "architecture",
+        "data_domain": "architecture",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "domain": {"type": "string", "description": "Domínio/negócio-alvo."},
+                "constraints": {"type": "array", "items": {"type": "string"}},
+                "quality_attributes": {"type": "array", "items": {"type": "string"}},
+                "architecture_name": {"type": "string", "description": "Nome opcional."},
             },
         },
-        "required": [],
-    },
-    "status": {
-        "type": "object",
-        "properties": {},
-        "required": [],
     },
 }
 
+# Health/status são encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless).
+_EXEMPT_TOOLS: frozenset[str] = frozenset({"status"})
+# Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
 
-async def assert_schema_contract(mcp: FastMCP) -> None:
-    """Garante que os schemas derivados pelo FastMCP cobrem o contrato documentado.
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
-    Falha se uma assinatura de tool divergir de TOOL_INPUT_SCHEMAS — ex.: uma
-    propriedade documentada some da função. Chamada pelos testes; async porque
-    FastMCP.list_tools é async.
+
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
+
+def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:architecture-mcp).
+
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
     """
-    derived: dict[str, set[str]] = {}
-    for tool in await mcp.list_tools():
-        props = (tool.inputSchema or {}).get("properties", {})
-        derived[tool.name] = set(props.keys())
-    for name, contract in TOOL_INPUT_SCHEMAS.items():
-        expected = set(contract.get("properties", {}).keys())
-        actual = derived.get(name, set())
-        missing = expected - actual
-        if missing:
-            raise RuntimeError(
-                f"Tool '{name}' perdeu propriedades do contrato documentado: {sorted(missing)}"
-            )
-
-
-def _scope_for_request(method: str, tool: str | None) -> str | None:
-    """Escopo mínimo exigido por request JSON-RPC (least privilege por ferramenta)."""
-    if method != "tools/call" or not tool:
-        return None  # initialize / tools/list: basta token válido
-    entry = TOOL_REGISTRY.get(tool)
-    return entry[1] if entry else "architecture:read"
-
-
-def build_mcp() -> FastMCP:
-    mcp = FastMCP(
-        name="architecture-mcp",
-        instructions=SYSTEM_PROMPT,
-        stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
-    )
-    for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
-        # O inputSchema é derivado das anotações de tipo de cada fn (ver
-        # TOOL_INPUT_SCHEMAS para o contrato documentado). Antes as tools não
-        # recebiam argumentos; agora expõem parâmetros tipados.
-        mcp.add_tool(
-            fn,
-            name=name,
-            description=(fn.__doc__ or "").strip().split("\n", 1)[0] or None,
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:architecture-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
         )
-    return mcp
-
-
-def build_app(validators: list[Callable] | None = None):
-    """Monta o app Streamable HTTP + rotas públicas + middleware de auth.
-
-    `validators` permite injetar validadores no teste; em produção usa JWKS do auth-mcp.
-    """
-    from shared.mcp_auth import (
-        BearerAuthMiddleware,
-        JwtValidator,
-        protected_resource_metadata,
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
-    mcp = build_mcp()
 
-    @mcp.custom_route("/v1/health", methods=["GET"])
-    async def health(_req: Request):
-        return JSONResponse({"status": "ok", "server": "architecture-mcp"})
+# ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
 
-    @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-    async def prm(_req: Request):
-        return JSONResponse(
-            protected_resource_metadata(
-                resource=RESOURCE,
-                authorization_servers=[AS_ISSUER],
-                scopes=SCOPES_SUPPORTED,
-            )
+
+def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
+    args (INV-3) mas as tools compute-only não o consomem."""
+    if name == "status":
+        return status()
+    if name == "generate_c4_diagram":
+        return generate_c4_diagram(
+            system_name=args.get("system_name", "System"),
+            actors=args.get("actors"),
+            containers=args.get("containers"),
+            relationships=args.get("relationships"),
         )
+    if name == "generate_solution_blueprint":
+        return generate_solution_blueprint(
+            requirements=args.get("requirements", ""),
+            solution_name=args.get("solution_name", "Solution"),
+            context=args.get("context", ""),
+            constraints=args.get("constraints"),
+        )
+    if name == "generate_architecture":
+        return generate_architecture(
+            domain=args.get("domain", ""),
+            constraints=args.get("constraints"),
+            quality_attributes=args.get("quality_attributes"),
+            architecture_name=args.get("architecture_name", ""),
+        )
+    raise KeyError(name)
 
-    app = mcp.streamable_http_app()
 
-    if validators is None:
-        validators = [
-            JwtValidator(
-                issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
-            ).validate
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
+
+def _build_http_app(settings: Settings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="architecture-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "architecture-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Any, Settings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    http_app = _build_http_app(settings)
+    _log.info("architecture_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+
+    server: Server = Server("architecture-mcp-server")
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
+            for name, meta in _TOOL_SCHEMAS.items()
         ]
 
-    return BearerAuthMiddleware(
-        app,
-        resource_metadata_url=RESOURCE_METADATA_URL,
-        validators=validators,
-        scope_for_request=_scope_for_request,
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        args = arguments or {}
+        try:
+            payload = _dispatch(name, args)
+        except KeyError:
+            payload = {"error": "unknown_tool", "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            _log.exception("tool_internal_error: %s", name)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    return server, settings, http_app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
     )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7118")))
+        _server, settings, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

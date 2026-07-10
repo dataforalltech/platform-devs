@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-architecture-mcp",
+    "namespace": "architecture-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-architecture-mcp:7100",
+    "audience": "mcp:architecture-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": ["status"],
+    "excludeTools": []
+  }
+]

@@ -60,9 +60,7 @@ class FakeCursor:
             self._result = [dict(row)] if row else []
         elif q.startswith("SELECT * FROM audit_log WHERE service ="):
             service, env = params
-            rows = [
-                dict(r) for r in self._table.values() if r["service"] == service and r["env"] == env
-            ]
+            rows = [dict(r) for r in self._table.values() if r["service"] == service and r["env"] == env]
             self._result = rows[:1]
         elif q.startswith("SELECT * FROM audit_log WHERE 1=1"):
             self._result = [dict(r) for r in self._table.values()]

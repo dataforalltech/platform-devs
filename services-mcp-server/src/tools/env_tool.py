@@ -241,11 +241,7 @@ def sync_service_urls(
         base_url = (
             svc.get("external_url")
             or svc.get("url")
-            or (
-                f"http://{svc['host']}:{svc['port']}"
-                if svc.get("host") and svc.get("port")
-                else None
-            )
+            or (f"http://{svc['host']}:{svc['port']}" if svc.get("host") and svc.get("port") else None)
         )
         if not base_url:
             not_found.append(env_key)
@@ -502,9 +498,7 @@ def audit_env_files(
                     )
                     if base_url:
                         existing_path = _extract_url_path(val)
-                        expected = base_url.rstrip("/") + (
-                            existing_path if existing_path != "/" else ""
-                        )
+                        expected = base_url.rstrip("/") + (existing_path if existing_path != "/" else "")
                         if val != expected:
                             url_issues.append(
                                 {
@@ -635,13 +629,11 @@ def redact_env_secrets(
         "changes": all_changes,
         "errors": errors,
         "note": (
-            "Valores substituidos por ${VAR_NAME}. "
-            "Defina as vars no shell (export JWT_SECRET_KEY=...) ou no CI/CD secrets antes de rodar."
-        )
-        if all_changes and not dry_run
-        else (
-            "dry_run=True: nenhum arquivo foi alterado."
-            if dry_run
-            else "Nenhuma mudanca necessaria."
+            (
+                "Valores substituidos por ${VAR_NAME}. "
+                "Defina as vars no shell (export JWT_SECRET_KEY=...) ou no CI/CD secrets antes de rodar."
+            )
+            if all_changes and not dry_run
+            else ("dry_run=True: nenhum arquivo foi alterado." if dry_run else "Nenhuma mudanca necessaria.")
         ),
     }

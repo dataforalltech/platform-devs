@@ -212,9 +212,7 @@ def test_diff_detects_port_conflict(tmp_path):
     repos_dir = tmp_path / "repos"
     repos_dir.mkdir()
     _make_repo(repos_dir, name="x", pyproject_name="platform-foo", port=9999)
-    yaml_path = _write_yaml(
-        tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}]
-    )
+    yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     assert len(report.conflicts) == 1
     c = report.conflicts[0]
@@ -273,9 +271,7 @@ def test_diff_resolves_basename_when_pyproject_differs(tmp_path):
     repo_path = repos_dir / "dataforall-foo"
     repo_path.mkdir()
     (repo_path / ".git").mkdir()
-    (repo_path / "pyproject.toml").write_text(
-        '[project]\nname = "platform-foo"\n', encoding="utf-8"
-    )
+    (repo_path / "pyproject.toml").write_text('[project]\nname = "platform-foo"\n', encoding="utf-8")
 
     yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "dataforall-foo"}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
@@ -310,9 +306,7 @@ def test_has_conflicts_property(tmp_path):
     repos_dir = tmp_path / "repos"
     repos_dir.mkdir()
     _make_repo(repos_dir, name="x", pyproject_name="platform-foo", port=9999)
-    yaml_path = _write_yaml(
-        tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}]
-    )
+    yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     assert report.has_conflicts is True
     assert report.has_warnings is False
@@ -323,9 +317,7 @@ def test_render_text_includes_conflicts(tmp_path):
     repos_dir = tmp_path / "repos"
     repos_dir.mkdir()
     _make_repo(repos_dir, name="x", pyproject_name="platform-foo", port=9999)
-    yaml_path = _write_yaml(
-        tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}]
-    )
+    yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     text = scanner.render_text(report)
     assert "CONFLICTS" in text
@@ -340,9 +332,7 @@ def test_render_json_is_valid_json(tmp_path):
     repos_dir = tmp_path / "repos"
     repos_dir.mkdir()
     _make_repo(repos_dir, name="x", pyproject_name="platform-foo", port=8050)
-    yaml_path = _write_yaml(
-        tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}]
-    )
+    yaml_path = _write_yaml(tmp_path / "ecosystem.yaml", services=[{"id": "platform-foo", "port": 8050}])
     report = scanner.build_report(yaml_path, scanner.scan(repos_dir), repos_dir)
     parsed = _json.loads(scanner.render_json(report))
     assert parsed["yaml_services_count"] == 1

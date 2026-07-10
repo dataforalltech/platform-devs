@@ -113,9 +113,7 @@ def test_sync_registry_docker_scan(store):
         # sem port scan / probes reais
         patch.object(gateway_tool, "_probe_url", return_value=False),
     ):
-        result = sync_registry(
-            store, include_docker=True, probe_health=True, port_ranges="8000-8000"
-        )
+        result = sync_registry(store, include_docker=True, probe_health=True, port_ranges="8000-8000")
     assert result["docker_scan"]["upserted"] == 1
     assert store.get("api") is not None
     assert result["total_upserted"] >= 1
@@ -127,9 +125,7 @@ def test_sync_registry_docker_not_found(store):
         patch("src.tools.gateway_tool.subprocess.run", side_effect=FileNotFoundError),
         patch.object(gateway_tool, "_probe_url", return_value=False),
     ):
-        result = sync_registry(
-            store, include_docker=True, probe_health=True, port_ranges="8000-8000"
-        )
+        result = sync_registry(store, include_docker=True, probe_health=True, port_ranges="8000-8000")
     assert result["docker_scan"]["error"] == "docker not found"
 
 

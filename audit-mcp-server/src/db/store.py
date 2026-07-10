@@ -37,7 +37,8 @@ class AuditStore:
             dsn=settings.pg_dsn,
         )
         logger.info(
-            f"✅ AuditStore initialized with PostgreSQL pool ({settings.pg_min_conn}-{settings.pg_max_conn} connections)"
+            "AuditStore initialized with PostgreSQL pool "
+            f"({settings.pg_min_conn}-{settings.pg_max_conn} connections)"
         )
 
     @contextmanager
@@ -79,8 +80,10 @@ class AuditStore:
                 cur.execute(
                     """
                     INSERT INTO audit_log
-                    (id, service, repo, env, criticality, score, passed, status, checklist, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    (id, service, repo, env, criticality, score, passed, status,
+                     checklist, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s,
+                            CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                     RETURNING id
                     """,
                     (

@@ -44,9 +44,7 @@ class TestRegisterGetList:
         assert result["pipeline"]["current_env"] == "dev"
 
     def test_register_updates_existing(self, registered_store):
-        result = register_pipeline(
-            registered_store, service="svc-a", repo="org/renamed", base_branch="trunk"
-        )
+        result = register_pipeline(registered_store, service="svc-a", repo="org/renamed", base_branch="trunk")
         assert result["action"] == "updated"
         assert result["pipeline"]["repo"] == "org/renamed"
         assert result["pipeline"]["base_branch"] == "trunk"
@@ -86,9 +84,7 @@ class TestRegisterGetList:
 # ─────────────────────────────────────────────────────────────────────────── #
 class TestPromoteErrors:
     def test_service_not_found(self, store):
-        result = promote_service(
-            store, service="ghost", from_env="dev", to_env="homol", promoted_by="u"
-        )
+        result = promote_service(store, service="ghost", from_env="dev", to_env="homol", promoted_by="u")
         assert result == {"error": "not_found", "service": "ghost", "can_promote": False}
 
     def test_blocked_service(self, registered_store):
@@ -158,9 +154,7 @@ class TestPromoteWithGates:
 
     def test_pr_created_waits_approval(self, registered_store, monkeypatch):
         self._pass_all_homol_gates(registered_store)
-        fake = FakeHTTPClient(
-            {"POST": FakeResponse(201, {"number": 77, "html_url": "https://gh/pr/77"})}
-        )
+        fake = FakeHTTPClient({"POST": FakeResponse(201, {"number": 77, "html_url": "https://gh/pr/77"})})
         monkeypatch.setattr(httpx, "Client", lambda *a, **k: fake)
 
         result = promote_service(
@@ -382,9 +376,7 @@ class TestWatchPRs:
         )
         monkeypatch.setattr(httpx, "Client", lambda *a, **k: FakeHTTPClient({"GET": list_resp}))
 
-        result = watch_prs(
-            registered_store, github_token="tok", github_org="org", repos=["org/svc-a"]
-        )
+        result = watch_prs(registered_store, github_token="tok", github_org="org", repos=["org/svc-a"])
         assert result["waiting_human_count"] == 1
         assert result["waiting_human"][0]["reason"] == "human approval required for homol/prod"
 
@@ -521,9 +513,7 @@ class TestGitHubHelpers:
         assert captured["url"] == "https://api.github.com/repos/myorg/bare-repo/pulls"
 
     def test_create_pr_already_exists_422(self, monkeypatch):
-        fake = FakeHTTPClient(
-            {"POST": FakeResponse(422, {"errors": ["A pull request already exists"]})}
-        )
+        fake = FakeHTTPClient({"POST": FakeResponse(422, {"errors": ["A pull request already exists"]})})
         monkeypatch.setattr(httpx, "Client", lambda *a, **k: fake)
         result = _create_pr("tok", "org", "org/repo", "develop", "homol", "t", "b")
         assert result["success"] is False

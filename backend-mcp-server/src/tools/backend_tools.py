@@ -1,11 +1,9 @@
 """Backend Backend Engineering Tools."""
 
-from typing import Any, Optional
+from typing import Any
 
 
-def analyze_backend_requirement(
-    requirement: str, context: Optional[dict] = None
-) -> dict[str, Any]:
+def analyze_backend_requirement(requirement: str, context: dict | None = None) -> dict[str, Any]:
     """Analisa requisito de negócio e identifica entidades, permissões, integrações."""
     return {
         "analysis": f"Analyzed backend requirement: {requirement}",
@@ -20,8 +18,8 @@ def generate_api_contract(
     endpoint: str,
     method: str,
     description: str,
-    request_schema: Optional[dict] = None,
-    response_schema: Optional[dict] = None,
+    request_schema: dict | None = None,
+    response_schema: dict | None = None,
 ) -> dict[str, Any]:
     """Gera contrato de API com schemas, endpoints e status codes."""
     return {
@@ -38,7 +36,7 @@ def generate_auth_policy(
     resource: str,
     auth_type: str,
     roles: list[str],
-    data_sensitivity: Optional[str] = None,
+    data_sensitivity: str | None = None,
 ) -> dict[str, Any]:
     """Gera política de autenticação, autorização e proteção de dados."""
     return {
@@ -52,7 +50,7 @@ def generate_auth_policy(
 
 
 def generate_database_schema(
-    entity: str, attributes: list, database: str, relationships: Optional[list] = None
+    entity: str, attributes: list, database: str, relationships: list | None = None
 ) -> dict[str, Any]:
     """Gera schema de banco de dados com índices e constraints."""
     return {
@@ -65,9 +63,7 @@ def generate_database_schema(
     }
 
 
-def generate_fastapi_router(
-    name: str, base_path: str, endpoints: Optional[list] = None
-) -> dict[str, Any]:
+def generate_fastapi_router(name: str, base_path: str, endpoints: list | None = None) -> dict[str, Any]:
     """Gera router FastAPI completo com validação e documentação."""
     return {
         "router_name": name,
@@ -78,9 +74,7 @@ def generate_fastapi_router(
     }
 
 
-def generate_nestjs_controller(
-    name: str, base_path: str, methods: Optional[list] = None
-) -> dict[str, Any]:
+def generate_nestjs_controller(name: str, base_path: str, methods: list | None = None) -> dict[str, Any]:
     """Gera controller NestJS com decoradores, validação e serviços."""
     return {
         "controller_name": name,
@@ -102,9 +96,7 @@ def generate_migration(title: str, operations: list, database: str) -> dict[str,
     }
 
 
-def generate_repository_layer(
-    entity: str, database: str, orm: Optional[str] = None
-) -> dict[str, Any]:
+def generate_repository_layer(entity: str, database: str, orm: str | None = None) -> dict[str, Any]:
     """Gera repository com operações CRUD e queries otimizadas."""
     return {
         "entity": entity,
@@ -115,9 +107,7 @@ def generate_repository_layer(
     }
 
 
-def generate_service_layer(
-    name: str, methods: list, dependencies: Optional[list] = None
-) -> dict[str, Any]:
+def generate_service_layer(name: str, methods: list, dependencies: list | None = None) -> dict[str, Any]:
     """Gera serviço com regra de negócio, validações e tratamento de erros."""
     return {
         "service_name": name,
@@ -129,7 +119,7 @@ def generate_service_layer(
 
 
 def generate_openapi_spec(
-    api_name: str, version: str, endpoints: list, base_url: Optional[str] = None
+    api_name: str, version: str, endpoints: list, base_url: str | None = None
 ) -> dict[str, Any]:
     """Gera especificação OpenAPI completa para documentação de API."""
     return {
@@ -144,8 +134,8 @@ def generate_openapi_spec(
 def map_integration_flow(
     integration_name: str,
     external_service: str,
-    endpoints: Optional[list] = None,
-    auth_type: Optional[str] = None,
+    endpoints: list | None = None,
+    auth_type: str | None = None,
 ) -> dict[str, Any]:
     """Mapeia fluxo de integração com sistemas externos: auth, erros, retry."""
     return {
@@ -159,9 +149,7 @@ def map_integration_flow(
     }
 
 
-def optimize_query(
-    query: str, database: str, table_schema: Optional[dict] = None
-) -> dict[str, Any]:
+def optimize_query(query: str, database: str, table_schema: dict | None = None) -> dict[str, Any]:
     """Otimiza query de banco de dados: índices, joins, N+1 problems."""
     return {
         "original_query": query,
@@ -172,9 +160,7 @@ def optimize_query(
     }
 
 
-def review_backend_code(
-    code: str, language: str, focus: Optional[list] = None
-) -> dict[str, Any]:
+def review_backend_code(code: str, language: str, focus: list | None = None) -> dict[str, Any]:
     """Revisa código backend: segurança, performance, padrões, erros."""
     return {
         "language": language,

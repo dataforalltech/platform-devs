@@ -63,7 +63,5 @@ def test_approval_rule_defaults():
     assert rule.required_approvals is None
     assert rule.required_roles is None
 
-    populated = ApprovalRule(
-        auto_approve_if_score=0.7, required_approvals=2, required_roles=["lead"]
-    )
+    populated = ApprovalRule(auto_approve_if_score=0.7, required_approvals=2, required_roles=["lead"])
     assert populated.required_roles == ["lead"]

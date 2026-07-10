@@ -355,7 +355,7 @@ class GitHubClient:
             else:
                 runs_iter = r.get_workflow_runs(**kwargs)
 
-            result = []
+            result: list[dict[str, Any]] = []
             for run in runs_iter:
                 if len(result) >= limit:
                     break
@@ -414,9 +414,7 @@ class GitHubClient:
             r.create_secret(secret_name, secret_value)
             return {"repo": repo, "secret": secret_name, "status": "ok"}
         except GithubException as exc:
-            raise GitHubClientError(
-                f"Erro ao definir secret '{secret_name}' em '{repo}': {exc}"
-            ) from exc
+            raise GitHubClientError(f"Erro ao definir secret '{secret_name}' em '{repo}': {exc}") from exc
 
     def set_repo_variable(self, repo: str, var_name: str, var_value: str) -> dict[str, Any]:
         """Define (cria ou atualiza) uma variável do GitHub Actions em um repositório."""
@@ -451,9 +449,7 @@ class GitHubClient:
                     raise GitHubClientError(
                         f"Erro ao atualizar variável '{var_name}' em '{repo}': {sanitized}"
                     ) from None
-            raise GitHubClientError(
-                f"Erro ao criar variável '{var_name}' em '{repo}': {exc}"
-            ) from exc
+            raise GitHubClientError(f"Erro ao criar variável '{var_name}' em '{repo}': {exc}") from exc
 
     # ── ACR (tags via API REST com httpx) ─────────────────────────────────── #
 

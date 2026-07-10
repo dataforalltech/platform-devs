@@ -9,7 +9,7 @@ sinalizado como esboço para refino humano.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 # ── Helpers ────────────────────────────────────────────────────────────────── #
 
@@ -42,7 +42,7 @@ def calculate_rice_score(
     impact: float,
     confidence: float,
     effort: float,
-    feature: Optional[str] = None,
+    feature: str | None = None,
 ) -> dict[str, Any]:
     """Calcula RICE score: (Reach × Impact × Confidence) / Effort.
 
@@ -68,9 +68,7 @@ def calculate_rice_score(
     # Normaliza confidence: aceita 0–1 (fração) ou 1–100 (percentual).
     confidence_fraction = confidence / 100.0 if confidence > 1 else confidence
     if confidence_fraction > 1:
-        errors.append(
-            "confidence out of range (expected 0-1 fraction or 1-100 percent)"
-        )
+        errors.append("confidence out of range (expected 0-1 fraction or 1-100 percent)")
 
     if errors:
         return {"error": "invalid_input", "details": errors, "feature": feature}
@@ -117,8 +115,8 @@ def prioritize_backlog(
             item = dict(raw)
         name = item.get("name") or item.get("title") or item.get("id") or "item"
 
-        score = item.get("score")
-        computed_from: Optional[str] = "provided_score" if score is not None else None
+        score: float | int | str | None = item.get("score")
+        computed_from: str | None = "provided_score" if score is not None else None
 
         if score is None and framework_norm == "RICE":
             try:
@@ -181,10 +179,10 @@ def prioritize_backlog(
 
 def generate_user_stories(
     feature: str,
-    role: Optional[str] = None,
-    roles: Optional[list[str]] = None,
-    goals: Optional[list[str]] = None,
-    benefit: Optional[str] = None,
+    role: str | None = None,
+    roles: list[str] | None = None,
+    goals: list[str] | None = None,
+    benefit: str | None = None,
 ) -> dict[str, Any]:
     """Gera user stories bem-formadas + critérios de aceite a partir de uma feature/épico.
 
@@ -237,9 +235,9 @@ def generate_user_stories(
 
 def analyze_product_problem(
     problem_statement: str,
-    affected_users: Optional[list[str]] = None,
-    symptoms: Optional[list[str]] = None,
-    business_impact: Optional[str] = None,
+    affected_users: list[str] | None = None,
+    symptoms: list[str] | None = None,
+    business_impact: str | None = None,
 ) -> dict[str, Any]:
     """Estrutura a análise de um problema de negócio a partir do enunciado e sintomas.
 
@@ -264,23 +262,20 @@ def analyze_product_problem(
         "affected_users": users,
         "root_cause_hypotheses": root_causes,
         "business_impact": business_impact or "não informado",
-        "user_pain": (
-            f"{', '.join(users)} enfrentam: {problem_statement}"
-            if users
-            else problem_statement
-        ),
-        "market_opportunity": f"Resolver '{problem_statement}' pode desbloquear valor para {len(users) or 'os'} segmento(s).",
+        "user_pain": (f"{', '.join(users)} enfrentam: {problem_statement}" if users else problem_statement),
+        "market_opportunity": f"Resolver '{problem_statement}' pode desbloquear valor para {len(users) or 'os'} segmento(s).",  # noqa: E501
         "note": "root_cause_hypotheses são esboços que requerem validação com dados/entrevistas.",
     }
 
 
 # ── MVP scope ──────────────────────────────────────────────────────────────── #
+# noqa: E501
 
 
 def define_mvp_scope(
     product: str,
     features: list[Any],
-    goal: Optional[str] = None,
+    goal: str | None = None,
 ) -> dict[str, Any]:
     """Divide features em must/should/could + out-of-scope para um MVP.
 
@@ -320,8 +315,7 @@ def define_mvp_scope(
 
     return {
         "product": product,
-        "goal": goal
-        or f"Validar a proposta de valor de {product} com o menor escopo viável.",
+        "goal": goal or f"Validar a proposta de valor de {product} com o menor escopo viável.",
         "mvp_scope": {
             "core_features": must,
             "nice_to_haves": should,
@@ -346,7 +340,7 @@ def define_mvp_scope(
 def define_product_metrics(
     product: str,
     objectives: list[str],
-    north_star: Optional[str] = None,
+    north_star: str | None = None,
 ) -> dict[str, Any]:
     """Deriva KPIs e indicadores leading/lagging a partir dos objetivos.
 
@@ -382,8 +376,8 @@ def define_product_vision(
     product: str,
     target_audience: str,
     problem: str,
-    differentiator: Optional[str] = None,
-    goals: Optional[list[str]] = None,
+    differentiator: str | None = None,
+    goals: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta visão/missão/objetivos/critérios de sucesso a partir dos inputs.
 
@@ -400,11 +394,8 @@ def define_product_vision(
         "product": product,
         "vision": f"Para {target_audience} que enfrentam {problem}, {product} oferece {diff}.",
         "mission": f"Ajudar {target_audience} a superar {problem} por meio de {product}.",
-        "goals": goal_list
-        or [f"Reduzir o impacto de {problem} para {target_audience}"],
-        "success_criteria": [
-            f"Evidência mensurável de que '{g}' foi atingido" for g in goal_list
-        ]
+        "goals": goal_list or [f"Reduzir o impacto de {problem} para {target_audience}"],
+        "success_criteria": [f"Evidência mensurável de que '{g}' foi atingido" for g in goal_list]
         or [f"Adoção e satisfação de {target_audience} acima da baseline"],
         "differentiator": diff,
     }
@@ -415,8 +406,8 @@ def define_product_vision(
 
 def generate_discovery_questions(
     hypothesis: str,
-    target_users: Optional[list[str]] = None,
-    unknowns: Optional[list[str]] = None,
+    target_users: list[str] | None = None,
+    unknowns: list[str] | None = None,
 ) -> dict[str, Any]:
     """Gera perguntas de discovery/validação a partir da hipótese e das incógnitas.
 
@@ -448,10 +439,10 @@ def generate_discovery_questions(
 
 def generate_feature_spec(
     feature: str,
-    problem: Optional[str] = None,
-    user_value: Optional[str] = None,
-    requirements: Optional[list[str]] = None,
-    acceptance_criteria: Optional[list[str]] = None,
+    problem: str | None = None,
+    user_value: str | None = None,
+    requirements: list[str] | None = None,
+    acceptance_criteria: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta a especificação de uma feature a partir dos inputs.
 
@@ -465,9 +456,7 @@ def generate_feature_spec(
     reqs = [r for r in _as_list(requirements) if r]
     acs = [a for a in _as_list(acceptance_criteria) if a]
     if not acs:
-        acs = [
-            f"Dado o requisito '{r}', então ele é atendido e verificável." for r in reqs
-        ]
+        acs = [f"Dado o requisito '{r}', então ele é atendido e verificável." for r in reqs]
     return {
         "feature": feature,
         "objective": problem or f"Entregar a capacidade '{feature}'.",
@@ -489,8 +478,8 @@ def generate_go_to_market_brief(
     product: str,
     target_segment: str,
     value_proposition: str,
-    channels: Optional[list[str]] = None,
-    launch_date: Optional[str] = None,
+    channels: list[str] | None = None,
+    launch_date: str | None = None,
 ) -> dict[str, Any]:
     """Monta um brief de Go-To-Market a partir dos inputs.
 
@@ -526,10 +515,10 @@ def generate_go_to_market_brief(
 
 def generate_handoff_to_architecture(
     feature: str,
-    requirements: Optional[list[str]] = None,
-    integrations: Optional[list[str]] = None,
-    scale_expectations: Optional[str] = None,
-    constraints: Optional[list[str]] = None,
+    requirements: list[str] | None = None,
+    integrations: list[str] | None = None,
+    scale_expectations: str | None = None,
+    constraints: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta o handoff para Arquitetura a partir dos inputs da feature.
 
@@ -544,8 +533,7 @@ def generate_handoff_to_architecture(
     return {
         "feature": feature,
         "architecture_handoff": {"feature": feature},
-        "tech_requirements": [f"Derivado de '{r}'" for r in reqs]
-        or [f"Suportar '{feature}'"],
+        "tech_requirements": [f"Derivado de '{r}'" for r in reqs] or [f"Suportar '{feature}'"],
         "integration_needs": [i for i in _as_list(integrations) if i],
         "scale_expectations": scale_expectations or "não informado",
         "constraints": [c for c in _as_list(constraints) if c],
@@ -555,9 +543,9 @@ def generate_handoff_to_architecture(
 
 def generate_handoff_to_design(
     feature: str,
-    user_journeys: Optional[list[str]] = None,
-    personas: Optional[list[str]] = None,
-    key_screens: Optional[list[str]] = None,
+    user_journeys: list[str] | None = None,
+    personas: list[str] | None = None,
+    key_screens: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta o handoff para Design a partir dos inputs da feature.
 
@@ -573,9 +561,9 @@ def generate_handoff_to_design(
         "design_handoff": {"feature": feature},
         "user_journeys": [j for j in _as_list(user_journeys) if j],
         "personas": [p for p in _as_list(personas) if p],
-        "wireframes_brief": f"Wireframes para: {', '.join(screens)}"
-        if screens
-        else f"Wireframes de '{feature}'",
+        "wireframes_brief": (
+            f"Wireframes para: {', '.join(screens)}" if screens else f"Wireframes de '{feature}'"
+        ),
         "key_screens": screens,
         "design_tokens_needs": [
             "cores de estado",
@@ -588,9 +576,9 @@ def generate_handoff_to_design(
 
 def generate_handoff_to_engineering(
     feature: str,
-    user_stories: Optional[list[Any]] = None,
-    dependencies: Optional[list[str]] = None,
-    acceptance_criteria: Optional[list[str]] = None,
+    user_stories: list[Any] | None = None,
+    dependencies: list[str] | None = None,
+    acceptance_criteria: list[str] | None = None,
 ) -> dict[str, Any]:
     """Monta o handoff para Engenharia a partir dos inputs da feature.
 
@@ -622,8 +610,8 @@ def generate_handoff_to_engineering(
 def generate_release_plan(
     product: str,
     features: list[Any],
-    milestones: Optional[list[str]] = None,
-    target_date: Optional[str] = None,
+    milestones: list[str] | None = None,
+    target_date: str | None = None,
 ) -> dict[str, Any]:
     """Monta um plano de release faseado a partir das features e marcos.
 
@@ -643,11 +631,7 @@ def generate_release_plan(
             name = str(f)
             phase = None
         if not phase:
-            phase = (
-                "Alpha"
-                if idx < len(feats) / 3
-                else ("Beta" if idx < 2 * len(feats) / 3 else "GA")
-            )
+            phase = "Alpha" if idx < len(feats) / 3 else ("Beta" if idx < 2 * len(feats) / 3 else "GA")
         phases.setdefault(phase, []).append(name)
 
     phase_list = [{"phase": p, "features": items} for p, items in phases.items()]
@@ -673,7 +657,7 @@ def generate_release_plan(
 
 def map_product_risks(
     feature: str,
-    risks: Optional[list[dict[str, Any]]] = None,
+    risks: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Classifica riscos de produto nas 4 categorias de Cagan (valor, usabilidade, viabilidade, feasibility).
 
@@ -683,7 +667,7 @@ def map_product_risks(
             `category` (value|usability|viability|feasibility). Sem categoria,
             entra em `uncategorized`.
     """
-    buckets = {
+    buckets: dict[str, list[str]] = {
         "value_risks": [],
         "usability_risks": [],
         "viability_risks": [],
@@ -719,7 +703,7 @@ def map_product_risks(
 def map_user_journey(
     persona: str,
     steps: list[Any],
-    scenario: Optional[str] = None,
+    scenario: str | None = None,
 ) -> dict[str, Any]:
     """Monta a jornada do usuário em stages a partir dos passos fornecidos.
 

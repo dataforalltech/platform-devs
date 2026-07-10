@@ -332,8 +332,7 @@ def generate_doc_report(
 
     if stale_docs > 0:
         worst_highlight = (
-            f"Freshness — {stale_docs} doc(s) com mais de "
-            f"{settings.stale_days_threshold} dias sem update"
+            f"Freshness — {stale_docs} doc(s) com mais de {settings.stale_days_threshold} dias sem update"
         )
     elif total_issues > 0:
         worst_highlight = f"{total_issues} issue(s) estrutural(is) nos documentos"

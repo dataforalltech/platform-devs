@@ -183,7 +183,14 @@ class EcosystemGraph:
         src = payload.get("from")
         dst = payload.get("to")
         rel = payload.get("relation")
-        if not all(isinstance(x, str) and x.strip() for x in (src, dst, rel)):
+        if not (
+            isinstance(src, str)
+            and src.strip()
+            and isinstance(dst, str)
+            and dst.strip()
+            and isinstance(rel, str)
+            and rel.strip()
+        ):
             raise EcosystemGraphError(f"edge inválido: {payload!r}")
         if rel not in VALID_RELATIONS:
             unknown_relations.append(rel)

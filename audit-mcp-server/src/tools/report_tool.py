@@ -39,9 +39,7 @@ def get_audit_report(
         auto_approved = sum(1 for a in filtered_audits if a["status"] == "auto_approved")
 
         avg_score = (
-            sum(a["score"] for a in filtered_audits) / len(filtered_audits)
-            if filtered_audits
-            else 0.0
+            sum(a["score"] for a in filtered_audits) / len(filtered_audits) if filtered_audits else 0.0
         )
 
         by_env = {}
@@ -70,9 +68,9 @@ def get_audit_report(
             "rejected_count": rejected,
             "pending_count": pending,
             "average_score": round(avg_score, 2),
-            "pass_rate_pct": round((approved + auto_approved) / len(filtered_audits) * 100, 1)
-            if filtered_audits
-            else 0.0,
+            "pass_rate_pct": (
+                round((approved + auto_approved) / len(filtered_audits) * 100, 1) if filtered_audits else 0.0
+            ),
             "by_env": by_env,
             "by_criticality": by_criticality,
         }

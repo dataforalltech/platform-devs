@@ -21,9 +21,7 @@ def _mock_result(stdout: str = "", stderr: str = "", exit_code: int = 0) -> Comm
 
 
 def test_checkov_no_findings(monkeypatch, fake_settings, tmp_path):
-    output = json.dumps(
-        {"results": {"failed_checks": [], "passed_checks": [{"check_id": "CKV_AZ_1"}]}}
-    )
+    output = json.dumps({"results": {"failed_checks": [], "passed_checks": [{"check_id": "CKV_AZ_1"}]}})
     monkeypatch.setattr(checkov_tool, "run_command", lambda *a, **kw: _mock_result(stdout=output))
     res = checkov_tool.policy_scan_checkov(fake_settings, path=str(tmp_path))
     assert res["failed_count"] == 0
@@ -103,8 +101,6 @@ def test_checkov_empty_path(fake_settings):
 
 
 def test_checkov_handles_invalid_json(monkeypatch, fake_settings, tmp_path):
-    monkeypatch.setattr(
-        checkov_tool, "run_command", lambda *a, **kw: _mock_result(stdout="not json")
-    )
+    monkeypatch.setattr(checkov_tool, "run_command", lambda *a, **kw: _mock_result(stdout="not json"))
     res = checkov_tool.policy_scan_checkov(fake_settings, path=str(tmp_path))
     assert res["error"] == "invalid_json"

@@ -75,9 +75,7 @@ class _FakeConnection:
 
     def cursor(self, cursor_factory=None):
         # RealDictCursor -> dict rows. Detect by name to avoid importing internals.
-        as_dict = cursor_factory is not None and "RealDict" in getattr(
-            cursor_factory, "__name__", ""
-        )
+        as_dict = cursor_factory is not None and "RealDict" in getattr(cursor_factory, "__name__", "")
         return _FakeCursor(self._conn, as_dict=as_dict)
 
     def commit(self) -> None:

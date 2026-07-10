@@ -14,11 +14,7 @@ def _detect_framework(repo_path: str) -> str:
         pkg = (p / "package.json").read_text(encoding="utf-8", errors="ignore")
         if "jest" in pkg or "vitest" in pkg:
             return "jest"
-    if (
-        (p / "pyproject.toml").exists()
-        or (p / "setup.py").exists()
-        or (p / "requirements.txt").exists()
-    ):
+    if (p / "pyproject.toml").exists() or (p / "setup.py").exists() or (p / "requirements.txt").exists():
         return "pytest"
     # fallback
     return "pytest"

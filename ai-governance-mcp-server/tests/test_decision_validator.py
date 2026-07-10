@@ -211,8 +211,7 @@ def test_negated_test_deletion_is_not_violation(repo):
     # nenhuma violation deve mencionar remoção de teste
     assert not any("teste" in v.lower() and "remoção" in v.lower() for v in res["violations"])
     assert not any(
-        "indicação de remoção" in v.lower() or "skip de teste" in v.lower()
-        for v in res["violations"]
+        "indicação de remoção" in v.lower() or "skip de teste" in v.lower() for v in res["violations"]
     )
 
 

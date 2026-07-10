@@ -1,8 +1,8 @@
 [project]
-name = "deploy-mcp-server"
+name = "deploy-mcp"
 version = "0.1.0"
-description = "MCP Server para operações de deploy: git, PRs, GitHub Actions e ACR via GitHub API."
-requires-python = ">=3.11"
+description = "MCP sidecar (kind=mcp_http, Model C) do deploy: git, PRs, GitHub Actions, ACR e workspace local via GitHub API — gateway-ready."
+requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [
     { name = "dataforalltech platform team" },
@@ -11,27 +11,29 @@ dependencies = [
     "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pyjwt[crypto]>=2.8.0",
+    "cryptography>=42.0.0",
+    "httpx>=0.27.0,<1.0",
     "PyGithub>=2.3.0,<3.0",
     "PyNaCl>=1.5.0,<2.0",
-    "httpx>=0.27.0,<1.0",
-    "fastapi>=0.104.0,<1.0",
-    "uvicorn[standard]>=0.24.0,<1.0",
-    "pyjwt>=2.8.0",
-    "cryptography>=42.0.0",
-    "bcrypt>=4.1.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0,<9.0",
-    "pytest-asyncio>=0.23.0,<1.0",
-    "pytest-mock>=3.14.0,<4.0",
-    "pytest-cov>=4.0.0,<5.0",
-    "ruff>=0.4.0,<1.0",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-mock>=3.14.0",
+    "httpx>=0.27",          # requerido pelo fastapi.testclient
+    "ruff==0.15.12",
+    "mypy==2.2.0",
+    "black>=24.0",
 ]
 
 [project.scripts]
-deploy-mcp-server = "src.server.mcp_server:main"
+deploy-mcp = "src.server.mcp_server:main"
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]
@@ -44,16 +46,33 @@ include = ["src*"]
 [tool.setuptools.package-dir]
 "" = "."
 
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-asyncio_mode = "auto"
-addopts = "-ra -q"
-
 [tool.ruff]
-line-length = 100
-target-version = "py311"
+line-length = 110
+target-version = "py312"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]
+select = ["E", "F", "I", "UP", "B", "S"]
+# S104 (bind 0.0.0.0): ingress só via gateway (INV-1, justificado no código).
+# S603/S607 (subprocess / partial path): git e docker CLI são a função-núcleo do
+# deploy-mcp (clone/build/push); as entradas são validadas na camada de tools.
+ignore = ["E501", "S104", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+# asserts + credenciais/caminhos-dummy nas fixtures de teste.
+"tests/*" = ["S101", "S105", "S106", "S108"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+# Plugin do pydantic: reconhece que campos de BaseSettings sao preenchidos via
+# env, entao DeploySettings() nao exige github_token no construtor (falso-positivo
+# call-arg). Nao reduz o rigor global do type-check.
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+omit = ["src/**/__init__.py"]

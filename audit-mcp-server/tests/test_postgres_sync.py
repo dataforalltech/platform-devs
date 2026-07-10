@@ -98,9 +98,7 @@ def test_sync_audit_created_active(active_sync):
 
 
 def test_sync_audit_updated_active(active_sync):
-    ok = active_sync.sync_audit_updated(
-        "audit_1", {"status": "approved", "score": 0.9, "passed": True}
-    )
+    ok = active_sync.sync_audit_updated("audit_1", {"status": "approved", "score": 0.9, "passed": True})
     assert ok is True
     active_sync.adapter.query_postgres.assert_called_once()
     sql, values = active_sync.adapter.query_postgres.call_args.args
@@ -126,9 +124,7 @@ def test_sync_audit_item_added_active(active_sync):
 
 
 def test_sync_approval_added_active(active_sync):
-    ok = active_sync.sync_approval_added(
-        "audit_1", {"approved_by": "alice", "decision": "approved"}
-    )
+    ok = active_sync.sync_approval_added("audit_1", {"approved_by": "alice", "decision": "approved"})
     assert ok is True
     table, data = active_sync.adapter.sync_to_postgres.call_args.args
     assert table == "audit_approvals"

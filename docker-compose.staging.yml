@@ -16,7 +16,7 @@ services:
     environment:
       POSTGRES_DB: platform_staging
       POSTGRES_USER: platform
-      POSTGRES_PASSWORD: staging_password_123
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}
     ports:
       - "5433:5432"
     volumes:
@@ -34,7 +34,7 @@ services:
     container_name: staging-redis
     ports:
       - "6380:6379"
-    command: redis-server --appendonly yes --requirepass staging_redis_pass_123
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?defina REDIS_PASSWORD no ambiente}
     volumes:
       - redis_data:/data
     healthcheck:
@@ -91,7 +91,7 @@ services:
     environment:
       MCP_PORT: 7098
       CONFIG_MCP_URL: http://config-mcp:7099
-      REDIS_URL: redis://:staging_redis_pass_123@redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?defina REDIS_PASSWORD no ambiente}@redis:6379/0
       ENVIRONMENT: staging
     ports:
       - "7098:7098"
@@ -115,7 +115,7 @@ services:
     container_name: staging-config-mcp
     environment:
       MCP_PORT: 7099
-      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      DATABASE_URL: postgresql://platform:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}@postgres:5432/platform_staging
       ENVIRONMENT: staging
     ports:
       - "7099:7099"
@@ -159,8 +159,8 @@ services:
     container_name: staging-session-mcp
     environment:
       MCP_PORT: 7100
-      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
-      REDIS_URL: redis://:staging_redis_pass_123@redis:6379/1
+      DATABASE_URL: postgresql://platform:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}@postgres:5432/platform_staging
+      REDIS_URL: redis://:${REDIS_PASSWORD:?defina REDIS_PASSWORD no ambiente}@redis:6379/1
       ENVIRONMENT: staging
     ports:
       - "7100:7100"
@@ -251,7 +251,7 @@ services:
     container_name: staging-test-mcp
     environment:
       MCP_PORT: 7104
-      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      DATABASE_URL: postgresql://platform:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}@postgres:5432/platform_staging
       ENVIRONMENT: staging
     ports:
       - "7104:7104"
@@ -295,7 +295,7 @@ services:
     container_name: staging-pipeline-mcp
     environment:
       MCP_PORT: 7106
-      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      DATABASE_URL: postgresql://platform:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}@postgres:5432/platform_staging
       CONFIG_MCP_URL: http://config-mcp:7099
       ENVIRONMENT: staging
     ports:
@@ -342,7 +342,7 @@ services:
     container_name: staging-audit-mcp
     environment:
       MCP_PORT: 7108
-      DATABASE_URL: postgresql://platform:staging_password_123@postgres:5432/platform_staging
+      DATABASE_URL: postgresql://platform:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}@postgres:5432/platform_staging
       CONFIG_MCP_URL: http://config-mcp:7099
       ENVIRONMENT: staging
     ports:
@@ -370,10 +370,10 @@ services:
       PG_PORT: 5432
       PG_DB: platform_staging
       PG_USER: platform
-      PG_PASSWORD: staging_password_123
+      PG_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no ambiente}
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: staging_redis_pass_123
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?defina REDIS_PASSWORD no ambiente}
       REDIS_DB: 3
       ENVIRONMENT: staging
     ports:

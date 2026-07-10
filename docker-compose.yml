@@ -19,7 +19,7 @@ services:
       TWIN_PG_DB: platform_dev
       TWIN_PG_USER: postgres
       TWIN_PG_PASSWORD: postgres
-      TWIN_ADMIN_TOKEN: ${TWIN_ADMIN_TOKEN:-sgqBj52MF2CH3-IBOvflNoyeH-1XN6BmBF7oZzIT9Hs}
+      TWIN_ADMIN_TOKEN: ${TWIN_ADMIN_TOKEN:?defina TWIN_ADMIN_TOKEN no ambiente/.env}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:7100/v1/health', timeout=5)"]
       interval: 30s

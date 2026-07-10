@@ -137,10 +137,7 @@ def _summarize(tool: str, payload: dict) -> str:
     if tool == "find_consumers_of":
         return f"node={payload.get('node_id')} consumers={payload.get('total')}"
     if tool == "find_dependencies_of":
-        return (
-            f"node={payload.get('node_id')} depth={payload.get('max_depth')} "
-            f"deps={payload.get('total')}"
-        )
+        return f"node={payload.get('node_id')} depth={payload.get('max_depth')} deps={payload.get('total')}"
     if tool == "get_service_metadata":
         redirect = payload.get("canonical_redirect")
         return (
@@ -220,10 +217,7 @@ async def _watch(session: ClientSession, interval: int) -> None:
                 "search_governance_knowledge",
                 {"query": "fallback", "limit": 1},
             )
-            print(
-                f"[{_ts()}] tick #{tick} list_tools={len(tools.tools)} "
-                f"search_total={search.get('total')}"
-            )
+            print(f"[{_ts()}] tick #{tick} list_tools={len(tools.tools)} search_total={search.get('total')}")
         except Exception as e:  # noqa: BLE001
             print(f"[{_ts()}] tick #{tick} EXC: {e}")
         await asyncio.sleep(interval)

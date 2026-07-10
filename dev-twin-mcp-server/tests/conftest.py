@@ -11,7 +11,15 @@ depender de um banco.
 from __future__ import annotations
 
 import re
+import sys
+from pathlib import Path
 from typing import Any
+
+# Garante que a raiz do dev-twin-mcp-server esteja no sys.path (permite `from src...`
+# mesmo quando o pytest é invocado de outro cwd, sem depender de `pip install -e .`).
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 import psycopg2
 import psycopg2.pool

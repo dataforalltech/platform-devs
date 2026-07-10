@@ -131,10 +131,7 @@ def test_sync_broker_urls_updates_kafka_and_redis(store, tmp_path):
 
     env = tmp_path / ".env"
     env.write_text(
-        "# comment\n"
-        "KAFKA_BOOTSTRAP_SERVERS=old:1111\n"
-        "REDIS_URL=redis://old:2222/3\n"
-        "UNRELATED=keepme\n",
+        "# comment\nKAFKA_BOOTSTRAP_SERVERS=old:1111\nREDIS_URL=redis://old:2222/3\nUNRELATED=keepme\n",
         encoding="utf-8",
     )
 

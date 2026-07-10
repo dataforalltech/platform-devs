@@ -40,9 +40,7 @@ def mocked_psutil(monkeypatch):
     def fake_disk_usage(mountpoint):
         if mountpoint == "/locked":
             raise PermissionError("denied")
-        return SimpleNamespace(
-            total=500 * 1024**3, used=250 * 1024**3, free=250 * 1024**3, percent=50.0
-        )
+        return SimpleNamespace(total=500 * 1024**3, used=250 * 1024**3, free=250 * 1024**3, percent=50.0)
 
     monkeypatch.setattr(ps, "disk_usage", fake_disk_usage)
     monkeypatch.setattr(

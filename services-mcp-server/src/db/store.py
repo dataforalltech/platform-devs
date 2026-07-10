@@ -47,7 +47,8 @@ class ServiceStore:
     def _migrate(self) -> None:
         with self._get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS services (
                         name           TEXT PRIMARY KEY,
                         host           TEXT NOT NULL DEFAULT 'localhost',
@@ -67,11 +68,12 @@ class ServiceStore:
                         last_check_at  TEXT,
                         last_check_ok  INTEGER
                     );
-                """)
+                """
+                )
                 # Runtime environment columns (idempotent ALTERs)
                 for col_ddl in [
                     "ALTER TABLE services ADD COLUMN IF NOT EXISTS internal_url TEXT",
-                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime      TEXT NOT NULL DEFAULT 'unknown'",
+                    "ALTER TABLE services ADD COLUMN IF NOT EXISTS runtime TEXT NOT NULL DEFAULT 'unknown'",
                     "ALTER TABLE services ADD COLUMN IF NOT EXISTS os_name      TEXT",
                     "ALTER TABLE services ADD COLUMN IF NOT EXISTS os_release   TEXT",
                     "ALTER TABLE services ADD COLUMN IF NOT EXISTS hostname     TEXT",

@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 
-
 from src.tools.architecture_tools import (
     generate_architecture,
     generate_c4_diagram,
@@ -51,11 +50,7 @@ def test_c4_uses_custom_actors_not_fixed_list():
     container_names = {c["name"] for c in result["levels"]["container"]["containers"]}
     assert container_names == {"Payments API", "Postgres"}
     # Metadados de tecnologia preservados a partir do dict de input.
-    api = next(
-        c
-        for c in result["levels"]["container"]["containers"]
-        if c["name"] == "Payments API"
-    )
+    api = next(c for c in result["levels"]["container"]["containers"] if c["name"] == "Payments API")
     assert api["technology"] == "FastAPI"
 
 
@@ -89,9 +84,7 @@ def test_c4_empty_inputs_produce_empty_model_not_defaults():
 
 
 def test_c4_deduplicates_repeated_actors():
-    result = generate_c4_diagram(
-        system_name="S", actors=["User", "User", {"name": "User"}]
-    )
+    result = generate_c4_diagram(system_name="S", actors=["User", "User", {"name": "User"}])
     assert len(result["levels"]["system_context"]["actors"]) == 1
 
 
@@ -108,11 +101,9 @@ def test_blueprint_components_derived_from_requirements():
         "score credit risk",
         "notify applicants",
     ]
-    biz_layer = next(l for l in result["layers"] if l["name"] == "Business Logic")
+    biz_layer = next(ly for ly in result["layers"] if ly["name"] == "Business Logic")
     # Componentes derivam dos requisitos (slug), não de lista fixa.
-    assert any(
-        "loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"]
-    )
+    assert any("loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"])
     assert "core_domain" not in biz_layer["components"]  # só quando não há requisitos
 
 
@@ -124,9 +115,7 @@ def test_blueprint_pattern_selection_is_traceable():
     names = {p["name"] for p in result["chosen_patterns"]}
     assert "Event-Driven Architecture" in names
     # A escolha é rastreável ao gatilho, não uma constante.
-    edp = next(
-        p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture"
-    )
+    edp = next(p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture")
     assert edp["triggered_by"]  # não vazio
 
 
@@ -200,33 +189,6 @@ def test_status_version_matches_pyproject():
     assert status()["version"] == declared
 
 
-# ── contrato de schema (mcp_server) ─────────────────────────────────────────── #
-def test_registered_tools_expose_expected_input_schemas():
-    """As tools agora recebem parâmetros; os schemas derivados batem com o contrato."""
-    import anyio
-
-    from src.server.mcp_server import (
-        TOOL_INPUT_SCHEMAS,
-        TOOL_REGISTRY,
-        assert_schema_contract,
-        build_mcp,
-    )
-
-    # Escopos preservados.
-    assert TOOL_REGISTRY["generate_c4_diagram"][1] == "architecture:write"
-    assert TOOL_REGISTRY["status"][1] == "architecture:read"
-
-    mcp = build_mcp()
-
-    async def _check():
-        # Não lança se assinatura e contrato documentado convergem.
-        await assert_schema_contract(mcp)
-        tools = {t.name: t for t in await mcp.list_tools()}
-        return tools
-
-    tools = anyio.run(_check)
-
-    assert set(tools) == set(TOOL_INPUT_SCHEMAS)
-    # generate_c4_diagram expõe os parâmetros derivados dos inputs.
-    c4_props = set(tools["generate_c4_diagram"].inputSchema.get("properties", {}))
-    assert {"system_name", "actors", "containers", "relationships"} <= c4_props
+# O contrato do servidor (schemas + campos de policy + PEP inner-token) agora é
+# validado em test_mcp_server.py (sidecar mcp_http, Model C). O contrato FastMCP
+# antigo (TOOL_REGISTRY/build_mcp/assert_schema_contract) foi aposentado.

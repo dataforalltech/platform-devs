@@ -1,4 +1,29 @@
-"""Servidor MCP pipeline — 14 tools para gerenciamento de pipeline DEV→HML→PROD.
+"""Servidor MCP do pipeline — sidecar kind=mcp_http, GATEWAY-READY (Model C).
+
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:pipeline-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3).
+  4. _EXEMPT_TOOLS (health/status, sem token) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: pipeline-mcp é stateful — mantém pipelines/gates/promoções num PostgreSQL via
+`PipelineStore` e chama a GitHub REST API para criar/mergiar PRs. Não há um Trinity
+backend HTTP intermediário, então não há ServiceApiClient; o dispatcher recebe o store.
 
 Regras de aprovação:
   DEV  (PRs → develop):     pipeline-mcp auto-aprova e mergia autonomamente
@@ -15,12 +40,15 @@ Tools:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from typing import Any
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
@@ -45,9 +73,15 @@ from ..tools import (
 
 _log = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Schemas                                                                      #
-# ─────────────────────────────────────────────────────────────────────────── #
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara, além de description/schema, os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties (senão a validação no front-door
+# é fail-open). Consultas usam verbo :read; mutações/trigger usam :write.
+# ─────────────────────────────────────────────────────────────────────────────
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     # ── Pipeline ──────────────────────────────────────────────────────────── #
     "register_pipeline": {
@@ -56,6 +90,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Se o serviço já existir, atualiza repo e base_branch. "
             "Retorna action=created ou action=updated."
         ),
+        "capability": "pipeline-mcp.register_pipeline",
+        "required_scope": "pipeline-mcp:pipeline:write",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -79,6 +117,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Retorna o status atual do pipeline de um serviço, "
             "incluindo ambiente atual, status de bloqueio e últimas 10 promoções."
         ),
+        "capability": "pipeline-mcp.get_pipeline",
+        "required_scope": "pipeline-mcp:pipeline:read",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -93,6 +135,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Lista serviços registrados no pipeline. "
             "Suporta filtros por env (dev/homol/prod/blocked/rollback) e status (active/blocked)."
         ),
+        "capability": "pipeline-mcp.list_pipeline",
+        "required_scope": "pipeline-mcp:pipeline:read",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -118,6 +164,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Após aprovação humana, chame approve_promotion(promotion_id). "
             "Retorna can_promote=false com lista de gates pendentes se houver falhas."
         ),
+        "capability": "pipeline-mcp.promote_service",
+        "required_scope": "pipeline-mcp:promotion:write",
+        "resource_type": "promotion",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -151,6 +201,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Deve ser chamado após o humano aprovar a PR no GitHub. "
             "Atualiza o ambiente do serviço para to_env após merge bem-sucedido."
         ),
+        "capability": "pipeline-mcp.approve_promotion",
+        "required_scope": "pipeline-mcp:promotion:write",
+        "resource_type": "promotion",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -174,13 +228,17 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "PRs targeting 'homol' ou 'main': lista para aprovação humana sem tocar. "
             "Configure PIPELINE_GITHUB_TOKEN e PIPELINE_GITHUB_ORG para usar."
         ),
+        "capability": "pipeline-mcp.watch_prs",
+        "required_scope": "pipeline-mcp:pipeline:write",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
                 "repos": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Repos específicos a verificar. Default: todos os registrados no pipeline.",
+                    "description": "Repos específicos a verificar. Default: todos os registrados.",
                 },
             },
             "additionalProperties": False,
@@ -191,6 +249,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Bloqueia a promoção de um serviço no pipeline. "
             "Um serviço bloqueado não pode ser promovido até ser desbloqueado manualmente."
         ),
+        "capability": "pipeline-mcp.block_service",
+        "required_scope": "pipeline-mcp:pipeline:write",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -210,6 +272,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Registra um rollback de versão para um serviço em um ambiente. "
             "Atualiza o status do serviço para 'rollback' e registra no histórico."
         ),
+        "capability": "pipeline-mcp.rollback",
+        "required_scope": "pipeline-mcp:promotion:write",
+        "resource_type": "promotion",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -240,9 +306,14 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "add_gate_result": {
         "description": (
             "Registra o resultado de um gate de qualidade para um serviço/ambiente. "
-            "Types válidos: qa_tests, security_scan, pr_approved, health_check, manual_approval. "
+            "Types válidos: qa_tests, security_scan, pr_approved, health_check, "
+            "manual_approval, audit_compliance. "
             "Se o gate já existir, atualiza o resultado."
         ),
+        "capability": "pipeline-mcp.add_gate_result",
+        "required_scope": "pipeline-mcp:gate:write",
+        "resource_type": "gate",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -260,6 +331,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                         "pr_approved",
                         "health_check",
                         "manual_approval",
+                        "audit_compliance",
                     ],
                     "description": "Tipo do gate.",
                 },
@@ -286,6 +358,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Indica quais gates são obrigatórios, quais passaram, falharam ou estão ausentes. "
             "Inclui campo can_promote: true/false."
         ),
+        "capability": "pipeline-mcp.get_gate_status",
+        "required_scope": "pipeline-mcp:gate:read",
+        "resource_type": "gate",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -305,6 +381,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Limpa todos os resultados de gates de um serviço/ambiente. "
             "Útil para forçar re-avaliação completa antes de uma nova promoção."
         ),
+        "capability": "pipeline-mcp.clear_gates",
+        "required_scope": "pipeline-mcp:gate:write",
+        "resource_type": "gate",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -326,6 +406,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Se service for fornecido, filtra pelo serviço. "
             "Retorna até limit registros ordenados por data decrescente."
         ),
+        "capability": "pipeline-mcp.get_promotion_history",
+        "required_scope": "pipeline-mcp:promotion:read",
+        "resource_type": "promotion",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -349,11 +433,11 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Retorna visão geral do pipeline: total de serviços por ambiente, "
             "contagem de bloqueados/ativos, e serviços com gates com falha."
         ),
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        "capability": "pipeline-mcp.get_pipeline_overview",
+        "required_scope": "pipeline-mcp:pipeline:read",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
+        "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "set_pipeline_config": {
         "description": (
@@ -361,6 +445,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Substitui a configuração padrão (homol: [qa_tests, pr_approved]; "
             "prod: [qa_tests, security_scan, pr_approved, health_check])."
         ),
+        "capability": "pipeline-mcp.set_pipeline_config",
+        "required_scope": "pipeline-mcp:pipeline:write",
+        "resource_type": "pipeline",
+        "data_domain": "pipeline",
         "schema": {
             "type": "object",
             "properties": {
@@ -383,118 +471,43 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Health/status são encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless).
+# pipeline-mcp não expõe tool tokenless: TODAS as tools tocam estado/GitHub e exigem
+# inner token válido (fail-closed). O liveness fica no endpoint /v1/health (sem tool).
+_EXEMPT_TOOLS: frozenset[str] = frozenset()
+# Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Escopo mínimo por ferramenta (least privilege).                              #
-#   pipeline:read  → status/consulta (não altera estado)                        #
-#   pipeline:write → trigger/gate/promote/rollback/mutação (altera estado)      #
-# ─────────────────────────────────────────────────────────────────────────── #
-SCOPE_FOR_TOOL: dict[str, str] = {
-    # ── read: consulta/status ────────────────────────────────────────────── #
-    "get_pipeline": "pipeline:read",
-    "list_pipeline": "pipeline:read",
-    "get_gate_status": "pipeline:read",
-    "get_promotion_history": "pipeline:read",
-    "get_pipeline_overview": "pipeline:read",
-    # ── write: trigger/gate/promoção/rollback/mutação ────────────────────── #
-    "register_pipeline": "pipeline:write",
-    "watch_prs": "pipeline:write",  # trigger de auto-merge/scan em repos
-    "block_service": "pipeline:write",
-    "add_gate_result": "pipeline:write",  # gate: escreve resultado
-    "clear_gates": "pipeline:write",  # gate: apaga resultados
-    "set_pipeline_config": "pipeline:write",
-    # ── write SENSÍVEL: promoção/rollback mudam ambiente de execução ─────── #
-    "promote_service": "pipeline:write",  # sensível: promove entre ambientes (cria/mergia PR)
-    "approve_promotion": "pipeline:write",  # sensível: executa merge da PR e muda o env do serviço
-    "rollback": "pipeline:write",  # sensível: reverte versão em produção/ambiente
-}
-SCOPES_SUPPORTED = ["pipeline:read", "pipeline:write"]
-
-# Garante que TODAS as tools declaradas têm escopo mínimo mapeado (least privilege).
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
-    "SCOPE_FOR_TOOL deve cobrir exatamente as tools de _TOOL_SCHEMAS: "
-    f"faltam={set(_TOOL_SCHEMAS) - set(SCOPE_FOR_TOOL)}; "
-    f"sobram={set(SCOPE_FOR_TOOL) - set(_TOOL_SCHEMAS)}"
-)
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# HTTP App                                                                      #
-# ─────────────────────────────────────────────────────────────────────────── #
-def _build_http_app(store: PipelineStore) -> FastAPI:
-    app = FastAPI(title="pipeline-mcp API", version="0.1.0", docs_url="/docs")
-
-    @app.get("/v1/health")
-    def health() -> dict[str, Any]:
-        try:
-            count = len(store.list_pipelines())
-        except Exception as exc:  # noqa: BLE001
-            return {"status": "degraded", "error": str(exc)}
-        return {"status": "ok", "service": "pipeline-mcp", "registered_pipelines": count}
-
-    @app.get("/v1/pipeline/{service}")
-    def get_service_pipeline(service: str) -> dict[str, Any]:
-        pipeline = store.get_pipeline(service)
-        if pipeline is None:
-            from fastapi import HTTPException
-
-            raise HTTPException(status_code=404, detail=f"Service '{service}' not found")
-        return pipeline
-
-    @app.get("/")
-    def root() -> dict[str, str]:
-        return {"service": "pipeline-mcp", "docs": "/docs", "health": "/health"}
-
-    return app
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Server                                                                       #
-# ─────────────────────────────────────────────────────────────────────────── #
-def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
-    settings = get_settings()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
-    store = PipelineStore(settings)
-    http_app = _build_http_app(store)
+def _verify_inner_token(twin_token: str, settings: PipelineSettings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:pipeline-mcp).
 
-    _log.info("pipeline_mcp_ready")
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:pipeline-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
+    )
 
-    server: Server = Server("pipeline-mcp-server")
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
-            for name, meta in _TOOL_SCHEMAS.items()
-        ]
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        _log.info("tool_called: %s keys=%s", name, sorted(args.keys()))
-        try:
-            payload = _dispatch(name, args, settings, store)
-        except KeyError:
-            payload = {"error": "UnknownTool", "tool": name}
-            _log.error("unknown_tool: %s", name)
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
-
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
-
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
-
-    return server, store, settings, http_app
+# ── Dispatcher (stateful: recebe store; tenant_id só p/ governança) ───────────
 
 
 def _dispatch(
@@ -502,7 +515,9 @@ def _dispatch(
     args: dict[str, Any],
     settings: PipelineSettings,
     store: PipelineStore,
-) -> dict:
+) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
+    args (INV-3); as tools de pipeline leem apenas as chaves declaradas no schema."""
     # ── Pipeline ──────────────────────────────────────────────────────────── #
     if name == "register_pipeline":
         return register_pipeline(
@@ -514,11 +529,7 @@ def _dispatch(
     if name == "get_pipeline":
         return get_pipeline(store, service=args["service"])
     if name == "list_pipeline":
-        return list_pipeline(
-            store,
-            env=args.get("env"),
-            status=args.get("status"),
-        )
+        return list_pipeline(store, env=args.get("env"), status=args.get("status"))
     if name == "promote_service":
         return promote_service(
             store,
@@ -578,53 +589,152 @@ def _dispatch(
         return clear_gates(store, service=args["service"], env=args["env"])
     # ── History ───────────────────────────────────────────────────────────── #
     if name == "get_promotion_history":
-        return get_promotion_history(
-            store,
-            service=args.get("service"),
-            limit=args.get("limit", 20),
-        )
+        return get_promotion_history(store, service=args.get("service"), limit=args.get("limit", 20))
     if name == "get_pipeline_overview":
         return get_pipeline_overview(store)
     if name == "set_pipeline_config":
-        return set_pipeline_config(
-            store,
-            service=args["service"],
-            gates_required=args["gates_required"],
-        )
-
+        return set_pipeline_config(store, service=args["service"], gates_required=args["gates_required"])
     raise KeyError(name)
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
-    Preserva build_server() (Server de baixo nível + _dispatch com store/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware
-    com escopo mínimo por ferramenta (least privilege).
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    server, _store, _settings, _http = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("PIPELINE_RESOURCE", "http://localhost:7108/mcp"),
-        prm_url=os.getenv(
-            "PIPELINE_PRM_URL",
-            "http://localhost:7108/.well-known/oauth-protected-resource",
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="pipeline-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "pipeline-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments, settings, store)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), store, settings e o sidecar HTTP."""
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    store = PipelineStore()
+    http_app = _build_http_app(store, settings)
+    _log.info("pipeline_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+
+    server: Server = Server("pipeline-mcp-server")
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
+            for name, meta in _TOOL_SCHEMAS.items()
+        ]
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        args = arguments or {}
+        try:
+            payload = _dispatch(name, args, settings, store)
+        except KeyError:
+            payload = {"error": "unknown_tool", "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            _log.exception("tool_internal_error: %s", name)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    return server, store, settings, http_app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, _store, settings, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7108")))
+        _server, _store, settings, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

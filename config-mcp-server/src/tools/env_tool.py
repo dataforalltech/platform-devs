@@ -263,7 +263,7 @@ def audit_env_files(
                     try:
                         existing = store.get(f"env.{profile}", k)
                         in_store = existing is not None
-                    except Exception:
+                    except Exception:  # noqa: BLE001, S110 — cobertura é best-effort
                         pass
                 hardcoded_secrets.append(
                     {
@@ -286,13 +286,9 @@ def audit_env_files(
 
     action_required: list[str] = []
     if hardcoded_secrets:
-        action_required.append(
-            f"{len(hardcoded_secrets)} hardcoded secret(s) found — run redact_env_secrets"
-        )
+        action_required.append(f"{len(hardcoded_secrets)} hardcoded secret(s) found — run redact_env_secrets")
     if non_canonical:
-        action_required.append(
-            f"{len(non_canonical)} non-canonical file name(s): {', '.join(non_canonical)}"
-        )
+        action_required.append(f"{len(non_canonical)} non-canonical file name(s): {', '.join(non_canonical)}")
 
     return {
         "directory": str(base),
@@ -349,9 +345,7 @@ def redact_env_secrets(
                 new_lines.append(raw)
                 continue
 
-            should_redact = (key in explicit_keys) or (
-                auto_detect and _is_hardcoded_secret(key, value)
-            )
+            should_redact = (key in explicit_keys) or (auto_detect and _is_hardcoded_secret(key, value))
 
             if should_redact:
                 new_value = f"${{{key}}}"
@@ -430,7 +424,7 @@ def push_env_to_store(
                 if existing is not None:
                     skipped_keys.append(key)
                     continue
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 — na dúvida, tenta gravar
                 pass
 
         try:

@@ -62,11 +62,11 @@ def _git_info(repo_path: Path) -> dict[str, Any]:
     ok, branch = _run_git(["rev-parse", "--abbrev-ref", "HEAD"], repo_path)
     branch = branch if ok else "unknown"
 
-    ok, remote = _run_git(["remote", "get-url", "origin"], repo_path)
-    remote = remote if ok else None
+    ok, remote_out = _run_git(["remote", "get-url", "origin"], repo_path)
+    remote = remote_out if ok else None
 
-    ok, last_commit = _run_git(["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path)
-    last_commit = last_commit if ok else None
+    ok, commit_out = _run_git(["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path)
+    last_commit = commit_out if ok else None
 
     ok, status_out = _run_git(["status", "--porcelain"], repo_path)
     dirty = bool(status_out) if ok else None
@@ -103,9 +103,7 @@ def _resolve_repos_root(
 
         client = ConfigClient.from_env()
         ws = client.get_workspace_config()
-        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get("REPOS_ROOT", {}).get(
-            "value"
-        )
+        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get("REPOS_ROOT", {}).get("value")
         if repos_root_val:
             return Path(repos_root_val).expanduser().resolve()
     except Exception as exc:
@@ -170,9 +168,7 @@ def get_repos_root(
         source = "auto_detected_or_config_mcp"
 
     exists = resolved.exists()
-    repo_count = (
-        sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists()) if exists else 0
-    )
+    repo_count = sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists()) if exists else 0
 
     return {
         "repos_root": str(resolved),

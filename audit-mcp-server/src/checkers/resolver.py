@@ -15,7 +15,8 @@ class RepoResolver:
         Resolve path do repo.
 
         - Se repo_path fornecido e existe localmente: return repo_path
-        - Se repo_path não fornecido e env != 'dev': retorna None (precisa GitHub API, não implementado nesta fase)
+        - Se repo_path não fornecido e env != 'dev': retorna None (precisa GitHub
+          API, não implementado nesta fase)
         - Se repo_path não fornecido e env == 'dev': tenta encontrar em /home/dev/repos
         """
         if repo_path:

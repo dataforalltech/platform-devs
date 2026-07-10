@@ -81,9 +81,7 @@ def terraform_validate(settings: Settings, path: str | None = None) -> dict:
                 "duration_ms": result.duration_ms,
                 "truncated": result.truncated,
             },
-            "notes": [
-                "Output não-JSON — verifique se o módulo está inicializado (`terraform init`)."
-            ],
+            "notes": ["Output não-JSON — verifique se o módulo está inicializado (`terraform init`)."],
         }
 
     return {
@@ -214,21 +212,18 @@ def terraform_plan(
     if match:
         add, change, destroy = (int(g) for g in match.groups())
 
+    no_changes_reason: str | None = None
+    if not has_changes:
+        no_changes_match = _NO_CHANGES_RE.search(result.stdout)
+        no_changes_reason = no_changes_match.group(0) if no_changes_match else "no changes"
+
     return {
         "has_changes": has_changes,
         "add": add,
         "change": change,
         "destroy": destroy,
         "plan_path": str(plan_file) if has_changes else None,
-        "no_changes_reason": (
-            None
-            if has_changes
-            else (
-                _NO_CHANGES_RE.search(result.stdout).group(0)
-                if _NO_CHANGES_RE.search(result.stdout)
-                else "no changes"
-            )
-        ),
+        "no_changes_reason": no_changes_reason,
         "stdout_excerpt": result.stdout[-2000:] if result.stdout else "",
         "command": {
             "cmd": "terraform plan",

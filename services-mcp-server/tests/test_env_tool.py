@@ -133,9 +133,7 @@ def test_sync_service_urls_explicit_map(store, tmp_path):
     make_service(store, name="admin", port=7000)
     env = tmp_path / ".env"
     env.write_text("URL_ADMIN=http://old:1\n", encoding="utf-8")
-    result = sync_service_urls(
-        store, path=str(env), url_map={"URL_ADMIN": "admin"}, url_suffix="/v2"
-    )
+    result = sync_service_urls(store, path=str(env), url_map={"URL_ADMIN": "admin"}, url_suffix="/v2")
     assert result["changes"][0]["new"] == "http://localhost:7000/v2"
 
 
@@ -171,9 +169,7 @@ def test_audit_no_env_files(store, tmp_path):
 
 
 def test_audit_detects_hardcoded_secret(store, tmp_path):
-    (tmp_path / ".env.local-dev").write_text(
-        "JWT_SECRET_KEY=XrDsC9superSecretValue\nA=1\n", encoding="utf-8"
-    )
+    (tmp_path / ".env.local-dev").write_text("JWT_SECRET_KEY=XrDsC9superSecretValue\nA=1\n", encoding="utf-8")
     result = audit_env_files(store, directory=str(tmp_path), check_registry_urls=False)
     assert result["hardcoded_secrets_count"] == 1
     assert result["hardcoded_secrets"][0]["key"] == "JWT_SECRET_KEY"
@@ -199,9 +195,7 @@ def test_audit_url_mismatch_against_registry(store, tmp_path):
 
 def test_redact_auto_detect(store, tmp_path):
     env = tmp_path / ".env"
-    env.write_text(
-        "JWT_SECRET_KEY=realsecret123\nDB_PASSWORD=toor\nPLAIN=value\n", encoding="utf-8"
-    )
+    env.write_text("JWT_SECRET_KEY=realsecret123\nDB_PASSWORD=toor\nPLAIN=value\n", encoding="utf-8")
     result = redact_env_secrets(store, paths=[str(env)])
     assert result["total_changes"] == 2
     content = env.read_text(encoding="utf-8")

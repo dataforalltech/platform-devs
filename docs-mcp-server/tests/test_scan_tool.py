@@ -61,9 +61,7 @@ def test_search_docs_finds_match(store, settings, tmp_path):
 def test_search_docs_case_insensitive(store, settings, tmp_path):
     (tmp_path / "doc.md").write_text("# Title\n\nHello World\n", encoding="utf-8")
 
-    result = search_docs(
-        store, settings, repo_path=str(tmp_path), query="hello world", case_sensitive=False
-    )
+    result = search_docs(store, settings, repo_path=str(tmp_path), query="hello world", case_sensitive=False)
 
     assert result["total_matches"] >= 1
 

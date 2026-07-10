@@ -199,9 +199,7 @@ def test_query_capacity_blocked_by_approval(store):
 
 def test_query_capacity_with_owner_quota(store):
     """Owner com quota cheia → blocked_by quota."""
-    s = AllocatorStore(
-        policy=AllocatorPolicy(max_active_leases_per_owner=1, max_cost_usd_per_hour=100.0)
-    )
+    s = AllocatorStore(policy=AllocatorPolicy(max_active_leases_per_owner=1, max_cost_usd_per_hour=100.0))
     request_vm(s, spec="cpu-small", duration_min=60, owner="a", exclusive=True)
     out = query_capacity(s, spec="cpu-small", owner="a")
     assert out["blocked_by"] == "owner_concurrent_lease_cap"

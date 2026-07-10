@@ -1,12 +1,25 @@
+"""Fixtures compartilhadas + shim de sys.path.
+
+Garante que a raiz do docs-mcp-server esteja no sys.path para que `from src...`
+funcione mesmo quando o pytest é invocado de outro cwd, sem depender de
+`pip install -e .` (embora este também funcione).
+"""
+
 from __future__ import annotations
 
 import json
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pytest
 
-from src.config.settings import DocsSettings
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from src.config.settings import DocsSettings  # noqa: E402
 
 
 def _now() -> str:
@@ -104,11 +117,7 @@ class FakeDocsStore:
 
     def search_index(self, repo_path: str, query: str) -> list[dict[str, Any]]:
         q = query.lower()
-        rows = [
-            r
-            for r in self._index
-            if r["repo_path"] == repo_path and q in (r["title"] or "").lower()
-        ]
+        rows = [r for r in self._index if r["repo_path"] == repo_path and q in (r["title"] or "").lower()]
         rows.sort(key=lambda r: r["title"] or "")
         return [dict(r) for r in rows]
 
@@ -142,16 +151,11 @@ def settings():
 def tmp_repo(tmp_path):
     """Cria estrutura mínima de repo para testes."""
     readme_content = (
-        "# Test Service\n\n"
-        "## Installation\n\nfoo bar baz qux quux\n\n"
-        "## Usage\n\nbar baz qux quux corge\n"
+        "# Test Service\n\n## Installation\n\nfoo bar baz qux quux\n\n## Usage\n\nbar baz qux quux corge\n"
     ) * 5
     (tmp_path / "README.md").write_text(readme_content, encoding="utf-8")
     changelog_content = (
-        "# Changelog\n\n"
-        "## [Unreleased]\n\n"
-        "## [1.0.0] - 2026-01-01\n\n"
-        "### Added\n- Initial release\n"
+        "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial release\n"
     )
     (tmp_path / "CHANGELOG.md").write_text(changelog_content, encoding="utf-8")
     return tmp_path

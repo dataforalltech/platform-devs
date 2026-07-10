@@ -21,9 +21,7 @@ class LintChecker:
                 "name": "ruff_passing",
                 "required": True,
                 "passed": passed,
-                "details": "ruff check passed"
-                if passed
-                else f"ruff violations found:\n{output[:200]}",
+                "details": "ruff check passed" if passed else f"ruff violations found:\n{output[:200]}",
             }
         )
 

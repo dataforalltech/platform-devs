@@ -1,139 +1,532 @@
-"""Backend MCP Server — Streamable HTTP (SDK oficial) + auth (padrão da plataforma).
+"""Servidor MCP do backend — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Conforme MCP_SERVICE_STANDARD.md:
-- Transporte: Streamable HTTP via FastMCP (conexão nativa do Claude Code, sem wrapper).
-- Auth: middleware Bearer valida tokens do auth-mcp (JWKS) e aplica escopo por ferramenta.
-- Publica /.well-known/oauth-protected-resource (RFC 9728) para disparar o fluxo OAuth do cliente.
-- Health público; qualquer rota /mcp sem token válido responde 401.
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:backend-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3).
+  4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: backend-mcp é compute-only (gera artefatos a partir dos inputs; não há
+backend REST), por isso não há ServiceApiClient — as tools são chamadas diretamente.
 """
 
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import os
-from typing import Callable
+from typing import Any
 
-from mcp.server.fastmcp import FastMCP
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
+from fastapi import FastAPI
+from fastapi.responses import JSONResponse
+from mcp.server import Server
+from mcp.types import TextContent, Tool
 
-from src.prompts.system_prompt import SYSTEM_PROMPT
-from src.tools.backend_tools import (
+from ..config.settings import Settings, get_settings
+from ..tools.backend_tools import (
     analyze_backend_requirement,
     generate_api_contract,
     generate_auth_policy,
     generate_database_schema,
     generate_fastapi_router,
-    generate_nestjs_controller,
     generate_migration,
+    generate_nestjs_controller,
+    generate_openapi_spec,
     generate_repository_layer,
     generate_service_layer,
-    generate_openapi_spec,
     map_integration_flow,
     optimize_query,
     review_backend_code,
 )
 
-# ── Configuração (env) ──────────────────────────────────────────────────── #
-RESOURCE = os.getenv("BACKEND_RESOURCE", "http://localhost:7119/mcp")
-AS_ISSUER = os.getenv("AS_ISSUER", "http://localhost:7103")
-AS_JWKS_URL = os.getenv("AS_JWKS_URL", f"{AS_ISSUER}/.well-known/jwks.json")
-RESOURCE_METADATA_URL = os.getenv(
-    "BACKEND_PRM_URL", "http://localhost:7119/.well-known/oauth-protected-resource"
-)
+_log = logging.getLogger(__name__)
 
-# ── Registro de ferramentas: (fn, scope mínimo, sensitive) ─────────────────── #
-# Escopos:
-#   backend:read  → análise, revisão e otimização (não gera artefatos novos)
-#   backend:write → geração de código, APIs, schemas, migrations e integrações
-# Nenhuma ferramenta é destrutiva/irreversível, então sensitive=False em todas.
-TOOL_REGISTRY: dict[str, tuple[Callable, str, bool]] = {
-    # Leitura / análise
-    "analyze_backend_requirement": (analyze_backend_requirement, "backend:read", False),
-    "review_backend_code": (review_backend_code, "backend:read", False),
-    "optimize_query": (optimize_query, "backend:read", False),
-    # Geração de artefatos / código
-    "generate_api_contract": (generate_api_contract, "backend:write", False),
-    "generate_auth_policy": (generate_auth_policy, "backend:write", False),
-    "generate_database_schema": (generate_database_schema, "backend:write", False),
-    "generate_fastapi_router": (generate_fastapi_router, "backend:write", False),
-    "generate_nestjs_controller": (generate_nestjs_controller, "backend:write", False),
-    "generate_migration": (generate_migration, "backend:write", False),
-    "generate_repository_layer": (generate_repository_layer, "backend:write", False),
-    "generate_service_layer": (generate_service_layer, "backend:write", False),
-    "generate_openapi_spec": (generate_openapi_spec, "backend:write", False),
-    "map_integration_flow": (map_integration_flow, "backend:write", False),
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara description/schema + os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução <namespace>:<resource_type>:<acao> (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties. Análise/revisão/otimização são
+# :read (não geram artefato novo); geradores são :write.
+# ─────────────────────────────────────────────────────────────────────────────
+_ARR = {"type": "array"}
+_STR_ARR = {"type": "array", "items": {"type": "string"}}
+_OBJ = {"type": "object"}
+_STR = {"type": "string"}
+
+
+def _schema(props: dict[str, Any]) -> dict[str, Any]:
+    return {"type": "object", "additionalProperties": False, "properties": props}
+
+
+_TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
+    # ── Leitura / análise (:read) ──────────────────────────────────────────────
+    "analyze_backend_requirement": {
+        "description": "Analisa requisito de negócio e identifica entidades, permissões, integrações.",
+        "capability": "backend-mcp.analyze_backend_requirement",
+        "required_scope": "backend-mcp:requirement:read",
+        "resource_type": "requirement",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "requirement": dict(_STR, description="Requisito de negócio a analisar."),
+                "context": dict(_OBJ, description="Contexto adicional (opcional)."),
+            }
+        ),
+    },
+    "review_backend_code": {
+        "description": "Revisa código backend: segurança, performance, padrões, erros.",
+        "capability": "backend-mcp.review_backend_code",
+        "required_scope": "backend-mcp:code:read",
+        "resource_type": "code",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "code": dict(_STR, description="Código a revisar."),
+                "language": dict(_STR, description="Linguagem (python/typescript/...)."),
+                "focus": dict(_STR_ARR, description="Focos da revisão (opcional)."),
+            }
+        ),
+    },
+    "optimize_query": {
+        "description": "Otimiza query de banco: índices, joins, N+1 problems.",
+        "capability": "backend-mcp.optimize_query",
+        "required_scope": "backend-mcp:query:read",
+        "resource_type": "query",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "query": dict(_STR, description="Query SQL/ORM a otimizar."),
+                "database": dict(_STR, description="Engine (postgres/mysql/...)."),
+                "table_schema": dict(_OBJ, description="Schema das tabelas (opcional)."),
+            }
+        ),
+    },
+    # ── Geração de artefatos / código (:write) ─────────────────────────────────
+    "generate_api_contract": {
+        "description": "Gera contrato de API com schemas, endpoints e status codes.",
+        "capability": "backend-mcp.generate_api_contract",
+        "required_scope": "backend-mcp:api_contract:write",
+        "resource_type": "api_contract",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "endpoint": dict(_STR, description="Path do endpoint."),
+                "method": dict(_STR, description="Método HTTP."),
+                "description": dict(_STR, description="Descrição do endpoint."),
+                "request_schema": dict(_OBJ, description="Schema da request (opcional)."),
+                "response_schema": dict(_OBJ, description="Schema da response (opcional)."),
+            }
+        ),
+    },
+    "generate_auth_policy": {
+        "description": "Gera política de autenticação, autorização e proteção de dados.",
+        "capability": "backend-mcp.generate_auth_policy",
+        "required_scope": "backend-mcp:auth_policy:write",
+        "resource_type": "auth_policy",
+        "data_domain": "security",
+        "schema": _schema(
+            {
+                "resource": dict(_STR, description="Recurso protegido."),
+                "auth_type": dict(_STR, description="Tipo de auth (jwt/oauth/...)."),
+                "roles": dict(_STR_ARR, description="Papéis autorizados."),
+                "data_sensitivity": dict(_STR, description="Sensibilidade do dado (opcional)."),
+            }
+        ),
+    },
+    "generate_database_schema": {
+        "description": "Gera schema de banco de dados com índices e constraints.",
+        "capability": "backend-mcp.generate_database_schema",
+        "required_scope": "backend-mcp:database_schema:write",
+        "resource_type": "database_schema",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "entity": dict(_STR, description="Entidade/tabela."),
+                "attributes": dict(_ARR, description="Atributos {name,type,...}."),
+                "database": dict(_STR, description="Engine (postgres/mysql/...)."),
+                "relationships": dict(_ARR, description="Relacionamentos (opcional)."),
+            }
+        ),
+    },
+    "generate_fastapi_router": {
+        "description": "Gera router FastAPI completo com validação e documentação.",
+        "capability": "backend-mcp.generate_fastapi_router",
+        "required_scope": "backend-mcp:fastapi_router:write",
+        "resource_type": "fastapi_router",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "name": dict(_STR, description="Nome do router."),
+                "base_path": dict(_STR, description="Prefixo de path."),
+                "endpoints": dict(_ARR, description="Endpoints (opcional)."),
+            }
+        ),
+    },
+    "generate_nestjs_controller": {
+        "description": "Gera controller NestJS com decoradores, validação e serviços.",
+        "capability": "backend-mcp.generate_nestjs_controller",
+        "required_scope": "backend-mcp:nestjs_controller:write",
+        "resource_type": "nestjs_controller",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "name": dict(_STR, description="Nome do controller."),
+                "base_path": dict(_STR, description="Prefixo de rota."),
+                "methods": dict(_ARR, description="Métodos (opcional)."),
+            }
+        ),
+    },
+    "generate_migration": {
+        "description": "Gera migration de banco idempotente e reversível.",
+        "capability": "backend-mcp.generate_migration",
+        "required_scope": "backend-mcp:migration:write",
+        "resource_type": "migration",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "title": dict(_STR, description="Título da migration."),
+                "operations": dict(_ARR, description="Operações {op,...}."),
+                "database": dict(_STR, description="Engine (postgres/mysql/...)."),
+            }
+        ),
+    },
+    "generate_repository_layer": {
+        "description": "Gera repository com operações CRUD e queries otimizadas.",
+        "capability": "backend-mcp.generate_repository_layer",
+        "required_scope": "backend-mcp:repository:write",
+        "resource_type": "repository",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "entity": dict(_STR, description="Entidade."),
+                "database": dict(_STR, description="Engine."),
+                "orm": dict(_STR, description="ORM (sqlalchemy/prisma/...; opcional)."),
+            }
+        ),
+    },
+    "generate_service_layer": {
+        "description": "Gera serviço com regra de negócio, validações e tratamento de erros.",
+        "capability": "backend-mcp.generate_service_layer",
+        "required_scope": "backend-mcp:service:write",
+        "resource_type": "service",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "name": dict(_STR, description="Nome do serviço."),
+                "methods": dict(_ARR, description="Métodos {name,...}."),
+                "dependencies": dict(_ARR, description="Dependências (opcional)."),
+            }
+        ),
+    },
+    "generate_openapi_spec": {
+        "description": "Gera especificação OpenAPI completa para documentação de API.",
+        "capability": "backend-mcp.generate_openapi_spec",
+        "required_scope": "backend-mcp:openapi_spec:write",
+        "resource_type": "openapi_spec",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "api_name": dict(_STR, description="Nome da API."),
+                "version": dict(_STR, description="Versão."),
+                "endpoints": dict(_ARR, description="Endpoints."),
+                "base_url": dict(_STR, description="Base URL (opcional)."),
+            }
+        ),
+    },
+    "map_integration_flow": {
+        "description": "Mapeia fluxo de integração com sistemas externos: auth, erros, retry.",
+        "capability": "backend-mcp.map_integration_flow",
+        "required_scope": "backend-mcp:integration:write",
+        "resource_type": "integration",
+        "data_domain": "backend",
+        "schema": _schema(
+            {
+                "integration_name": dict(_STR, description="Nome da integração."),
+                "external_service": dict(_STR, description="Serviço externo."),
+                "endpoints": dict(_ARR, description="Endpoints (opcional)."),
+                "auth_type": dict(_STR, description="Tipo de auth (opcional)."),
+            }
+        ),
+    },
 }
 
-SCOPES_SUPPORTED = ["backend:read", "backend:write"]
+# backend-mcp não tem tool tokenless; a liveness é o /v1/health (CI-7).
+_EXEMPT_TOOLS: frozenset[str] = frozenset()
+# Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-def _scope_for_request(method: str, tool: str | None) -> str | None:
-    """Escopo mínimo exigido por request JSON-RPC (least privilege por ferramenta)."""
-    if method != "tools/call" or not tool:
-        return None  # initialize / tools/list: basta token válido
-    entry = TOOL_REGISTRY.get(tool)
-    return entry[1] if entry else "backend:read"
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
 
-def build_mcp() -> FastMCP:
-    mcp = FastMCP(
-        name="backend-mcp",
-        instructions=SYSTEM_PROMPT,
-        stateless_http=(os.getenv("MCP_STATELESS", "0") == "1"),
-    )
-    for name, (fn, _scope, _sensitive) in TOOL_REGISTRY.items():
-        mcp.add_tool(fn, name=name)
-    return mcp
+def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:backend-mcp).
 
-
-def build_app(validators: list[Callable] | None = None):
-    """Monta o app Streamable HTTP + rotas públicas + middleware de auth.
-
-    `validators` permite injetar validadores no teste; em produção usa JWKS do auth-mcp.
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
     """
-    from shared.mcp_auth import (
-        BearerAuthMiddleware,
-        JwtValidator,
-        protected_resource_metadata,
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:backend-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
-    mcp = build_mcp()
 
-    @mcp.custom_route("/v1/health", methods=["GET"])
-    async def health(_req: Request):
-        return JSONResponse({"status": "ok", "server": "backend-mcp"})
+# ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
 
-    @mcp.custom_route("/.well-known/oauth-protected-resource", methods=["GET"])
-    async def prm(_req: Request):
-        return JSONResponse(
-            protected_resource_metadata(
-                resource=RESOURCE,
-                authorization_servers=[AS_ISSUER],
-                scopes=SCOPES_SUPPORTED,
-            )
+
+def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
+    args (INV-3) mas as tools compute-only não o consomem."""
+    if name == "analyze_backend_requirement":
+        return analyze_backend_requirement(
+            requirement=args.get("requirement", ""), context=args.get("context")
         )
+    if name == "review_backend_code":
+        return review_backend_code(
+            code=args.get("code", ""), language=args.get("language", ""), focus=args.get("focus")
+        )
+    if name == "optimize_query":
+        return optimize_query(
+            query=args.get("query", ""),
+            database=args.get("database", ""),
+            table_schema=args.get("table_schema"),
+        )
+    if name == "generate_api_contract":
+        return generate_api_contract(
+            endpoint=args.get("endpoint", ""),
+            method=args.get("method", ""),
+            description=args.get("description", ""),
+            request_schema=args.get("request_schema"),
+            response_schema=args.get("response_schema"),
+        )
+    if name == "generate_auth_policy":
+        return generate_auth_policy(
+            resource=args.get("resource", ""),
+            auth_type=args.get("auth_type", ""),
+            roles=args.get("roles", []),
+            data_sensitivity=args.get("data_sensitivity"),
+        )
+    if name == "generate_database_schema":
+        return generate_database_schema(
+            entity=args.get("entity", ""),
+            attributes=args.get("attributes", []),
+            database=args.get("database", ""),
+            relationships=args.get("relationships"),
+        )
+    if name == "generate_fastapi_router":
+        return generate_fastapi_router(
+            name=args.get("name", ""),
+            base_path=args.get("base_path", ""),
+            endpoints=args.get("endpoints"),
+        )
+    if name == "generate_nestjs_controller":
+        return generate_nestjs_controller(
+            name=args.get("name", ""),
+            base_path=args.get("base_path", ""),
+            methods=args.get("methods"),
+        )
+    if name == "generate_migration":
+        return generate_migration(
+            title=args.get("title", ""),
+            operations=args.get("operations", []),
+            database=args.get("database", ""),
+        )
+    if name == "generate_repository_layer":
+        return generate_repository_layer(
+            entity=args.get("entity", ""), database=args.get("database", ""), orm=args.get("orm")
+        )
+    if name == "generate_service_layer":
+        return generate_service_layer(
+            name=args.get("name", ""),
+            methods=args.get("methods", []),
+            dependencies=args.get("dependencies"),
+        )
+    if name == "generate_openapi_spec":
+        return generate_openapi_spec(
+            api_name=args.get("api_name", ""),
+            version=args.get("version", ""),
+            endpoints=args.get("endpoints", []),
+            base_url=args.get("base_url"),
+        )
+    if name == "map_integration_flow":
+        return map_integration_flow(
+            integration_name=args.get("integration_name", ""),
+            external_service=args.get("external_service", ""),
+            endpoints=args.get("endpoints"),
+            auth_type=args.get("auth_type"),
+        )
+    raise KeyError(name)
 
-    app = mcp.streamable_http_app()
 
-    if validators is None:
-        validators = [
-            JwtValidator(
-                issuer=AS_ISSUER, audience=RESOURCE, jwks_url=AS_JWKS_URL
-            ).validate
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
+
+def _build_http_app(settings: Settings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="backend-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "backend-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Any, Settings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    http_app = _build_http_app(settings)
+    _log.info("backend_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+
+    server: Server = Server("backend-mcp-server")
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
+            for name, meta in _TOOL_SCHEMAS.items()
         ]
 
-    return BearerAuthMiddleware(
-        app,
-        resource_metadata_url=RESOURCE_METADATA_URL,
-        validators=validators,
-        scope_for_request=_scope_for_request,
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        args = arguments or {}
+        try:
+            payload = _dispatch(name, args)
+        except KeyError:
+            payload = {"error": "unknown_tool", "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            _log.exception("tool_internal_error: %s", name)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    return server, settings, http_app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
     )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7119")))
+        _server, settings, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

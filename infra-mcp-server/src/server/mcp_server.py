@@ -1,12 +1,43 @@
-"""Servidor MCP infra — registra as 15 tools (Phase 1 read-only + Phase 2 allocator SQLite+terraform+SSH+queue) e expõe via Streamable HTTP + auth (padrão da plataforma)."""
+"""Servidor MCP do infra — sidecar kind=mcp_http, GATEWAY-READY (Model C).
+
+Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
+contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
+
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:infra-mcp) via
+     JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
+     inner token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3). As tools de infra não o consomem (é só p/
+     governança), então o dispatcher o remove antes de chamar a função.
+  4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: infra-mcp NÃO fala com um Trinity backend/REST — as tools operam sobre CLIs
+locais (terraform/checkov/infracost) e um allocator SQLite embarcado
+(``AllocatorStore``). O dispatcher recebe (settings, allocator) e injeta ambos nas
+tools — preservando a lógica original de src/tools/.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
-from typing import Any
+from typing import Any, cast
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
@@ -35,9 +66,15 @@ from ..utils.logger import get_logger, setup_logging
 _log = get_logger(__name__)
 
 
-# ---------------------------------------------------------------------- #
-# Schemas                                                                 #
-# ---------------------------------------------------------------------- #
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara, além de description/schema, os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties (senão a validação no front-door
+# é fail-open). Mutação → verbo :write; consulta/plan/scan → :read.
+# ─────────────────────────────────────────────────────────────────────────────
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "terraform_validate": {
         "description": (
@@ -45,6 +82,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "estruturados (erros + warnings). Read-only — não modifica state nem "
             "consulta provider remoto."
         ),
+        "capability": "infra-mcp.terraform_validate",
+        "required_scope": "infra-mcp:terraform:read",
+        "resource_type": "terraform",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -61,6 +102,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Roda `terraform fmt -check -diff` (recursivo). Não modifica arquivos. "
             "Retorna lista de arquivos não-formatados + diff."
         ),
+        "capability": "infra-mcp.terraform_fmt_check",
+        "required_scope": "infra-mcp:terraform:read",
+        "resource_type": "terraform",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -76,6 +121,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "summary (add/change/destroy) + path do .tfplan binário (input para "
             "infracost e show-plan). Pode chamar provider remoto (rate limit)."
         ),
+        "capability": "infra-mcp.terraform_plan",
+        "required_scope": "infra-mcp:terraform:read",
+        "resource_type": "terraform",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -97,6 +146,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Devolve o terraform plan em JSON estruturado para análise programática "
             "(via `terraform show -json <plan>`). Use depois de terraform_plan."
         ),
+        "capability": "infra-mcp.terraform_show_plan",
+        "required_scope": "infra-mcp:terraform:read",
+        "resource_type": "terraform",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -113,6 +166,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "findings agrupados por severity. Marca hard_stop=True se houver "
             "qualquer HIGH ou CRITICAL (cicd-deploy.md §4 #3 do ai-governance)."
         ),
+        "capability": "infra-mcp.policy_scan_checkov",
+        "required_scope": "infra-mcp:policy:read",
+        "resource_type": "policy",
+        "data_domain": "security",
         "schema": {
             "type": "object",
             "properties": {
@@ -138,6 +195,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "mensal de custo. Marca hard_stop=True se delta > threshold (default "
             "+US$ 100/mês ou +20%, conforme cicd-deploy.md §4 #4)."
         ),
+        "capability": "infra-mcp.cost_estimate_infracost",
+        "required_scope": "infra-mcp:cost:read",
+        "resource_type": "cost",
+        "data_domain": "finops",
         "schema": {
             "type": "object",
             "properties": {
@@ -160,6 +221,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Lease inicia PENDING e vai ACTIVE quando VM fica READY. "
             "Use get_lease(lease_id) para verificar connection_hint (endpoint SSH)."
         ),
+        "capability": "infra-mcp.request_vm",
+        "required_scope": "infra-mcp:lease:write",
+        "resource_type": "lease",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -180,6 +245,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "get_lease": {
         "description": "Estado atual de um lease (PENDING/ACTIVE/RELEASED/EXPIRED) + connection_hint.",
+        "capability": "infra-mcp.get_lease",
+        "required_scope": "infra-mcp:lease:read",
+        "resource_type": "lease",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {"lease_id": {"type": "string"}},
@@ -192,6 +261,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Libera um lease. Idempotente — segundo release no mesmo lease é no-op. "
             "Quando última lease de uma VM é liberada, VM é terminada (Phase 2a)."
         ),
+        "capability": "infra-mcp.release_lease",
+        "required_scope": "infra-mcp:lease:write",
+        "resource_type": "lease",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -207,6 +280,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Estende a validade de um lease ativo. Cap absoluto: 24h totais e "
             "no máximo 3 extensões por lease."
         ),
+        "capability": "infra-mcp.extend_lease",
+        "required_scope": "infra-mcp:lease:write",
+        "resource_type": "lease",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -219,6 +296,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_my_leases": {
         "description": "Lista leases do owner (filtro opcional por status).",
+        "capability": "infra-mcp.list_my_leases",
+        "required_scope": "infra-mcp:lease:read",
+        "resource_type": "lease",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -237,6 +318,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Snapshot do pool: VMs ativas + active_lease_count + custo/hora total. "
             "Visibilidade administrativa."
         ),
+        "capability": "infra-mcp.list_pool",
+        "required_scope": "infra-mcp:pool:read",
+        "resource_type": "pool",
+        "data_domain": "infrastructure",
         "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "query_capacity": {
@@ -245,6 +330,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "hard stops?' Retorna can_satisfy_now + by_existing_vm/would_provision "
             "+ blocked_by quando recusado."
         ),
+        "capability": "infra-mcp.query_capacity",
+        "required_scope": "infra-mcp:capacity:read",
+        "resource_type": "capacity",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -266,6 +355,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "A chave é deletada quando o lease é liberado — salve localmente antes do release. "
             "Uso: salvar em arquivo com chmod 600 e usar com ssh -i key.pem ubuntu@<host>."
         ),
+        "capability": "infra-mcp.get_lease_ssh_key",
+        "required_scope": "infra-mcp:secret:write",
+        "resource_type": "secret",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -287,6 +380,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "request_id foi retornado por request_vm quando outcome=QUEUED. "
             "Retorna erro se request_id não existe ou já foi FULFILLED/CANCELLED."
         ),
+        "capability": "infra-mcp.cancel_queued_request",
+        "required_scope": "infra-mcp:queue:write",
+        "resource_type": "queue",
+        "data_domain": "infrastructure",
         "schema": {
             "type": "object",
             "properties": {
@@ -305,73 +402,209 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Tools encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless). infra-mcp
+# não expõe tool pública/tokenless: TODA execução exige inner token válido.
+_EXEMPT_TOOLS: frozenset[str] = frozenset()
+# Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
+# get_lease_ssh_key expõe chave privada Ed25519 — se o gateway precisar bloqueá-la,
+# adicione aqui (mantido vazio: a exposição é governada por required_scope :write).
+_EXCLUDE_TOOLS: frozenset[str] = frozenset()
 
-# ---------------------------------------------------------------------- #
-# Escopo mínimo por ferramenta (least privilege).                         #
-#   infra:read  -> plan/scan/validação/custo + leituras do allocator      #
-#   infra:write -> apply/mutação de infra + operações que mudam estado    #
-# ---------------------------------------------------------------------- #
-SCOPE_FOR_TOOL: dict[str, str] = {
-    # --- infra:read — plan/scan/validação/custo (não modificam state) --- #
-    "terraform_validate": "infra:read",  # terraform validate (read-only)
-    "terraform_fmt_check": "infra:read",  # terraform fmt -check (não escreve)
-    "terraform_plan": "infra:read",  # terraform plan (não aplica; só planeja)
-    "terraform_show_plan": "infra:read",  # terraform show -json (read-only)
-    "policy_scan_checkov": "infra:read",  # checkov (scan estático)
-    "cost_estimate_infracost": "infra:read",  # infracost (estimativa de custo)
-    # leituras do allocator (consultas, sem mutação de estado)
-    "get_lease": "infra:read",
-    "list_my_leases": "infra:read",
-    "list_pool": "infra:read",
-    "query_capacity": "infra:read",  # planejamento sem efeito
-    # --- infra:write — APPLY/mutação de infra + allocator que muda estado --- #
-    "request_vm": "infra:write",  # SENSÍVEL: provisiona VM real (terraform apply) / cria lease
-    "release_lease": "infra:write",  # SENSÍVEL: libera lease e pode terminar VM (terraform destroy)
-    "extend_lease": "infra:write",  # muda estado do lease (prorroga validade)
-    "cancel_queued_request": "infra:write",  # muda estado da fila de provisão
-    "get_lease_ssh_key": "infra:write",  # SENSÍVEL: expõe chave privada Ed25519 da VM
-}
-SCOPES_SUPPORTED = ["infra:read", "infra:write"]
-
-# Garante cobertura: todo tool declarado tem escopo mínimo mapeado.
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
-    "SCOPE_FOR_TOOL não cobre exatamente as tools de _TOOL_SCHEMAS"
-)
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-# ---------------------------------------------------------------------- #
-# Server                                                                  #
-# ---------------------------------------------------------------------- #
-def _build_http_app() -> FastAPI:
-    app = FastAPI(title="Infra API", version="0.1.0", docs_url="/docs")
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
+
+
+def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:infra-mcp).
+
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:infra-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
+    )
+
+
+# ── Dispatcher (backend-backed: settings + allocator injetados nas tools) ─────
+
+
+def _dispatch(
+    name: str,
+    args: dict[str, Any],
+    settings: Settings,
+    allocator: AllocatorStore,
+) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool, preservando as assinaturas
+    originais ``tool(settings, ...)`` (terraform/checkov/infracost) e
+    ``tool(allocator, ...)`` (allocator).
+
+    ``tenant_id`` é injetado pelo PEP nos args (INV-3) apenas para governança; as
+    tools de infra não o consomem, então é removido antes da chamada.
+    """
+    a = {k: v for k, v in args.items() if k != "tenant_id"}
+    if name == "terraform_validate":
+        return terraform_validate(settings, path=a.get("path"))
+    if name == "terraform_fmt_check":
+        return terraform_fmt_check(settings, path=a.get("path"), recursive=a.get("recursive", True))
+    if name == "terraform_plan":
+        return terraform_plan(
+            settings,
+            path=a.get("path"),
+            out_file=a.get("out_file"),
+            var_file=a.get("var_file"),
+        )
+    if name == "terraform_show_plan":
+        return terraform_show_plan(settings, plan_path=cast(str, a.get("plan_path")), path=a.get("path"))
+    if name == "policy_scan_checkov":
+        return policy_scan_checkov(
+            settings,
+            path=cast(str, a.get("path")),
+            framework=a.get("framework", "terraform"),
+            skip_checks=a.get("skip_checks"),
+        )
+    if name == "cost_estimate_infracost":
+        return cost_estimate_infracost(
+            settings,
+            plan_path=cast(str, a.get("plan_path")),
+            delta_usd_threshold=a.get("delta_usd_threshold"),
+            delta_pct_threshold=a.get("delta_pct_threshold"),
+        )
+    # ---- Phase 2a — VM allocator ----
+    if name == "request_vm":
+        return request_vm(
+            allocator,
+            spec=cast(str, a.get("spec")),
+            duration_min=cast(int, a.get("duration_min")),
+            owner=cast(str, a.get("owner")),
+            exclusive=a.get("exclusive", False),
+            priority=a.get("priority", "low"),
+            purpose=a.get("purpose"),
+            human_approved=a.get("human_approved", False),
+        )
+    if name == "get_lease":
+        return get_lease(allocator, lease_id=cast(str, a.get("lease_id")))
+    if name == "release_lease":
+        return release_lease(allocator, lease_id=cast(str, a.get("lease_id")), by=a.get("by"))
+    if name == "extend_lease":
+        return extend_lease(
+            allocator,
+            lease_id=cast(str, a.get("lease_id")),
+            additional_min=cast(int, a.get("additional_min")),
+        )
+    if name == "list_my_leases":
+        return list_my_leases(allocator, owner=cast(str, a.get("owner")), status=a.get("status"))
+    if name == "list_pool":
+        return list_pool(allocator)
+    if name == "query_capacity":
+        return query_capacity(allocator, spec=cast(str, a.get("spec")), owner=a.get("owner"))
+    if name == "get_lease_ssh_key":
+        return get_lease_ssh_key(
+            allocator, lease_id=cast(str, a.get("lease_id")), owner=cast(str, a.get("owner"))
+        )
+    # ---- Phase 2h — priority queue ----
+    if name == "cancel_queued_request":
+        return cancel_queued_request(allocator, request_id=cast(str, a.get("request_id")), by=a.get("by"))
+    raise KeyError(name)
+
+
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
+
+def _build_http_app(settings: Settings, allocator: AllocatorStore) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="infra-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
+    )
 
     @app.get("/v1/health")
-    def health() -> dict:
-        return {"status": "ok", "service": "infra-mcp"}
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "infra-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+                _log.warning("inner_token_rejected", extra={"extras": {"tool": name, "detail": str(exc)}})
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments, settings, allocator)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
     return app
 
 
-def build_server() -> tuple[Any, ...]:
-    settings = get_settings()
-    http_app = _build_http_app()
-    setup_logging(level=settings.log_level, fmt=settings.log_format)
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
-    # Phase 2c: provisioner real (terraform) se INFRA_TF_MODULES_ROOT estiver configurado.
-    # Phase 2f: backend remoto via INFRA_TF_BACKEND_TYPE + INFRA_TF_BACKEND_CONFIG_JSON.
+
+def _build_allocator(settings: Settings) -> AllocatorStore:
+    """Constrói o AllocatorStore (SQLite) + provisioner (terraform real ou mock)."""
     if settings.tf_modules_root is not None:
         backend_config: dict[str, str] = {}
         if settings.tf_backend_config_json:
-            import json as _json  # noqa: PLC0415
-
             try:
-                backend_config = _json.loads(settings.tf_backend_config_json)
+                backend_config = json.loads(settings.tf_backend_config_json)
             except Exception:  # noqa: BLE001
                 _log.warning(
                     "backend_config_json_parse_error",
                     extra={"extras": {"raw": settings.tf_backend_config_json[:200]}},
                 )
-        provisioner = TerraformProvisioner(
+        provisioner: Any = TerraformProvisioner(
             terraform_bin=settings.terraform_bin,
             backend_type=settings.tf_backend_type,
             backend_config=backend_config,
@@ -392,8 +625,6 @@ def build_server() -> tuple[Any, ...]:
         provisioner = ImmediateProvisioner()
         _log.info("provisioner_immediate", extra={"extras": {}})
 
-    # AllocatorStore SQLite-backed (db_path configurável via INFRA_DB_PATH).
-    # Phase 2f: lease_secret para cifrar chaves SSH por VM.
     allocator = AllocatorStore(
         db_path=settings.db_path,
         policy=AllocatorPolicy(),
@@ -407,16 +638,21 @@ def build_server() -> tuple[Any, ...]:
         extra={
             "extras": {
                 "db_path": settings.db_path,
-                "tf_modules_root": str(settings.tf_modules_root)
-                if settings.tf_modules_root
-                else None,
                 "provisioner": type(provisioner).__name__,
                 "max_cost_usd_per_hour": allocator.policy.max_cost_usd_per_hour,
-                "max_active_leases_per_owner": allocator.policy.max_active_leases_per_owner,
-                "max_lease_duration_min": allocator.policy.max_lease_duration_min,
             }
         },
     )
+    return allocator
+
+
+def build_server() -> tuple[Any, Settings, AllocatorStore, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings, o allocator e o sidecar HTTP."""
+    settings = get_settings()
+    setup_logging(level=settings.log_level, fmt=settings.log_format)
+    allocator = _build_allocator(settings)
+    http_app = _build_http_app(settings, allocator)
+    _log.info("infra_mcp_ready", extra={"extras": {"tools": len(_TOOL_SCHEMAS)}})
 
     server: Server = Server("infra-mcp-server")
 
@@ -430,144 +666,53 @@ def build_server() -> tuple[Any, ...]:
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
         args = arguments or {}
-        _log.info(
-            "tool_called",
-            extra={"extras": {"tool": name, "args_keys": sorted(args.keys())}},
-        )
         try:
             payload = _dispatch(name, args, settings, allocator)
         except KeyError:
             payload = {"error": "unknown_tool", "tool": name}
-            _log.error("unknown_tool", extra={"extras": {"tool": name}})
-        except Exception as e:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(e), "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
             _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
-
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
-
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
 
     return server, settings, allocator, http_app
 
 
-def _dispatch(
-    name: str,
-    args: dict[str, Any],
-    settings: Settings,
-    allocator: AllocatorStore,
-) -> dict:
-    if name == "terraform_validate":
-        return terraform_validate(settings, path=args.get("path"))
-    if name == "terraform_fmt_check":
-        return terraform_fmt_check(
-            settings, path=args.get("path"), recursive=args.get("recursive", True)
-        )
-    if name == "terraform_plan":
-        return terraform_plan(
-            settings,
-            path=args.get("path"),
-            out_file=args.get("out_file"),
-            var_file=args.get("var_file"),
-        )
-    if name == "terraform_show_plan":
-        return terraform_show_plan(settings, plan_path=args.get("plan_path"), path=args.get("path"))
-    if name == "policy_scan_checkov":
-        return policy_scan_checkov(
-            settings,
-            path=args.get("path"),
-            framework=args.get("framework", "terraform"),
-            skip_checks=args.get("skip_checks"),
-        )
-    if name == "cost_estimate_infracost":
-        return cost_estimate_infracost(
-            settings,
-            plan_path=args.get("plan_path"),
-            delta_usd_threshold=args.get("delta_usd_threshold"),
-            delta_pct_threshold=args.get("delta_pct_threshold"),
-        )
-    # ---- Phase 2a — VM allocator ----
-    if name == "request_vm":
-        return request_vm(
-            allocator,
-            spec=args.get("spec"),
-            duration_min=args.get("duration_min"),
-            owner=args.get("owner"),
-            exclusive=args.get("exclusive", False),
-            priority=args.get("priority", "low"),
-            purpose=args.get("purpose"),
-            human_approved=args.get("human_approved", False),
-        )
-    if name == "get_lease":
-        return get_lease(allocator, lease_id=args.get("lease_id"))
-    if name == "release_lease":
-        return release_lease(allocator, lease_id=args.get("lease_id"), by=args.get("by"))
-    if name == "extend_lease":
-        return extend_lease(
-            allocator,
-            lease_id=args.get("lease_id"),
-            additional_min=args.get("additional_min"),
-        )
-    if name == "list_my_leases":
-        return list_my_leases(allocator, owner=args.get("owner"), status=args.get("status"))
-    if name == "list_pool":
-        return list_pool(allocator)
-    if name == "query_capacity":
-        return query_capacity(allocator, spec=args.get("spec"), owner=args.get("owner"))
-    if name == "get_lease_ssh_key":
-        return get_lease_ssh_key(
-            allocator,
-            lease_id=args.get("lease_id"),
-            owner=args.get("owner"),
-        )
-    # ---- Phase 2h — priority queue ----
-    if name == "cancel_queued_request":
-        return cancel_queued_request(
-            allocator,
-            request_id=args.get("request_id"),
-            by=args.get("by"),
-        )
-    raise KeyError(name)
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
 
-    Preserva build_server() (Server de baixo nível + dispatch com allocator/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware com
-    escopo por ferramenta (least privilege).
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
-
-    server, _settings, _allocator, _http = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("INFRA_RESOURCE", "http://localhost:7106/mcp"),
-        prm_url=os.getenv(
-            "INFRA_PRM_URL",
-            "http://localhost:7106/.well-known/oauth-protected-resource",
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+    server, settings, _allocator, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
     )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7106")))
+        _server, settings, _allocator, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

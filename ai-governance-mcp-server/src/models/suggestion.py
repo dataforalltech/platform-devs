@@ -62,9 +62,7 @@ class Suggestion(BaseModel):
         default=None,
         description="Repositório onde o agente estava trabalhando quando teve a percepção.",
     )
-    target_repo: str = Field(
-        description="Repositório destinatário da sugestão (id canônico do grafo)."
-    )
+    target_repo: str = Field(description="Repositório destinatário da sugestão (id canônico do grafo).")
     target_repo_canonical: str | None = Field(
         default=None,
         description="Se o target_repo informado era alias/deprecated, este é o canônico resolvido.",

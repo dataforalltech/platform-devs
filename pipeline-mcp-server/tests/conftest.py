@@ -63,9 +63,7 @@ class FakePipelineStore:
             }
             action = "created"
         else:
-            self.pipelines[service].update(
-                {"repo": repo, "base_branch": base_branch, "updated_at": now}
-            )
+            self.pipelines[service].update({"repo": repo, "base_branch": base_branch, "updated_at": now})
             action = "updated"
         return {"action": action, "pipeline": dict(self.pipelines[service])}
 
@@ -74,9 +72,7 @@ class FakePipelineStore:
         if p is None:
             return None
         result = dict(p)
-        result["recent_promotions"] = [
-            dict(pr) for pr in self.promotions if pr["service"] == service
-        ][-10:]
+        result["recent_promotions"] = [dict(pr) for pr in self.promotions if pr["service"] == service][-10:]
         return result
 
     def list_pipelines(self, env: str | None = None, status: str | None = None) -> list[dict]:
