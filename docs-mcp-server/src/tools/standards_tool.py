@@ -71,9 +71,7 @@ def check_doc_standards(
                 }
             )
         recommendations.append(f"Adicionar arquivos obrigatórios: {', '.join(missing)}")
-        completeness_detail = (
-            f"{len(present)}/{len(present) + len(missing)} docs obrigatórios presentes"
-        )
+        completeness_detail = f"{len(present)}/{len(present) + len(missing)} docs obrigatórios presentes"
     else:
         completeness_detail = f"{len(present)}/{len(present)} docs obrigatórios presentes"
 
@@ -117,9 +115,7 @@ def check_doc_standards(
             validity_details.append(f"{fname} OK")
 
     validity_score = int(sum(validity_scores) / len(validity_scores)) if validity_scores else 100
-    validity_detail = (
-        "; ".join(validity_details[:5]) if validity_details else "Nenhum doc encontrado"
-    )
+    validity_detail = "; ".join(validity_details[:5]) if validity_details else "Nenhum doc encontrado"
 
     if validity_score < 80:
         recommendations.append("Corrigir estrutura dos documentos — seções obrigatórias ausentes")
@@ -170,9 +166,7 @@ def check_doc_standards(
     for doc_name in ["README.md", "CHANGELOG.md"]:
         doc_path = root / doc_name
         if doc_path.exists():
-            link_result = check_links(
-                store, settings, file_path=str(doc_path), check_external=False
-            )
+            link_result = check_links(store, settings, file_path=str(doc_path), check_external=False)
             if "error" not in link_result and link_result.get("broken", 0) > 0:
                 all_issues.append(
                     {
@@ -182,9 +176,7 @@ def check_doc_standards(
                         "message": f"{link_result['broken']} link(s) quebrado(s)",
                     }
                 )
-                recommendations.append(
-                    f"Corrigir {link_result['broken']} link(s) quebrado(s) em {doc_name}"
-                )
+                recommendations.append(f"Corrigir {link_result['broken']} link(s) quebrado(s) em {doc_name}")
 
     # Compute overall score
     overall_score = int(completeness_score * 0.30 + validity_score * 0.40 + quality_score * 0.30)

@@ -3,9 +3,7 @@
 from typing import Any
 
 
-def generate_feature_spec(
-    feature: str = "Feature", objective: str = ""
-) -> dict[str, Any]:
+def generate_feature_spec(feature: str = "Feature", objective: str = "") -> dict[str, Any]:
     """Generate comprehensive feature specification."""
     return {
         "title": f"Feature Spec: {feature}",

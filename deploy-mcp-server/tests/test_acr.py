@@ -182,9 +182,7 @@ class TestAcrBuild:
 
         monkeypatch.setattr(subprocess, "run", fake_run)
 
-        result = acr_build(
-            acr_settings, repo_path="/tmp/repo", image_name="img", tag="v1", push=False
-        )
+        result = acr_build(acr_settings, repo_path="/tmp/repo", image_name="img", tag="v1", push=False)
 
         assert result["pushed"] is False
         assert "push" not in [c[1] for c in calls]

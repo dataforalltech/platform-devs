@@ -308,9 +308,7 @@ class TestTerraformProvisionerMocked:
         output_json = '{"vm_ssh_endpoint": {"value": "10.0.0.1:22"}}'
 
         with patch("subprocess.run") as mock_run:
-            mock_run.side_effect = lambda cmd, **kw: (
-                self._ok(output_json) if "output" in cmd else self._ok()
-            )
+            mock_run.side_effect = lambda cmd, **kw: self._ok(output_json) if "output" in cmd else self._ok()
 
             prov.provision(
                 spec="cpu-small",
@@ -744,9 +742,7 @@ class TestAllocatorDestroyIntegration:
 
         # Faz o lease expirar no passado
         past = _dt_to_str(now_utc() - timedelta(hours=2))
-        store._con.execute(
-            "UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id)
-        )
+        store._con.execute("UPDATE leases SET expires_at=? WHERE lease_id=?", (past, d.lease.lease_id))
 
         # Qualquer operação dispara _gc_expired
         store.get_lease(d.lease.lease_id)

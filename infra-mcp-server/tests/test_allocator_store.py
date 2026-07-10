@@ -107,9 +107,7 @@ def test_high_mem_denied_without_human_approval():
 
 
 def test_concurrent_lease_cap_per_owner():
-    store = AllocatorStore(
-        policy=AllocatorPolicy(max_active_leases_per_owner=2, max_cost_usd_per_hour=100.0)
-    )
+    store = AllocatorStore(policy=AllocatorPolicy(max_active_leases_per_owner=2, max_cost_usd_per_hour=100.0))
     store.request_vm(_req(owner="a", exclusive=True))  # vm 1
     store.request_vm(_req(owner="a", exclusive=True))  # vm 2
     d3 = store.request_vm(_req(owner="a", exclusive=True))
@@ -177,9 +175,7 @@ def test_extend_lease_bumps_expiry():
 
 
 def test_extend_caps_at_max_extensions():
-    store = AllocatorStore(
-        policy=AllocatorPolicy(max_extensions_per_lease=2, max_lease_duration_min=24 * 60)
-    )
+    store = AllocatorStore(policy=AllocatorPolicy(max_extensions_per_lease=2, max_lease_duration_min=24 * 60))
     d = store.request_vm(_req(duration_min=10))
     lease_id = d.lease.lease_id
     store.extend_lease(lease_id, 5)
@@ -274,9 +270,7 @@ def test_capacity_blocked_by_approval():
 
 
 def test_capacity_blocked_by_owner_concurrent_cap():
-    store = AllocatorStore(
-        policy=AllocatorPolicy(max_active_leases_per_owner=1, max_cost_usd_per_hour=100.0)
-    )
+    store = AllocatorStore(policy=AllocatorPolicy(max_active_leases_per_owner=1, max_cost_usd_per_hour=100.0))
     store.request_vm(_req(owner="a", exclusive=True))
     cap = store.query_capacity("cpu-small", owner="a")
     assert cap.can_satisfy_now is False

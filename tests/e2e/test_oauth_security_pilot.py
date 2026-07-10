@@ -3,7 +3,6 @@
 Roda in-process com TestClient. Ordem de import evita os shadows de mcp/ e src/ da raiz:
 importa o SDK real 'mcp' ANTES de qualquer sys.path que aponte para a raiz do repo.
 """
-import asyncio
 import importlib.util
 import json
 import os
@@ -38,7 +37,10 @@ AS = importlib.util.module_from_spec(spec_as); spec_as.loader.exec_module(AS)
 
 from starlette.testclient import TestClient  # noqa: E402
 
-RESOURCE = sec.RESOURCE  # audience que o Security exige
+# Audience/resource do Authorization Server (RFC 8707). O Security migrou p/ Model-C
+# (inner Twin Token, aud=mcp:security-mcp) e NÃO é mais um OAuth Resource Server, então
+# o RESOURCE do AS é independente do sidecar — é só o identificador que o cliente pede.
+RESOURCE = os.getenv("AS_RESOURCE", "https://security-mcp.dataforall.tech/mcp")
 
 print("\n[A] Authorization Server emite token (client_credentials)")
 as_client = TestClient(AS.app)
@@ -83,57 +85,50 @@ try:
 except mcp_auth.AuthError as e:
     check("rejeita audience errado (invalid_token)", e.error == "invalid_token")
 
-print("\n[D] Security Streamable HTTP + middleware de auth")
-app = sec.build_app(validators=[validator.validate])
+print("\n[D] Security sidecar Model-C (mcp_http) — health + tools/list público + PEP inner-token")
+# O Security agora é um sidecar Model-C: /v1/health e /mcp/tools/list são públicos
+# (o gateway lê a lista p/ agregar), e /mcp/tools/call exige inner Twin Token (SEC-006).
+sec_settings = sec.get_settings()
+sec_app = sec._build_http_app(sec_settings)
 
-hdr_mcp = {"Accept": "application/json, text/event-stream", "Content-Type": "application/json"}
-init_body = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
-             "params": {"protocolVersion": "2025-06-18", "capabilities": {},
-                        "clientInfo": {"name": "e2e", "version": "1"}}}
-call_scan = {"jsonrpc": "2.0", "id": 2, "method": "tools/call",
-             "params": {"name": "review_secure_code", "arguments": {"code": "x=1", "language": "python"}}}
-
-# context manager dispara o lifespan (inicializa o task group do session manager)
-with TestClient(app) as sc:
+with TestClient(sec_app) as sc:
     # health público sem token
     check("health público 200", sc.get("/v1/health").status_code == 200)
-    # PRM público
-    prm = sc.get("/.well-known/oauth-protected-resource")
-    check("PRM 200 + aponta AS", prm.status_code == 200 and AS.ISSUER in prm.json().get("authorization_servers", []))
 
-    # sem token → 401 + WWW-Authenticate
-    r401 = sc.post("/mcp", headers=hdr_mcp, json=init_body)
-    check("sem token → 401", r401.status_code == 401)
-    check("401 traz resource_metadata", "resource_metadata" in r401.headers.get("WWW-Authenticate", ""))
+    # tools/list público + carrega os campos de policy por tool (STD-MCP-001)
+    lst = sc.get("/mcp/tools/list")
+    check("tools/list 200", lst.status_code == 200)
+    listed = lst.json().get("result", {}).get("tools", [])
+    listed_names = {t["name"] for t in listed}
+    check("inclui review_secure_code e calculate_cvss",
+          {"review_secure_code", "calculate_cvss"} <= listed_names)
+    check("tools carregam required_scope + capability",
+          bool(listed) and all("required_scope" in t and "capability" in t for t in listed))
 
-    # initialize com token válido → não-401
-    r_init = sc.post("/mcp", headers={**hdr_mcp, "Authorization": f"Bearer {scan_token}"}, json=init_body)
-    check("initialize com token → não 401/403", r_init.status_code not in (401, 403))
+    # tools/call sem inner token → 401 missing_twin_token (fail-closed)
+    r401 = sc.post("/mcp/tools/call", json={
+        "params": {"name": "review_secure_code",
+                   "arguments": {"code": "x=1", "language": "python"}}})
+    check("call sem twin_token → 401", r401.status_code == 401)
+    check("401 = missing_twin_token", r401.json().get("error") == "missing_twin_token")
 
-    # tools/call de scan com token só-leitura → 403 insufficient_scope
-    r403 = sc.post("/mcp", headers={**hdr_mcp, "Authorization": f"Bearer {read_token}"}, json=call_scan)
-    check("scan com scope read → 403", r403.status_code == 403)
-    check("403 = insufficient_scope", "insufficient_scope" in r403.text)
+    # inner token inválido (não verifica na JWKS do admin) → 401 invalid_twin_token
+    r_bad = sc.post("/mcp/tools/call", json={
+        "params": {"name": "review_secure_code",
+                   "arguments": {"code": "x=1", "language": "python"},
+                   "_meta": {"twin_token": "not-a-jwt"}}})
+    check("call com token inválido → 401", r_bad.status_code == 401)
+    check("401 = invalid_twin_token", r_bad.json().get("error") == "invalid_twin_token")
 
-    # tools/call de scan com token de scan → middleware libera (não 401/403)
-    r_ok = sc.post("/mcp", headers={**hdr_mcp, "Authorization": f"Bearer {scan_token}"}, json=call_scan)
-    check("scan com scope scan → liberado (não 401/403)", r_ok.status_code not in (401, 403))
-
-print("\n[E] Ferramentas registradas + execução real via FastMCP")
-mcp = sec.build_mcp()
-
-async def _exercise():
-    tools = await mcp.list_tools()
-    # executa uma ferramenta de verdade pela camada MCP
-    result = await mcp.call_tool("calculate_cvss",
-                                 {"vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"})
-    return tools, result
-
-tools, call_result = asyncio.run(_exercise())
-check("12 ferramentas registradas", len(tools) == 12)
-names = {t.name for t in tools}
+print("\n[E] Ferramentas registradas + execução real via camada de dispatch (Model-C)")
+schemas = sec._TOOL_SCHEMAS
+check("12 ferramentas registradas", len(schemas) == 12)
+names = set(schemas)
 check("inclui review_secure_code e calculate_cvss", {"review_secure_code", "calculate_cvss"} <= names)
-# call_tool devolve (content, structured) ou content; procura o 9.8 no payload serializado
+# executa uma tool de verdade pela camada de dispatch do sidecar
+call_result = sec._dispatch(
+    "calculate_cvss", {"vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H"}
+)
 payload = json.dumps(call_result, default=lambda o: getattr(o, "__dict__", str(o)))
 check("execução real da tool retorna CVSS 9.8", "9.8" in payload)
 

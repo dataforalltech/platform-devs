@@ -200,9 +200,9 @@ class SuggestionStore:
             extra={
                 "extras": {
                     "id": suggestion_id,
-                    "from": suggestion.status_history[-2].status
-                    if len(suggestion.status_history) >= 2
-                    else None,
+                    "from": (
+                        suggestion.status_history[-2].status if len(suggestion.status_history) >= 2 else None
+                    ),
                     "to": new_status,
                     "by": by,
                 }
@@ -223,9 +223,7 @@ class SuggestionStore:
                 continue
             total += 1
             by_status[data.get("status", "?")] = by_status.get(data.get("status", "?"), 0) + 1
-            by_severity[data.get("severity", "?")] = (
-                by_severity.get(data.get("severity", "?"), 0) + 1
-            )
+            by_severity[data.get("severity", "?")] = by_severity.get(data.get("severity", "?"), 0) + 1
             target = data.get("target_repo_canonical") or data.get("target_repo", "?")
             by_target[target] = by_target.get(target, 0) + 1
         return {

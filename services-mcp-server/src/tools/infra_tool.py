@@ -246,11 +246,7 @@ def register_infra(
         "metadata": {
             "protocol": defaults["protocol"],
             "default_port": defaults["port"],
-            **(
-                {"host_port": host_port or defaults.get("host_port")}
-                if kind_lower == "kafka"
-                else {}
-            ),
+            **({"host_port": host_port or defaults.get("host_port")} if kind_lower == "kafka" else {}),
             **(metadata or {}),
         },
     }
@@ -523,23 +519,27 @@ def sync_infra_env(
         _write_env_lines(env_path, new_lines)
 
     found_in_registry = {
-        "db": {"name": db_svc["name"], "host": db_svc["host"], "port": db_svc.get("port")}
-        if db_svc
-        else None,
-        "redis": {
-            "name": redis_svc["name"],
-            "host": redis_svc["host"],
-            "port": redis_svc.get("port"),
-        }
-        if redis_svc
-        else None,
-        "kafka": {
-            "name": kafka_svc["name"],
-            "host": kafka_svc["host"],
-            "port": kafka_svc.get("port"),
-        }
-        if kafka_svc
-        else None,
+        "db": (
+            {"name": db_svc["name"], "host": db_svc["host"], "port": db_svc.get("port")} if db_svc else None
+        ),
+        "redis": (
+            {
+                "name": redis_svc["name"],
+                "host": redis_svc["host"],
+                "port": redis_svc.get("port"),
+            }
+            if redis_svc
+            else None
+        ),
+        "kafka": (
+            {
+                "name": kafka_svc["name"],
+                "host": kafka_svc["host"],
+                "port": kafka_svc.get("port"),
+            }
+            if kafka_svc
+            else None
+        ),
     }
 
     return {

@@ -74,9 +74,7 @@ class TestCreateBranch:
 
         result = create_branch(client, "my-repo", "feature/test-123", "develop")
 
-        mock_repo.create_git_ref.assert_called_once_with(
-            ref="refs/heads/feature/test-123", sha="deadbeef"
-        )
+        mock_repo.create_git_ref.assert_called_once_with(ref="refs/heads/feature/test-123", sha="deadbeef")
         assert result["branch"] == "feature/test-123"
         assert result["sha"] == "deadbeef"
 

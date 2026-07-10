@@ -1,4 +1,8 @@
-"""Fixtures compartilhadas: usa a knowledge-base real do repositório.
+"""Fixtures compartilhadas + shim de sys.path.
+
+Garante que a raiz do ai-governance-mcp-server esteja no sys.path (permite
+`from src...` mesmo quando o pytest é invocado de outro cwd, sem depender de
+`pip install -e .`).
 
 A base de conhecimento faz parte do produto — testar contra ela garante que
 qualquer drift entre código e knowledge-base seja detectado.
@@ -6,13 +10,18 @@ qualquer drift entre código e knowledge-base seja detectado.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
-from src.knowledge.governance_repository import GovernanceRepository
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+from src.knowledge.governance_repository import GovernanceRepository  # noqa: E402
+
+PROJECT_ROOT = _ROOT
 KB_PATH = PROJECT_ROOT / "knowledge-base"
 
 

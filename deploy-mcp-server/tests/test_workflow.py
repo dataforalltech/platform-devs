@@ -61,9 +61,7 @@ class TestTriggerWorkflow:
         mock_github.get_repo.return_value = mock_repo
         mock_repo.get_workflow.side_effect = UnknownObjectException(404, "Not Found")
 
-        result = trigger_workflow(
-            client, repo="my-repo", workflow_id="nonexistent.yml", ref="develop"
-        )
+        result = trigger_workflow(client, repo="my-repo", workflow_id="nonexistent.yml", ref="develop")
 
         assert "error" in result
         assert "não encontrado" in result["details"]

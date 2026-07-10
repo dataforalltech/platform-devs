@@ -6,9 +6,6 @@ stories e reflexo dos inputs nos artefatos (nenhuma saída constante).
 
 from __future__ import annotations
 
-import asyncio
-
-
 from src.tools.product_owner_tools import (
     analyze_product_problem,
     calculate_rice_score,
@@ -44,9 +41,7 @@ class TestRiceScore:
         assert r["breakdown"]["confidence"] == 0.8
 
     def test_reflects_feature_name(self):
-        r = calculate_rice_score(
-            reach=10, impact=1, confidence=1, effort=1, feature="Checkout"
-        )
+        r = calculate_rice_score(reach=10, impact=1, confidence=1, effort=1, feature="Checkout")
         assert r["feature"] == "Checkout"
         assert r["score"] == 10.0
 
@@ -115,9 +110,7 @@ class TestUserStories:
             benefit="eu acesse sem criar senha",
         )
         s = r["user_stories"][0]
-        assert s["story"] == (
-            "As a visitante, I want entrar com Google, so that eu acesse sem criar senha."
-        )
+        assert s["story"] == ("As a visitante, I want entrar com Google, so that eu acesse sem criar senha.")
         assert s["acceptance_criteria"]
         assert r["feature"] == "Login social"
 
@@ -132,9 +125,7 @@ class TestUserStories:
     def test_defaults_when_minimal(self):
         r = generate_user_stories(feature="Busca")
         assert r["count"] == 1
-        assert r["user_stories"][0]["story"].startswith(
-            "As a usuário, I want usar Busca"
-        )
+        assert r["user_stories"][0]["story"].startswith("As a usuário, I want usar Busca")
 
 
 class TestMvpScope:
@@ -177,9 +168,7 @@ class TestInputReflection:
         assert r["north_star_metric"] == "aumentar retenção"
 
     def test_vision_reflects(self):
-        r = define_product_vision(
-            product="Orbit", target_audience="devs", problem="deploys frágeis"
-        )
+        r = define_product_vision(product="Orbit", target_audience="devs", problem="deploys frágeis")
         assert "Orbit" in r["vision"]
         assert "devs" in r["vision"]
         assert "deploys frágeis" in r["vision"]
@@ -192,16 +181,12 @@ class TestInputReflection:
         assert any("motivo do abandono" in q for q in r["research_questions"])
 
     def test_feature_spec_derives_acceptance(self):
-        r = generate_feature_spec(
-            feature="Export CSV", requirements=["exportar filtrado"]
-        )
+        r = generate_feature_spec(feature="Export CSV", requirements=["exportar filtrado"])
         assert r["feature"] == "Export CSV"
         assert any("exportar filtrado" in a for a in r["acceptance_criteria"])
 
     def test_gtm_reflects(self):
-        r = generate_go_to_market_brief(
-            product="P", target_segment="PME", value_proposition="mais rápido"
-        )
+        r = generate_go_to_market_brief(product="P", target_segment="PME", value_proposition="mais rápido")
         assert r["target_segment"] == "PME"
         assert "mais rápido" in r["value_proposition"]
 
@@ -213,9 +198,7 @@ class TestInputReflection:
         assert r["scale_expectations"] == "10k rps"
 
     def test_handoff_design_reflects(self):
-        r = generate_handoff_to_design(
-            feature="Onboarding", key_screens=["welcome", "profile"]
-        )
+        r = generate_handoff_to_design(feature="Onboarding", key_screens=["welcome", "profile"])
         assert r["key_screens"] == ["welcome", "profile"]
 
     def test_handoff_engineering_normalizes_stories(self):
@@ -285,24 +268,6 @@ class TestInputReflection:
         assert r["personas"][0]["goals"] == ["shipar rápido"]
 
 
-class TestFastMcpSchemas:
-    """As ferramentas devem registrar schemas de input derivados das assinaturas."""
-
-    def test_schemas_reflect_params(self):
-        from src.server.mcp_server import build_mcp
-
-        mcp = build_mcp()
-        tools = asyncio.run(mcp.list_tools())
-        by_name = {t.name: t for t in tools}
-
-        assert len(by_name) == 17  # todas as 17 ferramentas registradas
-
-        rice = by_name["calculate_rice_score"].inputSchema
-        assert set(["reach", "impact", "confidence", "effort"]).issubset(
-            rice["properties"].keys()
-        )
-        assert set(rice["required"]) == {"reach", "impact", "confidence", "effort"}
-
-        stories = by_name["generate_user_stories"].inputSchema
-        assert "feature" in stories["properties"]
-        assert stories["required"] == ["feature"]
+# O contrato do servidor (schemas + campos de policy + PEP inner-token) agora é
+# validado em test_mcp_server.py (sidecar mcp_http, Model C). O contrato FastMCP
+# antigo (build_mcp/list_tools) foi aposentado.

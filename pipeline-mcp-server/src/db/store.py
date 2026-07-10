@@ -64,7 +64,8 @@ class PipelineStore:
     def _migrate(self) -> None:
         with self._get_conn() as conn:
             with conn.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS pipelines (
                         service         TEXT PRIMARY KEY,
                         repo            TEXT NOT NULL,
@@ -79,8 +80,10 @@ class PipelineStore:
                         registered_at   TEXT NOT NULL,
                         updated_at      TEXT NOT NULL
                     );
-                """)
-                cur.execute("""
+                """
+                )
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS promotions (
                         id             SERIAL PRIMARY KEY,
                         service        TEXT NOT NULL,
@@ -98,8 +101,10 @@ class PipelineStore:
                         created_at     TEXT NOT NULL,
                         completed_at   TEXT
                     );
-                """)
-                cur.execute("""
+                """
+                )
+                cur.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS gates (
                         id           SERIAL PRIMARY KEY,
                         service      TEXT NOT NULL,
@@ -111,7 +116,8 @@ class PipelineStore:
                         evaluated_at TEXT NOT NULL,
                         UNIQUE(service, env, gate_type)
                     );
-                """)
+                """
+                )
 
     # ── Pipelines ──────────────────────────────────────────────────────────── #
 
@@ -190,7 +196,7 @@ class PipelineStore:
             with self._get_conn() as conn:
                 with conn.cursor() as cur:
                     cur.execute(
-                        "UPDATE pipelines SET current_env=%s, current_version=%s, updated_at=%s WHERE service=%s",
+                        "UPDATE pipelines SET current_env=%s, current_version=%s, updated_at=%s WHERE service=%s",  # noqa: E501
                         (env, version, now, service),
                     )
 
@@ -283,7 +289,7 @@ class PipelineStore:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute(
-                        "UPDATE promotions SET approved_by=%s, approved_at=%s, status='approved', completed_at=%s WHERE id=%s",
+                        "UPDATE promotions SET approved_by=%s, approved_at=%s, status='approved', completed_at=%s WHERE id=%s",  # noqa: E501
                         (approved_by, now, now, promotion_id),
                     )
                     cur.execute("SELECT * FROM promotions WHERE id=%s", (promotion_id,))
@@ -333,7 +339,8 @@ class PipelineStore:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute(
-                        """INSERT INTO gates (service, env, gate_type, passed, details, evaluated_by, evaluated_at)
+                        """INSERT INTO gates
+                               (service, env, gate_type, passed, details, evaluated_by, evaluated_at)
                            VALUES (%s,%s,%s,%s,%s,%s,%s)
                            ON CONFLICT(service, env, gate_type) DO UPDATE SET
                                passed=EXCLUDED.passed,
@@ -374,7 +381,7 @@ class PipelineStore:
             with self._get_conn() as conn:
                 with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                     cur.execute(
-                        "SELECT current_env, blocked, COUNT(*) as cnt FROM pipelines GROUP BY current_env, blocked"
+                        "SELECT current_env, blocked, COUNT(*) as cnt FROM pipelines GROUP BY current_env, blocked"  # noqa: E501
                     )
                     rows = cur.fetchall()
                     overview: dict[str, Any] = {}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from ..knowledge.governance_repository import GovernanceRepository
 from ..utils.validators import (
     coerce_string_list,
@@ -240,7 +242,7 @@ def get_layer_policy(repo: GovernanceRepository, layer: str) -> dict:
 # ----------------------------------------------------------------------- #
 # Ações proibidas                                                         #
 # ----------------------------------------------------------------------- #
-_FORBIDDEN_ACTIONS = [
+_FORBIDDEN_ACTIONS: list[dict[str, Any]] = [
     {
         "id": "silent-fallback",
         "action": "Criar fallback silencioso (try/except retornando dado fake) para 'fazer funcionar'.",

@@ -61,9 +61,7 @@ def test_run_unit_tests_missing_repo_validation(store, settings):
 def test_run_e2e_tests_playwright_python(store, settings, tmp_path):
     (tmp_path / "test_login.py").write_text("def test_login(): pass")
     with patch("subprocess.run", return_value=_make_proc("2 passed in 5s")):
-        result = run_e2e_tests(
-            store, settings, test_path=str(tmp_path), base_url="http://localhost:8000"
-        )
+        result = run_e2e_tests(store, settings, test_path=str(tmp_path), base_url="http://localhost:8000")
     assert result["browser"] == "chromium"
     assert result["passed"] == 2
     assert result["status"] == "passed"
@@ -72,9 +70,7 @@ def test_run_e2e_tests_playwright_python(store, settings, tmp_path):
 def test_run_e2e_tests_spec_ts(store, settings, tmp_path):
     (tmp_path / "login.spec.ts").write_text("test('login', () => {})")
     with patch("subprocess.run", return_value=_make_proc("3 passed", returncode=0)):
-        result = run_e2e_tests(
-            store, settings, test_path=str(tmp_path), base_url="http://localhost:3000"
-        )
+        result = run_e2e_tests(store, settings, test_path=str(tmp_path), base_url="http://localhost:3000")
     assert result["base_url"] == "http://localhost:3000"
     assert "run_id" in result
 

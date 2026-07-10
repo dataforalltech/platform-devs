@@ -1,5 +1,5 @@
 """Configuração do servidor MCP."""
 
-from .settings import Settings, get_settings
+from .settings import NAMESPACE, Settings, get_settings
 
-__all__ = ["Settings", "get_settings"]
+__all__ = ["NAMESPACE", "Settings", "get_settings"]

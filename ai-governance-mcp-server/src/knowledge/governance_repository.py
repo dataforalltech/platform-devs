@@ -196,9 +196,7 @@ class GovernanceRepository:
     @staticmethod
     def _tokenize(text: str) -> Counter[str]:
         tokens = [
-            tok.lower()
-            for tok in _TOKEN_RE.findall(text)
-            if len(tok) > 2 and tok.lower() not in _STOPWORDS
+            tok.lower() for tok in _TOKEN_RE.findall(text) if len(tok) > 2 and tok.lower() not in _STOPWORDS
         ]
         return Counter(tokens)
 
@@ -240,9 +238,7 @@ class GovernanceRepository:
             return []
 
         query_tokens = [
-            tok.lower()
-            for tok in _TOKEN_RE.findall(query)
-            if len(tok) > 2 and tok.lower() not in _STOPWORDS
+            tok.lower() for tok in _TOKEN_RE.findall(query) if len(tok) > 2 and tok.lower() not in _STOPWORDS
         ]
         if not query_tokens:
             return []

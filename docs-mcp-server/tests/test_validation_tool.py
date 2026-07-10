@@ -15,9 +15,7 @@ _README_VALID = (
     "Import and use the client.\n" * 10
 )
 
-_CHANGELOG_VALID = (
-    "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
-)
+_CHANGELOG_VALID = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
 
 
 def test_validate_readme_valid(store, settings, tmp_path):

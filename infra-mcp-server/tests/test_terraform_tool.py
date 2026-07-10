@@ -95,9 +95,7 @@ def test_plan_no_changes(monkeypatch, fake_settings):
     monkeypatch.setattr(
         terraform_tool,
         "run_command",
-        lambda *a, **kw: _mock_result(
-            stdout="No changes. Your infrastructure matches.", exit_code=0
-        ),
+        lambda *a, **kw: _mock_result(stdout="No changes. Your infrastructure matches.", exit_code=0),
     )
     res = terraform_tool.terraform_plan(fake_settings)
     assert res["has_changes"] is False
@@ -107,9 +105,7 @@ def test_plan_no_changes(monkeypatch, fake_settings):
 
 def test_plan_with_changes(monkeypatch, fake_settings):
     out = "Plan: 3 to add, 1 to change, 0 to destroy.\n"
-    monkeypatch.setattr(
-        terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=out, exit_code=2)
-    )
+    monkeypatch.setattr(terraform_tool, "run_command", lambda *a, **kw: _mock_result(stdout=out, exit_code=2))
     res = terraform_tool.terraform_plan(fake_settings)
     assert res["has_changes"] is True
     assert res["add"] == 3
@@ -130,9 +126,7 @@ def test_plan_failure(monkeypatch, fake_settings):
 
 # --------------------------- terraform_show_plan --------------------------- #
 def test_show_plan_missing_file(fake_settings, tmp_path):
-    res = terraform_tool.terraform_show_plan(
-        fake_settings, plan_path=str(tmp_path / "nonexistent.tfplan")
-    )
+    res = terraform_tool.terraform_show_plan(fake_settings, plan_path=str(tmp_path / "nonexistent.tfplan"))
     assert res["error"] == "plan_not_found"
 
 

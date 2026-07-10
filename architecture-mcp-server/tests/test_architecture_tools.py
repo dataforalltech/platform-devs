@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import re
 
-
 from src.tools.architecture_tools import (
     generate_architecture,
     generate_c4_diagram,
@@ -51,11 +50,7 @@ def test_c4_uses_custom_actors_not_fixed_list():
     container_names = {c["name"] for c in result["levels"]["container"]["containers"]}
     assert container_names == {"Payments API", "Postgres"}
     # Metadados de tecnologia preservados a partir do dict de input.
-    api = next(
-        c
-        for c in result["levels"]["container"]["containers"]
-        if c["name"] == "Payments API"
-    )
+    api = next(c for c in result["levels"]["container"]["containers"] if c["name"] == "Payments API")
     assert api["technology"] == "FastAPI"
 
 
@@ -89,9 +84,7 @@ def test_c4_empty_inputs_produce_empty_model_not_defaults():
 
 
 def test_c4_deduplicates_repeated_actors():
-    result = generate_c4_diagram(
-        system_name="S", actors=["User", "User", {"name": "User"}]
-    )
+    result = generate_c4_diagram(system_name="S", actors=["User", "User", {"name": "User"}])
     assert len(result["levels"]["system_context"]["actors"]) == 1
 
 
@@ -108,11 +101,9 @@ def test_blueprint_components_derived_from_requirements():
         "score credit risk",
         "notify applicants",
     ]
-    biz_layer = next(l for l in result["layers"] if l["name"] == "Business Logic")
+    biz_layer = next(ly for ly in result["layers"] if ly["name"] == "Business Logic")
     # Componentes derivam dos requisitos (slug), não de lista fixa.
-    assert any(
-        "loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"]
-    )
+    assert any("loan" in c or "credit" in c or "notify" in c for c in biz_layer["components"])
     assert "core_domain" not in biz_layer["components"]  # só quando não há requisitos
 
 
@@ -124,9 +115,7 @@ def test_blueprint_pattern_selection_is_traceable():
     names = {p["name"] for p in result["chosen_patterns"]}
     assert "Event-Driven Architecture" in names
     # A escolha é rastreável ao gatilho, não uma constante.
-    edp = next(
-        p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture"
-    )
+    edp = next(p for p in result["chosen_patterns"] if p["name"] == "Event-Driven Architecture")
     assert edp["triggered_by"]  # não vazio
 
 

@@ -1,34 +1,39 @@
 [project]
-name = "qa-mcp-server"
+name = "qa-mcp"
 version = "0.1.0"
-description = "MCP Server de QA para testes, análise e qualidade — plataforma dataforalltech."
-requires-python = ">=3.11"
+description = "MCP sidecar (kind=mcp_http, Model C) do qa — testes/análise/qualidade com store PostgreSQL, gateway-ready."
+requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team" }]
 dependencies = [
     "mcp>=1.10.0,<2.0",
     "pydantic>=2.6.0,<3.0",
     "pydantic-settings>=2.2.0,<3.0",
-    "httpx>=0.27.0,<1.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pyjwt[crypto]>=2.8.0",
+    "cryptography>=42.0.0",
+    "httpx>=0.27.0",
     "playwright>=1.44.0",
     "Pillow>=10.0.0",
-    "fastapi>=0.104.0,<1.0",
-    "uvicorn[standard]>=0.24.0,<1.0",
     "psycopg2-binary>=2.9.0,<3.0",
-    "pyjwt>=2.8.0",
-    "cryptography>=42.0.0",
-    "bcrypt>=4.1.0",
 ]
+
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0,<9.0",
-    "pytest-asyncio>=0.23.0,<1.0",
-    "pytest-mock>=3.14.0",
-    "pytest-cov>=4.0.0,<5.0",
-    "ruff>=0.4.0,<1.0",
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.14",
+    "httpx>=0.27",           # requerido pelo fastapi.testclient
+    "ruff==0.15.12",
+    "mypy==2.2.0",
+    "black>=24.0",
 ]
+
 [project.scripts]
-qa-mcp-server = "src.server.mcp_server:main"
+qa-mcp = "src.server.mcp_server:main"
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -39,13 +44,35 @@ include = ["src*"]
 
 [tool.setuptools.package-dir]
 "" = "."
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+# Desvios justificados p/ um sidecar backend-backed (qa persiste runs no PostgreSQL
+# e roda testes/linters via subprocess) — diferente da persona compute-only:
+#   S104 — bind 0.0.0.0: ingress só via gateway (INV-1), justificado no código.
+#   S603/S607 — subprocess de comandos fixos (pytest/ruff/bandit/...) sem shell.
+#   S608 — SQL "dinâmico" só concatena fragmentos estáticos; valores via %s (parametrizado).
+#   S110 — try/except/pass best-effort nos parsers (falha de parse não derruba a tool).
+#   S310 — add_script_tag(url=axe CDN) é URL literal fixa (não input do usuário).
+ignore = ["S104", "S603", "S607", "S608", "S110", "S310"]
+
+[tool.ruff.lint.per-file-ignores]
+# S101 assert em testes; S105/S106 tokens/senhas fake em test doubles (sem I/O real);
+# S108 paths /tmp fixos em fixtures (sem I/O real — screenshots_dir/baselines_dir de teste).
+"tests/*" = ["S101", "S105", "S106", "S108"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
+addopts = "--cov=src --cov-report=term-missing --cov-fail-under=80"
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "-ra -q"
-[tool.ruff]
-line-length = 100
-target-version = "py311"
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP"]
-ignore = ["E501"]
+
+[tool.coverage.run]
+omit = ["src/**/__init__.py"]

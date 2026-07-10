@@ -1,0 +1,14 @@
+[
+  {
+    "name": "platform-audit-mcp",
+    "namespace": "audit-mcp",
+    "kind": "mcp_http",
+    "mcpUrl": "http://platform-audit-mcp:7100",
+    "audience": "mcp:audit-mcp",
+    "healthPath": "/v1/health",
+    "toolsListPath": "/mcp/tools/list",
+    "toolsCallPath": "/mcp/tools/call",
+    "exemptTools": [],
+    "excludeTools": []
+  }
+]

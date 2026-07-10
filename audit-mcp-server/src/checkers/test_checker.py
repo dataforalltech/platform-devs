@@ -22,9 +22,11 @@ class TestChecker:
                 "name": "has_tests",
                 "required": True,
                 "passed": has_tests,
-                "details": f"Found {len(list(tests_dir.glob('test_*.py')))} test files"
-                if has_tests
-                else "No test files found",
+                "details": (
+                    f"Found {len(list(tests_dir.glob('test_*.py')))} test files"
+                    if has_tests
+                    else "No test files found"
+                ),
             }
         )
 

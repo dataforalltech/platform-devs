@@ -132,8 +132,7 @@ def start_session(
         "tool": "mcp__deploy-mcp__create_branch",
         "args": {"repo": repo, "branch": branch_name, "from_ref": base},
         "rationale": (
-            "Crie a branch da sessão antes de qualquer commit. "
-            "Use confirm_branch_created após o sucesso."
+            "Crie a branch da sessão antes de qualquer commit. Use confirm_branch_created após o sucesso."
         ),
     }
     # Sugestões pendentes para esse repo (cross-repo queue)
@@ -285,7 +284,7 @@ def end_session(
     store: SessionStore,
     *,
     session_id: str,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     rationale: str,
     final_summary: str | None = None,
 ) -> dict[str, Any]:
@@ -384,8 +383,7 @@ def _handle_transition(result: Any, task_id: int, allowed_from: tuple[str, ...])
         return {
             "error": "invalid_transition",
             "details": (
-                f"Transição não permitida: tarefa está em '{result}', "
-                f"esperado um de {sorted(allowed_from)}."
+                f"Transição não permitida: tarefa está em '{result}', esperado um de {sorted(allowed_from)}."
             ),
             "current_status": result,
         }
@@ -417,7 +415,7 @@ def approve_task(
     *,
     task_id: int,
     decision: str,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     rationale: str | None = None,
     notes: str | None = None,
 ) -> dict[str, Any]:
@@ -505,7 +503,7 @@ def fail_task(
     store: SessionStore,
     *,
     task_id: int,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     reason: str,
 ) -> dict[str, Any]:
     """Marca a tarefa como `failed` registrando o motivo. reason vira rationale na audit."""
@@ -539,7 +537,7 @@ def cancel_task(
     store: SessionStore,
     *,
     task_id: int,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     reason: str,
 ) -> dict[str, Any]:
     """Cancela a tarefa (de `pending` ou `in_progress`). reason obrigatório (governança)."""
@@ -622,12 +620,10 @@ def add_service_dependency(
                 "(consulte o services-mcp para descobrir os disponíveis)"
             ),
         }
-    result = store.add_service_dependency(
-        session_id=session_id, service=service, role=role, notes=notes
-    )
+    result = store.add_service_dependency(session_id=session_id, service=service, role=role, notes=notes)
     if result is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
-    if result == "duplicate":
+    if isinstance(result, str):  # store devolve "duplicate" como sentinela
         return {
             "error": "duplicate",
             "details": f"Serviço '{service}' já está vinculado à sessão '{session_id}'",
@@ -759,7 +755,7 @@ def accept_suggestion(
     *,
     suggestion_id: int,
     session_id: str,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     rationale: str | None = None,
     needs_human_decision: bool | None = None,
 ) -> dict[str, Any]:
@@ -803,6 +799,8 @@ def accept_suggestion(
         description=description,
         needs_human_decision=needs_decision,
     )
+    if task is None:  # sessão já validada acima; guarda defensiva p/ tipo
+        return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     transitioned = store.transition_suggestion(
         suggestion_id,
         new_status="accepted",
@@ -827,7 +825,7 @@ def reject_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     reason: str,
 ) -> dict[str, Any]:
     if not suggestion_id or not reason:
@@ -835,9 +833,7 @@ def reject_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    result = store.transition_suggestion(
-        suggestion_id, new_status="rejected", response_reason=reason
-    )
+    result = store.transition_suggestion(suggestion_id, new_status="rejected", response_reason=reason)
     payload = _handle_suggestion_transition(result, suggestion_id)
     if isinstance(payload, dict) and "error" not in payload:
         _record(
@@ -856,7 +852,7 @@ def defer_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     reason: str | None = None,
 ) -> dict[str, Any]:
     if not suggestion_id:
@@ -864,9 +860,7 @@ def defer_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    result = store.transition_suggestion(
-        suggestion_id, new_status="deferred", response_reason=reason
-    )
+    result = store.transition_suggestion(suggestion_id, new_status="deferred", response_reason=reason)
     payload = _handle_suggestion_transition(result, suggestion_id)
     if isinstance(payload, dict) and "error" not in payload:
         _record(
@@ -885,7 +879,7 @@ def supersede_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
-    actor: dict[str, Any],
+    actor: dict[str, Any] | None,
     by_suggestion_id: int | None = None,
     reason: str | None = None,
 ) -> dict[str, Any]:

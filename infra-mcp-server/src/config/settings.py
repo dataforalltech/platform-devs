@@ -1,4 +1,19 @@
-"""Configuração do servidor — lida do ambiente, sem hardcode."""
+"""Settings do infra-mcp (sidecar mcp_http, Model C).
+
+Config de integração ao MCP Gateway central conforme:
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md
+
+`infra-mcp` NÃO fala com um Trinity backend/REST — as tools operam sobre CLIs
+locais (terraform/checkov/infracost) e um allocator SQLite embarcado. Por isso
+NÃO há `ServiceApiClient`/`MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` (deviação
+justificada do esqueleto do template, que assume um backend HTTP).
+
+Os campos de integração com o gateway (mcp_twin_audience, url_admin_twin_jwks,
+mcp_port, docs_enabled) usam `validation_alias` — logo lêem as env-vars
+canônicas da plataforma (MCP_TWIN_AUDIENCE, URL_ADMIN_TWIN_JWKS, MCP_PORT,
+DOCS_ENABLED) SEM o prefixo `INFRA_`. Os demais campos mantêm o prefixo INFRA_.
+"""
 
 from __future__ import annotations
 
@@ -8,6 +23,10 @@ from pathlib import Path
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# namespace canônico = name_microservice ('platform-infra-mcp') menos o prefixo
+# 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
+NAMESPACE = "infra-mcp"
+
 
 class Settings(BaseSettings):
     """Configuração do servidor MCP. Defaults seguros — nada é obrigatório."""
@@ -16,8 +35,21 @@ class Settings(BaseSettings):
         env_prefix="INFRA_",
         env_file=".env",
         env_file_encoding="utf-8",
+        case_sensitive=False,
         extra="ignore",
     )
+
+    # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────── #
+    # Audiência exata que o PEP re-verifica no inner token (a falha de integração
+    # nº 1 é audiência divergente → 401). validation_alias ⇒ lê MCP_TWIN_AUDIENCE
+    # (sem o prefixo INFRA_).
+    mcp_twin_audience: str = Field(default=f"mcp:{NAMESPACE}", validation_alias="MCP_TWIN_AUDIENCE")
+    # JWKS do platform-admin (emissor do twin/inner token) — mesma de STD-SEC-006.
+    url_admin_twin_jwks: str = Field(default="", validation_alias="URL_ADMIN_TWIN_JWKS")
+
+    # ── HTTP sidecar ──────────────────────────────────────────────────────── #
+    mcp_port: int = Field(default=7100, validation_alias="MCP_PORT")
+    docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
 
     # --------------------------------------------------------------------- #
     # Chaves SSH por VM (Phase 2f)                                         #
@@ -48,10 +80,10 @@ class Settings(BaseSettings):
         ),
     )
 
-    # Configuração do backend remoto como JSON. Exemplos:
-    #   S3:     {"bucket":"...", "region":"us-east-1", "dynamodb_table":"tf-locks", "key":"infra-mcp/terraform.tfstate"}
-    #   AzureRM: {"resource_group_name":"...", "storage_account_name":"...", "container_name":"tfstate", "key":"infra-mcp.tfstate"}
-    #   GCS:    {"bucket":"...", "prefix":"infra-mcp"}
+    # Configuração do backend remoto como JSON. Exemplos (chaves conforme o backend):
+    #   S3:      bucket, region, dynamodb_table, key
+    #   AzureRM: resource_group_name, storage_account_name, container_name, key
+    #   GCS:     bucket, prefix
     tf_backend_config_json: str | None = Field(
         default=None,
         description=(
@@ -136,7 +168,11 @@ class Settings(BaseSettings):
     # Truncamento de output para não estourar response do MCP.
     output_max_chars: int = Field(default=16000, ge=1000, le=200000)
 
-    log_level: str = Field(default="INFO", description="DEBUG | INFO | WARNING | ERROR")
+    log_level: str = Field(
+        default="INFO",
+        validation_alias="MCP_SERVICE_LOG_LEVEL",
+        description="DEBUG | INFO | WARNING | ERROR",
+    )
     log_format: str = Field(default="json", description="json | text")
 
     @field_validator("log_level")

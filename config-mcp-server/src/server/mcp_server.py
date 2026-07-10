@@ -1,32 +1,48 @@
-"""Servidor MCP config — 21 tools para credenciais, ambientes, tenants, hardware e workspace.
+"""Servidor MCP do config — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Tools:
-  Credentials (5): get_credential, set_credential, set_credential_secure,
-                   list_credentials, delete_credential
-  Env (4):         get_env_config, set_env_var, list_environments, sync_env_file
-  Sysinfo (1):     get_physical_info
-  Tenants (4):     get_tenant_config, set_tenant_config, list_tenants,
-                   get_session_tenant_config
+Reescrito para o padrão canônico do platform-service-template (v2.0), espelhando o
+architecture-mcp-server. Implementa o contrato de integração com o MCP Gateway
+central (platform-mcp-gateway):
+  - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
+  - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
 
-HTTP API na porta 7100:
-  Consumida por outros MCP servers (deploy-mcp, qa-mcp, etc.) via ConfigClient.
-  Ver shared/config_client.py para o cliente.
-Modo híbrido: stdio (para Claude/registry) + HTTP (para gateway e cross-MCP).
+Pontos gateway-ready:
+  1. /mcp/tools/list emite, por tool, inputSchema type=object + capability +
+     required_scope + resource_type + data_domain (o gateway NÃO deriva por nome).
+  2. /mcp/tools/call re-verifica o **inner Twin Token** (aud=mcp:config-mcp) via JWKS
+     do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O inner
+     token chega em params._meta.twin_token.
+  3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
+     cliente (SEC-035 / INV-3). Isolamento por tenant nas tools tenants.*.
+  4. _EXEMPT_TOOLS (status/health, sem token) e _EXCLUDE_TOOLS (denylist fail-safe:
+     tools que devolvem SEGREDO em claro ou dependem de TTY nunca saem pelo gateway).
+  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+  GET  /v1/health        — liveness (health_path do registro, sem token)
+  GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
+  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
+
+NOTA: config-mcp é uma persona **stateful** (serve credenciais/ambientes/tenants a
+partir de um ConfigStore encriptado local). O store É o backend — não há REST a
+chamar —, por isso não há ServiceApiClient; o dispatcher recebe o `store` diretamente.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
 from typing import Any
 
+import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
 
-from ..api.router import make_router
-from ..config.settings import ConfigMcpSettings, get_settings
+from ..config.settings import Settings, get_settings
 from ..knowledge.encryptor import Encryptor
 from ..knowledge.store import ConfigStore
 from ..tools import (
@@ -55,11 +71,26 @@ from ..tools import (
 
 _log = logging.getLogger(__name__)
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Schemas                                                                      #
-# ─────────────────────────────────────────────────────────────────────────── #
+# ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
+# Cada tool declara, além de description/schema, os 4 campos de política:
+#   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
+#   required_scope — escopo de execução no formato dominio:tipo:acao (least-privilege)
+#   resource_type  — tipo de recurso tocado
+#   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
+# inputSchema MUST ser type=object com properties (senão a validação no front-door
+# é fail-open). Leituras usam verbo :read; mutações :write.
+# ─────────────────────────────────────────────────────────────────────────────
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
-    # ── Credentials ───────────────────────────────────────────────────────── #
+    # ── Status (exempt/health) ────────────────────────────────────────────── #
+    "status": {
+        "description": "Retorna o status real do servidor (nome, versão, nº de tools).",
+        "capability": "config-mcp.status",
+        "required_scope": "config-mcp:status:read",
+        "resource_type": "status",
+        "data_domain": "operational",
+        "schema": {"type": "object", "additionalProperties": False, "properties": {}},
+    },
+    # ── Credentials (data_domain=secrets) ─────────────────────────────────── #
     "get_credential": {
         "description": (
             "Recupera um valor de credencial do store central. "
@@ -67,6 +98,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "credentials.portainer, credentials.internal.\n\n"
             "Use list_credentials para ver quais chaves estão disponíveis."
         ),
+        "capability": "config-mcp.get_credential",
+        "required_scope": "config-mcp:credential:read",
+        "resource_type": "credential",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -86,10 +121,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "set_credential": {
         "description": (
             "Define (cria ou atualiza) uma credencial no store central. "
-            "O valor é armazenado encriptado com Fernet. "
-            "Credenciais armazenadas aqui podem ser consultadas por qualquer MCP "
-            "via HTTP API interna (config-mcp:7099)."
+            "O valor é armazenado encriptado com Fernet."
         ),
+        "capability": "config-mcp.set_credential",
+        "required_scope": "config-mcp:credential:write",
+        "resource_type": "credential",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -117,6 +154,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "O valor nunca trafega pelo canal MCP — digitado diretamente no TTY do config-mcp. "
             "Use para senhas e tokens altamente sensíveis."
         ),
+        "capability": "config-mcp.set_credential_secure",
+        "required_scope": "config-mcp:credential:write",
+        "resource_type": "credential",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -135,10 +176,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_credentials": {
         "description": (
-            "Lista namespaces e chaves disponíveis no store. "
-            "Nunca exibe valores — apenas as chaves. "
-            "Use get_credential para recuperar um valor específico."
+            "Lista namespaces e chaves disponíveis no store. Nunca exibe valores — apenas as chaves."
         ),
+        "capability": "config-mcp.list_credentials",
+        "required_scope": "config-mcp:credential:read",
+        "resource_type": "credential",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -152,6 +195,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "delete_credential": {
         "description": "Remove uma credencial do store central.",
+        "capability": "config-mcp.delete_credential",
+        "required_scope": "config-mcp:credential:write",
+        "resource_type": "credential",
+        "data_domain": "secrets",
         "schema": {
             "type": "object",
             "properties": {
@@ -162,9 +209,13 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # ── Env ───────────────────────────────────────────────────────────────── #
+    # ── Env (data_domain=configuration) ───────────────────────────────────── #
     "get_env_config": {
         "description": "Retorna variáveis de um perfil de ambiente (dev/staging/production).",
+        "capability": "config-mcp.get_env_config",
+        "required_scope": "config-mcp:env:read",
+        "resource_type": "env_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "properties": {
@@ -188,6 +239,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "set_env_var": {
         "description": "Define uma variável de ambiente para um perfil específico.",
+        "capability": "config-mcp.set_env_var",
+        "required_scope": "config-mcp:env:write",
+        "resource_type": "env_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "properties": {
@@ -204,18 +259,21 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_environments": {
         "description": "Lista os ambientes configurados e a quantidade de variáveis em cada um.",
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        "capability": "config-mcp.list_environments",
+        "required_scope": "config-mcp:env:read",
+        "resource_type": "env_config",
+        "data_domain": "configuration",
+        "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "sync_env_file": {
         "description": (
             "Gera ou atualiza um arquivo .env com as variáveis do store para um ambiente. "
-            "Com merge=true (padrão), mantém variáveis locais que não estão no store. "
-            "Com merge=false, sobrescreve completamente o arquivo."
+            "Com merge=true (padrão), mantém variáveis locais que não estão no store."
         ),
+        "capability": "config-mcp.sync_env_file",
+        "required_scope": "config-mcp:env:write",
+        "resource_type": "env_file",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "properties": {
@@ -237,12 +295,15 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
         },
     },
-    # ── Env (file-based) ─────────────────────────────────────────────────────── #
     "read_env_file": {
         "description": (
             "Le um arquivo .env do disco e retorna as variaveis como dict. "
             "Complemento ao get_env_config que le do store encriptado."
         ),
+        "capability": "config-mcp.read_env_file",
+        "required_scope": "config-mcp:env:read",
+        "resource_type": "env_file",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "required": ["path"],
@@ -259,9 +320,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "audit_env_files": {
         "description": (
             "Escaneia todos os arquivos .env.* de um diretorio e reporta problemas. "
-            "Detecta secrets hardcoded (JWT_SECRET_KEY, DB_PASSWORD, TOKEN...), "
-            "arquivos fora do padrao canonico, e verifica cobertura no ConfigStore."
+            "Detecta secrets hardcoded, arquivos fora do padrao canonico, e cobertura no ConfigStore."
         ),
+        "capability": "config-mcp.audit_env_files",
+        "required_scope": "config-mcp:env:read",
+        "resource_type": "env_file",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "required": ["directory"],
@@ -287,9 +351,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "redact_env_secrets": {
         "description": (
             "Substitui valores hardcoded de secrets por ${VAR_NAME} em arquivos .env. "
-            "Ex: JWT_SECRET_KEY=XrDsC... vira JWT_SECRET_KEY=${JWT_SECRET_KEY}. "
             "Use dry_run=true para simular antes de aplicar."
         ),
+        "capability": "config-mcp.redact_env_secrets",
+        "required_scope": "config-mcp:env:write",
+        "resource_type": "env_file",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "required": ["paths"],
@@ -321,9 +388,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "push_env_to_store": {
         "description": (
             "Le um arquivo .env do disco e importa as variaveis para o ConfigStore encriptado "
-            "no namespace env.<environment>. Ideal para inicializar o store a partir de um arquivo existente. "
-            "Apos o push, use sync_env_file para gerar arquivos .env a partir do store."
+            "no namespace env.<environment>."
         ),
+        "capability": "config-mcp.push_env_to_store",
+        "required_scope": "config-mcp:env:write",
+        "resource_type": "env_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "required": ["path", "environment"],
@@ -347,13 +417,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
-    # ── Workspace ─────────────────────────────────────────────────────────── #
+    # ── Workspace (data_domain=configuration) ─────────────────────────────── #
     "get_workspace_config": {
         "description": (
             "Le configuracao do workspace do namespace 'workspace' no ConfigStore. "
-            "Chaves canonicas: REPOS_ROOT (pasta dos repos), PYTHON_BIN, EDITOR, DEFAULT_ENV. "
-            "Se key for passado, retorna apenas aquela chave com fallback para variaveis de ambiente."
+            "Chaves canonicas: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV."
         ),
+        "capability": "config-mcp.get_workspace_config",
+        "required_scope": "config-mcp:workspace:read",
+        "resource_type": "workspace_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "additionalProperties": False,
@@ -368,10 +441,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "set_workspace_config": {
         "description": (
             "Define ou atualiza uma chave no namespace 'workspace' do ConfigStore. "
-            "Para REPOS_ROOT: valida que o caminho existe (use create_dir=true para criar). "
-            "Outras chaves sao armazenadas livremente. "
-            "Exemplo: set_workspace_config(key='REPOS_ROOT', value='/home/user/repos')."
+            "Para REPOS_ROOT: valida que o caminho existe (use create_dir=true para criar)."
         ),
+        "capability": "config-mcp.set_workspace_config",
+        "required_scope": "config-mcp:workspace:write",
+        "resource_type": "workspace_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "required": ["key", "value"],
@@ -381,10 +456,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "description": "Nome da chave (ex: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV).",
                 },
-                "value": {
-                    "type": "string",
-                    "description": "Valor a armazenar.",
-                },
+                "value": {"type": "string", "description": "Valor a armazenar."},
                 "create_dir": {
                     "type": "boolean",
                     "default": False,
@@ -396,41 +468,36 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     "list_workspace_config": {
         "description": (
             "Lista todas as chaves do namespace 'workspace' com valores e descricoes. "
-            "Mostra quais chaves canonicas estao ausentes para facilitar o setup inicial. "
             "Chaves canonicas: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV."
         ),
-        "schema": {
-            "type": "object",
-            "additionalProperties": False,
-            "properties": {},
-        },
+        "capability": "config-mcp.list_workspace_config",
+        "required_scope": "config-mcp:workspace:read",
+        "resource_type": "workspace_config",
+        "data_domain": "configuration",
+        "schema": {"type": "object", "additionalProperties": False, "properties": {}},
     },
-    # ── Sysinfo ───────────────────────────────────────────────────────────── #
+    # ── Sysinfo (data_domain=operational) ─────────────────────────────────── #
     "get_physical_info": {
-        "description": (
-            "Coleta informações do ambiente físico atual: "
-            "sistema operacional (OS, release, hostname), "
-            "CPU (cores físicos/lógicos, frequência, uso%), "
-            "RAM (total, disponível, uso%), "
-            "discos (device, mountpoint, fstype, total/usado/livre GB), "
-            "rede (interface → IP)."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        "description": ("Coleta informações do ambiente físico atual: OS, CPU, RAM, discos e rede."),
+        "capability": "config-mcp.get_physical_info",
+        "required_scope": "config-mcp:sysinfo:read",
+        "resource_type": "system_info",
+        "data_domain": "operational",
+        "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
-    # ── Tenants ───────────────────────────────────────────────────────────── #
+    # ── Tenants (data_domain=configuration; tenant_id vem das claims — INV-3) ─ #
     "get_tenant_config": {
-        "description": "Retorna variáveis de configuração de um tenant.",
+        "description": (
+            "Retorna variáveis de configuração do tenant. O tenant_id é resolvido das "
+            "claims do inner token (gateway); via stdio direto pode ser informado."
+        ),
+        "capability": "config-mcp.get_tenant_config",
+        "required_scope": "config-mcp:tenant:read",
+        "resource_type": "tenant_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "properties": {
-                "tenant_id": {
-                    "type": "string",
-                    "description": "Identificador do tenant. Ex: 'tenant_abc123'.",
-                },
                 "key_pattern": {
                     "type": "string",
                     "description": "Filtrar variáveis por nome (substring). Ex: 'DATABASE'.",
@@ -441,164 +508,93 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "default": 50,
                 },
             },
-            "required": ["tenant_id"],
             "additionalProperties": False,
         },
     },
     "set_tenant_config": {
-        "description": "Define uma variável de configuração para um tenant.",
+        "description": (
+            "Define uma variável de configuração para o tenant. O tenant_id é resolvido "
+            "das claims do inner token (gateway) — nunca de argumento do cliente (INV-3)."
+        ),
+        "capability": "config-mcp.set_tenant_config",
+        "required_scope": "config-mcp:tenant:write",
+        "resource_type": "tenant_config",
+        "data_domain": "configuration",
         "schema": {
             "type": "object",
             "properties": {
-                "tenant_id": {"type": "string"},
                 "key": {"type": "string", "description": "Ex: 'DATABASE_URL'."},
                 "value": {"type": "string"},
             },
-            "required": ["tenant_id", "key", "value"],
+            "required": ["key", "value"],
             "additionalProperties": False,
         },
     },
     "list_tenants": {
         "description": "Lista todos os tenants configurados e a quantidade de variáveis de cada um.",
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        "capability": "config-mcp.list_tenants",
+        "required_scope": "config-mcp:tenant:read",
+        "resource_type": "tenant_config",
+        "data_domain": "configuration",
+        "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
     "get_session_tenant_config": {
         "description": (
-            "Retorna config do tenant da sessão autenticada atual. "
-            "Resolve tenant_id automaticamente via dev-twin-mcp (:7098) — "
-            "o agente não precisa conhecer o tenant_id."
+            "Retorna config do tenant da sessão autenticada atual. Resolve tenant_id "
+            "automaticamente via dev-twin-mcp — o agente não precisa conhecer o tenant_id."
         ),
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
+        "capability": "config-mcp.get_session_tenant_config",
+        "required_scope": "config-mcp:tenant:read",
+        "resource_type": "tenant_config",
+        "data_domain": "configuration",
+        "schema": {"type": "object", "properties": {}, "additionalProperties": False},
     },
 }
 
+# Health/status são encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless).
+_EXEMPT_TOOLS: frozenset[str] = frozenset({"status"})
+# Denylist fail-safe (CI-7): tools que NUNCA devem sair pelo gateway.
+#   get_credential        — devolve o SEGREDO em claro (risco de exfiltração p/ o agente).
+#   set_credential_secure — depende de getpass no TTY do processo; travaria o worker HTTP.
+_EXCLUDE_TOOLS: frozenset[str] = frozenset({"get_credential", "set_credential_secure"})
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# Escopo mínimo por ferramenta (least privilege). write = mutação; read = consulta. #
-#                                                                              #
-# ATENÇÃO — tools de credenciais lidam com SEGREDOS (credential_tool):         #
-#   Leitura de segredos (get_credential, list_credentials) fica em config:read #
-#   mas é SENSÍVEL — devolve/expõe metadados de credenciais.                   #
-#   Escrita/mutação de segredos (set_credential, set_credential_secure,        #
-#   delete_credential) e a importação de .env (push_env_to_store, que grava    #
-#   segredos no store) exigem config:write — marcadas como SENSÍVEL abaixo.    #
-# ─────────────────────────────────────────────────────────────────────────── #
-SCOPE_FOR_TOOL: dict[str, str] = {
-    # ── Credentials — SENSÍVEL (segredos) ─────────────────────────────────── #
-    "get_credential": "config:read",  # SENSÍVEL: lê valor de segredo
-    "list_credentials": "config:read",  # SENSÍVEL: lista chaves de segredos
-    "set_credential": "config:write",  # SENSÍVEL: grava segredo
-    "set_credential_secure": "config:write",  # SENSÍVEL: grava segredo via getpass
-    "delete_credential": "config:write",  # SENSÍVEL: remove segredo
-    # ── Env ───────────────────────────────────────────────────────────────── #
-    "get_env_config": "config:read",
-    "list_environments": "config:read",
-    "read_env_file": "config:read",
-    "audit_env_files": "config:read",
-    "set_env_var": "config:write",
-    "sync_env_file": "config:write",
-    "redact_env_secrets": "config:write",
-    "push_env_to_store": "config:write",  # SENSÍVEL: importa segredos p/ o store
-    # ── Workspace ─────────────────────────────────────────────────────────── #
-    "get_workspace_config": "config:read",
-    "list_workspace_config": "config:read",
-    "set_workspace_config": "config:write",
-    # ── Sysinfo ───────────────────────────────────────────────────────────── #
-    "get_physical_info": "config:read",
-    # ── Tenants ───────────────────────────────────────────────────────────── #
-    "get_tenant_config": "config:read",
-    "list_tenants": "config:read",
-    "get_session_tenant_config": "config:read",
-    "set_tenant_config": "config:write",
-}
-SCOPES_SUPPORTED = ["config:read", "config:write"]
-
-assert set(SCOPE_FOR_TOOL.keys()) == set(_TOOL_SCHEMAS.keys()), (
-    "SCOPE_FOR_TOOL não cobre exatamente as tools de _TOOL_SCHEMAS"
-)
+# Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
+_POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# HTTP API (sidecar para outros MCPs)                                          #
-# ─────────────────────────────────────────────────────────────────────────── #
-def _build_http_app(store: ConfigStore, settings: ConfigMcpSettings) -> FastAPI:
-    """Constrói a FastAPI app para config-mcp HTTP na porta 7100."""
-    app = FastAPI(title="config-mcp API", version="0.1.0", docs_url="/docs")
-    router = make_router(store, settings.api_token)
-    app.include_router(router)
-    return app
+# ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# MCP Server                                                                   #
-# ─────────────────────────────────────────────────────────────────────────── #
-def build_server() -> tuple[Any, ConfigStore, ConfigMcpSettings, FastAPI]:
-    settings = get_settings()
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
+    """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:config-mcp).
 
-    encryptor = Encryptor(settings.master_key)
-    # Valida Fernet key imediatamente — falha rápida no startup
-    try:
-        encryptor.decrypt(encryptor.encrypt("_health_check_"))
-    except Exception as exc:
-        _log.critical("invalid_or_missing_master_key — abortando.")
-        raise SystemExit(1) from exc
-    store = ConfigStore(settings.store_path, encryptor)
-
-    http_app = _build_http_app(store, settings)
-
-    _log.info(
-        "config_mcp_ready store=%s",
-        settings.store_path,
+    O gateway já verificou o front token; o backend é 'one more verified client'
+    (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
+    obrigatório. Levanta em qualquer falha (fail-closed).
+    """
+    if not settings.mcp_twin_audience or not settings.url_admin_twin_jwks:
+        raise PermissionError(
+            "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
+            "(mcp:config-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
+        )
+    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    return jwt.decode(
+        twin_token,
+        signing_key.key,
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
-    server: Server = Server("config-mcp-server")
 
-    @server.list_tools()
-    async def list_tools() -> list[Tool]:
-        return [
-            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
-            for name, meta in _TOOL_SCHEMAS.items()
-        ]
-
-    @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        _log.info("tool_called: %s keys=%s", name, sorted(args.keys()))
-        try:
-            payload = _dispatch(name, args, store)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-            _log.error("unknown_tool: %s", name)
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "details": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
-
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-
-    @http_app.get("/mcp/tools/list")
-    async def http_list_tools() -> dict:
-        tools = await list_tools()
-        return {"result": {"tools": [t.model_dump(exclude_none=True) for t in tools]}}
-
-    @http_app.post("/mcp/tools/call")
-    async def http_call_tool(body: dict) -> dict:
-        params = body.get("params", body)
-        result = await call_tool(params.get("name", ""), params.get("arguments", {}))
-        return {"result": {"content": [r.model_dump(exclude_none=True) for r in result]}}
-
-    return server, store, settings, http_app
+# ── Dispatcher (stateful: recebe o ConfigStore) ───────────────────────────────
 
 
-def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
+def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
+    args a partir das claims (INV-3) e consumido pelas tools tenants.*."""
+    if name == "status":
+        return {"status": "ok", "service": "config-mcp", "tools": len(_TOOL_SCHEMAS)}
     # ── Credentials ───────────────────────────────────────────────────────── #
     if name == "get_credential":
         return get_credential(store, namespace=args["namespace"], key=args["key"])
@@ -625,9 +621,7 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
             limit=args.get("limit", 50),
         )
     if name == "set_env_var":
-        return set_env_var(
-            store, environment=args["environment"], key=args["key"], value=args["value"]
-        )
+        return set_env_var(store, environment=args["environment"], key=args["key"], value=args["value"])
     if name == "list_environments":
         return list_environments(store)
     if name == "sync_env_file":
@@ -674,20 +668,25 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
         )
     if name == "list_workspace_config":
         return list_workspace_config(store)
+    # ── Sysinfo ───────────────────────────────────────────────────────────── #
     if name == "get_physical_info":
         return get_physical_info()
-    # ── Tenants ───────────────────────────────────────────────────────────── #
+    # ── Tenants (tenant_id das claims — INV-3) ─────────────────────────────── #
     if name == "get_tenant_config":
+        tenant_id = args.get("tenant_id")
+        if not tenant_id:
+            return {"error": "missing_tenant", "hint": "tenant_id resolvido das claims do token."}
         return get_tenant_config(
             store,
-            tenant_id=args["tenant_id"],
+            tenant_id=tenant_id,
             key_pattern=args.get("key_pattern"),
             limit=args.get("limit", 50),
         )
     if name == "set_tenant_config":
-        return set_tenant_config(
-            store, tenant_id=args["tenant_id"], key=args["key"], value=args["value"]
-        )
+        tenant_id = args.get("tenant_id")
+        if not tenant_id:
+            return {"error": "missing_tenant", "hint": "tenant_id resolvido das claims do token."}
+        return set_tenant_config(store, tenant_id=tenant_id, key=args["key"], value=args["value"])
     if name == "list_tenants":
         return list_tenants(store)
     if name == "get_session_tenant_config":
@@ -696,36 +695,158 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict:
     raise KeyError(name)
 
 
-def build_app(validators: Any = None):
-    """Monta o app Streamable HTTP + auth (padrão da plataforma) sobre o Server legado.
+# ── ConfigStore bootstrap (valida a chave Fernet — fail-fast) ─────────────────
 
-    Preserva build_server() (Server de baixo nível + dispatch com store/settings);
-    só troca o transporte para Streamable HTTP e adiciona o BearerAuthMiddleware
-    com escopo por ferramenta (config:read / config:write).
-    """
-    from shared.mcp_auth import mount_lowlevel_streamable_http
 
-    server, _store, _settings, _http = build_server()
-    return mount_lowlevel_streamable_http(
-        server,
-        resource=os.getenv("CONFIG_RESOURCE", "http://localhost:7100/mcp"),
-        prm_url=os.getenv(
-            "CONFIG_PRM_URL",
-            "http://localhost:7100/.well-known/oauth-protected-resource",
-        ),
-        as_issuer=os.getenv("AS_ISSUER", "http://localhost:7103"),
-        as_jwks_url=os.getenv("AS_JWKS_URL", "http://localhost:7103/.well-known/jwks.json"),
-        scopes_supported=SCOPES_SUPPORTED,
-        scope_for_tool=SCOPE_FOR_TOOL,
-        validators=validators,
+def _build_store(settings: Settings) -> ConfigStore:
+    """Constrói o ConfigStore e valida a master key imediatamente (fail-fast)."""
+    try:
+        encryptor = Encryptor(settings.master_key)
+        encryptor.decrypt(encryptor.encrypt("_health_check_"))
+    except Exception as exc:  # noqa: BLE001 — chave ausente/inválida = boot inviável
+        _log.critical("invalid_or_missing_master_key — abortando.")
+        raise SystemExit(1) from exc
+    return ConfigStore(settings.store_path, encryptor)
+
+
+# ── HTTP Sidecar ──────────────────────────────────────────────────────────────
+
+
+def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    app = FastAPI(
+        title="config-mcp API",
+        version="0.1.0",
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
+        redoc_url=None,
+        openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+
+    @app.get("/v1/health")
+    def health() -> dict[str, Any]:
+        return {"status": "ok", "service": "config-mcp", "tools": len(_TOOL_SCHEMAS)}
+
+    @app.get("/mcp/tools/list")
+    def http_list_tools() -> dict:
+        tools = []
+        for name, meta in _TOOL_SCHEMAS.items():
+            entry: dict[str, Any] = {
+                "name": name,
+                "description": meta["description"],
+                "inputSchema": meta["schema"],
+            }
+            entry.update({f: meta[f] for f in _POLICY_FIELDS})
+            tools.append(entry)
+        return {"result": {"tools": tools}}
+
+    @app.post("/mcp/tools/call")
+    def http_call_tool(body: dict) -> Any:
+        params = body.get("params", body)
+        name = params.get("name", "")
+        arguments = dict(params.get("arguments", {}) or {})
+
+        if name in _EXCLUDE_TOOLS:
+            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        if name not in _EXEMPT_TOOLS:
+            twin_token = (params.get("_meta") or {}).get("twin_token")
+            if not twin_token:
+                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            try:
+                claims = _verify_inner_token(twin_token, settings)
+            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha
+                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            tenant_id = claims.get("tenant_id")
+            if not tenant_id:
+                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            arguments["tenant_id"] = tenant_id
+
+        try:
+            payload = _dispatch(name, arguments, store)
+        except KeyError:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+            _log.exception("tool_internal_error: %s", name)
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    return app
+
+
+# ── Server (stdio + sidecar) ──────────────────────────────────────────────────
+
+
+def build_server() -> tuple[Any, Settings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings, o ConfigStore e o sidecar HTTP."""
+    settings = get_settings()
+    logging.basicConfig(level=settings.log_level, format="%(levelname)s %(name)s %(message)s")
+    store = _build_store(settings)
+    http_app = _build_http_app(settings, store)
+    _log.info("config_mcp_ready tools=%d store=%s", len(_TOOL_SCHEMAS), settings.store_path)
+
+    server: Server = Server("config-mcp-server")
+
+    @server.list_tools()
+    async def list_tools() -> list[Tool]:
+        return [
+            Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
+            for name, meta in _TOOL_SCHEMAS.items()
+        ]
+
+    @server.call_tool()
+    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        args = arguments or {}
+        try:
+            payload = _dispatch(name, args, store)
+        except KeyError:
+            payload = {"error": "unknown_tool", "tool": name}
+        except Exception as exc:  # noqa: BLE001
+            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            _log.exception("tool_internal_error: %s", name)
+        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+
+    return server, settings, http_app
+
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+
+
+async def _run() -> None:
+    import uvicorn
+    from mcp.server.stdio import stdio_server
+
+    server, settings, http_app = build_server()
+    cfg = uvicorn.Config(
+        http_app,
+        host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
+        port=settings.mcp_port,
+        log_level="warning",
+        access_log=False,
+    )
+    server_http = uvicorn.Server(cfg)
+    try:
+        async with stdio_server() as (read_stream, write_stream):
+            await asyncio.gather(
+                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server_http.serve(),
+            )
+    except (EOFError, BrokenPipeError):
+        pass
 
 
 def main() -> None:
-    """Entry point — Streamable HTTP + auth."""
-    import uvicorn
+    # MCP_HTTP_ONLY=1 → só o sidecar HTTP (uso típico atrás do gateway, sem stdio).
+    if os.getenv("MCP_HTTP_ONLY", "0") == "1":
+        import uvicorn
 
-    uvicorn.run(build_app(), host="0.0.0.0", port=int(os.getenv("MCP_PORT", "7100")))
+        _server, settings, http_app = build_server()
+        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        return
+    asyncio.run(_run())
 
 
 if __name__ == "__main__":

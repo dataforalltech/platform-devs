@@ -102,9 +102,7 @@ class TestAllocatorSSHKeys:
         store = self._make_store()
         d = store.request_vm(_req())
         vm_id = d.lease.vm_id
-        row = store._con.execute(
-            "SELECT vm_id, public_key FROM vm_keys WHERE vm_id=?", (vm_id,)
-        ).fetchone()
+        row = store._con.execute("SELECT vm_id, public_key FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone()
         assert row is not None
         assert "ssh-ed25519" in row["public_key"]
 
@@ -171,17 +169,12 @@ class TestAllocatorSSHKeys:
         vm_id = d.lease.vm_id
 
         # Confirma que chave existe
-        assert (
-            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone()
-            is not None
-        )
+        assert store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is not None
 
         store.release_lease(d.lease.lease_id)
 
         # Chave deve ter sido deletada
-        assert (
-            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
-        )
+        assert store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
 
     def test_ssh_key_deleted_on_provision_failure(self):
         """_on_vm_failed → vm_keys deletado."""
@@ -211,9 +204,7 @@ class TestAllocatorSSHKeys:
         vm_id = d.lease.vm_id
 
         # Após falha, chave deve ser deletada
-        assert (
-            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
-        )
+        assert store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
 
     def test_ssh_key_deleted_on_gc_expired(self):
         """GC de leases expirados → VM órfã terminada → vm_keys deletado."""
@@ -236,9 +227,7 @@ class TestAllocatorSSHKeys:
         # Operação que dispara GC
         store.get_lease(d.lease.lease_id)
 
-        assert (
-            store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
-        )
+        assert store._con.execute("SELECT 1 FROM vm_keys WHERE vm_id=?", (vm_id,)).fetchone() is None
 
     def test_extra_tf_vars_has_ssh_public_key(self):
         """provisioner.provision() deve receber extra_tf_vars com ssh_public_key."""

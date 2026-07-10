@@ -92,9 +92,7 @@ def setup_repo(
     # ── Variables ──────────────────────────────────────────────────────────── #
     try:
         client.set_repo_variable(repo, "IMAGE_NAME", image_name)
-        configured.append(
-            {"type": "variable", "name": "IMAGE_NAME", "value": image_name, "status": "ok"}
-        )
+        configured.append({"type": "variable", "name": "IMAGE_NAME", "value": image_name, "status": "ok"})
     except GitHubClientError as exc:
         errors.append({"type": "variable", "name": "IMAGE_NAME", "error": str(exc)})
 
@@ -107,11 +105,13 @@ def setup_repo(
         "errors": errors,
         "success": success,
         "next_step": (
-            f"trigger_workflow(repo='{repo}', workflow_id='deploy.yml', ref='master') "
-            "para disparar o build e push no ACR."
-        )
-        if success
-        else "Corrija os erros e chame setup_repo novamente.",
+            (
+                f"trigger_workflow(repo='{repo}', workflow_id='deploy.yml', ref='master') "
+                "para disparar o build e push no ACR."
+            )
+            if success
+            else "Corrija os erros e chame setup_repo novamente."
+        ),
     }
 
 

@@ -85,8 +85,7 @@ def validate_migration(repo: GovernanceRepository, content: str) -> dict:
     if orm_hits:
         for hit in orm_hits:
             issues.append(
-                f"ORM detectado — {hit}. "
-                "Migrations devem usar SQL raw via op.execute(sa.text('...')). §29."
+                f"ORM detectado — {hit}. Migrations devem usar SQL raw via op.execute(sa.text('...')). §29."
             )
         checks["no_orm_operations"] = False
     else:
@@ -164,9 +163,7 @@ def validate_migration(repo: GovernanceRepository, content: str) -> dict:
     noop_downgrade = bool(_NOOP_DOWNGRADE_RE.search(content))
 
     if not has_downgrade:
-        issues.append(
-            "Função downgrade() ausente. Toda migration precisa de downgrade reversível. §29."
-        )
+        issues.append("Função downgrade() ausente. Toda migration precisa de downgrade reversível. §29.")
         checks["has_reversible_downgrade"] = False
     elif noop_downgrade:
         warnings.append(

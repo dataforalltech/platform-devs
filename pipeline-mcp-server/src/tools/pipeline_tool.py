@@ -218,7 +218,7 @@ def approve_promotion(
             github_org=github_org,
             repo=repo_name,
             pr_number=pr_number,
-            commit_message=f"Merge PR #{pr_number} — {service} {promotion['from_env']}→{promotion['to_env']} (approved by {approved_by})",
+            commit_message=f"Merge PR #{pr_number} — {service} {promotion['from_env']}→{promotion['to_env']} (approved by {approved_by})",  # noqa: E501
         )
 
     if not merge_result.get("success") and not merge_result.get("unavailable"):
@@ -322,9 +322,7 @@ def watch_prs(
                             "target_branch": base,
                             "merged": merge_result.get("success", False),
                             "merge_sha": merge_result.get("sha"),
-                            "error": merge_result.get("error")
-                            if not merge_result.get("success")
-                            else None,
+                            "error": merge_result.get("error") if not merge_result.get("success") else None,
                             "gate_details": gate_details,
                         }
                     )
@@ -404,9 +402,7 @@ def rollback(
     }
 
 
-def get_promotion_history(
-    store: PipelineStore, service: str | None = None, limit: int = 20
-) -> dict:
+def get_promotion_history(store: PipelineStore, service: str | None = None, limit: int = 20) -> dict:
     history = store.get_promotion_history(service=service, limit=limit)
     return {"total": len(history), "service": service, "limit": limit, "promotions": history}
 
@@ -415,9 +411,7 @@ def get_pipeline_overview(store: PipelineStore) -> dict:
     return store.get_pipeline_overview()
 
 
-def set_pipeline_config(
-    store: PipelineStore, service: str, gates_required: dict[str, list[str]]
-) -> dict:
+def set_pipeline_config(store: PipelineStore, service: str, gates_required: dict[str, list[str]]) -> dict:
     pipeline = store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}

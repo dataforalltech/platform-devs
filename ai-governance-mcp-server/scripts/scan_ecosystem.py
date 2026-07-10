@@ -128,9 +128,7 @@ class DriftReport:
 
     @property
     def has_warnings(self) -> bool:
-        return bool(
-            self.missing_from_yaml or self.missing_on_disk or self.lib_drift or self.consume_drift
-        )
+        return bool(self.missing_from_yaml or self.missing_on_disk or self.lib_drift or self.consume_drift)
 
 
 # --------------------------------------------------------------------- #
@@ -420,9 +418,7 @@ def render_text(report: DriftReport) -> str:
     if report.conflicts:
         lines.append(f"X CONFLICTS ({len(report.conflicts)})")
         for c in report.conflicts:
-            lines.append(
-                f"  {c['service']} ({c['field']}): yaml={c['yaml_value']} disk={c['disk_value']}"
-            )
+            lines.append(f"  {c['service']} ({c['field']}): yaml={c['yaml_value']} disk={c['disk_value']}")
             lines.append(f"    source: {c['disk_source']}")
         lines.append("")
 

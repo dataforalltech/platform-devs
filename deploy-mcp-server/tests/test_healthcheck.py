@@ -132,14 +132,10 @@ class TestWaitForCi:
 
     def test_timeout(self, monkeypatch):
         # ci sempre in_progress + relógio que estoura o deadline imediatamente
-        monkeypatch.setattr(
-            healthcheck_tool, "_ci_status", lambda *a, **k: {"status": "in_progress"}
-        )
+        monkeypatch.setattr(healthcheck_tool, "_ci_status", lambda *a, **k: {"status": "in_progress"})
         times = iter([0, 0, 1000, 2000, 3000])
         monkeypatch.setattr(healthcheck_tool.time, "time", lambda: next(times))
-        result = _wait_for_ci(
-            MagicMock(), "repo", "ci.yml", "develop", wait_seconds=10, poll_interval=1
-        )
+        result = _wait_for_ci(MagicMock(), "repo", "ci.yml", "develop", wait_seconds=10, poll_interval=1)
         assert result == "timeout"
 
 
@@ -201,9 +197,7 @@ class TestEnsureAllReposHealthy:
         monkeypatch.setattr(
             healthcheck_tool, "_ci_status", lambda _c, name, *a, **k: {"status": ci_map[name]}
         )
-        monkeypatch.setattr(
-            healthcheck_tool, "_acr_status", lambda _c, _s, name: {"status": acr_map[name]}
-        )
+        monkeypatch.setattr(healthcheck_tool, "_acr_status", lambda _c, _s, name: {"status": acr_map[name]})
 
         result = ensure_all_repos_healthy(client, acr_settings, dry_run=True)
         health = {r["name"]: r["health"] for r in result["repos"]}
@@ -233,9 +227,7 @@ class TestEnsureAllReposHealthy:
         client = MagicMock()
         client.list_repos.return_value = [{"name": "new-repo"}]
 
-        monkeypatch.setattr(
-            healthcheck_tool, "_ci_status", lambda *a, **k: {"status": "no_workflow"}
-        )
+        monkeypatch.setattr(healthcheck_tool, "_ci_status", lambda *a, **k: {"status": "no_workflow"})
         monkeypatch.setattr(healthcheck_tool, "_acr_status", lambda *a, **k: {"status": "present"})
         scaffold = MagicMock(return_value={"committed": True})
         trigger = MagicMock(return_value={"dispatched": True})

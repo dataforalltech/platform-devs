@@ -1,5 +1,10 @@
 # MCP Service Standard — Serviços MCP seguros em cloud, acessados via Claude Code (Desktop/CLI)
 
+> ⚠️ **SUPERSEDED (2026-07-10).** Este padrão (FastMCP Streamable-HTTP + OAuth-PRM) foi
+> substituído pelo **Model-C `mcp_http`** do hub. "Seguir o platform-mcp-gateway" = `mcp_http`
+> (carrega o inner token no `_meta`, habilita o PEP per-hop). Ver
+> [docs/MCP_COMPLIANCE.md](docs/MCP_COMPLIANCE.md) e `platform-service-template/docs/standards/STD-MCP-001`.
+
 > Padrão de referência para construir, expor e consumir servidores MCP da plataforma.
 > Aplica-se a todo novo MCP (DevTeam, system MCPs, data services) e à evolução dos existentes.
 > Status: **v1.0 — proposta de padronização**. Autoridade: qualquer MCP em produção DEVE

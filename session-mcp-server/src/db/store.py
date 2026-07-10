@@ -348,14 +348,10 @@ class SessionStore:
                 (session_id, name, title, objective, repo, branch, base_branch, now, now),
             )
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             return self._row_to_session(row)
 
-    def set_session_branch(
-        self, session_id: str, branch: str, base_branch: str | None = None
-    ) -> None:
+    def set_session_branch(self, session_id: str, branch: str, base_branch: str | None = None) -> None:
         """Registra a branch da sessão (e sua base)."""
         with self._lock:
             self._conn.execute(
@@ -367,9 +363,7 @@ class SessionStore:
     def get_session(self, session_id: str) -> dict[str, Any] | None:
         """Retorna a sessão completa (com último checkpoint, contagens e dependências)."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if not row:
                 return None
             return self._row_to_session(row)
@@ -417,9 +411,7 @@ class SessionStore:
                 return None
             self._conn.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", params)
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             return self._row_to_session(row)
 
     def end_session(
@@ -447,8 +439,7 @@ class SessionStore:
             if open_rows:
                 return [self._row_to_task(r) for r in open_rows]
             self._conn.execute(
-                "UPDATE sessions SET status = 'completed', ended_at = ?, "
-                "last_updated_at = ? WHERE id = ?",
+                "UPDATE sessions SET status = 'completed', ended_at = ?, last_updated_at = ? WHERE id = ?",
                 (now, now, session_id),
             )
             if summary:
@@ -457,9 +448,7 @@ class SessionStore:
                     (session_id, f"[FINAL] {summary}", now),
                 )
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             return self._row_to_session(row)
 
     # ────────────────────────────────────────────────────────────────────────── #
@@ -477,13 +466,10 @@ class SessionStore:
         context_json = json.dumps(context, ensure_ascii=False) if context else None
         with self._lock:
             cur = self._conn.execute(
-                "INSERT INTO checkpoints (session_id, summary, context_json, created_at) "
-                "VALUES (?, ?, ?, ?)",
+                "INSERT INTO checkpoints (session_id, summary, context_json, created_at) VALUES (?, ?, ?, ?)",
                 (session_id, summary, context_json, now),
             )
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             checkpoint_id = cur.lastrowid
             self._conn.commit()
         return {
@@ -519,9 +505,7 @@ class SessionStore:
                 "INSERT INTO artifacts (session_id, type, content, created_at) VALUES (?, ?, ?, ?)",
                 (session_id, artifact_type, content, now),
             )
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             artifact_id = cur.lastrowid
             self._conn.commit()
         return {
@@ -584,13 +568,9 @@ class SessionStore:
                     now,
                 ),
             )
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
             return self._row_to_task(row)
 
     def create_tasks(
@@ -621,13 +601,9 @@ class SessionStore:
                         now,
                     ),
                 )
-                row = self._conn.execute(
-                    "SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)
-                ).fetchone()
+                row = self._conn.execute("SELECT * FROM tasks WHERE id = ?", (cur.lastrowid,)).fetchone()
                 created.append(self._row_to_task(row))
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             self._conn.commit()
         return created
 
@@ -821,9 +797,7 @@ class SessionStore:
                 "VALUES (?, ?, ?, ?, ?)",
                 (session_id, service, role, notes, now),
             )
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             self._conn.commit()
             row = self._conn.execute(
                 "SELECT * FROM session_services WHERE id = ?", (cur.lastrowid,)
@@ -851,9 +825,7 @@ class SessionStore:
             if cur.rowcount == 0:
                 self._conn.commit()
                 return False
-            self._conn.execute(
-                "UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id)
-            )
+            self._conn.execute("UPDATE sessions SET last_updated_at = ? WHERE id = ?", (now, session_id))
             self._conn.commit()
             return True
 
@@ -892,17 +864,13 @@ class SessionStore:
                 ),
             )
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM suggestions WHERE id = ?", (cur.lastrowid,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM suggestions WHERE id = ?", (cur.lastrowid,)).fetchone()
             return dict(row)
 
     def get_suggestion(self, suggestion_id: int) -> dict[str, Any] | None:
         """Retorna uma sugestão pelo ID."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)).fetchone()
             return dict(row) if row else None
 
     def list_suggestions(
@@ -934,8 +902,7 @@ class SessionStore:
         """Conta sugestões pendentes para um repositório."""
         with self._lock:
             row = self._conn.execute(
-                "SELECT COUNT(*) AS n FROM suggestions "
-                "WHERE target_repo = ? AND status = 'pending'",
+                "SELECT COUNT(*) AS n FROM suggestions WHERE target_repo = ? AND status = 'pending'",
                 (target_repo,),
             ).fetchone()
             return row["n"] if row else 0
@@ -955,9 +922,7 @@ class SessionStore:
         ou string com status atual se a transição é inválida."""
         now = _now()
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM suggestions WHERE id = ?", (suggestion_id,)).fetchone()
             if not row:
                 return None
             if row["status"] not in allowed_from:
@@ -1023,9 +988,7 @@ class SessionStore:
                 ),
             )
             self._conn.commit()
-            row = self._conn.execute(
-                "SELECT * FROM decisions WHERE id = ?", (cur.lastrowid,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM decisions WHERE id = ?", (cur.lastrowid,)).fetchone()
             return dict(row)
 
     def list_decisions(
@@ -1061,9 +1024,7 @@ class SessionStore:
     def get_decision(self, decision_id: int) -> dict[str, Any] | None:
         """Retorna uma decisão pelo ID."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM decisions WHERE id = ?", (decision_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM decisions WHERE id = ?", (decision_id,)).fetchone()
             return dict(row) if row else None
 
     # ────────────────────────────────────────────────────────────────────────── #
@@ -1073,9 +1034,7 @@ class SessionStore:
     def get_resume_context(self, session_id: str) -> dict[str, Any] | None:
         """Retorna o contexto completo para retomar uma sessão."""
         with self._lock:
-            row = self._conn.execute(
-                "SELECT * FROM sessions WHERE id = ?", (session_id,)
-            ).fetchone()
+            row = self._conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
             if not row:
                 return None
             session = dict(row)

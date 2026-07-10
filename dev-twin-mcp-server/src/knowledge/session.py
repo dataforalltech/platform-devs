@@ -84,9 +84,7 @@ class SessionManager:
     def require(cls) -> UserSession:
         with cls._lock:
             if cls._current is None:
-                raise RuntimeError(
-                    "Nenhuma sessão autenticada. Chame authenticate(token) primeiro."
-                )
+                raise RuntimeError("Nenhuma sessão autenticada. Chame authenticate(token) primeiro.")
             return cls._current
 
     @classmethod
@@ -169,7 +167,7 @@ def _collect_fresh() -> dict[str, Any]:
         "hostname": platform.node(),
         "python": platform.python_version(),
         "cwd": os.getcwd(),
-        "user": os.getenv("USER") or os.getenv("USERNAME", "unknown"),
+        "user": os.getenv("USER") or os.getenv("USERNAME") or "unknown",
     }
 
     return {

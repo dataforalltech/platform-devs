@@ -47,9 +47,7 @@ def _require_store(repo: GovernanceRepository):
     return repo.suggestions
 
 
-def _resolve_canonical_target(
-    repo: GovernanceRepository, target_repo: str
-) -> tuple[str, list[str]]:
+def _resolve_canonical_target(repo: GovernanceRepository, target_repo: str) -> tuple[str | None, list[str]]:
     """Tenta resolver target_repo via EcosystemGraph (alias/deprecated_by).
 
     Devolve (canonical, notes). Se o grafo está indisponível ou o target não
@@ -67,9 +65,7 @@ def _resolve_canonical_target(
         if node.get("status") == "deprecated":
             for _, dst, key in g.graph.out_edges(target_repo, keys=True):
                 if key == "deprecated_by":
-                    notes.append(
-                        f"target_repo '{target_repo}' está deprecado; redirecionado para '{dst}'."
-                    )
+                    notes.append(f"target_repo '{target_repo}' está deprecado; redirecionado para '{dst}'.")
                     return dst, notes
         return target_repo, notes
 
@@ -126,9 +122,7 @@ def submit_suggestion(
 
     suggestion = store.create(
         source_agent=source_agent.strip(),
-        source_repo=source_repo.strip()
-        if isinstance(source_repo, str) and source_repo.strip()
-        else None,
+        source_repo=source_repo.strip() if isinstance(source_repo, str) and source_repo.strip() else None,
         target_repo=target_repo.strip(),
         target_repo_canonical=canonical,
         category=cat_norm,  # type: ignore[arg-type]  # validado contra _VALID_CATEGORIES
@@ -173,16 +167,12 @@ def list_suggestions(
     if category:
         c = safe_lower(category)
         if c not in _VALID_CATEGORIES:
-            raise ValueError(
-                f"category inválida: {category!r}. Opções: {sorted(_VALID_CATEGORIES)}"
-            )
+            raise ValueError(f"category inválida: {category!r}. Opções: {sorted(_VALID_CATEGORIES)}")
         filters_kwargs["category"] = c
     if severity:
         sev = safe_lower(severity)
         if sev not in _VALID_SEVERITIES:
-            raise ValueError(
-                f"severity inválida: {severity!r}. Opções: {sorted(_VALID_SEVERITIES)}"
-            )
+            raise ValueError(f"severity inválida: {severity!r}. Opções: {sorted(_VALID_SEVERITIES)}")
         filters_kwargs["severity"] = sev
     if source_agent:
         filters_kwargs["source_agent"] = source_agent

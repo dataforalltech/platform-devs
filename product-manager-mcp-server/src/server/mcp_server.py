@@ -24,6 +24,7 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
 NOTA: product-manager-mcp é compute-only (gera artefatos a partir dos inputs; não há
 backend REST), por isso não há ServiceApiClient — as tools são chamadas diretamente.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -76,10 +77,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "required_scope": "product-manager-mcp:feature_spec:write",
         "resource_type": "feature_spec",
         "data_domain": "product-manager",
-        "schema": _schema({
-            "feature": dict(_STR, description="Nome/tema da feature."),
-            "objective": dict(_STR, description="Objetivo da feature (opcional)."),
-        }),
+        "schema": _schema(
+            {
+                "feature": dict(_STR, description="Nome/tema da feature."),
+                "objective": dict(_STR, description="Objetivo da feature (opcional)."),
+            }
+        ),
     },
     "generate_go_to_market_brief": {
         "description": "Generate GTM brief for product launch.",
@@ -128,6 +131,7 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
+
 def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:product-manager-mcp).
 
@@ -144,13 +148,14 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     return jwt.decode(
         twin_token,
         signing_key.key,
-        algorithms=["RS256"],                         # RS256 exclusivo (STD-SEC-001)
-        audience=settings.mcp_twin_audience,          # a falha de integração nº 1
-        options={"require": ["exp", "aud", "jti"]},   # sem jti → rejeita (JTI_REQUIRED)
+        algorithms=["RS256"],  # RS256 exclusivo (STD-SEC-001)
+        audience=settings.mcp_twin_audience,  # a falha de integração nº 1
+        options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
 
 
 # ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
+
 
 def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
     """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
@@ -172,12 +177,13 @@ def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
+
 def _build_http_app(settings: Settings) -> FastAPI:
     """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
     app = FastAPI(
         title="product-manager-mcp API",
         version="0.1.0",
-        docs_url="/docs" if settings.docs_enabled else None,   # false em todo ambiente
+        docs_url="/docs" if settings.docs_enabled else None,  # false em todo ambiente
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
@@ -239,6 +245,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
+
 def build_server() -> tuple[Any, Settings, FastAPI]:
     """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
     settings = get_settings()
@@ -271,6 +278,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
+
 
 async def _run() -> None:
     import uvicorn

@@ -3,9 +3,7 @@
 from typing import Any
 
 
-def generate_kubernetes_manifest(
-    application: str = "app", replicas: int = 3
-) -> dict[str, Any]:
+def generate_kubernetes_manifest(application: str = "app", replicas: int = 3) -> dict[str, Any]:
     """Generate Kubernetes manifests (Deployment, Service, ConfigMap)."""
     return {
         "title": f"Kubernetes Manifest: {application}",
@@ -28,9 +26,7 @@ def generate_kubernetes_manifest(
     }
 
 
-def generate_dockerfile(
-    application: str = "app", runtime: str = "python:3.11"
-) -> dict[str, Any]:
+def generate_dockerfile(application: str = "app", runtime: str = "python:3.11") -> dict[str, Any]:
     """Generate optimized Dockerfile."""
     return {
         "title": f"Dockerfile: {application}",

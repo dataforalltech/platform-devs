@@ -1,8 +1,10 @@
-"""Fixtures compartilhadas para testes do session-mcp-server."""
+"""Fixtures compartilhadas para testes do session-mcp-server.
+
+O ``SessionStore`` é SQLite embarcado (hermético): nenhuma conexão de rede/DB é
+aberta, então os testes rodam sem PostgreSQL nem o gateway.
+"""
 
 from __future__ import annotations
-
-import os
 
 import pytest
 
@@ -13,15 +15,8 @@ from src.tools.session_tool import start_session
 
 @pytest.fixture
 def store() -> SessionStore:
-    """SessionStore com PostgreSQL de teste — isolado por teste."""
-    settings = SessionSettings(
-        pg_host=os.getenv("TEST_POSTGRES_HOST", "claude-dev"),
-        pg_port=int(os.getenv("TEST_POSTGRES_PORT", "5432")),
-        pg_db=os.getenv("TEST_POSTGRES_DB", "app_test"),
-        pg_user=os.getenv("TEST_POSTGRES_USER", "postgres"),
-        pg_password=os.getenv("TEST_POSTGRES_PASSWORD", "postgres_password_local_dev"),
-    )
-    s = SessionStore(settings)
+    """SessionStore hermético (SQLite in-memory) — isolado por teste."""
+    s = SessionStore(SessionSettings())
     yield s
     s.close()
 

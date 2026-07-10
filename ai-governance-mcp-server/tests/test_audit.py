@@ -298,9 +298,7 @@ class TestAuditStoreStats:
                 _make_result(repo="platform-auth"),
                 _make_result(repo="platform-auth")["input_summary"],
             )
-        store.record(
-            _make_result(repo="platform-ml"), _make_result(repo="platform-ml")["input_summary"]
-        )
+        store.record(_make_result(repo="platform-ml"), _make_result(repo="platform-ml")["input_summary"])
         s = store.stats()
         repos = {item["repo"]: item["count"] for item in s["top_repos"]}
         assert repos["platform-auth"] == 3

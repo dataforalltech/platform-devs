@@ -110,7 +110,7 @@ class DocsStore:
         with self._get_conn() as conn:
             with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
                 query = "SELECT id, repo_path, title, content, created_at FROM documents WHERE doc_type = %s"
-                params = ["audit"]
+                params: list[Any] = ["audit"]
 
                 if repo_path:
                     query += " AND repo_path = %s"
