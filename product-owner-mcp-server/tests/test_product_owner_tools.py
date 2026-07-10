@@ -6,8 +6,6 @@ stories e reflexo dos inputs nos artefatos (nenhuma saída constante).
 
 from __future__ import annotations
 
-import asyncio
-
 
 from src.tools.product_owner_tools import (
     analyze_product_problem,
@@ -285,24 +283,6 @@ class TestInputReflection:
         assert r["personas"][0]["goals"] == ["shipar rápido"]
 
 
-class TestFastMcpSchemas:
-    """As ferramentas devem registrar schemas de input derivados das assinaturas."""
-
-    def test_schemas_reflect_params(self):
-        from src.server.mcp_server import build_mcp
-
-        mcp = build_mcp()
-        tools = asyncio.run(mcp.list_tools())
-        by_name = {t.name: t for t in tools}
-
-        assert len(by_name) == 17  # todas as 17 ferramentas registradas
-
-        rice = by_name["calculate_rice_score"].inputSchema
-        assert set(["reach", "impact", "confidence", "effort"]).issubset(
-            rice["properties"].keys()
-        )
-        assert set(rice["required"]) == {"reach", "impact", "confidence", "effort"}
-
-        stories = by_name["generate_user_stories"].inputSchema
-        assert "feature" in stories["properties"]
-        assert stories["required"] == ["feature"]
+# O contrato do servidor (schemas + campos de policy + PEP inner-token) agora é
+# validado em test_mcp_server.py (sidecar mcp_http, Model C). O contrato FastMCP
+# antigo (build_mcp/list_tools) foi aposentado.

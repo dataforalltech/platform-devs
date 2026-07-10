@@ -22,7 +22,7 @@ jobs:
           - architecture-mcp-server
           - backend-mcp-server
           - devops-mcp-server
-          # - frontend-mcp-server  # PENDENTE: ainda FastMCP (não migrado p/ mcp_http Model C)
+          - frontend-mcp-server
           - product-manager-mcp-server
           - product-owner-mcp-server
           - qa-engineer-mcp-server
