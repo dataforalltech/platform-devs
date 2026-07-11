@@ -1,31 +1,229 @@
-"""Fixtures + sys.path shim para os testes do config-mcp-server.
+"""Fixtures da Suíte Canônica do config-mcp (§16 — PA-01 / FID-02).
 
-Garante que a raiz do config-mcp-server esteja no sys.path (permite `from src...`
-mesmo quando o pytest é invocado de outro cwd, sem depender de `pip install -e .`).
+**Banco REAL, nunca mockado** (FID-02): os testes do store/tools rodam contra um MySQL
+8.x real com **2 tenants** (banco-por-tenant), exercitando o caminho canônico
+`get_pool_for_tenant -> Repository -> dialeto MySQL`. O único "duplo" é o
+``platform_lookup`` (linha estática que substitui a consulta ao admin-mysql PLATFORMS) —
+a credencial do tenant, não o banco. RS256 é **real** (chave gerada, token assinado,
+verificador real) — nunca bypass (STD-QA-001 / Test Doubles Policy). A encriptação
+Fernet dos valores também é real (Encryptor de verdade, chave gerada por teste).
+
+Config via env (o CI provê o serviço MySQL):
+  MYSQL_ROOT_PASSWORD  — senha root (obrigatória; sem ela os testes de DB são SKIPADOS)
+  PILOT_MYSQL_HOST     — default 127.0.0.1
+  PILOT_MYSQL_PORT     — default 3306
 """
 
 from __future__ import annotations
 
+import os
+import socket
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
+# sys.path shim: raiz do config-mcp-server no path (permite `from src...` sem pip -e .).
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+import aiomysql  # noqa: E402
+import jwt  # noqa: E402
 import pytest  # noqa: E402
+import pytest_asyncio  # noqa: E402
+from cryptography.fernet import Fernet  # noqa: E402
+from cryptography.hazmat.primitives.asymmetric import rsa  # noqa: E402
+from platform_core.request_context import reset_tenant_id, set_tenant_id  # noqa: E402
+from platform_database import close_tenant_pools  # noqa: E402
+from platform_database.orm import configure  # noqa: E402
+from platform_database.orm.dialects import dialect_for_pool  # noqa: E402
+from platform_database.orm.tenant import TenantSession  # noqa: E402
+from platform_database.tenant_resolver import get_pool_for_tenant  # noqa: E402
 
+from src.config.settings import Settings  # noqa: E402
+from src.db.schema import CONFIG_ENTRIES_TABLE, ensure_schema  # noqa: E402
+from src.db.store import ConfigStore  # noqa: E402
 from src.knowledge.encryptor import Encryptor  # noqa: E402
-from src.knowledge.store import ConfigStore  # noqa: E402
+
+_HOST = os.environ.get("PILOT_MYSQL_HOST", "127.0.0.1")
+_PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
+_PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+
+TENANT_A = "config_test_a"
+TENANT_B = "config_test_b"
 
 
-@pytest.fixture()
-def encryptor() -> Encryptor:
-    from cryptography.fernet import Fernet
+def _mysql_up() -> bool:
+    if not _PW:
+        return False
+    try:
+        with socket.create_connection((_HOST, _PORT), timeout=2):
+            return True
+    except OSError:
+        return False
 
-    return Encryptor(Fernet.generate_key().decode())
+
+requires_mysql = pytest.mark.skipif(
+    not _mysql_up(),
+    reason="MySQL real indisponível (defina MYSQL_ROOT_PASSWORD/PILOT_MYSQL_HOST/PILOT_MYSQL_PORT)",
+)
 
 
-@pytest.fixture()
-def store(tmp_path, encryptor) -> ConfigStore:
-    return ConfigStore(str(tmp_path / "test_config.enc.json"), encryptor)
+def _test_settings(**over: Any) -> Settings:
+    kw: dict[str, Any] = dict(
+        MCP_TWIN_AUDIENCE="mcp:config-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        CONFIG_MCP_MASTER_KEY=Fernet.generate_key().decode(),
+        DB_ENGINE="mysql",
+        DB_HOST=_HOST,
+        DB_PORT=_PORT,
+        DB_USER="root",
+        DB_PASSWORD=_PW,
+        ADMIN_DB_HOST=_HOST,
+        ADMIN_DB_PORT=_PORT,
+        ADMIN_DB_USER="root",
+        ADMIN_DB_PASSWORD=_PW,
+    )
+    kw.update(over)
+    return Settings(_env_file=None, **kw)
+
+
+def _platform_row(tenant_id: str) -> dict[str, Any]:
+    return {
+        "tenant_id": tenant_id,
+        "db_engine": "mysql",
+        "db_host": _HOST,
+        "db_port": _PORT,
+        "db_name": tenant_id,  # banco-por-tenant: o db do tenant é o próprio id
+        "db_user": "root",
+        "db_password": _PW,
+    }
+
+
+async def _lookup(tenant_id: str, _settings: Any) -> dict[str, Any] | None:
+    return _platform_row(tenant_id) if tenant_id in (TENANT_A, TENANT_B) else None
+
+
+# Encryptor compartilhado pelos testes (chave Fernet estável dentro da sessão de teste,
+# para que store_a e store_b decriptem os mesmos valores).
+_ENC = Encryptor(Fernet.generate_key().decode())
+
+
+# Pools aiomysql são atados ao event loop. pytest-asyncio usa um loop por função;
+# cada fixture cria os pools no loop do teste e `close_tenant_pools()` no teardown
+# limpa o registry (close_all) p/ o próximo teste recriar no seu próprio loop.
+async def _make_store(tenant_id: str) -> tuple[ConfigStore, Any]:
+    settings = _test_settings()
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tenant_id} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+    pool = await get_pool_for_tenant(settings, tenant_id, platform_lookup=_lookup, strict=True)
+    await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+    # Estado limpo por teste (a tabela já existe; TRUNCATE é idempotente e rápido).
+    await pool.execute(f"TRUNCATE TABLE {CONFIG_ENTRIES_TABLE}")
+    token = set_tenant_id(tenant_id)
+    return ConfigStore(TenantSession(pool, tenant_id), _ENC), token
+
+
+@pytest_asyncio.fixture
+async def store_a():
+    store, token = await _make_store(TENANT_A)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def store_b():
+    store, token = await _make_store(TENANT_B)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def seed_platforms():
+    """Semeia ADMIN_DATAFORALL.PLATFORMS no MySQL de teste + `configure()`.
+
+    Exercita o caminho credencial-zero REAL (for_tenant -> get_platform -> PLATFORMS),
+    não o platform_lookup estático. A tabela é mínima (só as colunas que o resolver lê)."""
+    from platform_tenant.platform_client import close_admin_pools, invalidate_cache
+
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute("CREATE DATABASE IF NOT EXISTS ADMIN_DATAFORALL CHARACTER SET utf8mb4")
+            await cur.execute(
+                """CREATE TABLE IF NOT EXISTS ADMIN_DATAFORALL.PLATFORMS (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tenant_id VARCHAR(255) NOT NULL,
+                    db_engine VARCHAR(32), db_host VARCHAR(255), db_port INT,
+                    db_name VARCHAR(255), db_user VARCHAR(255), db_password VARCHAR(500),
+                    active SMALLINT DEFAULT 1, excluded SMALLINT DEFAULT 0,
+                    UNIQUE KEY uq_platforms_tenant (tenant_id))"""
+            )
+            for tid in (TENANT_A, TENANT_B):
+                await cur.execute("DELETE FROM ADMIN_DATAFORALL.PLATFORMS WHERE tenant_id=%s", (tid,))
+                await cur.execute(
+                    "INSERT INTO ADMIN_DATAFORALL.PLATFORMS (tenant_id, db_engine, db_host, "
+                    "db_port, db_name, db_user, db_password, active, excluded) "
+                    "VALUES (%s,'mysql',%s,%s,%s,'root',%s,1,0)",
+                    (tid, _HOST, _PORT, tid, _PW),
+                )
+                await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tid} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+
+    invalidate_cache()
+    configure(_test_settings())
+    yield
+    invalidate_cache()
+    await close_admin_pools()
+    await close_tenant_pools()
+
+
+# ── RS256 real (STD-QA-001: sem HS*, sem bypass) ──────────────────────────────
+@pytest.fixture(scope="session")
+def rsa_key() -> rsa.RSAPrivateKey:
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def mint_token(
+    rsa_key: rsa.RSAPrivateKey,
+    *,
+    tenant_id: str | None = TENANT_A,
+    aud: str = "mcp:config-mcp",
+    jti: str = "jti-1",
+    exp_delta: int = 300,
+    include_jti: bool = True,
+) -> str:
+    """Assina um inner Twin Token RS256 real (aud=mcp:<ns>, jti, exp, tenant_id)."""
+    now = datetime.now(UTC)
+    claims: dict[str, Any] = {"aud": aud, "exp": now + timedelta(seconds=exp_delta), "iat": now}
+    if include_jti:
+        claims["jti"] = jti
+    if tenant_id is not None:
+        claims["tenant_id"] = tenant_id
+    return jwt.encode(claims, rsa_key, algorithm="RS256")
+
+
+def patch_jwks(monkeypatch: pytest.MonkeyPatch, rsa_key: rsa.RSAPrivateKey) -> None:
+    """Faz o PyJWKClient servir a chave pública local — a verificação RS256 é REAL
+    (só evita o fetch de rede do JWKS; nada de bypass)."""
+    public_key = rsa_key.public_key()
+
+    class _SigningKey:
+        key = public_key
+
+    class _Client:
+        def __init__(self, _url: str) -> None:
+            pass
+
+        def get_signing_key_from_jwt(self, _token: str) -> _SigningKey:
+            return _SigningKey()
+
+    monkeypatch.setattr(jwt, "PyJWKClient", _Client)

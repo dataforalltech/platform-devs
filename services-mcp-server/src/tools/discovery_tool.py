@@ -134,7 +134,7 @@ def _docker_inspect_runtime(container_ids: list[str], timeout: int = 8) -> dict[
     return info
 
 
-def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
+async def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
     """Executa docker ps + docker inspect e sincroniza registry.
 
     Campos capturados por container:
@@ -227,7 +227,7 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
             fields["port"] = port
 
         svc_name = container_name or f"docker-{cid}"
-        store.upsert(svc_name, fields)
+        await store.upsert(svc_name, fields)
         upserted += 1
 
         containers.append(
@@ -250,7 +250,7 @@ def scan_docker(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
     }
 
 
-def scan_processes(store: ServiceStore, *, min_port: int = 1024) -> dict[str, Any]:
+async def scan_processes(store: ServiceStore, *, min_port: int = 1024) -> dict[str, Any]:
     """Usa psutil para listar processos em LISTEN com porta >= min_port.
 
     Campos capturados por processo:
@@ -316,7 +316,7 @@ def scan_processes(store: ServiceStore, *, min_port: int = 1024) -> dict[str, An
 
         # Registra no store com as informacoes de runtime
         svc_name = f"proc-{port}"
-        store.upsert(
+        await store.upsert(
             svc_name,
             {
                 "host": "localhost",
@@ -336,14 +336,14 @@ def scan_processes(store: ServiceStore, *, min_port: int = 1024) -> dict[str, An
     return {"total": len(processes), "processes": processes}
 
 
-def check_health(
+async def check_health(
     store: ServiceStore,
     *,
     name: str,
     timeout: float = 3.0,
 ) -> dict[str, Any]:
     """Realiza HTTP GET no health endpoint do serviço e atualiza o store."""
-    row = store.get(name)
+    row = await store.get(name)
     if row is None:
         return {"error": "not_found", "name": name, "healthy": False}
 
@@ -359,7 +359,7 @@ def check_health(
             response = client.get(url_checked)
         elapsed_ms = round((time.monotonic() - start) * 1000, 1)
         healthy = response.status_code < 400
-        store.update_check(name, healthy)
+        await store.update_check(name, healthy)
         return {
             "name": name,
             "healthy": healthy,
@@ -369,7 +369,7 @@ def check_health(
         }
     except httpx.TimeoutException:
         elapsed_ms = round((time.monotonic() - start) * 1000, 1)
-        store.update_check(name, False)
+        await store.update_check(name, False)
         return {
             "name": name,
             "healthy": False,
@@ -380,7 +380,7 @@ def check_health(
         }
     except Exception as exc:  # noqa: BLE001
         elapsed_ms = round((time.monotonic() - start) * 1000, 1)
-        store.update_check(name, False)
+        await store.update_check(name, False)
         return {
             "name": name,
             "healthy": False,
@@ -391,9 +391,9 @@ def check_health(
         }
 
 
-def check_all_health(store: ServiceStore, *, timeout: float = 3.0) -> dict[str, Any]:
+async def check_all_health(store: ServiceStore, *, timeout: float = 3.0) -> dict[str, Any]:
     """Verifica saúde de todos os serviços com health_path definido."""
-    rows = store.list_all()
+    rows = await store.list_all()
     total_checked = 0
     healthy_count = 0
     unhealthy_count = 0
@@ -407,7 +407,7 @@ def check_all_health(store: ServiceStore, *, timeout: float = 3.0) -> dict[str, 
             continue
 
         name = row["name"]
-        result = check_health(store, name=name, timeout=timeout)
+        result = await check_health(store, name=name, timeout=timeout)
         total_checked += 1
         is_healthy = result.get("healthy", False)
 
@@ -416,13 +416,13 @@ def check_all_health(store: ServiceStore, *, timeout: float = 3.0) -> dict[str, 
             # Se estava unknown ou stopped, marcar como running
             current_status = row.get("status", "unknown")
             if current_status in ("unknown", "stopped"):
-                store.upsert(name, {"status": "running"})
+                await store.upsert(name, {"status": "running"})
         else:
             unhealthy_count += 1
             # Se estava running, marcar como stopped
             current_status = row.get("status", "unknown")
             if current_status == "running":
-                store.upsert(name, {"status": "stopped"})
+                await store.upsert(name, {"status": "stopped"})
 
         results.append(result)
 

@@ -5,6 +5,10 @@ Esta camada é puramente de estado: cada sessão sugere um nome de branch
 via deploy-mcp. Operações git em si NÃO são feitas aqui — o agente é o
 orquestrador que chama deploy-mcp.create_branch/commit_files e devolve
 os resultados (sha) ao session-mcp via complete_task / confirm_branch.
+
+Async: o store é 100% ORM canônico (async), então cada tool é uma coroutine que
+`await`-a as operações do ``SessionStore`` tenant-scoped. A validação/audit é
+idêntica ao comportamento original.
 """
 
 from __future__ import annotations
@@ -60,7 +64,7 @@ def _validate_actor(actor: dict[str, Any] | None) -> dict[str, Any] | str:
     return {"type": a_type, "id": a_id}
 
 
-def _record(
+async def _record(
     store: SessionStore,
     *,
     actor: dict[str, str],
@@ -73,7 +77,7 @@ def _record(
     session_id: str | None = None,
 ) -> None:
     """Wrapper conveniente para gravar decisão (silencioso, não bloqueia o caller)."""
-    store.record_decision(
+    await store.record_decision(
         actor_type=actor["type"],
         actor_id=actor["id"],
         action=action,
@@ -91,7 +95,7 @@ def _session_branch_name(name: str | None) -> str:
     return sanitize_branch(f"session/{base}")
 
 
-def start_session(
+async def start_session(
     store: SessionStore,
     default_base_branch: str,
     *,
@@ -123,9 +127,9 @@ def start_session(
         }
 
     base = base_branch or default_base_branch
-    session = store.create_session(title=title, objective=objective, repo=repo)
+    session = await store.create_session(title=title, objective=objective, repo=repo)
     branch_name = _session_branch_name(session.get("name"))
-    store.set_session_branch(session_id=session["id"], branch=branch_name, base_branch=base)
+    await store.set_session_branch(session_id=session["id"], branch=branch_name, base_branch=base)
     session["branch"] = branch_name
     session["base_branch"] = base
     session["next_action"] = {
@@ -136,15 +140,15 @@ def start_session(
         ),
     }
     # Sugestões pendentes para esse repo (cross-repo queue)
-    pending = store.list_suggestions(target_repo=repo, status="pending", limit=10)
+    pending = await store.list_suggestions(target_repo=repo, status="pending", limit=10)
     session["pending_suggestions"] = {
-        "count": store.count_pending_suggestions(repo),
+        "count": await store.count_pending_suggestions(repo),
         "items": pending[:5],
     }
     return session
 
 
-def confirm_branch_created(
+async def confirm_branch_created(
     store: SessionStore,
     *,
     session_id: str,
@@ -154,7 +158,7 @@ def confirm_branch_created(
     deploy-mcp. Se sha for informado, é gravado num artifact da sessão."""
     if not session_id:
         return {"error": "ValidationError", "details": "session_id é obrigatório"}
-    session = store.get_session(session_id)
+    session = await store.get_session(session_id)
     if not session:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if not session.get("branch"):
@@ -163,7 +167,7 @@ def confirm_branch_created(
             "details": "Sessão não tem branch sugerida; use update_session ou recrie.",
         }
     if sha:
-        store.add_artifact(
+        await store.add_artifact(
             session_id=session_id,
             artifact_type="note",
             content=f"Branch '{session['branch']}' criada — sha base {sha}",
@@ -171,7 +175,7 @@ def confirm_branch_created(
     return {"confirmed": True, "session_id": session_id, "branch": session["branch"]}
 
 
-def save_checkpoint(
+async def save_checkpoint(
     store: SessionStore,
     *,
     session_id: str,
@@ -181,12 +185,12 @@ def save_checkpoint(
     """Salva um snapshot do progresso da sessão."""
     if not session_id or not summary:
         return {"error": "ValidationError", "details": "session_id e summary são obrigatórios"}
-    if not store.get_session(session_id):
+    if not await store.get_session(session_id):
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
-    return store.save_checkpoint(session_id=session_id, summary=summary, context=context)
+    return await store.save_checkpoint(session_id=session_id, summary=summary, context=context)
 
 
-def update_session(
+async def update_session(
     store: SessionStore,
     *,
     session_id: str,
@@ -201,13 +205,13 @@ def update_session(
             "error": "ValidationError",
             "details": f"status deve ser um de: {sorted(_VALID_STATUSES)}",
         }
-    result = store.update_session(session_id=session_id, status=status, progress=progress)
+    result = await store.update_session(session_id=session_id, status=status, progress=progress)
     if not result:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     return result
 
 
-def add_artifact(
+async def add_artifact(
     store: SessionStore,
     *,
     session_id: str,
@@ -225,12 +229,12 @@ def add_artifact(
             "error": "ValidationError",
             "details": f"artifact_type deve ser um de: {sorted(_VALID_ARTIFACT_TYPES)}",
         }
-    if not store.get_session(session_id):
+    if not await store.get_session(session_id):
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
-    return store.add_artifact(session_id=session_id, artifact_type=artifact_type, content=content)
+    return await store.add_artifact(session_id=session_id, artifact_type=artifact_type, content=content)
 
 
-def list_sessions(
+async def list_sessions(
     store: SessionStore,
     *,
     status: str | None = None,
@@ -243,11 +247,11 @@ def list_sessions(
             "error": "ValidationError",
             "details": f"status deve ser um de: {sorted(_VALID_STATUSES)}",
         }
-    sessions = store.list_sessions(status=status, repo=repo, limit=min(limit, 100))
+    sessions = await store.list_sessions(status=status, repo=repo, limit=min(limit, 100))
     return {"count": len(sessions), "sessions": sessions}
 
 
-def get_session(
+async def get_session(
     store: SessionStore,
     *,
     session_id: str,
@@ -255,13 +259,13 @@ def get_session(
     """Retorna dados completos de uma sessão (com último checkpoint e contagem de artefatos)."""
     if not session_id:
         return {"error": "ValidationError", "details": "session_id é obrigatório"}
-    result = store.get_session(session_id)
+    result = await store.get_session(session_id)
     if not result:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     return result
 
 
-def resume_session(
+async def resume_session(
     store: SessionStore,
     *,
     session_id: str,
@@ -269,18 +273,18 @@ def resume_session(
     """Retorna o contexto completo para retomar uma sessão: checkpoints, artefatos e hint de retomada."""
     if not session_id:
         return {"error": "ValidationError", "details": "session_id é obrigatório"}
-    result = store.get_resume_context(session_id)
+    result = await store.get_resume_context(session_id)
     if not result:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     # Reativa a sessão se estava pausada
     session = result["session"]
     if session.get("status") == "paused":
-        store.update_session(session_id=session_id, status="active")
+        await store.update_session(session_id=session_id, status="active")
         result["session"]["status"] = "active"
     return result
 
 
-def end_session(
+async def end_session(
     store: SessionStore,
     *,
     session_id: str,
@@ -300,7 +304,7 @@ def end_session(
             "error": "ValidationError",
             "details": "rationale é obrigatório em end_session (decisão crítica)",
         }
-    result = store.end_session(session_id=session_id, summary=final_summary or "")
+    result = await store.end_session(session_id=session_id, summary=final_summary or "")
     if result is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if isinstance(result, list):
@@ -312,7 +316,7 @@ def end_session(
             ),
             "open_tasks": result,
         }
-    _record(
+    await _record(
         store,
         actor=actor_v,
         action="end_session",
@@ -329,7 +333,7 @@ def end_session(
 # ── Tasks ────────────────────────────────────────────────────────────────── #
 
 
-def add_task(
+async def add_task(
     store: SessionStore,
     *,
     session_id: str,
@@ -356,7 +360,7 @@ def add_task(
                     "error": "ValidationError",
                     "details": f"tasks[{idx}] precisa ter campo 'title'",
                 }
-        created = store.create_tasks(session_id=session_id, tasks=tasks)
+        created = await store.create_tasks(session_id=session_id, tasks=tasks)
         if created is None:
             return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
         return {"count": len(created), "tasks": created}
@@ -365,7 +369,7 @@ def add_task(
             "error": "ValidationError",
             "details": "informe 'title' ou 'tasks' com a lista de tarefas",
         }
-    task = store.create_task(
+    task = await store.create_task(
         session_id=session_id,
         title=title,
         description=description,
@@ -390,12 +394,12 @@ def _handle_transition(result: Any, task_id: int, allowed_from: tuple[str, ...])
     return result
 
 
-def start_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
+async def start_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
     """Marca a tarefa como `in_progress` (só funciona a partir de `pending`).
     Bloqueia se a task tem needs_human_decision=true e ainda não recebeu decision='go'."""
     if not task_id:
         return {"error": "ValidationError", "details": "task_id é obrigatório"}
-    task = store.get_task(task_id)
+    task = await store.get_task(task_id)
     if not task:
         return {"error": "not_found", "details": f"Tarefa '{task_id}' não encontrada"}
     if task["needs_human_decision"] and task["decision"] != "go":
@@ -407,10 +411,10 @@ def start_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
             ),
             "task_id": task_id,
         }
-    return _handle_transition(store.start_task(task_id), task_id, ("pending",))
+    return _handle_transition(await store.start_task(task_id), task_id, ("pending",))
 
 
-def approve_task(
+async def approve_task(
     store: SessionStore,
     *,
     task_id: int,
@@ -438,7 +442,7 @@ def approve_task(
             "error": "ValidationError",
             "details": "rationale é obrigatório quando decision='no_go' (decisão crítica)",
         }
-    result = store.approve_task(task_id, decision=decision, notes=notes or rationale)
+    result = await store.approve_task(task_id, decision=decision, notes=notes or rationale)
     if result is None:
         return {"error": "not_found", "details": f"Tarefa '{task_id}' não encontrada"}
     if isinstance(result, str):
@@ -447,7 +451,7 @@ def approve_task(
             "details": (f"Decisão só é aceita para tasks pending; status atual: '{result}'."),
             "current_status": result,
         }
-    _record(
+    await _record(
         store,
         actor=actor_v,
         action="approve_task",
@@ -460,7 +464,7 @@ def approve_task(
     return result
 
 
-def complete_task(
+async def complete_task(
     store: SessionStore,
     *,
     task_id: int,
@@ -490,7 +494,7 @@ def complete_task(
     if not commit_message:
         return {"error": "ValidationError", "details": "commit_message é obrigatório"}
 
-    transition = store.complete_task(
+    transition = await store.complete_task(
         task_id,
         result=result,
         commit_sha=commit_sha,
@@ -499,7 +503,7 @@ def complete_task(
     return _handle_transition(transition, task_id, ("pending", "in_progress"))
 
 
-def fail_task(
+async def fail_task(
     store: SessionStore,
     *,
     task_id: int,
@@ -515,12 +519,12 @@ def fail_task(
     if not reason:
         return {"error": "ValidationError", "details": "reason é obrigatório"}
     payload = _handle_transition(
-        store.fail_task(task_id, reason=reason),
+        await store.fail_task(task_id, reason=reason),
         task_id,
         ("pending", "in_progress"),
     )
     if isinstance(payload, dict) and "error" not in payload:
-        _record(
+        await _record(
             store,
             actor=actor_v,
             action="fail_task",
@@ -533,7 +537,7 @@ def fail_task(
     return payload
 
 
-def cancel_task(
+async def cancel_task(
     store: SessionStore,
     *,
     task_id: int,
@@ -549,12 +553,12 @@ def cancel_task(
     if not reason:
         return {"error": "ValidationError", "details": "reason é obrigatório (decisão crítica)"}
     payload = _handle_transition(
-        store.cancel_task(task_id, reason=reason),
+        await store.cancel_task(task_id, reason=reason),
         task_id,
         ("pending", "in_progress"),
     )
     if isinstance(payload, dict) and "error" not in payload:
-        _record(
+        await _record(
             store,
             actor=actor_v,
             action="cancel_task",
@@ -567,7 +571,7 @@ def cancel_task(
     return payload
 
 
-def list_tasks(
+async def list_tasks(
     store: SessionStore,
     *,
     session_id: str,
@@ -581,17 +585,17 @@ def list_tasks(
             "error": "ValidationError",
             "details": f"status deve ser um de: {sorted(_VALID_TASK_STATUSES)}",
         }
-    tasks = store.list_tasks(session_id=session_id, status=status)
+    tasks = await store.list_tasks(session_id=session_id, status=status)
     if tasks is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     return {"count": len(tasks), "tasks": tasks}
 
 
-def get_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
+async def get_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
     """Retorna os dados de uma tarefa pelo ID."""
     if not task_id:
         return {"error": "ValidationError", "details": "task_id é obrigatório"}
-    task = store.get_task(task_id)
+    task = await store.get_task(task_id)
     if not task:
         return {"error": "not_found", "details": f"Tarefa '{task_id}' não encontrada"}
     return task
@@ -600,7 +604,7 @@ def get_task(store: SessionStore, *, task_id: int) -> dict[str, Any]:
 # ── Service dependencies ────────────────────────────────────────────────────── #
 
 
-def add_service_dependency(
+async def add_service_dependency(
     store: SessionStore,
     *,
     session_id: str,
@@ -620,7 +624,9 @@ def add_service_dependency(
                 "(consulte o services-mcp para descobrir os disponíveis)"
             ),
         }
-    result = store.add_service_dependency(session_id=session_id, service=service, role=role, notes=notes)
+    result = await store.add_service_dependency(
+        session_id=session_id, service=service, role=role, notes=notes
+    )
     if result is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if isinstance(result, str):  # store devolve "duplicate" como sentinela
@@ -631,7 +637,7 @@ def add_service_dependency(
     return result
 
 
-def list_service_dependencies(
+async def list_service_dependencies(
     store: SessionStore,
     *,
     session_id: str,
@@ -639,13 +645,13 @@ def list_service_dependencies(
     """Lista os serviços auxiliares vinculados à sessão."""
     if not session_id:
         return {"error": "ValidationError", "details": "session_id é obrigatório"}
-    deps = store.list_service_dependencies(session_id=session_id)
+    deps = await store.list_service_dependencies(session_id=session_id)
     if deps is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     return {"count": len(deps), "service_dependencies": deps}
 
 
-def remove_service_dependency(
+async def remove_service_dependency(
     store: SessionStore,
     *,
     session_id: str,
@@ -657,7 +663,7 @@ def remove_service_dependency(
             "error": "ValidationError",
             "details": "session_id e service são obrigatórios",
         }
-    result = store.remove_service_dependency(session_id=session_id, service=service)
+    result = await store.remove_service_dependency(session_id=session_id, service=service)
     if result is None:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if result is False:
@@ -671,7 +677,7 @@ def remove_service_dependency(
 # ── Cross-repo suggestions ────────────────────────────────────────────────────── #
 
 
-def submit_suggestion(
+async def submit_suggestion(
     store: SessionStore,
     *,
     source_repo: str,
@@ -701,7 +707,7 @@ def submit_suggestion(
             "error": "ValidationError",
             "details": f"priority deve ser um de: {sorted(_VALID_SUGGESTION_PRIORITIES)}",
         }
-    suggestion = store.create_suggestion(
+    suggestion = await store.create_suggestion(
         source_repo=source_repo,
         target_repo=target_repo,
         title=title,
@@ -710,14 +716,13 @@ def submit_suggestion(
         priority=priority,
         source_session_id=source_session_id,
     )
-    # Anota inheritance via response_reason ainda não — armazenamos como decision_notes
-    # na task quando accept ocorrer. needs_human_decision é propagado em memory na função
-    # accept_suggestion abaixo.
+    # needs_human_decision é propagado em memória; a herança na task acontece em
+    # accept_suggestion abaixo (que aplica o flag ao criar a task).
     suggestion["needs_human_decision"] = needs_human_decision
     return suggestion
 
 
-def list_suggestions_tool(
+async def list_suggestions_tool(
     store: SessionStore,
     *,
     target_repo: str | None = None,
@@ -731,26 +736,26 @@ def list_suggestions_tool(
             "error": "ValidationError",
             "details": f"status deve ser um de: {sorted(_VALID_SUGGESTION_STATUSES)}",
         }
-    items = store.list_suggestions(
+    items = await store.list_suggestions(
         target_repo=target_repo, source_repo=source_repo, status=status, limit=min(limit, 200)
     )
     return {"count": len(items), "suggestions": items}
 
 
-def get_suggestion_tool(
+async def get_suggestion_tool(
     store: SessionStore,
     *,
     suggestion_id: int,
 ) -> dict[str, Any]:
     if not suggestion_id:
         return {"error": "ValidationError", "details": "suggestion_id é obrigatório"}
-    item = store.get_suggestion(suggestion_id)
+    item = await store.get_suggestion(suggestion_id)
     if not item:
         return {"error": "not_found", "details": f"Sugestão '{suggestion_id}' não encontrada"}
     return item
 
 
-def accept_suggestion(
+async def accept_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
@@ -768,7 +773,7 @@ def accept_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    suggestion = store.get_suggestion(suggestion_id)
+    suggestion = await store.get_suggestion(suggestion_id)
     if not suggestion:
         return {"error": "not_found", "details": f"Sugestão '{suggestion_id}' não encontrada"}
     if suggestion["status"] != "pending":
@@ -777,7 +782,7 @@ def accept_suggestion(
             "details": f"Sugestão está em '{suggestion['status']}' — só pending pode ser aceita.",
             "current_status": suggestion["status"],
         }
-    session = store.get_session(session_id)
+    session = await store.get_session(session_id)
     if not session:
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
     if session.get("repo") and session["repo"] != suggestion["target_repo"]:
@@ -793,7 +798,7 @@ def accept_suggestion(
     if suggestion.get("source_repo"):
         prefix = f"[suggestion #{suggestion_id} from {suggestion['source_repo']}]"
         description = f"{prefix}\n\n{description}".strip()
-    task = store.create_task(
+    task = await store.create_task(
         session_id=session_id,
         title=suggestion["title"],
         description=description,
@@ -801,13 +806,13 @@ def accept_suggestion(
     )
     if task is None:  # sessão já validada acima; guarda defensiva p/ tipo
         return {"error": "not_found", "details": f"Sessão '{session_id}' não encontrada"}
-    transitioned = store.transition_suggestion(
+    transitioned = await store.transition_suggestion(
         suggestion_id,
         new_status="accepted",
         accepted_session_id=session_id,
         accepted_task_id=task["id"],
     )
-    _record(
+    await _record(
         store,
         actor=actor_v,
         action="accept_suggestion",
@@ -821,7 +826,7 @@ def accept_suggestion(
     return {"suggestion": transitioned, "task": task}
 
 
-def reject_suggestion(
+async def reject_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
@@ -833,10 +838,10 @@ def reject_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    result = store.transition_suggestion(suggestion_id, new_status="rejected", response_reason=reason)
+    result = await store.transition_suggestion(suggestion_id, new_status="rejected", response_reason=reason)
     payload = _handle_suggestion_transition(result, suggestion_id)
     if isinstance(payload, dict) and "error" not in payload:
-        _record(
+        await _record(
             store,
             actor=actor_v,
             action="reject_suggestion",
@@ -848,7 +853,7 @@ def reject_suggestion(
     return payload
 
 
-def defer_suggestion(
+async def defer_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
@@ -860,10 +865,10 @@ def defer_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    result = store.transition_suggestion(suggestion_id, new_status="deferred", response_reason=reason)
+    result = await store.transition_suggestion(suggestion_id, new_status="deferred", response_reason=reason)
     payload = _handle_suggestion_transition(result, suggestion_id)
     if isinstance(payload, dict) and "error" not in payload:
-        _record(
+        await _record(
             store,
             actor=actor_v,
             action="defer_suggestion",
@@ -875,7 +880,7 @@ def defer_suggestion(
     return payload
 
 
-def supersede_suggestion(
+async def supersede_suggestion(
     store: SessionStore,
     *,
     suggestion_id: int,
@@ -888,7 +893,7 @@ def supersede_suggestion(
     actor_v = _validate_actor(actor)
     if isinstance(actor_v, str):
         return {"error": "ValidationError", "details": actor_v}
-    result = store.transition_suggestion(
+    result = await store.transition_suggestion(
         suggestion_id,
         new_status="superseded",
         response_reason=reason,
@@ -896,7 +901,7 @@ def supersede_suggestion(
     )
     payload = _handle_suggestion_transition(result, suggestion_id)
     if isinstance(payload, dict) and "error" not in payload:
-        _record(
+        await _record(
             store,
             actor=actor_v,
             action="supersede_suggestion",
@@ -924,7 +929,7 @@ def _handle_suggestion_transition(result: Any, suggestion_id: int) -> dict[str, 
 # ── Decisions audit ───────────────────────────────────────────────────────────────── #
 
 
-def list_decisions_tool(
+async def list_decisions_tool(
     store: SessionStore,
     *,
     target_type: str | None = None,
@@ -941,7 +946,7 @@ def list_decisions_tool(
             "error": "ValidationError",
             "details": f"actor_type deve ser um de: {sorted(_VALID_ACTOR_TYPES)}",
         }
-    items = store.list_decisions(
+    items = await store.list_decisions(
         target_type=target_type,
         target_id=target_id,
         actor_type=actor_type,
@@ -953,14 +958,14 @@ def list_decisions_tool(
     return {"count": len(items), "decisions": items}
 
 
-def get_decision_tool(
+async def get_decision_tool(
     store: SessionStore,
     *,
     decision_id: int,
 ) -> dict[str, Any]:
     if not decision_id:
         return {"error": "ValidationError", "details": "decision_id é obrigatório"}
-    item = store.get_decision(decision_id)
+    item = await store.get_decision(decision_id)
     if not item:
         return {"error": "not_found", "details": f"Decisão '{decision_id}' não encontrada"}
     return item

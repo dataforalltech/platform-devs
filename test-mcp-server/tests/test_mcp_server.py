@@ -1,10 +1,10 @@
 """Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
 
 Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown, happy path,
-erro interno), _dispatch e _verify_inner_token. O PyJWKClient/JWKS é sempre
-mockado e o PostgreSQL é substituído pela camada SQLite in-memory do conftest —
-os testes nunca fazem I/O de rede/DB (FID-01 / Test Doubles Policy).
+(missing/invalid token, tenant das claims, exclude, unknown, happy path, erro
+interno), o dispatcher async, _verify_inner_token e o caminho credencial-zero real
+(_run_tool -> for_tenant -> store) contra MySQL. RS256 é sempre real (chave gerada +
+PyJWKClient servindo a chave pública local) — nunca bypass.
 """
 
 from __future__ import annotations
@@ -13,14 +13,13 @@ import datetime
 import json
 from decimal import Decimal
 
-import psycopg2.pool
 import pytest
 from fastapi.testclient import TestClient
 
 from src.config.settings import Settings
 from src.server import mcp_server as M
 
-from .conftest import _FakePool
+from .conftest import mint_token, patch_jwks, requires_mysql
 
 _EXPECTED_TOOLS = {
     "create_test_plan",
@@ -46,9 +45,9 @@ def _settings() -> Settings:
 
 
 @pytest.fixture()
-def client(store: M.TestStore) -> TestClient:
-    """Sidecar HTTP com o ``store`` SQLite-backed do conftest."""
-    return TestClient(M._build_http_app(_settings(), store))
+def client() -> TestClient:
+    """Sidecar HTTP (sem store global; a persistência é resolvida por-request)."""
+    return TestClient(M._build_http_app(_settings()))
 
 
 # ── /v1/health ────────────────────────────────────────────────────────────────
@@ -97,44 +96,10 @@ def test_call_invalid_twin_token(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_verify_inner_token", _boom)
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_test_plans",
-                "arguments": {},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "list_test_plans", "arguments": {}, "_meta": {"twin_token": "tok"}}},
     )
     assert r.status_code == 401
     assert r.json()["error"] == "invalid_twin_token"
-
-
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args, _store):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_test_plans",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    assert captured["name"] == "list_test_plans"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
 
 
 # ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
@@ -142,48 +107,66 @@ def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_test_plans",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
+        json={"params": {"name": "list_test_plans", "arguments": {}, "_meta": {"twin_token": "t"}}},
     )
     assert r.status_code == 401
     assert r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — happy path: token válido → executa e strippa tenant ─────
-def test_call_valid_token_happy_path(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-1", "jti": "j"})
+# ── /mcp/tools/call — token válido: tenant das claims DIRIGE o pool (INV-3) ────
+def test_call_tenant_from_claims_drives_pool(client: TestClient, monkeypatch):
+    captured: dict = {}
+
+    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
+
+    async def _fake_run_tool(name, arguments, settings, tenant_id):
+        captured["name"] = name
+        captured["tenant_id"] = tenant_id
+        captured["args"] = dict(arguments)
+        return {"ok": True}
+
+    monkeypatch.setattr(M, "_run_tool", _fake_run_tool)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_test_plans",
+                # tenant do cliente deve ser IGNORADO (tenant vem das claims).
+                "arguments": {"tenant_id": "ATTACKER"},
+                "_meta": {"twin_token": "tok"},
+            }
+        },
+    )
+    assert r.status_code == 200
+    assert captured["name"] == "list_test_plans"
+    assert captured["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    # o tenant NÃO é injetado nos args (dirige o pool, não a chamada da tool)
+    assert captured["args"] == {"tenant_id": "ATTACKER"}
+
+
+# ── /mcp/tools/call — happy path (RS256 real; _run_tool mockado) ──────────────
+def test_call_happy_path_real_token(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+
+    async def _fake_run_tool(name, arguments, settings, tenant_id):
+        return {"title": arguments.get("title"), "status": "active"}
+
+    monkeypatch.setattr(M, "_run_tool", _fake_run_tool)
+    token = mint_token(rsa_key, tenant_id="T-1")
     r = client.post(
         "/mcp/tools/call",
         json={
             "params": {
                 "name": "create_test_plan",
                 "arguments": {"title": "P", "scope": "S"},
-                "_meta": {"twin_token": "tok"},
+                "_meta": {"twin_token": token},
             }
         },
     )
     assert r.status_code == 200
     payload = json.loads(r.json()["result"]["content"][0]["text"])
-    # tenant_id injetado foi removido pelo dispatcher → a tool executou com sucesso
     assert payload["title"] == "P"
     assert payload["status"] == "active"
-
-
-# ── /mcp/tools/call — tool exempt (sem token) via monkeypatch ─────────────────
-def test_call_exempt_tool_without_token(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXEMPT_TOOLS", frozenset({"list_test_plans"}))
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "list_test_plans", "arguments": {}}},
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert "count" in payload
 
 
 # ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
@@ -200,6 +183,11 @@ def test_call_excluded_tool(client: TestClient, monkeypatch):
 # ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
 def test_call_unknown_tool(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
+
+    async def _raise_key(name, arguments, settings, tenant_id):
+        raise KeyError(name)
+
+    monkeypatch.setattr(M, "_run_tool", _raise_key)
     r = client.post(
         "/mcp/tools/call",
         json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
@@ -208,23 +196,17 @@ def test_call_unknown_tool(client: TestClient, monkeypatch):
     assert r.json()["error"] == "unknown_tool"
 
 
-# ── /mcp/tools/call — erro interno na tool → payload internal_error ────────────
+# ── /mcp/tools/call — erro interno → payload internal_error ────────────────────
 def test_call_internal_error(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
 
-    def _boom(name, args, _store):
+    async def _boom(name, arguments, settings, tenant_id):
         raise RuntimeError("kaboom")
 
-    monkeypatch.setattr(M, "_dispatch", _boom)
+    monkeypatch.setattr(M, "_run_tool", _boom)
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_test_plans",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
+        json={"params": {"name": "list_test_plans", "arguments": {}, "_meta": {"twin_token": "t"}}},
     )
     assert r.status_code == 200
     payload = json.loads(r.json()["result"]["content"][0]["text"])
@@ -232,78 +214,60 @@ def test_call_internal_error(client: TestClient, monkeypatch):
     assert "kaboom" in payload["detail"]
 
 
-# ── _dispatch cobre roteamento + KeyError + strip de tenant + TypeError ────────
-def test_dispatch_routes_and_strips_tenant(store: M.TestStore):
-    plan = M._dispatch("create_test_plan", {"title": "P", "scope": "S", "tenant_id": "T"}, store)
-    assert plan["title"] == "P"  # tenant_id removido, não vira invalid_arguments
-    listed = M._dispatch("list_test_plans", {}, store)
-    assert listed["count"] >= 1
-    add = M._dispatch(
-        "add_bug", {"plan_id": str(plan["id"]), "severity": "low", "title": "t", "description": "d"}, store
-    )
-    assert add["severity"] == "low"  # add_bug → validation_tool.add_finding
+# ── _dispatch (async) roteia + KeyError + TypeError ───────────────────────────
+async def test_dispatch_unknown_raises_keyerror():
+    class _NoStore:
+        pass
+
     with pytest.raises(KeyError):
-        M._dispatch("unknown", {}, store)
+        await M._dispatch("unknown", {}, _NoStore())  # type: ignore[arg-type]
 
 
-def test_dispatch_invalid_arguments(store: M.TestStore):
-    result = M._dispatch("list_test_plans", {"bogus": 1}, store)
+async def test_dispatch_invalid_arguments(store):
+    result = await M._dispatch("list_test_plans", {"bogus": 1}, store)
     assert result["error"] == "invalid_arguments"
 
 
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token ───────────────────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
     s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── _verify_inner_token configurado usa PyJWKClient + jwt.decode (mockado) ─────
-def test_verify_inner_token_decodes(monkeypatch):
+def test_verify_inner_token_decodes(monkeypatch, rsa_key):
     s = _settings()
-
-    class _FakeKey:
-        key = "K"
-
-    class _FakeJWK:
-        def __init__(self, _url):
-            pass
-
-        def get_signing_key_from_jwt(self, _tok):
-            return _FakeKey()
-
-    captured: dict = {}
-
-    def _decode(tok, key, algorithms, audience, options):
-        captured.update(algorithms=algorithms, audience=audience, options=options)
-        return {"tenant_id": "T", "jti": "j"}
-
-    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWK)
-    monkeypatch.setattr(M.jwt, "decode", _decode)
-    claims = M._verify_inner_token("tok", s)
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id="T", jti="j")
+    claims = M._verify_inner_token(token, s)
     assert claims["tenant_id"] == "T"
-    assert captured["algorithms"] == ["RS256"]
-    assert captured["audience"] == "mcp:test-mcp"
-    assert set(captured["options"]["require"]) == {"exp", "aud", "jti"}
+    assert claims["aud"] == "mcp:test-mcp"
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server; pool faked) ───────────
+def test_verify_inner_token_rejects_wrong_audience(monkeypatch, rsa_key):
+    s = _settings()
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, aud="mcp:outro-servico")
+    with pytest.raises(Exception):  # noqa: B017 — audiência divergente rejeita (fail-closed)
+        M._verify_inner_token(token, s)
+
+
+# ── build_server smoke (fábrica + stdio Server; sem DB) ───────────────────────
 def test_build_server_smoke(monkeypatch):
-    monkeypatch.setattr(psycopg2.pool, "ThreadedConnectionPool", _FakePool)
+    monkeypatch.setenv("MCP_TWIN_AUDIENCE", "mcp:test-mcp")
     from src.config import settings as settings_mod
 
     settings_mod.get_settings.cache_clear()
-    server, settings, store, http_app = M.build_server()
+    server, settings, http_app = M.build_server()
     assert server is not None
     assert settings.mcp_twin_audience == "mcp:test-mcp"
     assert http_app.title.startswith("test-mcp")
     resp = TestClient(http_app).get("/v1/health")
     assert resp.json()["service"] == "test-mcp"
-    store.close()
     settings_mod.get_settings.cache_clear()
 
 
-# ── _JSONEncoder serializa datetime/Decimal (retornos do psycopg2) ────────────
+# ── _JSONEncoder serializa datetime/Decimal (colunas padrão do ORM) ───────────
 def test_json_encoder_serializes_datetime_and_decimal():
     payload = {
         "when": datetime.datetime(2026, 1, 2, 3, 4, 5),
@@ -321,7 +285,7 @@ def test_json_encoder_raises_on_unknown_type():
         json.dumps({"x": object()}, cls=M._JSONEncoder)
 
 
-# ── stdio handlers registrados no low-level Server (list_tools / call_tool) ────
+# ── stdio handlers: list_tools + call_tool (gateway-only, fail-closed) ────────
 def _find_handler(server, needle: str):
     for req_type, fn in server.request_handlers.items():
         if needle in req_type.__name__.lower():
@@ -331,13 +295,11 @@ def _find_handler(server, needle: str):
 
 @pytest.fixture()
 def built(monkeypatch):
-    monkeypatch.setattr(psycopg2.pool, "ThreadedConnectionPool", _FakePool)
     from src.config import settings as settings_mod
 
     settings_mod.get_settings.cache_clear()
     result = M.build_server()
     yield result
-    result[2].close()  # store.close()
     settings_mod.get_settings.cache_clear()
 
 
@@ -364,18 +326,14 @@ async def _invoke_call(server, name, arguments):
     return json.loads(result.root.content[0].text)
 
 
-async def test_stdio_call_tool_happy_and_errors(built, monkeypatch):
+async def test_stdio_call_tool_is_gateway_only(built):
     server = built[0]
-    plan = await _invoke_call(server, "create_test_plan", {"title": "P", "scope": "S"})
-    assert plan["title"] == "P"
-    # tool desconhecida → unknown_tool (KeyError capturado no handler stdio)
+    # tool conhecida via stdio → recusa fail-closed (sem tenant; gateway-only)
+    known = await _invoke_call(server, "create_test_plan", {"title": "P", "scope": "S"})
+    assert known["error"] == "tenant_context_required"
+    # tool desconhecida → unknown_tool
     unknown = await _invoke_call(server, "does_not_exist", {})
     assert unknown["error"] == "unknown_tool"
-    # erro interno propaga como internal_error
-    monkeypatch.setattr(M, "_dispatch", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
-    err = await _invoke_call(server, "list_test_plans", {})
-    assert err["error"] == "internal_error"
-    assert "boom" in err["detail"]
 
 
 # ── main() com MCP_HTTP_ONLY=1 → sobe só o sidecar (uvicorn.run mockado) ───────
@@ -386,10 +344,31 @@ def test_main_http_only(monkeypatch):
     class _FakeHttp:
         title = "test-mcp API"
 
-    monkeypatch.setattr(M, "build_server", lambda: (None, _settings(), None, _FakeHttp()))
+    monkeypatch.setattr(M, "build_server", lambda: (None, _settings(), _FakeHttp()))
 
     import uvicorn
 
     monkeypatch.setattr(uvicorn, "run", lambda *a, **k: ran.setdefault("called", True))
     M.main()
     assert ran["called"] is True
+
+
+# ── Caminho credencial-zero REAL: _run_tool -> for_tenant -> store (MySQL) ─────
+@requires_mysql
+@pytest.mark.integration
+async def test_run_tool_end_to_end_real_tenant(seed_platforms):
+    from .conftest import TENANT_A, _test_settings
+
+    settings = _test_settings()
+    payload = await M._run_tool("create_test_plan", {"title": "P", "scope": "S"}, settings, TENANT_A)
+    assert payload["title"] == "P"
+    assert payload["status"] == "active"
+    assert isinstance(payload["id"], int) and payload["id"] > 0
+
+    # segunda chamada reusa o guard _SCHEMA_READY (schema já garantido)
+    listed = await M._run_tool("list_test_plans", {}, settings, TENANT_A)
+    assert listed["count"] >= 1
+
+    # tool desconhecida propaga KeyError (o handler HTTP o traduz p/ 404)
+    with pytest.raises(KeyError):
+        await M._run_tool("does_not_exist", {}, settings, TENANT_A)

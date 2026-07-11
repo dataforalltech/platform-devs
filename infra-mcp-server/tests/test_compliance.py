@@ -55,11 +55,25 @@ def test_enforce_requires_jwks_in_cloud():
         s.enforce_security_invariants()
 
 
-def test_enforce_ok_in_cloud_with_jwks():
+def test_enforce_requires_admin_db_in_cloud():
+    # cloud + jwks mas SEM ADMIN_DB_HOST/PASSWORD → o allocator agora é tenant-scoped no
+    # ORM (há credencial de DB de verdade), então o boot falha fechado (STD-SEC-004).
     s = Settings(
         RUNTIME_ENV="cloud",
         MCP_TWIN_AUDIENCE="mcp:infra-mcp",
         URL_ADMIN_TWIN_JWKS="http://admin.local/jwks",
+    )
+    with pytest.raises(RuntimeError, match="ADMIN_DB_HOST/ADMIN_DB_PASSWORD"):
+        s.enforce_security_invariants()
+
+
+def test_enforce_ok_in_cloud_with_jwks_and_admin_db():
+    s = Settings(
+        RUNTIME_ENV="cloud",
+        MCP_TWIN_AUDIENCE="mcp:infra-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks",
+        ADMIN_DB_HOST="admin-db.local",
+        ADMIN_DB_PASSWORD="s3cr3t",  # noqa: S106 — valor fake de teste, sem I/O real
     )
     assert s.enforce_security_invariants() is None
 

@@ -22,9 +22,12 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: dev-twin-mcp é **stateful** (gerencia a tabela agent_tokens em PostgreSQL via
-TokenStore). O store é criado de forma lazy (primeira tool que o usa), então o boot
-e o /v1/health não dependem do banco.
+NOTA: dev-twin-mcp é **stateful** (gerencia a tabela agent_tokens de identidade/tokens).
+A persistência roda 100% sobre o ORM canônico (`platform_database.orm`), tenant-scoped e
+dual-db (credencial-zero, ORM-H-12): resolvida por-request a partir do tenant nos claims
+do inner token. As tools de sessão em memória (whoami/get_twin_context/refresh_context/
+context_status) e o status operacional NÃO tocam o banco; só authenticate e as 4 admin
+tools abrem uma sessão tenant-scoped.
 """
 
 from __future__ import annotations
@@ -40,10 +43,15 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import DevTwinSettings, get_settings
-from ..db.token_store import TokenStore
+from ..db.schema import ensure_schema
+from ..db.store import TokenStore
 from ..knowledge.session import SessionManager
 from ..tools import (
     authenticate,
@@ -280,18 +288,12 @@ _EXCLUDE_TOOLS: frozenset[str] = frozenset({"register_token", "rotate_token"})
 # Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
 _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
 
-
-# ── Persistência (lazy) ───────────────────────────────────────────────────────
-# O TokenStore abre um pool psycopg2 no __init__; criá-lo de forma lazy mantém o boot
-# e o /v1/health resilientes a indisponibilidade momentânea do banco.
-_store: TokenStore | None = None
-
-
-def _get_store(settings: DevTwinSettings) -> TokenStore:
-    global _store
-    if _store is None:
-        _store = TokenStore(settings)
-    return _store
+# Tools que tocam o banco (agent_tokens) → precisam de uma sessão tenant-scoped
+# (`for_tenant`). As demais não-exempt (whoami/get_twin_context/refresh_context/
+# context_status) leem apenas o SessionManager em memória e são despachadas sem store.
+_STORE_TOOLS: frozenset[str] = frozenset(
+    {"authenticate", "register_token", "revoke_token", "rotate_token", "list_tokens"}
+)
 
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
@@ -327,16 +329,24 @@ def status() -> dict[str, Any]:
     return {"status": "ok", "service": "dev-twin-mcp", "tools": len(_TOOL_SCHEMAS)}
 
 
-# ── Dispatcher ────────────────────────────────────────────────────────────────
+# ── Dispatcher (async) ────────────────────────────────────────────────────────
 
 
-def _dispatch(name: str, args: dict[str, Any], settings: DevTwinSettings) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
-    args (INV-3); as tools de sessão/admin não o consomem (lêem apenas suas chaves)."""
+async def _dispatch(
+    name: str,
+    args: dict[str, Any],
+    settings: DevTwinSettings,
+    store: TokenStore | None,
+) -> dict[str, Any]:
+    """Despacha a chamada para a função de tool (async).
+
+    O tenant NÃO viaja nos args (INV-3): quando a tool toca o banco, o ``store`` já
+    está ligado ao pool do tenant (resolvido dos claims do inner token). As tools de
+    sessão/status não usam o store (``store is None`` é válido para elas).
+    """
+    # ── Operacional / sessão em memória (sem store) ───────────────────────── #
     if name == "status":
         return status()
-    if name == "authenticate":
-        return authenticate(_get_store(settings), token=args["token"])
     if name == "whoami":
         return whoami()
     if name == "get_twin_context":
@@ -345,9 +355,14 @@ def _dispatch(name: str, args: dict[str, Any], settings: DevTwinSettings) -> dic
         return refresh_context()
     if name == "context_status":
         return context_status()
+    # ── Tocam o banco (agent_tokens) — store tenant-scoped obrigatório ─────── #
+    if store is None:
+        raise KeyError(name)
+    if name == "authenticate":
+        return await authenticate(store, token=args["token"])
     if name == "register_token":
-        return register_token(
-            _get_store(settings),
+        return await register_token(
+            store,
             admin_token_configured=settings.admin_token,
             admin_token=args["admin_token"],
             name=args["name"],
@@ -359,22 +374,22 @@ def _dispatch(name: str, args: dict[str, Any], settings: DevTwinSettings) -> dic
             tenant_id=args.get("tenant_id"),
         )
     if name == "revoke_token":
-        return revoke_token(
-            _get_store(settings),
+        return await revoke_token(
+            store,
             admin_token_configured=settings.admin_token,
             admin_token=args["admin_token"],
             identifier=args["identifier"],
         )
     if name == "rotate_token":
-        return rotate_token(
-            _get_store(settings),
+        return await rotate_token(
+            store,
             admin_token_configured=settings.admin_token,
             admin_token=args["admin_token"],
             identifier=args["identifier"],
         )
     if name == "list_tokens":
-        return list_tokens(
-            _get_store(settings),
+        return await list_tokens(
+            store,
             admin_token_configured=settings.admin_token,
             admin_token=args["admin_token"],
             include_revoked=args.get("include_revoked", False),
@@ -382,11 +397,50 @@ def _dispatch(name: str, args: dict[str, Any], settings: DevTwinSettings) -> dic
     raise KeyError(name)
 
 
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: DevTwinSettings, tenant_id: str) -> None:
+    """Garante a tabela agent_tokens no banco do tenant (uma vez por processo). O engine
+    é o do dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: DevTwinSettings, tenant_id: str | None
+) -> dict[str, Any]:
+    """Despacha a tool. Se ela toca o banco, abre a sessão tenant-scoped (credencial-zero)
+    e garante o schema; senão (status/sessão em memória) despacha sem store."""
+    if name in _STORE_TOOLS:
+        if not tenant_id:
+            # Defensivo: tools de store só chegam pelo caminho verificado (com tenant).
+            raise KeyError(name)
+        await _ensure_tenant_schema(settings, tenant_id)
+        async with for_tenant(tenant_id) as session:
+            store = TokenStore(session)
+            return await _dispatch(name, arguments, settings, store)
+    return await _dispatch(name, arguments, settings, None)
+
+
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
 def _build_http_app(settings: DevTwinSettings) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada que toca o banco abre uma sessão
+    tenant-scoped (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="dev-twin-mcp API",
         version="0.1.0",
@@ -413,7 +467,7 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -422,6 +476,7 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
         # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        tenant_id: str | None = None
         if name not in _EXEMPT_TOOLS:
             twin_token = (params.get("_meta") or {}).get("twin_token")
             if not twin_token:
@@ -431,15 +486,15 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
             except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
                 _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
                 return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
+            claim_tenant = claims.get("tenant_id")
+            if not claim_tenant:
                 return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
             # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+            tenant_id = str(claim_tenant)
 
         SessionManager.increment_tool_calls()
         try:
-            payload = _dispatch(name, arguments, settings)
+            payload = await _run_tool(name, arguments, settings, tenant_id)
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -448,6 +503,11 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
@@ -455,12 +515,17 @@ def _build_http_app(settings: DevTwinSettings) -> FastAPI:
 
 
 def build_server() -> tuple[Any, DevTwinSettings, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logs estruturados JSON (STD-OBS-001)
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
     http_app = _build_http_app(settings)
-    _log.info("dev_twin_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+    _log.info("dev_twin_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("dev-twin-mcp-server")
 
@@ -473,15 +538,20 @@ def build_server() -> tuple[Any, DevTwinSettings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        SessionManager.increment_tool_calls()
-        try:
-            payload = _dispatch(name, args, settings)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). dev-twin-mcp
+        # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
+        # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "dev-twin-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     return server, settings, http_app

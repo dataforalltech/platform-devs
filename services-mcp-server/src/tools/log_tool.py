@@ -257,7 +257,7 @@ async def _stream_file_logs(
 # ── MCP Tools ─────────────────────────────────────────────────────────────────
 
 
-def get_service_logs(
+async def get_service_logs(
     store: ServiceStore,
     *,
     name: str,
@@ -274,7 +274,7 @@ def get_service_logs(
     since: '30m', '1h', '2h', '5s' ou timestamp ISO 8601.
     grep:  filtro regex case-insensitive nas linhas retornadas.
     """
-    svc = store.get(name)
+    svc = await store.get(name)
     if svc is None:
         return {"error": "not_found", "name": name}
 
@@ -316,7 +316,7 @@ def get_service_logs(
     }
 
 
-def search_logs(
+async def search_logs(
     store: ServiceStore,
     *,
     name: str,
@@ -329,7 +329,7 @@ def search_logs(
     Retorna apenas as linhas que batem com o padrao.
     lines: quantas linhas recentes vasculhar antes de filtrar.
     """
-    result = get_service_logs(store, name=name, lines=lines, since=since, grep=pattern)
+    result = await get_service_logs(store, name=name, lines=lines, since=since, grep=pattern)
     if "error" in result:
         return result
 

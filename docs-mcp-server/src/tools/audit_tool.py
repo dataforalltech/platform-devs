@@ -118,7 +118,7 @@ def find_stale_docs(
     }
 
 
-def audit_repo(
+async def audit_repo(
     store: Any,
     settings: Any,
     *,
@@ -211,7 +211,7 @@ def audit_repo(
         "stale": stale_result.get("stale_docs", [])[:5],
     }
 
-    audit_id = store.save_audit(
+    audit_id = await store.save_audit(
         repo_path=repo_path,
         score=overall_score,
         grade=grade,
@@ -236,7 +236,7 @@ def audit_repo(
     }
 
 
-def get_audit_history(
+async def get_audit_history(
     store: Any,
     settings: Any,
     *,
@@ -244,9 +244,9 @@ def get_audit_history(
     limit: int = 10,
 ) -> dict:
     """
-    Retorna histórico de auditorias salvas no SQLite.
+    Retorna histórico de auditorias salvas no store.
     """
-    audits = store.list_audits(repo_path=repo_path, limit=limit)
+    audits = await store.list_audits(repo_path=repo_path, limit=limit)
     return {
         "total": len(audits),
         "audits": [
@@ -263,7 +263,7 @@ def get_audit_history(
     }
 
 
-def generate_doc_report(
+async def generate_doc_report(
     store: Any,
     settings: Any,
     *,
@@ -280,14 +280,14 @@ def generate_doc_report(
         }
 
     # Get audit history
-    audits = store.list_audits(repo_path=repo_path, limit=10)
+    audits = await store.list_audits(repo_path=repo_path, limit=10)
 
     if not audits:
         # Run audit_repo if no history
-        audit_result = audit_repo(store, settings, repo_path=repo_path)
+        audit_result = await audit_repo(store, settings, repo_path=repo_path)
         if "error" in audit_result:
             return audit_result
-        audits = store.list_audits(repo_path=repo_path, limit=10)
+        audits = await store.list_audits(repo_path=repo_path, limit=10)
 
     if not audits:
         return {

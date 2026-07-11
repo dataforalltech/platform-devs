@@ -1,4 +1,4 @@
-"""Ferramentas de gestão de variáveis de ambiente por perfil.
+"""Ferramentas de gestão de variáveis de ambiente por perfil (async, tenant-scoped).
 
 Namespaces: env.dev, env.staging, env.production
 """
@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from ..knowledge.store import ConfigStore
+from ..db.store import ConfigStore
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +79,7 @@ def _parse_env_lines(text: str) -> list[tuple[str, str | None, str]]:
     return result
 
 
-def get_env_config(
+async def get_env_config(
     store: ConfigStore,
     environment: str,
     key_pattern: str | None = None,
@@ -93,7 +93,7 @@ def get_env_config(
         limit: Máximo de variáveis retornadas. Padrão: 50.
     """
     ns = f"env.{environment}"
-    config = store.get_namespace(ns)
+    config = await store.get_namespace(ns)
     if key_pattern:
         config = {k: v for k, v in config.items() if key_pattern.upper() in k.upper()}
     if len(config) > limit:
@@ -101,28 +101,29 @@ def get_env_config(
     return {"environment": environment, "config": config, "count": len(config)}
 
 
-def set_env_var(
+async def set_env_var(
     store: ConfigStore,
     environment: str,
     key: str,
     value: str,
 ) -> dict[str, Any]:
     """Define uma variável de ambiente para um perfil."""
-    store.set(f"env.{environment}", key, value)
+    await store.set(f"env.{environment}", key, value)
     return {"success": True, "environment": environment, "key": key}
 
 
-def list_environments(store: ConfigStore) -> dict[str, Any]:
+async def list_environments(store: ConfigStore) -> dict[str, Any]:
     """Lista os ambientes configurados e a quantidade de variáveis em cada um."""
     envs: dict[str, int] = {}
-    for ns in store.list_namespaces():
+    for ns in await store.list_namespaces():
         if ns.startswith("env."):
             env_name = ns.removeprefix("env.")
-            envs[env_name] = len(store.list_keys(ns).get(ns, []))
+            keys = await store.list_keys(ns)
+            envs[env_name] = len(keys.get(ns, []))
     return {"environments": envs, "count": len(envs)}
 
 
-def sync_env_file(
+async def sync_env_file(
     store: ConfigStore,
     target_path: str,
     environment: str,
@@ -136,7 +137,7 @@ def sync_env_file(
         merge: Se True, mantém variáveis existentes não presentes no store.
     """
     ns = f"env.{environment}"
-    config = store.get_namespace(ns)
+    config = await store.get_namespace(ns)
 
     if not config:
         return {
@@ -174,11 +175,11 @@ def sync_env_file(
 
 
 # ---------------------------------------------------------------------------
-# New disk-level helpers
+# Disk-level helpers (I/O de .env; alguns tocam o store, threaded pela sessão async)
 # ---------------------------------------------------------------------------
 
 
-def read_env_file(
+async def read_env_file(
     store: ConfigStore,
     *,
     path: str,
@@ -208,7 +209,7 @@ def read_env_file(
     return {"path": str(p), "variables": variables, "count": len(variables)}
 
 
-def audit_env_files(
+async def audit_env_files(
     store: ConfigStore,
     *,
     directory: str,
@@ -261,7 +262,7 @@ def audit_env_files(
                 in_store = False
                 if check_store:
                     try:
-                        existing = store.get(f"env.{profile}", k)
+                        existing = await store.get(f"env.{profile}", k)
                         in_store = existing is not None
                     except Exception:  # noqa: BLE001, S110 — cobertura é best-effort
                         pass
@@ -300,7 +301,7 @@ def audit_env_files(
     }
 
 
-def redact_env_secrets(
+async def redact_env_secrets(
     store: ConfigStore,
     *,
     paths: list[str],
@@ -380,7 +381,7 @@ def redact_env_secrets(
     }
 
 
-def push_env_to_store(
+async def push_env_to_store(
     store: ConfigStore,
     *,
     path: str,
@@ -420,7 +421,7 @@ def push_env_to_store(
 
         if not overwrite:
             try:
-                existing = store.get(namespace, key)
+                existing = await store.get(namespace, key)
                 if existing is not None:
                     skipped_keys.append(key)
                     continue
@@ -428,7 +429,7 @@ def push_env_to_store(
                 pass
 
         try:
-            store.set(namespace, key, value)
+            await store.set(namespace, key, value)
             pushed_keys.append(key)
         except Exception as exc:
             logger.warning("Failed to push %s to %s: %s", key, namespace, exc)

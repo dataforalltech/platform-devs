@@ -1,42 +1,39 @@
+"""Tools de API (run_api_tests / generate_test_matrix) — async, ORM-backed.
+
+As chamadas HTTP síncronas (`httpx.Client`) rodam em `asyncio.to_thread` para não
+travar o event loop do sidecar; só a persistência (`await store.save_run`) fica no
+contexto async. O store é tenant-scoped (ORM canônico, dual-db).
+"""
+
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import Any
 
 import httpx
 
 
-def run_api_tests(
-    store: Any,
+def _run_api_tests_blocking(
     settings: Any,
     *,
     base_url: str,
     endpoints: list[dict],
-    timeout: float | None = None,
-) -> dict:
-    """
-    Testa endpoints HTTP. Cada item em endpoints:
-    {
-      "path": "/api/users",
-      "method": "GET",
-      "headers": {},
-      "body": {},
-      "expect_status": 200,
-      "expect_keys": ["id", "name"]
-    }
-    """
+    timeout: float | None,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de run_api_tests. Retorna (resposta, kwargs de persistência|None)."""
     if not base_url:
         return {
             "error": "ValidationError",
             "details": "base_url is required",
             "tool": "run_api_tests",
-        }
+        }, None
     if not endpoints:
         return {
             "error": "ValidationError",
             "details": "endpoints list is required and cannot be empty",
             "tool": "run_api_tests",
-        }
+        }, None
 
     http_timeout = timeout if timeout is not None else settings.http_timeout
     results: list[dict[str, Any]] = []
@@ -103,45 +100,72 @@ def run_api_tests(
                 }
             )
 
-    run_id = store.save_run(
-        run_type="api",
-        status="passed" if total_failed == 0 else "failed",
-        summary={"total": len(endpoints), "passed": total_passed, "failed": total_failed},
-        details={"results": results[:20]},
-        repo_path=base_url,
-    )
-
-    return {
+    ret = {
         "total": len(endpoints),
         "passed": total_passed,
         "failed": total_failed,
         "results": results,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "api",
+        "status": "passed" if total_failed == 0 else "failed",
+        "summary": {"total": len(endpoints), "passed": total_passed, "failed": total_failed},
+        "details": {"results": results[:20]},
+        "repo_path": base_url,
+    }
+    return ret, persist
 
 
-def generate_test_matrix(
+async def run_api_tests(
     store: Any,
     settings: Any,
     *,
     base_url: str,
-    scenarios: list[dict],
+    endpoints: list[dict],
+    timeout: float | None = None,
 ) -> dict:
     """
-    Gera a matriz de testes: cada (cenário × payload) é um caso de teste.
+    Testa endpoints HTTP. Cada item em endpoints:
+    {
+      "path": "/api/users",
+      "method": "GET",
+      "headers": {},
+      "body": {},
+      "expect_status": 200,
+      "expect_keys": ["id", "name"]
+    }
     """
+    ret, persist = await asyncio.to_thread(
+        _run_api_tests_blocking,
+        settings,
+        base_url=base_url,
+        endpoints=endpoints,
+        timeout=timeout,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _generate_test_matrix_blocking(
+    settings: Any,
+    *,
+    base_url: str,
+    scenarios: list[dict],
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de generate_test_matrix. Retorna (resposta, kwargs de persistência|None)."""
     if not base_url:
         return {
             "error": "ValidationError",
             "details": "base_url is required",
             "tool": "generate_test_matrix",
-        }
+        }, None
     if not scenarios:
         return {
             "error": "ValidationError",
             "details": "scenarios list is required and cannot be empty",
             "tool": "generate_test_matrix",
-        }
+        }, None
 
     matrix: list[dict[str, Any]] = []
     total_passed = 0
@@ -213,22 +237,42 @@ def generate_test_matrix(
                 )
 
     total_cases = len(matrix)
-    run_id = store.save_run(
-        run_type="api_matrix",
-        status="passed" if total_failed == 0 else "failed",
-        summary={
-            "total_cases": total_cases,
-            "passed": total_passed,
-            "failed": total_failed,
-        },
-        details={"matrix_sample": matrix[:10]},
-        repo_path=base_url,
-    )
-
-    return {
+    ret = {
         "total_cases": total_cases,
         "passed": total_passed,
         "failed": total_failed,
         "matrix": matrix,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "api_matrix",
+        "status": "passed" if total_failed == 0 else "failed",
+        "summary": {
+            "total_cases": total_cases,
+            "passed": total_passed,
+            "failed": total_failed,
+        },
+        "details": {"matrix_sample": matrix[:10]},
+        "repo_path": base_url,
+    }
+    return ret, persist
+
+
+async def generate_test_matrix(
+    store: Any,
+    settings: Any,
+    *,
+    base_url: str,
+    scenarios: list[dict],
+) -> dict:
+    """
+    Gera a matriz de testes: cada (cenário × payload) é um caso de teste.
+    """
+    ret, persist = await asyncio.to_thread(
+        _generate_test_matrix_blocking,
+        settings,
+        base_url=base_url,
+        scenarios=scenarios,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret

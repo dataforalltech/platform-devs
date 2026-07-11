@@ -27,7 +27,7 @@ def _validation_error(tool: str, details: str) -> dict[str, Any]:
     return {"error": "ValidationError", "tool": tool, "details": details}
 
 
-def register_service(
+async def register_service(
     store: ServiceStore,
     *,
     name: str,
@@ -76,7 +76,7 @@ def register_service(
         if kwargs.get(field) is not None:
             fields[field] = kwargs[field]
 
-    result = store.upsert(name, fields)
+    result = await store.upsert(name, fields)
     return {
         "name": name,
         "action": result["action"],
@@ -84,15 +84,15 @@ def register_service(
     }
 
 
-def get_service(store: ServiceStore, *, name: str) -> dict[str, Any]:
+async def get_service(store: ServiceStore, *, name: str) -> dict[str, Any]:
     """Retorna os dados de um serviço pelo nome."""
-    row = store.get(name)
+    row = await store.get(name)
     if row is None:
         return {"found": False, "name": name}
     return {"found": True, "service": service_record(row)}
 
 
-def list_services(
+async def list_services(
     store: ServiceStore,
     *,
     environment: str | None = None,
@@ -104,7 +104,7 @@ def list_services(
     """Lista servicos com filtros opcionais."""
     type_ = kwargs.get("type")
     status = kwargs.get("status")
-    rows = store.list_all(
+    rows = await store.list_all(
         environment=environment,
         type_=type_,
         status=status,
@@ -115,7 +115,7 @@ def list_services(
     return {"total": len(rows), "services": [service_record(r) for r in rows]}
 
 
-def update_service(store: ServiceStore, *, name: str, **kwargs: Any) -> dict[str, Any]:
+async def update_service(store: ServiceStore, *, name: str, **kwargs: Any) -> dict[str, Any]:
     """Atualiza campos de um serviço existente."""
     # Remove sentinels / None values and check that at least 1 field was given
     fields = {k: v for k, v in kwargs.items() if v is not None}
@@ -147,11 +147,11 @@ def update_service(store: ServiceStore, *, name: str, **kwargs: Any) -> dict[str
             f"status inválido: {fields['status']!r}. Use: {sorted(VALID_STATUSES)}",
         )
 
-    existing = store.get(name)
+    existing = await store.get(name)
     if existing is None:
         return {"error": "NotFound", "tool": "update_service", "name": name}
 
-    result = store.upsert(name, fields)
+    result = await store.upsert(name, fields)
     return {
         "name": name,
         "updated_fields": sorted(fields.keys()),
@@ -159,7 +159,7 @@ def update_service(store: ServiceStore, *, name: str, **kwargs: Any) -> dict[str
     }
 
 
-def unregister_service(store: ServiceStore, *, name: str) -> dict[str, Any]:
+async def unregister_service(store: ServiceStore, *, name: str) -> dict[str, Any]:
     """Remove um serviço do registry."""
-    deleted = store.delete(name)
+    deleted = await store.delete(name)
     return {"deleted": deleted, "name": name}

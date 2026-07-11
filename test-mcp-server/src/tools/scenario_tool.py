@@ -1,4 +1,4 @@
-"""Ferramentas de construção e execução de cenários de teste."""
+"""Ferramentas de construção e execução de cenários de teste (async — store ORM)."""
 
 from __future__ import annotations
 
@@ -497,7 +497,7 @@ _TEMPLATES: dict[str, list[dict[str, Any]]] = {
 }
 
 
-def generate_scenarios(
+async def generate_scenarios(
     store: TestStore,
     *,
     plan_id: str,
@@ -512,7 +512,7 @@ def generate_scenarios(
             "error": "ValidationError",
             "details": f"category deve ser um de: {sorted(_TEMPLATES.keys())}",
         }
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
     templates = _TEMPLATES[category]
@@ -525,7 +525,7 @@ def generate_scenarios(
             name = name.replace("{endpoint}", context)
             steps = steps.replace("{endpoint}", context)
 
-        result = store.add_scenario(
+        result = await store.add_scenario(
             plan_id=plan_id,
             name=name,
             category=tmpl["category"],
@@ -545,7 +545,7 @@ def generate_scenarios(
     }
 
 
-def add_scenario(
+async def add_scenario(
     store: TestStore,
     *,
     plan_id: str,
@@ -572,10 +572,10 @@ def add_scenario(
             "error": "ValidationError",
             "details": f"priority deve ser um de: {sorted(_VALID_PRIORITIES)}",
         }
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
-    return store.add_scenario(
+    return await store.add_scenario(
         plan_id=plan_id,
         name=name,
         category=category,
@@ -586,7 +586,7 @@ def add_scenario(
     )
 
 
-def record_result(
+async def record_result(
     store: TestStore,
     *,
     plan_id: str,
@@ -604,10 +604,10 @@ def record_result(
             "error": "ValidationError",
             "details": f"status deve ser um de: {sorted(_VALID_RESULT_STATUSES)}",
         }
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
-    return store.record_result(
+    return await store.record_result(
         plan_id=plan_id,
         scenario_id=scenario_id,
         status=status,

@@ -2,7 +2,7 @@ from ..config.settings import AuditSettings
 from ..db.store import AuditStore
 
 
-def get_audit_gate_result(
+async def get_audit_gate_result(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -11,7 +11,7 @@ def get_audit_gate_result(
 ) -> dict:
     """Retorna resultado do gate de auditoria para integração com pipeline-mcp."""
     try:
-        audit = store.get_latest_audit(service, env)
+        audit = await store.get_latest_audit(service, env)
 
         if not audit:
             return {

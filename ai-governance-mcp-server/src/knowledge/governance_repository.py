@@ -14,7 +14,6 @@ from pathlib import Path
 from ..utils.logger import get_logger
 from .ecosystem_graph import EcosystemGraph, EcosystemGraphError
 from .markdown_loader import KnowledgeDocument, KnowledgeSection, MarkdownLoader
-from .suggestion_store import SuggestionStore
 
 _log = get_logger(__name__)
 
@@ -118,22 +117,22 @@ class GovernanceRepository:
 
     Carrega documentos no construtor; expõe consultas por arquivo, camada e busca.
     Não expõe paths absolutos para fora — apenas o `name` do arquivo.
+
+    NOTA: a mural de sugestões e a trilha de auditoria NÃO vivem mais aqui — migraram
+    para o ORM tenant-scoped (`..db.store`), instanciado por-request a partir da
+    ``TenantSession``. Este repositório é puramente a KB compute-only (read-only).
     """
 
     def __init__(
         self,
         kb_path: Path,
-        suggestions_path: Path | None = None,
     ) -> None:
         self.kb_path = kb_path
-        self._suggestions_path = suggestions_path or (kb_path / "suggestions")
         self._documents: dict[str, KnowledgeDocument] = {}
         self._index: list[_IndexedSection] = []
         self._ecosystem: EcosystemGraph | None = None
-        self._suggestions: SuggestionStore | None = None
         self._load()
         self._load_graph()
-        self._load_suggestions()
 
     def _load(self) -> None:
         loader = MarkdownLoader(self.kb_path)
@@ -176,22 +175,6 @@ class GovernanceRepository:
     def ecosystem(self) -> EcosystemGraph | None:
         """Acesso somente-leitura ao grafo. None se ausente/inválido."""
         return self._ecosystem
-
-    def _load_suggestions(self) -> None:
-        """Inicializa o SuggestionStore. Cria a pasta se ausente."""
-        try:
-            self._suggestions = SuggestionStore(self._suggestions_path)
-        except OSError as e:
-            _log.error(
-                "suggestion_store_unavailable",
-                extra={"extras": {"error": str(e), "path": str(self._suggestions_path)}},
-            )
-            self._suggestions = None
-
-    @property
-    def suggestions(self) -> SuggestionStore | None:
-        """Acesso ao store de sugestões cross-repo. None se filesystem falhou."""
-        return self._suggestions
 
     @staticmethod
     def _tokenize(text: str) -> Counter[str]:

@@ -1,5 +1,13 @@
+"""Tools de análise estática (linter/security/deps/type-check/complexity) — async, ORM-backed.
+
+Os subprocessos (ruff/eslint/bandit/npm-audit/pip-audit/mypy/tsc/radon) rodam em
+`asyncio.to_thread` (não travam o event loop do sidecar); só a persistência
+(`await store.save_run`) fica no contexto async. O store é tenant-scoped (dual-db).
+"""
+
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import subprocess
@@ -30,23 +38,20 @@ def _run_subprocess(
     return result.returncode, result.stdout, result.stderr
 
 
-def run_linter(
-    store: Any,
+def _run_linter_blocking(
     settings: Any,
     *,
     repo_path: str,
-    framework: str = "auto",
-    fix: bool = False,
-) -> dict:
-    """
-    Python: ruff check; JS/TS: npx eslint.
-    """
+    framework: str,
+    fix: bool,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Python: ruff check; JS/TS: npx eslint."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "run_linter",
-        }
+        }, None
 
     actual_fw = framework if framework != "auto" else _detect_project_type(repo_path)
 
@@ -68,13 +73,13 @@ def run_linter(
             "tool": tool_name,
             "hint": hint,
             "details": str(exc),
-        }
+        }, None
     except subprocess.TimeoutExpired:
         return {
             "error": "timeout",
             "details": f"Linter exceeded {settings.subprocess_timeout}s",
             "tool": "run_linter",
-        }
+        }, None
 
     issues: list[dict] = []
     errors = 0
@@ -139,15 +144,6 @@ def run_linter(
         except (json.JSONDecodeError, KeyError):
             pass
 
-    run_id = store.save_run(
-        run_type="linter",
-        status="passed" if errors == 0 else "failed",
-        summary={"errors": errors, "warnings": warnings},
-        details={"issues": issues[:20]},
-        repo_path=repo_path,
-        framework=actual_fw,
-    )
-
     ret: dict[str, Any] = {
         "framework": actual_fw,
         "tool": tool_name,
@@ -155,27 +151,54 @@ def run_linter(
         "warnings": warnings,
         "files_checked": files_checked,
         "issues": issues,
-        "run_id": run_id,
     }
     if fix:
         ret["fixed"] = fixed
-    return ret
+    persist = {
+        "run_type": "linter",
+        "status": "passed" if errors == 0 else "failed",
+        "summary": {"errors": errors, "warnings": warnings},
+        "details": {"issues": issues[:20]},
+        "repo_path": repo_path,
+        "framework": actual_fw,
+    }
+    return ret, persist
 
 
-def run_security_scan(
+async def run_linter(
     store: Any,
     settings: Any,
     *,
     repo_path: str,
     framework: str = "auto",
+    fix: bool = False,
 ) -> dict:
+    """Análise estática (ruff/eslint)."""
+    ret, persist = await asyncio.to_thread(
+        _run_linter_blocking,
+        settings,
+        repo_path=repo_path,
+        framework=framework,
+        fix=fix,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _run_security_scan_blocking(
+    settings: Any,
+    *,
+    repo_path: str,
+    framework: str,
+) -> tuple[dict, dict[str, Any] | None]:
     """Python: bandit; JS/TS: npm audit."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "run_security_scan",
-        }
+        }, None
 
     actual_fw = framework if framework != "auto" else _detect_project_type(repo_path)
 
@@ -195,13 +218,13 @@ def run_security_scan(
             "tool": tool_name,
             "hint": hint,
             "details": str(exc),
-        }
+        }, None
     except subprocess.TimeoutExpired:
         return {
             "error": "timeout",
             "details": f"Security scan exceeded {settings.subprocess_timeout}s",
             "tool": "run_security_scan",
-        }
+        }, None
 
     findings: list[dict] = []
     high = medium = low = 0
@@ -256,16 +279,7 @@ def run_security_scan(
             pass
 
     total_issues = high + medium + low
-    run_id = store.save_run(
-        run_type="security",
-        status="passed" if high == 0 else "failed",
-        summary={"high": high, "medium": medium, "low": low, "total_issues": total_issues},
-        details={"findings": findings[:20]},
-        repo_path=repo_path,
-        framework=actual_fw,
-    )
-
-    return {
+    ret = {
         "framework": actual_fw,
         "tool": tool_name,
         "high": high,
@@ -273,23 +287,49 @@ def run_security_scan(
         "low": low,
         "total_issues": total_issues,
         "findings": findings,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "security",
+        "status": "passed" if high == 0 else "failed",
+        "summary": {"high": high, "medium": medium, "low": low, "total_issues": total_issues},
+        "details": {"findings": findings[:20]},
+        "repo_path": repo_path,
+        "framework": actual_fw,
+    }
+    return ret, persist
 
 
-def check_dependencies(
+async def run_security_scan(
     store: Any,
     settings: Any,
     *,
     repo_path: str,
+    framework: str = "auto",
 ) -> dict:
+    """Scan de segurança (bandit/npm audit)."""
+    ret, persist = await asyncio.to_thread(
+        _run_security_scan_blocking,
+        settings,
+        repo_path=repo_path,
+        framework=framework,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _check_dependencies_blocking(
+    settings: Any,
+    *,
+    repo_path: str,
+) -> tuple[dict, dict[str, Any] | None]:
     """pip-audit / safety para Python; npm audit para Node."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "check_dependencies",
-        }
+        }, None
 
     p = Path(repo_path)
     is_node = (p / "package.json").exists()
@@ -318,20 +358,20 @@ def check_dependencies(
                     "tool": "pip-audit",
                     "hint": "pip install pip-audit",
                     "details": str(exc2),
-                }
+                }, None
         else:
             return {
                 "error": "tool_not_found",
                 "tool": tool_name,
                 "hint": "npm install",
                 "details": "npm not found",
-            }
+            }, None
     except subprocess.TimeoutExpired:
         return {
             "error": "timeout",
             "details": f"Dependency check exceeded {settings.subprocess_timeout}s",
             "tool": "check_dependencies",
-        }
+        }, None
 
     findings: list[dict] = []
     total_packages = 0
@@ -392,39 +432,54 @@ def check_dependencies(
         except (json.JSONDecodeError, KeyError):
             pass
 
-    run_id = store.save_run(
-        run_type="dependencies",
-        status="passed" if not findings else "failed",
-        summary={"total_packages": total_packages, "vulnerabilities": len(findings)},
-        details={"findings": findings[:20]},
-        repo_path=repo_path,
-        framework=fw,
-    )
-
-    return {
+    ret = {
         "framework": fw,
         "tool": tool_name,
         "total_packages": total_packages,
         "vulnerabilities": len(findings),
         "findings": findings,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "dependencies",
+        "status": "passed" if not findings else "failed",
+        "summary": {"total_packages": total_packages, "vulnerabilities": len(findings)},
+        "details": {"findings": findings[:20]},
+        "repo_path": repo_path,
+        "framework": fw,
+    }
+    return ret, persist
 
 
-def run_type_check(
+async def check_dependencies(
     store: Any,
     settings: Any,
     *,
     repo_path: str,
-    framework: str = "auto",
 ) -> dict:
+    """Verifica vulnerabilidades em dependências (pip-audit/safety/npm audit)."""
+    ret, persist = await asyncio.to_thread(
+        _check_dependencies_blocking,
+        settings,
+        repo_path=repo_path,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _run_type_check_blocking(
+    settings: Any,
+    *,
+    repo_path: str,
+    framework: str,
+) -> tuple[dict, dict[str, Any] | None]:
     """mypy para Python; tsc para TypeScript."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "run_type_check",
-        }
+        }, None
 
     actual_fw = framework if framework != "auto" else _detect_project_type(repo_path)
 
@@ -444,13 +499,13 @@ def run_type_check(
             "tool": tool_name,
             "hint": hint,
             "details": str(exc),
-        }
+        }, None
     except subprocess.TimeoutExpired:
         return {
             "error": "timeout",
             "details": f"Type check exceeded {settings.subprocess_timeout}s",
             "tool": "run_type_check",
-        }
+        }, None
 
     issues: list[dict] = []
     errors = 0
@@ -500,40 +555,57 @@ def run_type_check(
             )
         files_checked = len(seen_files)
 
-    run_id = store.save_run(
-        run_type="type_check",
-        status="passed" if errors == 0 else "failed",
-        summary={"errors": errors, "warnings": warnings},
-        details={"issues": issues[:20]},
-        repo_path=repo_path,
-        framework=actual_fw,
-    )
-
-    return {
+    ret = {
         "framework": actual_fw,
         "tool": tool_name,
         "errors": errors,
         "warnings": warnings,
         "files_checked": files_checked,
         "issues": issues,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "type_check",
+        "status": "passed" if errors == 0 else "failed",
+        "summary": {"errors": errors, "warnings": warnings},
+        "details": {"issues": issues[:20]},
+        "repo_path": repo_path,
+        "framework": actual_fw,
+    }
+    return ret, persist
 
 
-def analyze_complexity(
+async def run_type_check(
     store: Any,
     settings: Any,
     *,
     repo_path: str,
-    threshold: int | None = None,
+    framework: str = "auto",
 ) -> dict:
+    """Type checking (mypy/tsc)."""
+    ret, persist = await asyncio.to_thread(
+        _run_type_check_blocking,
+        settings,
+        repo_path=repo_path,
+        framework=framework,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _analyze_complexity_blocking(
+    settings: Any,
+    *,
+    repo_path: str,
+    threshold: int | None,
+) -> tuple[dict, dict[str, Any] | None]:
     """radon cc para Python; grep simples para JS/TS."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "analyze_complexity",
-        }
+        }, None
 
     actual_threshold = threshold if threshold is not None else settings.complexity_threshold
     actual_fw = _detect_project_type(repo_path)
@@ -585,13 +657,13 @@ def analyze_complexity(
                 "tool": "radon",
                 "hint": "pip install radon",
                 "details": str(exc),
-            }
+            }, None
         except subprocess.TimeoutExpired:
             return {
                 "error": "timeout",
                 "details": f"Complexity analysis exceeded {settings.subprocess_timeout}s",
                 "tool": "analyze_complexity",
-            }
+            }, None
 
         try:
             data: dict = json.loads(stdout) if stdout.strip() else {}
@@ -618,24 +690,42 @@ def analyze_complexity(
 
     hotspots.sort(key=lambda h: h["complexity"], reverse=True)
 
-    run_id = store.save_run(
-        run_type="complexity",
-        status="passed" if above_threshold == 0 else "warning",
-        summary={
-            "total_functions": total_functions,
-            "above_threshold": above_threshold,
-            "avg_complexity": avg_complexity,
-        },
-        details={"hotspots": hotspots[:10]},
-        repo_path=repo_path,
-    )
-
-    return {
+    ret = {
         "tool": tool_name,
         "threshold": actual_threshold,
         "total_functions": total_functions,
         "above_threshold": above_threshold,
         "avg_complexity": avg_complexity,
         "hotspots": hotspots,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "complexity",
+        "status": "passed" if above_threshold == 0 else "warning",
+        "summary": {
+            "total_functions": total_functions,
+            "above_threshold": above_threshold,
+            "avg_complexity": avg_complexity,
+        },
+        "details": {"hotspots": hotspots[:10]},
+        "repo_path": repo_path,
+    }
+    return ret, persist
+
+
+async def analyze_complexity(
+    store: Any,
+    settings: Any,
+    *,
+    repo_path: str,
+    threshold: int | None = None,
+) -> dict:
+    """Analisa complexidade ciclomática (radon/grep)."""
+    ret, persist = await asyncio.to_thread(
+        _analyze_complexity_blocking,
+        settings,
+        repo_path=repo_path,
+        threshold=threshold,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret

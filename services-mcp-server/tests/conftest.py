@@ -1,165 +1,213 @@
-"""Fixtures compartilhadas para todos os testes do services-mcp-server.
+"""Fixtures da Suíte Canônica do services-mcp (§16 — PA-01 / FID-02).
 
-Os testes são herméticos: nenhuma I/O externa (PostgreSQL, rede, subprocess) é
-executada. O `ServiceStore` real abre um pool psycopg2 contra um PostgreSQL no
-`__init__`, então usamos um store in-memory (`InMemoryServiceStore`) que replica
-fielmente o contrato público do store (upsert/get/list_all/delete/update_check/
-close), incluindo a serialização JSON de tags/metadata e a semântica de
-created/updated. Assim o código das tools e o dispatch rodam sem tocar no banco.
+**Banco REAL, nunca mockado** (FID-02): os testes do store rodam contra um MySQL 8.x
+real com **2 tenants** (banco-por-tenant), exercitando o caminho canônico
+`get_pool_for_tenant -> Repository -> dialeto MySQL`. O único "duplo" é o
+``platform_lookup`` (linha estática que substitui a consulta ao admin-mysql PLATFORMS) —
+a credencial do tenant, não o banco. RS256 é **real** (chave gerada, token assinado,
+verificador real) — nunca bypass (STD-QA-001 / Test Doubles Policy).
+
+Config via env (o CI provê o serviço MySQL):
+  MYSQL_ROOT_PASSWORD  — senha root (obrigatória; sem ela os testes de DB são SKIPADOS)
+  PILOT_MYSQL_HOST     — default 127.0.0.1
+  PILOT_MYSQL_PORT     — default 3306
 """
 
 from __future__ import annotations
 
-import json
-from datetime import UTC, datetime
+import os
+import socket
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import aiomysql
+import jwt
 import pytest
+import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric import rsa
+from platform_core.request_context import reset_tenant_id, set_tenant_id
+from platform_database import close_tenant_pools
+from platform_database.orm import configure
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.orm.tenant import TenantSession
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from src.config.settings import ServicesSettings
+from src.db.schema import ensure_schema
+from src.db.store import ServiceStore
 
-# Colunas do schema `services` (ver ServiceStore._migrate) com seus defaults.
-# Toda row retornada pelo store real sempre tem todas as colunas presentes.
-_COLUMN_DEFAULTS: dict[str, Any] = {
-    "host": "localhost",
-    "port": None,
-    "url": None,
-    "internal_url": None,
-    "type": "unknown",
-    "container_name": None,
-    "pid": None,
-    "status": "unknown",
-    "health_path": "/health",
-    "environment": "local",
-    "tags": "[]",
-    "metadata": "{}",
-    "registered_at": None,
-    "last_seen": None,
-    "last_check_at": None,
-    "last_check_ok": None,
-    "runtime": "unknown",
-    "os_name": None,
-    "os_release": None,
-    "hostname": None,
-    "deploy_mode": None,
-}
+_HOST = os.environ.get("PILOT_MYSQL_HOST", "127.0.0.1")
+_PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
+_PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+
+TENANT_A = "services_test_a"
+TENANT_B = "services_test_b"
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+def _mysql_up() -> bool:
+    if not _PW:
+        return False
+    try:
+        with socket.create_connection((_HOST, _PORT), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
-class InMemoryServiceStore:
-    """Réplica in-memory do ServiceStore.
-
-    Mesmo contrato público, mesma semântica de serialização e de create/update,
-    porém sem PostgreSQL — mantém as rows num dict em memória.
-    """
-
-    def __init__(self, db_path: str = ":memory:", dsn: str | None = None) -> None:
-        self._rows: dict[str, dict[str, Any]] = {}
-        self.closed = False
-
-    @staticmethod
-    def _serialize(fields: dict[str, Any]) -> dict[str, Any]:
-        out = dict(fields)
-        if isinstance(out.get("tags"), list):
-            out["tags"] = json.dumps(out["tags"])
-        if isinstance(out.get("metadata"), dict):
-            out["metadata"] = json.dumps(out["metadata"])
-        return out
-
-    def upsert(self, name: str, fields: dict[str, Any]) -> dict[str, Any]:
-        existing = self._rows.get(name)
-        if existing is None:
-            row = dict(_COLUMN_DEFAULTS)
-            row["name"] = name
-            row.update(self._serialize(fields))
-            row.setdefault("registered_at", _now())
-            self._rows[name] = row
-            action = "created"
-        else:
-            existing.update(self._serialize(fields))
-            existing["last_seen"] = _now()
-            action = "updated"
-        return {"action": action, "row": dict(self._rows[name])}
-
-    def get(self, name: str) -> dict | None:
-        row = self._rows.get(name)
-        return dict(row) if row else None
-
-    def list_all(
-        self,
-        environment: str | None = None,
-        type_: str | None = None,
-        status: str | None = None,
-        tag: str | None = None,
-        runtime: str | None = None,
-        deploy_mode: str | None = None,
-    ) -> list[dict]:
-        rows = [dict(r) for r in self._rows.values()]
-        if environment:
-            rows = [r for r in rows if r.get("environment") == environment]
-        if type_:
-            rows = [r for r in rows if r.get("type") == type_]
-        if status:
-            rows = [r for r in rows if r.get("status") == status]
-        if runtime:
-            rows = [r for r in rows if r.get("runtime") == runtime]
-        if deploy_mode:
-            rows = [r for r in rows if r.get("deploy_mode") == deploy_mode]
-        rows.sort(key=lambda r: r["name"])
-        if tag:
-            rows = [r for r in rows if tag in json.loads(r.get("tags") or "[]")]
-        return rows
-
-    def delete(self, name: str) -> bool:
-        return self._rows.pop(name, None) is not None
-
-    def update_check(self, name: str, ok: bool) -> None:
-        row = self._rows.get(name)
-        if row is not None:
-            row["last_check_at"] = _now()
-            row["last_check_ok"] = 1 if ok else 0
-
-    def close(self) -> None:
-        self.closed = True
+requires_mysql = pytest.mark.skipif(
+    not _mysql_up(),
+    reason="MySQL real indisponível (defina MYSQL_ROOT_PASSWORD/PILOT_MYSQL_HOST/PILOT_MYSQL_PORT)",
+)
 
 
-@pytest.fixture
-def store():
-    s = InMemoryServiceStore(db_path=":memory:")
-    yield s
-    s.close()
-
-
-@pytest.fixture
-def settings():
-    return ServicesSettings(db_path=":memory:", health_timeout=2.0, docker_timeout=5)
-
-
-def make_service(
-    store: InMemoryServiceStore,
-    name: str = "api-gateway",
-    port: int = 8080,
-    environment: str = "local",
-    type_: str = "docker",
-    status: str = "running",
-    tags: list[str] | None = None,
-) -> None:
-    """Helper para registrar serviço nos testes."""
-    from src.tools.registry_tool import register_service
-
-    register_service(
-        store,
-        name=name,
-        host="localhost",
-        port=port,
-        url=f"http://localhost:{port}",
-        type=type_,
-        environment=environment,
-        health_path="/health",
-        tags=tags or [],
-        metadata={},
-        status=status,
+def _test_settings(**over: Any) -> ServicesSettings:
+    kw: dict[str, Any] = dict(
+        MCP_TWIN_AUDIENCE="mcp:services-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        DB_ENGINE="mysql",
+        DB_HOST=_HOST,
+        DB_PORT=_PORT,
+        DB_USER="root",
+        DB_PASSWORD=_PW,
+        ADMIN_DB_HOST=_HOST,
+        ADMIN_DB_PORT=_PORT,
+        ADMIN_DB_USER="root",
+        ADMIN_DB_PASSWORD=_PW,
     )
+    kw.update(over)
+    return ServicesSettings(**kw)
+
+
+def _platform_row(tenant_id: str) -> dict[str, Any]:
+    return {
+        "tenant_id": tenant_id,
+        "db_engine": "mysql",
+        "db_host": _HOST,
+        "db_port": _PORT,
+        "db_name": tenant_id,  # banco-por-tenant: o db do tenant é o próprio id
+        "db_user": "root",
+        "db_password": _PW,
+    }
+
+
+async def _lookup(tenant_id: str, _settings: Any) -> dict[str, Any] | None:
+    return _platform_row(tenant_id) if tenant_id in (TENANT_A, TENANT_B) else None
+
+
+# Pools aiomysql são atados ao event loop. pytest-asyncio usa um loop por função;
+# cada fixture cria os pools no loop do teste e `close_tenant_pools()` no teardown
+# limpa o registry (close_all) p/ o próximo teste recriar no seu próprio loop.
+async def _make_store(tenant_id: str) -> tuple[ServiceStore, Any]:
+    settings = _test_settings()
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tenant_id} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+    pool = await get_pool_for_tenant(settings, tenant_id, platform_lookup=_lookup, strict=True)
+    await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+    # Estado limpo por teste (tabela já existe; TRUNCATE é idempotente e rápido).
+    await pool.execute("TRUNCATE TABLE services")
+    token = set_tenant_id(tenant_id)
+    return ServiceStore(TenantSession(pool, tenant_id)), token
+
+
+@pytest_asyncio.fixture
+async def store_a():
+    store, token = await _make_store(TENANT_A)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def store_b():
+    store, token = await _make_store(TENANT_B)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def seed_platforms():
+    """Semeia ADMIN_DATAFORALL.PLATFORMS no MySQL de teste + `configure()`.
+
+    Exercita o caminho credencial-zero REAL (for_tenant -> get_platform -> PLATFORMS),
+    não o platform_lookup estático. A tabela é mínima (só as colunas que o resolver lê)."""
+    from platform_tenant.platform_client import close_admin_pools, invalidate_cache
+
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute("CREATE DATABASE IF NOT EXISTS ADMIN_DATAFORALL CHARACTER SET utf8mb4")
+            await cur.execute(
+                """CREATE TABLE IF NOT EXISTS ADMIN_DATAFORALL.PLATFORMS (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tenant_id VARCHAR(255) NOT NULL,
+                    db_engine VARCHAR(32), db_host VARCHAR(255), db_port INT,
+                    db_name VARCHAR(255), db_user VARCHAR(255), db_password VARCHAR(500),
+                    active SMALLINT DEFAULT 1, excluded SMALLINT DEFAULT 0,
+                    UNIQUE KEY uq_platforms_tenant (tenant_id))"""
+            )
+            for tid in (TENANT_A, TENANT_B):
+                await cur.execute("DELETE FROM ADMIN_DATAFORALL.PLATFORMS WHERE tenant_id=%s", (tid,))
+                await cur.execute(
+                    "INSERT INTO ADMIN_DATAFORALL.PLATFORMS (tenant_id, db_engine, db_host, "
+                    "db_port, db_name, db_user, db_password, active, excluded) "
+                    "VALUES (%s,'mysql',%s,%s,%s,'root',%s,1,0)",
+                    (tid, _HOST, _PORT, tid, _PW),
+                )
+                await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tid} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+
+    invalidate_cache()
+    configure(_test_settings())
+    yield
+    invalidate_cache()
+    await close_admin_pools()
+    await close_tenant_pools()
+
+
+# ── RS256 real (STD-QA-001: sem HS*, sem bypass) ──────────────────────────────
+@pytest.fixture(scope="session")
+def rsa_key() -> rsa.RSAPrivateKey:
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def mint_token(
+    rsa_key: rsa.RSAPrivateKey,
+    *,
+    tenant_id: str | None = TENANT_A,
+    aud: str = "mcp:services-mcp",
+    jti: str = "jti-1",
+    exp_delta: int = 300,
+    include_jti: bool = True,
+) -> str:
+    """Assina um inner Twin Token RS256 real (aud=mcp:<ns>, jti, exp, tenant_id)."""
+    now = datetime.now(UTC)
+    claims: dict[str, Any] = {"aud": aud, "exp": now + timedelta(seconds=exp_delta), "iat": now}
+    if include_jti:
+        claims["jti"] = jti
+    if tenant_id is not None:
+        claims["tenant_id"] = tenant_id
+    return jwt.encode(claims, rsa_key, algorithm="RS256")
+
+
+def patch_jwks(monkeypatch: pytest.MonkeyPatch, rsa_key: rsa.RSAPrivateKey) -> None:
+    """Faz o PyJWKClient servir a chave pública local — a verificação RS256 é REAL
+    (só evita o fetch de rede do JWKS; nada de bypass)."""
+    public_key = rsa_key.public_key()
+
+    class _SigningKey:
+        key = public_key
+
+    class _Client:
+        def __init__(self, _url: str) -> None:
+            pass
+
+        def get_signing_key_from_jwt(self, _token: str) -> _SigningKey:
+            return _SigningKey()
+
+    monkeypatch.setattr(jwt, "PyJWKClient", _Client)

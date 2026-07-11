@@ -12,8 +12,8 @@ Pontos gateway-ready:
      JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
      inner token chega em params._meta.twin_token.
   3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
-     cliente (SEC-035 / INV-3). As tools de sessão não o consomem (é só p/
-     governança), então o dispatcher o remove antes de chamar a função.
+     cliente (SEC-035 / INV-3). O store é tenant-scoped (resolvido credencial-zero
+     via for_tenant), então o tenant NÃO viaja nos args das tools.
   4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
   5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
 
@@ -22,9 +22,11 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: session-mcp persiste em ``SessionStore`` (SQLite embarcado, hermético), então
-o dispatcher recebe (store, settings) e injeta ambos nas tools — preservando a
-lógica original de src/tools/.
+NOTA: session-mcp persiste em ``SessionStore`` sobre o ORM canônico
+(`platform_database.orm`), **tenant-scoped e dual-db** (credencial-zero, ORM-H-12).
+Não há store global: cada chamada abre uma sessão tenant-scoped (`for_tenant`) a
+partir do tenant nos claims do inner token, garante o schema (1x/tenant) e injeta um
+``SessionStore`` fresco no dispatcher (async) — preservando a lógica de src/tools/.
 """
 
 from __future__ import annotations
@@ -42,9 +44,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, SessionSettings, get_settings
+from ..db.schema import ensure_schema
 from ..db.store import (
     ACTOR_TYPES,
     SUGGESTION_KINDS,
@@ -798,19 +805,18 @@ def _verify_inner_token(twin_token: str, settings: SessionSettings) -> dict[str,
 # ── Dispatcher (backend-backed: store + settings injetados nas tools) ─────────
 
 
-def _dispatch(
-    name: str, args: dict[str, Any], store: SessionStore, settings: SessionSettings
+async def _dispatch(
+    name: str, args: dict[str, Any], settings: SessionSettings, store: SessionStore
 ) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool, preservando a lógica original.
+    """Despacha a chamada para a função de tool (async), preservando a lógica original.
 
-    ``tenant_id`` é injetado pelo PEP nos args (INV-3) apenas para governança; as
-    tools de sessão não o consomem, então é removido antes da chamada.
-    """
-    a = {k: v for k, v in args.items() if k != "tenant_id"}
+    O ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner
+    token); o tenant NÃO viaja nos args das tools (INV-3)."""
+    a = args
     base = settings.default_base_branch
 
     if name == "start_session":
-        return start_session(
+        return await start_session(
             store,
             base,
             title=a.get("title", ""),
@@ -819,41 +825,41 @@ def _dispatch(
             base_branch=a.get("base_branch"),
         )
     if name == "confirm_branch_created":
-        return confirm_branch_created(store, session_id=a.get("session_id", ""), sha=a.get("sha"))
+        return await confirm_branch_created(store, session_id=a.get("session_id", ""), sha=a.get("sha"))
     if name == "save_checkpoint":
-        return save_checkpoint(
+        return await save_checkpoint(
             store,
             session_id=a.get("session_id", ""),
             summary=a.get("summary", ""),
             context=a.get("context"),
         )
     if name == "update_session":
-        return update_session(
+        return await update_session(
             store,
             session_id=a.get("session_id", ""),
             status=a.get("status"),
             progress=a.get("progress"),
         )
     if name == "add_artifact":
-        return add_artifact(
+        return await add_artifact(
             store,
             session_id=a.get("session_id", ""),
             artifact_type=a.get("artifact_type", ""),
             content=a.get("content", ""),
         )
     if name == "list_sessions":
-        return list_sessions(
+        return await list_sessions(
             store,
             status=a.get("status"),
             repo=a.get("repo"),
             limit=a.get("limit", 20),
         )
     if name == "get_session":
-        return get_session(store, session_id=a.get("session_id", ""))
+        return await get_session(store, session_id=a.get("session_id", ""))
     if name == "resume_session":
-        return resume_session(store, session_id=a.get("session_id", ""))
+        return await resume_session(store, session_id=a.get("session_id", ""))
     if name == "end_session":
-        return end_session(
+        return await end_session(
             store,
             session_id=a.get("session_id", ""),
             actor=a.get("actor"),
@@ -861,7 +867,7 @@ def _dispatch(
             final_summary=a.get("final_summary"),
         )
     if name == "add_task":
-        return add_task(
+        return await add_task(
             store,
             session_id=a.get("session_id", ""),
             title=a.get("title"),
@@ -870,7 +876,7 @@ def _dispatch(
             tasks=a.get("tasks"),
         )
     if name == "approve_task":
-        return approve_task(
+        return await approve_task(
             store,
             task_id=a.get("task_id", 0),
             decision=a.get("decision", ""),
@@ -879,9 +885,9 @@ def _dispatch(
             notes=a.get("notes"),
         )
     if name == "start_task":
-        return start_task(store, task_id=a.get("task_id", 0))
+        return await start_task(store, task_id=a.get("task_id", 0))
     if name == "complete_task":
-        return complete_task(
+        return await complete_task(
             store,
             task_id=a.get("task_id", 0),
             commit_sha=a.get("commit_sha", ""),
@@ -889,25 +895,25 @@ def _dispatch(
             result=a.get("result"),
         )
     if name == "fail_task":
-        return fail_task(
+        return await fail_task(
             store,
             task_id=a.get("task_id", 0),
             actor=a.get("actor"),
             reason=a.get("reason", ""),
         )
     if name == "cancel_task":
-        return cancel_task(
+        return await cancel_task(
             store,
             task_id=a.get("task_id", 0),
             actor=a.get("actor"),
             reason=a.get("reason", ""),
         )
     if name == "list_tasks":
-        return list_tasks(store, session_id=a.get("session_id", ""), status=a.get("status"))
+        return await list_tasks(store, session_id=a.get("session_id", ""), status=a.get("status"))
     if name == "get_task":
-        return get_task(store, task_id=a.get("task_id", 0))
+        return await get_task(store, task_id=a.get("task_id", 0))
     if name == "add_service_dependency":
-        return add_service_dependency(
+        return await add_service_dependency(
             store,
             session_id=a.get("session_id", ""),
             service=a.get("service", ""),
@@ -915,15 +921,15 @@ def _dispatch(
             notes=a.get("notes"),
         )
     if name == "list_service_dependencies":
-        return list_service_dependencies(store, session_id=a.get("session_id", ""))
+        return await list_service_dependencies(store, session_id=a.get("session_id", ""))
     if name == "remove_service_dependency":
-        return remove_service_dependency(
+        return await remove_service_dependency(
             store,
             session_id=a.get("session_id", ""),
             service=a.get("service", ""),
         )
     if name == "submit_suggestion":
-        return submit_suggestion(
+        return await submit_suggestion(
             store,
             source_repo=a.get("source_repo", ""),
             target_repo=a.get("target_repo", ""),
@@ -935,7 +941,7 @@ def _dispatch(
             source_session_id=a.get("source_session_id"),
         )
     if name == "list_suggestions":
-        return list_suggestions_tool(
+        return await list_suggestions_tool(
             store,
             target_repo=a.get("target_repo"),
             source_repo=a.get("source_repo"),
@@ -943,9 +949,9 @@ def _dispatch(
             limit=a.get("limit", 50),
         )
     if name == "get_suggestion":
-        return get_suggestion_tool(store, suggestion_id=a.get("suggestion_id", 0))
+        return await get_suggestion_tool(store, suggestion_id=a.get("suggestion_id", 0))
     if name == "accept_suggestion":
-        return accept_suggestion(
+        return await accept_suggestion(
             store,
             suggestion_id=a.get("suggestion_id", 0),
             session_id=a.get("session_id", ""),
@@ -954,21 +960,21 @@ def _dispatch(
             needs_human_decision=a.get("needs_human_decision"),
         )
     if name == "reject_suggestion":
-        return reject_suggestion(
+        return await reject_suggestion(
             store,
             suggestion_id=a.get("suggestion_id", 0),
             actor=a.get("actor"),
             reason=a.get("reason", ""),
         )
     if name == "defer_suggestion":
-        return defer_suggestion(
+        return await defer_suggestion(
             store,
             suggestion_id=a.get("suggestion_id", 0),
             actor=a.get("actor"),
             reason=a.get("reason"),
         )
     if name == "supersede_suggestion":
-        return supersede_suggestion(
+        return await supersede_suggestion(
             store,
             suggestion_id=a.get("suggestion_id", 0),
             actor=a.get("actor"),
@@ -976,7 +982,7 @@ def _dispatch(
             reason=a.get("reason"),
         )
     if name == "list_decisions":
-        return list_decisions_tool(
+        return await list_decisions_tool(
             store,
             target_type=a.get("target_type"),
             target_id=a.get("target_id"),
@@ -987,15 +993,48 @@ def _dispatch(
             limit=a.get("limit", 100),
         )
     if name == "get_decision":
-        return get_decision_tool(store, decision_id=a.get("decision_id", 0))
+        return await get_decision_tool(store, decision_id=a.get("decision_id", 0))
     raise KeyError(name)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: SessionSettings, tenant_id: str) -> None:
+    """Garante as tabelas no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: SessionSettings, tenant_id: str
+) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = SessionStore(session)
+        return await _dispatch(name, arguments, settings, store)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: SessionSettings, store: SessionStore) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: SessionSettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="session-mcp API",
         version="0.1.0",
@@ -1022,7 +1061,7 @@ def _build_http_app(settings: SessionSettings, store: SessionStore) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -1031,6 +1070,7 @@ def _build_http_app(settings: SessionSettings, store: SessionStore) -> FastAPI:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
         # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        tenant_id: str | None = None
         if name not in _EXEMPT_TOOLS:
             twin_token = (params.get("_meta") or {}).get("twin_token")
             if not twin_token:
@@ -1040,14 +1080,18 @@ def _build_http_app(settings: SessionSettings, store: SessionStore) -> FastAPI:
             except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
                 _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
                 return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
+            claimed = claims.get("tenant_id")
+            if not claimed:
                 return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
             # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+            tenant_id = str(claimed)
+
+        if tenant_id is None:
+            # Tool exempt/tokenless: session-mcp não expõe nenhuma (fail-closed).
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments, store, settings)
+            payload = await _run_tool(name, arguments, settings, tenant_id)
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -1056,20 +1100,29 @@ def _build_http_app(settings: SessionSettings, store: SessionStore) -> FastAPI:
         text = json.dumps(payload, ensure_ascii=False, indent=2, cls=_JSONEncoder)
         return {"result": {"content": [{"type": "text", "text": text}]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
+def build_server() -> tuple[Any, SessionSettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há mais store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    store = SessionStore(settings)
-    http_app = _build_http_app(settings, store)
-    _log.info("session_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    http_app = _build_http_app(settings)
+    _log.info("session_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("session-mcp-server")
 
@@ -1082,14 +1135,20 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, store, settings)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). session-mcp
+        # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
+        # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "session-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [
             TextContent(
                 type="text",
@@ -1097,7 +1156,7 @@ def build_server() -> tuple[Any, SessionSettings, SessionStore, FastAPI]:
             )
         ]
 
-    return server, settings, store, http_app
+    return server, settings, http_app
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -1107,7 +1166,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, settings, _store, http_app = build_server()
+    server, settings, http_app = build_server()
     cfg = uvicorn.Config(
         http_app,
         host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
@@ -1131,7 +1190,7 @@ def main() -> None:
     if os.getenv("MCP_HTTP_ONLY", "0") == "1":
         import uvicorn
 
-        _server, settings, _store, http_app = build_server()
+        _server, settings, http_app = build_server()
         uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
         return
     asyncio.run(_run())

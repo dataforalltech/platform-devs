@@ -6,7 +6,7 @@ from ..config.settings import AuditSettings
 from ..db.store import AuditStore
 
 
-def get_compliance_policy(
+async def get_compliance_policy(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -37,7 +37,7 @@ def get_compliance_policy(
         return {"error": "InternalError", "details": str(e), "tool": "get_compliance_policy"}
 
 
-def set_service_criticality(
+async def set_service_criticality(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -55,7 +55,7 @@ def set_service_criticality(
                 "tool": "set_service_criticality",
             }
 
-        store.set_service_criticality(service, criticality, updated_by)
+        await store.set_service_criticality(service, criticality, updated_by)
 
         return {
             "service": service,

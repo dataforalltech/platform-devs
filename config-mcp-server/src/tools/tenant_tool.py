@@ -1,13 +1,17 @@
-"""Ferramentas de gestão de configurações por tenant.
+"""Ferramentas de gestão de configurações por tenant (async, tenant-scoped).
 
 Namespace: tenants.<tenant_id>
+
+No mundo dual-db credencial-zero o store JÁ é o banco do tenant (resolvido dos claims
+do inner token, INV-3): o prefixo ``tenants.<id>`` fica aninhado no próprio banco do
+tenant, mantido por back-compat do contrato das tools.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from ..knowledge.store import ConfigStore
+from ..db.store import ConfigStore
 
 
 def _get_twin_tenant_id() -> str | None:
@@ -20,7 +24,7 @@ def _get_twin_tenant_id() -> str | None:
         return None
 
 
-def get_tenant_config(
+async def get_tenant_config(
     store: ConfigStore,
     tenant_id: str,
     key_pattern: str | None = None,
@@ -34,7 +38,7 @@ def get_tenant_config(
         limit: Máximo de variáveis retornadas. Padrão: 50.
     """
     ns = f"tenants.{tenant_id}"
-    config = store.get_namespace(ns)
+    config = await store.get_namespace(ns)
     if not config:
         return {"found": False, "tenant_id": tenant_id}
     if key_pattern:
@@ -44,18 +48,18 @@ def get_tenant_config(
     return {"found": True, "tenant_id": tenant_id, "config": config, "count": len(config)}
 
 
-def set_tenant_config(
+async def set_tenant_config(
     store: ConfigStore,
     tenant_id: str,
     key: str,
     value: str,
 ) -> dict[str, Any]:
     """Define uma variável de configuração para um tenant."""
-    store.set(f"tenants.{tenant_id}", key, value)
+    await store.set(f"tenants.{tenant_id}", key, value)
     return {"success": True, "tenant_id": tenant_id, "key": key}
 
 
-def get_session_tenant_config(store: ConfigStore) -> dict[str, Any]:
+async def get_session_tenant_config(store: ConfigStore) -> dict[str, Any]:
     """Retorna a config do tenant associado à sessão autenticada no dev-twin-mcp.
 
     Resolve automaticamente o tenant_id via HTTP API do dev-twin (:7098).
@@ -71,14 +75,15 @@ def get_session_tenant_config(store: ConfigStore) -> dict[str, Any]:
                 "(2) authenticate() chamado, (3) tenant_id configurado no perfil."
             ),
         }
-    return get_tenant_config(store, tenant_id)
+    return await get_tenant_config(store, tenant_id)
 
 
-def list_tenants(store: ConfigStore) -> dict[str, Any]:
+async def list_tenants(store: ConfigStore) -> dict[str, Any]:
     """Lista todos os tenants configurados e a quantidade de variáveis de cada um."""
     tenants: dict[str, int] = {}
-    for ns in store.list_namespaces():
+    for ns in await store.list_namespaces():
         if ns.startswith("tenants."):
             tid = ns.removeprefix("tenants.")
-            tenants[tid] = len(store.list_keys(ns).get(ns, []))
+            keys = await store.list_keys(ns)
+            tenants[tid] = len(keys.get(ns, []))
     return {"tenants": tenants, "count": len(tenants)}

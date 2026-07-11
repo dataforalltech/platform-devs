@@ -6,7 +6,7 @@ from ..config.settings import AuditSettings
 from ..db.store import AuditStore
 
 
-def get_compliance_checklist(
+async def get_compliance_checklist(
     store: AuditStore,
     settings: AuditSettings,
     *,

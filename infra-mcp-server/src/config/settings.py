@@ -4,15 +4,25 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`infra-mcp` NÃO fala com um Trinity backend/REST — as tools operam sobre CLIs
-locais (terraform/checkov/infracost) e um allocator SQLite embarcado. Por isso
-NÃO há `ServiceApiClient`/`MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` (deviação
-justificada do esqueleto do template, que assume um backend HTTP).
+`infra-mcp` NÃO fala com um Trinity backend/REST — as tools de infra operam sobre CLIs
+locais (terraform/checkov/infracost). Por isso NÃO há `ServiceApiClient`/
+`MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` (deviação justificada do esqueleto do template,
+que assume um backend HTTP).
+
+O **allocator** persiste 100% sobre o ORM canônico (`platform_database.orm`),
+**tenant-scoped e dual-db**: credencial-zero (ORM-H-12) — o serviço só conhece o
+`tenant_id`; a credencial do banco do tenant vem de `ADMIN_DATAFORALL.PLATFORMS`
+(resolvida pela lib). Estas Settings expõem os protocolos `DBSettings` (`DB_*`, fallback
+compartilhado) e `AdminDBSettings` (`ADMIN_DB_*`, conexão admin que lê PLATFORMS) — o mesmo
+objeto é passado a `orm.configure()` no boot. (A migração `bbdda58` SQLite→PostgreSQL
+deixou um esqueleto PG inerte; esta migração entrega o store funcional sobre o ORM, não
+campos `pg_*` mortos.)
 
 Os campos de integração com o gateway (mcp_twin_audience, url_admin_twin_jwks,
-mcp_port, docs_enabled) usam `validation_alias` — logo lêem as env-vars
-canônicas da plataforma (MCP_TWIN_AUDIENCE, URL_ADMIN_TWIN_JWKS, MCP_PORT,
-DOCS_ENABLED) SEM o prefixo `INFRA_`. Os demais campos mantêm o prefixo INFRA_.
+mcp_port, docs_enabled) e os campos de banco (`DB_*`/`ADMIN_DB_*`) usam `validation_alias`
+— logo lêem as env-vars canônicas da plataforma (MCP_TWIN_AUDIENCE, URL_ADMIN_TWIN_JWKS,
+MCP_PORT, DOCS_ENABLED, DB_HOST, ADMIN_DB_HOST, …) SEM o prefixo `INFRA_`. Os demais campos
+(terraform/allocator/lease_secret) mantêm o prefixo INFRA_.
 """
 
 from __future__ import annotations
@@ -20,8 +30,10 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from .secrets import load_secret
 
 # namespace canônico = name_microservice ('platform-infra-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
@@ -56,6 +68,35 @@ class Settings(BaseSettings):
     # ── HTTP sidecar ──────────────────────────────────────────────────────── #
     mcp_port: int = Field(default=7100, validation_alias="MCP_PORT")
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
+
+    # ── Backend do tenant (DBSettings — ORM canônico, dual-db) ────────────── #
+    # O allocator persiste tenant-scoped (banco-por-tenant no MySQL / schema-por-tenant
+    # no PG). A credencial real do tenant vem de ADMIN_DATAFORALL.PLATFORMS; estes DB_* são
+    # o fallback compartilhado. DB_ENGINE decide o dialeto. validation_alias ⇒ env canônica
+    # (DB_HOST…) sem o prefixo INFRA_. STD-SEC-004: nada com cara de credencial no código.
+    DB_ENGINE: str = Field(default="mysql", validation_alias="DB_ENGINE")
+    DB_HOST: str = Field(default="", validation_alias="DB_HOST")
+    DB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
+    DB_NAME: str = Field(default="", validation_alias="DB_NAME")
+    DB_USER: str = Field(default="root", validation_alias="DB_USER")
+    DB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
+    DB_POOL_MIN_SIZE: int = Field(default=1, validation_alias="DB_POOL_MIN_SIZE")
+    DB_POOL_MAX_SIZE: int = Field(default=10, validation_alias="DB_POOL_MAX_SIZE")
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
+        default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
+    )
+    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
+    DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
+
+    # ── Conexão admin (AdminDBSettings — lê ADMIN_DATAFORALL.PLATFORMS) ────── #
+    # Resolve o tenant → credencial do seu banco. Fonte passada a orm.configure()/
+    # get_pool_for_tenant. O db name admin é fixo "ADMIN_DATAFORALL".
+    ADMIN_DB_HOST: str = Field(default="", validation_alias="ADMIN_DB_HOST")
+    ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
+    ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
+    ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
 
     # --------------------------------------------------------------------- #
     # Chaves SSH por VM (Phase 2f)                                         #
@@ -113,22 +154,6 @@ class Settings(BaseSettings):
             "Verificado via 'infracost diff' antes do terraform apply. "
             "None (default) → sem verificação. 0.0 → bloqueia qualquer VM. "
             "Ignorado (warning) se infracost não estiver no PATH."
-        ),
-    )
-
-    # --------------------------------------------------------------------- #
-    # Persistência do allocator — SQLite embarcado (backend OFICIAL, decisão db8902a).
-    # A migração bbdda58 (SQLite→PostgreSQL) deixou o store PG como esqueleto
-    # não-funcional; o backend atual é SQLite. Migrar para PostgreSQL de verdade
-    # (locking por linha para alocação concorrente + testes de integração contra
-    # PG real) é um follow-up dedicado — NÃO reintroduzir campos pg_* inertes aqui
-    # enquanto o store PostgreSQL não existir de fato.
-    db_path: str = Field(
-        default=":memory:",
-        description=(
-            "Caminho do banco SQLite do allocator. Default ':memory:' (testes/dev sem "
-            "persistência); defina INFRA_DB_PATH=/data/allocator.db para persistir. "
-            "Migração para PostgreSQL: follow-up dedicado."
         ),
     )
 
@@ -212,26 +237,40 @@ class Settings(BaseSettings):
             raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
         return v
 
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> Settings:
+        """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
+        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", env_fallback=self.DB_PASSWORD) or ""
+        self.ADMIN_DB_PASSWORD = (
+            load_secret(f"{NAMESPACE}/admin_db_password", env_fallback=self.ADMIN_DB_PASSWORD) or ""
+        )
+        return self
+
     def enforce_security_invariants(self) -> None:
-        """Fail-fast no boot (STD-SEC-001 / STD-SEC-006). Chamado em build_server().
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006). Chamado em build_server().
 
         - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
         - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
-        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica) e a conexão
+          admin (host + senha p/ resolver o tenant via PLATFORMS) DEVE vir de env/Vault (o
+          allocator agora persiste tenant-scoped no ORM — há credencial de DB de verdade).
 
-        NOTA (persistência): o backend do allocator é SQLite embarcado (``db_path``),
-        que NÃO possui credencial/senha — logo não há "credencial de DB" a exigir em
-        cloud (diferente de um server PostgreSQL). O único segredo é o
-        ``INFRA_LEASE_SECRET`` (Fernet, cifra chaves SSH), opcional por design
-        (degrada para chave efêmera por sessão), resolvido via Vault-fallback em
+        NOTA (segredo SSH): o ``INFRA_LEASE_SECRET`` (Fernet, cifra chaves SSH) segue opcional
+        por design (degrada para chave efêmera por sessão), resolvido via Vault-fallback em
         ``config.secrets.load_secret`` — não é invariante de boot.
         """
         if self.docs_enabled:
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
         if not self.mcp_twin_audience.startswith("mcp:"):
             raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
-        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
-            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
+                    "cloud (resolução credencial-zero do tenant via PLATFORMS; sem default no código)"
+                )
 
 
 @lru_cache(maxsize=1)

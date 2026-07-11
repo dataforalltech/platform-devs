@@ -11,9 +11,9 @@ from .discovery_tool import check_health
 from .registry_tool import get_service
 
 
-def service_status(store: ServiceStore, *, name: str, timeout: float = 3.0) -> dict[str, Any]:
+async def service_status(store: ServiceStore, *, name: str, timeout: float = 3.0) -> dict[str, Any]:
     """Retorna dados do serviço + resultado do health check."""
-    svc_result = get_service(store, name=name)
+    svc_result = await get_service(store, name=name)
     if not svc_result.get("found"):
         return {
             "name": name,
@@ -21,7 +21,7 @@ def service_status(store: ServiceStore, *, name: str, timeout: float = 3.0) -> d
             "overall_status": "unknown",
         }
 
-    health_result = check_health(store, name=name, timeout=timeout)
+    health_result = await check_health(store, name=name, timeout=timeout)
     healthy = health_result.get("healthy", False)
     error = health_result.get("error")
 
@@ -41,7 +41,7 @@ def service_status(store: ServiceStore, *, name: str, timeout: float = 3.0) -> d
     }
 
 
-def reload_service(
+async def reload_service(
     store: ServiceStore,
     *,
     name: str,
@@ -56,7 +56,7 @@ def reload_service(
       remote  → POST /<health_path_base>/reload ou /__reload
       unknown → apenas re-faz health check
     """
-    svc_result = get_service(store, name=name)
+    svc_result = await get_service(store, name=name)
     if not svc_result.get("found"):
         return {"error": "not_found", "name": name}
 
@@ -147,7 +147,7 @@ def reload_service(
     if not error and wait_seconds > 0:
         time.sleep(wait_seconds)
 
-    health = check_health(store, name=name, timeout=health_timeout)
+    health = await check_health(store, name=name, timeout=health_timeout)
 
     return {
         "name": name,
@@ -160,9 +160,9 @@ def reload_service(
     }
 
 
-def list_environments(store: ServiceStore) -> dict[str, Any]:
+async def list_environments(store: ServiceStore) -> dict[str, Any]:
     """Agrupa serviços por environment e conta totais."""
-    rows = store.list_all()
+    rows = await store.list_all()
     env_map: dict[str, dict[str, Any]] = {}
 
     for row in rows:

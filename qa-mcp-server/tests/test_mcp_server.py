@@ -1,12 +1,10 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, tenant ausente, exclude,
-unknown, happy path, erro interno), _verify_inner_token (não configurado,
-decode real com RS256, audiência errada) e o roteamento de _dispatch.
-
-O PyJWKClient/JWKS é sempre mockado (chave RSA gerada no teste) e o PostgreSQL é
-substituído pelo _FakePool do conftest — os testes nunca fazem I/O de rede/DB.
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). Os caminhos do PEP que retornam ANTES do DB
+(missing/invalid token, tenant ausente, exclude, exempt `status` compute-only) rodam via
+TestClient. A execução com estado (dispatch/_run_tool) roda contra MySQL real com `await`
+(mesmo event loop do teste async — os pools aiomysql são atados a esse loop).
 """
 
 from __future__ import annotations
@@ -15,13 +13,12 @@ import json
 
 import jwt
 import pytest
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from src.config.settings import QASettings
-from src.db.store import QAStore
 from src.server import mcp_server as M
+
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
 _ALL_TOOLS = {
     "status",
@@ -40,45 +37,43 @@ _ALL_TOOLS = {
     "get_coverage_report",
     "generate_qa_report",
 }
-_TOOL_FUNCS = _ALL_TOOLS - {"status"}
 
 
-def _settings() -> QASettings:
+def _settings(**over) -> QASettings:
     return QASettings(
-        mcp_twin_audience="mcp:qa-mcp",
-        url_admin_twin_jwks="http://admin.local/.well-known/jwks.json",
-        db_path=":memory:",
-        screenshots_dir="/tmp/qa-test",
-        baselines_dir="/tmp/qa-test-baselines",
-        subprocess_timeout=5,
+        MCP_TWIN_AUDIENCE="mcp:qa-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        **over,
     )
 
 
 @pytest.fixture()
-def http_store() -> QAStore:
-    s = QAStore(db_path=":memory:")
-    yield s
-    s.close()
+def client() -> TestClient:
+    return TestClient(M._build_http_app(_settings()))
 
 
-@pytest.fixture()
-def client(http_store: QAStore) -> TestClient:
-    return TestClient(M._build_http_app(_settings(), http_store))
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 15
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
 
 
 # ── /v1/health ────────────────────────────────────────────────────────────────
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "qa-mcp", "tools": len(M._TOOL_SCHEMAS)}
+    assert r.json() == {"status": "ok", "service": "qa-mcp", "tools": len(M._TOOL_SCHEMAS)}
 
 
 # ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
     assert {t["name"] for t in tools} == _ALL_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
@@ -96,7 +91,7 @@ def test_tools_list_has_policy_fields(client: TestClient):
     assert by_name["generate_qa_report"]["required_scope"].endswith(":read")
 
 
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
     r = client.post(
         "/mcp/tools/call",
@@ -106,19 +101,16 @@ def test_call_missing_twin_token(client: TestClient):
     assert r.json()["error"] == "missing_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
         json={
             "params": {
                 "name": "generate_qa_report",
                 "arguments": {"repo_path": "/r"},
-                "_meta": {"twin_token": "tok"},
+                "_meta": {"twin_token": tok},
             }
         },
     )
@@ -126,44 +118,33 @@ def test_call_invalid_twin_token(client: TestClient, monkeypatch):
     assert r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ───────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args, _settings, _store):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_qa_report",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"repo_path": "/r", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_qa_report"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
-
-
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
         json={
             "params": {
                 "name": "generate_qa_report",
                 "arguments": {"repo_path": "/r"},
-                "_meta": {"twin_token": "t"},
+                "_meta": {"twin_token": tok},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "generate_qa_report",
+                "arguments": {"repo_path": "/r"},
+                "_meta": {"twin_token": tok},
             }
         },
     )
@@ -171,35 +152,6 @@ def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
     assert r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — happy path: token válido → executa (store real fake) ─────
-def test_call_valid_token_happy_path(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-1", "jti": "j"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_qa_report",
-                "arguments": {"repo_path": "/empty/repo"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["overall_score"] == 0
-    assert payload["grade"] == "F"
-
-
-# ── /mcp/tools/call — tool exempt (status) sem token → 200 ────────────────────
-def test_call_exempt_status_without_token(client: TestClient):
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["service"] == "qa-mcp"
-    assert payload["tools"] == len(M._TOOL_SCHEMAS)
-
-
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
 def test_call_excluded_tool(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"generate_qa_report"}))
     r = client.post(
@@ -210,171 +162,53 @@ def test_call_excluded_tool(client: TestClient, monkeypatch):
     assert r.json()["error"] == "tool_excluded"
 
 
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
-
-
-# ── /mcp/tools/call — erro interno na tool → payload internal_error ───────────
-def test_call_internal_error(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(name, args, _settings, _store):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_qa_report",
-                "arguments": {"repo_path": "/r"},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
+# ── /mcp/tools/call — tool exempt (status) compute-only, sem token → 200 ───────
+def test_call_exempt_status_without_token(client: TestClient):
+    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
     assert r.status_code == 200
     payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["error"] == "internal_error"
-    assert "kaboom" in payload["detail"]
+    assert payload["service"] == "qa-mcp"
+    assert payload["tools"] == len(M._TOOL_SCHEMAS)
 
 
-# ── _dispatch — status + KeyError + roteamento de todas as tools ──────────────
-def test_dispatch_status(http_store: QAStore):
-    out = M._dispatch("status", {}, _settings(), http_store)
+# ── _status (compute-only) ────────────────────────────────────────────────────
+def test_status_compute_only():
+    out = M._status()
     assert out["service"] == "qa-mcp"
     assert out["status"] == "ok"
+    assert out["tools"] == len(M._TOOL_SCHEMAS)
 
 
-def test_dispatch_unknown_raises(http_store: QAStore):
-    with pytest.raises(KeyError):
-        M._dispatch("does_not_exist", {}, _settings(), http_store)
-
-
-def test_dispatch_routes_every_tool(http_store: QAStore, monkeypatch):
-    """Cada branch de _dispatch encaminha para a função-tool correspondente."""
-    sentinel = {"routed": True}
-    for fn in _TOOL_FUNCS:
-        monkeypatch.setattr(M, fn, lambda *a, **k: sentinel)
-    s = _settings()
-    for name in _TOOL_FUNCS:
-        assert M._dispatch(name, {}, s, http_store) is sentinel, name
-
-
-def test_dispatch_forwards_kwargs(http_store: QAStore, monkeypatch):
-    """Verifica que os argumentos do cliente chegam como kwargs à tool."""
-    captured: dict = {}
-
-    def _spy(_store, _settings, **kwargs):
-        captured.update(kwargs)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "run_unit_tests", _spy)
-    M._dispatch(
-        "run_unit_tests",
-        {"repo_path": "/r", "framework": "pytest", "coverage": True},
-        _settings(),
-        http_store,
-    )
-    assert captured["repo_path"] == "/r"
-    assert captured["framework"] == "pytest"
-    assert captured["coverage"] is True
-
-
-# ── _verify_inner_token ───────────────────────────────────────────────────────
-def _rsa_keypair():
-    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    priv_pem = key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    )
-    pub_pem = key.public_key().public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo,
-    )
-    return priv_pem, pub_pem
-
-
-class _FakeSigningKey:
-    def __init__(self, pub_pem: bytes) -> None:
-        self.key = pub_pem
-
-
-class _FakeJWKClient:
-    _pub: bytes = b""
-
-    def __init__(self, _url: str) -> None:
-        pass
-
-    def get_signing_key_from_jwt(self, _tok: str):
-        return _FakeSigningKey(self._pub)
-
-
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
     s = QASettings(mcp_twin_audience="", url_admin_twin_jwks="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-def test_verify_inner_token_decodes_valid(monkeypatch):
-    priv, pub = _rsa_keypair()
-    token = jwt.encode(
-        {"aud": "mcp:qa-mcp", "jti": "abc", "exp": 9999999999, "tenant_id": "T-9"},
-        priv,
-        algorithm="RS256",
-    )
-    _FakeJWKClient._pub = pub
-    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWKClient)
-    claims = M._verify_inner_token(token, _settings())
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
     assert claims["tenant_id"] == "T-9"
-    assert claims["jti"] == "abc"
-
-
-def test_verify_inner_token_wrong_audience(monkeypatch):
-    priv, pub = _rsa_keypair()
-    token = jwt.encode(
-        {"aud": "mcp:WRONG", "jti": "abc", "exp": 9999999999, "tenant_id": "T"},
-        priv,
-        algorithm="RS256",
-    )
-    _FakeJWKClient._pub = pub
-    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWKClient)
     with pytest.raises(jwt.InvalidAudienceError):
-        M._verify_inner_token(token, _settings())
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
 
-def test_verify_inner_token_missing_jti(monkeypatch):
-    priv, pub = _rsa_keypair()
-    token = jwt.encode(
-        {"aud": "mcp:qa-mcp", "exp": 9999999999, "tenant_id": "T"},
-        priv,
-        algorithm="RS256",
-    )
-    _FakeJWKClient._pub = pub
-    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWKClient)
+def test_verify_inner_token_missing_jti(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
     with pytest.raises(jwt.MissingRequiredClaimError):
-        M._verify_inner_token(token, _settings())
+        M._verify_inner_token(mint_token(rsa_key, include_jti=False), _settings())
 
 
-# ── build_server + main (http-only) ───────────────────────────────────────────
+# ── build_server (3-tuple; stdio recusa fail-closed exceto status) ────────────
 def test_build_server_smoke(monkeypatch):
     monkeypatch.setattr(M, "get_settings", _settings)
-    server, settings, store, http_app = M.build_server()
-    try:
-        assert server is not None
-        assert settings.mcp_twin_audience == "mcp:qa-mcp"
-        assert http_app.title.startswith("qa-mcp")
-        resp = TestClient(http_app).get("/v1/health")
-        assert resp.json()["service"] == "qa-mcp"
-    finally:
-        store.close()
+    server, settings, http_app = M.build_server()
+    assert server is not None
+    assert settings.mcp_twin_audience == "mcp:qa-mcp"
+    assert http_app.title.startswith("qa-mcp")
+    resp = TestClient(http_app).get("/v1/health")
+    assert resp.json()["service"] == "qa-mcp"
 
 
 def test_main_http_only(monkeypatch):
@@ -390,3 +224,52 @@ def test_main_http_only(monkeypatch):
     monkeypatch.setattr(uvicorn, "run", _fake_run)
     M.main()
     assert called["port"] == 7100
+
+
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_status_and_unknown(store_a):
+    s = _settings()
+    out = await M._dispatch("status", {}, s, store_a)
+    assert out["service"] == "qa-mcp"
+    with pytest.raises(KeyError):
+        await M._dispatch("does_not_exist", {}, s, store_a)
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_persisting_tools(store_a):
+    """Roteamento de _dispatch para tools que persistem (store real)."""
+    from unittest.mock import patch
+
+    s = _settings()
+
+    # generate_qa_report: só lê o histórico (vazio) + persiste o próprio report.
+    rep = await M._dispatch("generate_qa_report", {"repo_path": "/x"}, s, store_a)
+    assert rep["grade"] == "F"
+
+    # run_linter roteia e persiste (ruff mockado).
+    with patch("src.tools.analysis_tool._run_subprocess", return_value=(0, "[]", "")):
+        lint = await M._dispatch(
+            "run_linter",
+            {"repo_path": "/tmp/does-not-matter"},
+            s,
+            store_a,  # noqa: S108
+        )
+    assert lint["tool"] == "ruff"
+    assert "run_id" in lint
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> QAStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    result = await M._run_tool("generate_qa_report", {"repo_path": "/e2e"}, settings, TENANT_A)
+    assert result["grade"] == "F"  # histórico vazio
+    assert "run_id" in result
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

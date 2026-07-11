@@ -1,4 +1,4 @@
-"""Ferramentas de gerenciamento de checklists e execução de runs."""
+"""Ferramentas de gerenciamento de checklists e execução de runs (async — store ORM)."""
 
 from __future__ import annotations
 
@@ -397,7 +397,7 @@ _CHECKLIST_TEMPLATES: dict[str, list[dict[str, Any]]] = {
 }
 
 
-def create_checklist(
+async def create_checklist(
     store: TestStore,
     *,
     title: str,
@@ -414,7 +414,7 @@ def create_checklist(
             "error": "ValidationError",
             "details": f"checklist_type deve ser um de: {sorted(_VALID_CHECKLIST_TYPES)}",
         }
-    if plan_id and not store.get_plan(plan_id):
+    if plan_id and not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
     if use_template and checklist_type in _CHECKLIST_TEMPLATES and not items:
@@ -429,7 +429,7 @@ def create_checklist(
         if "description" not in item:
             return {"error": "ValidationError", "details": f"item[{i}] precisa de 'description'"}
 
-    result = store.create_checklist(
+    result = await store.create_checklist(
         title=title,
         checklist_type=checklist_type,
         items=items,
@@ -439,7 +439,7 @@ def create_checklist(
     return result
 
 
-def run_checklist(
+async def run_checklist(
     store: TestStore,
     *,
     checklist_id: str,
@@ -449,7 +449,7 @@ def run_checklist(
     if not checklist_id:
         return {"error": "ValidationError", "details": "checklist_id é obrigatório"}
 
-    result = store.start_run(checklist_id=checklist_id, executor=executor)
+    result = await store.start_run(checklist_id=checklist_id, executor=executor)
     if not result:
         return {"error": "not_found", "details": f"Checklist '{checklist_id}' não encontrado"}
 
@@ -460,7 +460,7 @@ def run_checklist(
     return result
 
 
-def check_item(
+async def check_item(
     store: TestStore,
     *,
     run_id: str,
@@ -477,14 +477,14 @@ def check_item(
             "details": f"status deve ser um de: {sorted(_VALID_ITEM_STATUSES)}",
         }
 
-    result = store.check_item(run_id=run_id, item_id=item_id, status=status, notes=notes)
+    result = await store.check_item(run_id=run_id, item_id=item_id, status=status, notes=notes)
     if not result:
         return {
             "error": "not_found",
             "details": f"Run '{run_id}' ou item '{item_id}' não encontrado",
         }
 
-    run_status = store.get_run_status(run_id)
+    run_status = await store.get_run_status(run_id)
     return {
         **result,
         "run_summary": run_status.get("summary", {}),
@@ -492,7 +492,7 @@ def check_item(
     }
 
 
-def get_run_status(
+async def get_run_status(
     store: TestStore,
     *,
     run_id: str,
@@ -501,7 +501,7 @@ def get_run_status(
     if not run_id:
         return {"error": "ValidationError", "details": "run_id é obrigatório"}
 
-    result = store.get_run_status(run_id)
+    result = await store.get_run_status(run_id)
     if not result:
         return {"error": "not_found", "details": f"Run '{run_id}' não encontrado"}
     return result

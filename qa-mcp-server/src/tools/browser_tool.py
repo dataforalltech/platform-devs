@@ -1,5 +1,13 @@
+"""Tools de browser (screenshot / accessibility / visual regression) — async, ORM-backed.
+
+O Playwright síncrono (`sync_playwright`) e a comparação Pillow rodam em
+`asyncio.to_thread` (não travam o event loop do sidecar); só a persistência
+(`await store.save_run`) fica no contexto async. O store é tenant-scoped (dual-db).
+"""
+
 from __future__ import annotations
 
+import asyncio
 import re
 import shutil
 from datetime import UTC, datetime
@@ -44,21 +52,20 @@ def _timestamp() -> str:
     return datetime.now(UTC).strftime("%Y%m%dT%H%M%S")
 
 
-def screenshot_page(
-    store: Any,
+def _screenshot_page_blocking(
     settings: Any,
     *,
     url: str,
-    viewport: str = "desktop",
-    selector: str | None = None,
-    output_dir: str | None = None,
-) -> dict:
-    """Tira screenshot de uma página via Playwright."""
+    viewport: str,
+    selector: str | None,
+    output_dir: str | None,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de screenshot_page. Retorna (resposta, kwargs de persistência|None)."""
     if sync_playwright is None:
         return {
             "error": "playwright_not_installed",
             "details": "run: playwright install",
-        }
+        }, None
 
     vp = _VIEWPORTS.get(viewport, _VIEWPORTS["desktop"])
     width, height = vp
@@ -85,39 +92,60 @@ def screenshot_page(
             "error": "browser_error",
             "details": str(exc),
             "tool": "screenshot_page",
-        }
+        }, None
 
-    run_id = store.save_run(
-        run_type="screenshot",
-        status="passed",
-        summary={"url": url, "viewport": viewport},
-        details={"path": path, "selector": selector},
-    )
-
-    return {
+    ret = {
         "url": url,
         "viewport": viewport,
         "width": width,
         "height": height,
         "path": path,
         "selector": selector,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "screenshot",
+        "status": "passed",
+        "summary": {"url": url, "viewport": viewport},
+        "details": {"path": path, "selector": selector},
+    }
+    return ret, persist
 
 
-def check_accessibility(
+async def screenshot_page(
     store: Any,
     settings: Any,
     *,
     url: str,
-    standard: str = "WCAG2AA",
+    viewport: str = "desktop",
+    selector: str | None = None,
+    output_dir: str | None = None,
 ) -> dict:
-    """Verifica acessibilidade via Playwright + axe-core."""
+    """Tira screenshot de uma página via Playwright."""
+    ret, persist = await asyncio.to_thread(
+        _screenshot_page_blocking,
+        settings,
+        url=url,
+        viewport=viewport,
+        selector=selector,
+        output_dir=output_dir,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _check_accessibility_blocking(
+    settings: Any,
+    *,
+    url: str,
+    standard: str,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de check_accessibility. Retorna (resposta, kwargs de persistência|None)."""
     if sync_playwright is None:
         return {
             "error": "playwright_not_installed",
             "details": "run: playwright install",
-        }
+        }, None
 
     tags = _AXE_TAGS.get(standard, _AXE_TAGS["WCAG2AA"])
     axe_run_script = f"axe.run({{runOnly: {{type: 'tag', values: {tags!r}}}}})"
@@ -135,7 +163,7 @@ def check_accessibility(
             "error": "browser_error",
             "details": str(exc),
             "tool": "check_accessibility",
-        }
+        }, None
 
     raw_violations: list[dict] = results.get("violations") or []
     raw_passes: list[dict] = results.get("passes") or []
@@ -152,50 +180,67 @@ def check_accessibility(
         for v in raw_violations
     ]
 
-    run_id = store.save_run(
-        run_type="accessibility",
-        status="passed" if not violations else "failed",
-        summary={
-            "violations_count": len(violations),
-            "passes_count": len(raw_passes),
-        },
-        details={"violations": violations[:10]},
-        repo_path=url,
-    )
-
-    return {
+    ret = {
         "url": url,
         "standard": standard,
         "violations_count": len(violations),
         "passes_count": len(raw_passes),
         "incomplete_count": len(raw_incomplete),
         "violations": violations,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "accessibility",
+        "status": "passed" if not violations else "failed",
+        "summary": {
+            "violations_count": len(violations),
+            "passes_count": len(raw_passes),
+        },
+        "details": {"violations": violations[:10]},
+        "repo_path": url,
+    }
+    return ret, persist
 
 
-def visual_regression(
+async def check_accessibility(
     store: Any,
     settings: Any,
     *,
     url: str,
-    baseline_name: str,
-    viewport: str = "desktop",
-    threshold_pct: float = 2.0,
-    update_baseline: bool = False,
+    standard: str = "WCAG2AA",
 ) -> dict:
-    """Compara screenshot atual com baseline via Pillow."""
+    """Verifica acessibilidade via Playwright + axe-core."""
+    ret, persist = await asyncio.to_thread(
+        _check_accessibility_blocking,
+        settings,
+        url=url,
+        standard=standard,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
+
+
+def _visual_regression_blocking(
+    settings: Any,
+    *,
+    url: str,
+    baseline_name: str,
+    viewport: str,
+    threshold_pct: float,
+    update_baseline: bool,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de visual_regression. Retorna (resposta, kwargs de persistência|None)."""
     if sync_playwright is None:
         return {
             "error": "playwright_not_installed",
             "details": "run: playwright install",
-        }
+        }, None
 
     if Image is None or ImageChops is None:
         return {
             "error": "pillow_not_installed",
             "details": "pip install Pillow",
-        }
+        }, None
 
     vp = _VIEWPORTS.get(viewport, _VIEWPORTS["desktop"])
     width, height = vp
@@ -222,20 +267,13 @@ def visual_regression(
             "error": "browser_error",
             "details": str(exc),
             "tool": "visual_regression",
-        }
+        }, None
 
     baseline_exists = Path(baseline_path).exists()
 
     if not baseline_exists or update_baseline:
         shutil.copy2(screenshot_path, baseline_path)
-        run_id = store.save_run(
-            run_type="visual_regression",
-            status="passed",
-            summary={"action": "baseline_created", "baseline_name": baseline_name},
-            details={"baseline_path": baseline_path},
-            repo_path=url,
-        )
-        return {
+        ret = {
             "url": url,
             "baseline_name": baseline_name,
             "match": True,
@@ -245,8 +283,15 @@ def visual_regression(
             "baseline_path": baseline_path,
             "diff_path": None,
             "action": "baseline_created",
-            "run_id": run_id,
         }
+        persist = {
+            "run_type": "visual_regression",
+            "status": "passed",
+            "summary": {"action": "baseline_created", "baseline_name": baseline_name},
+            "details": {"baseline_path": baseline_path},
+            "repo_path": url,
+        }
+        return ret, persist
 
     # Compare with baseline
     try:
@@ -269,7 +314,7 @@ def visual_regression(
             "error": "comparison_error",
             "details": str(exc),
             "tool": "visual_regression",
-        }
+        }, None
 
     match = diff_pct <= threshold_pct
     diff_path: str | None = None
@@ -281,15 +326,7 @@ def visual_regression(
         except Exception:  # noqa: BLE001
             diff_path = None
 
-    run_id = store.save_run(
-        run_type="visual_regression",
-        status="passed" if match else "failed",
-        summary={"match": match, "diff_pct": diff_pct, "baseline_name": baseline_name},
-        details={"diff_path": diff_path},
-        repo_path=url,
-    )
-
-    return {
+    ret = {
         "url": url,
         "baseline_name": baseline_name,
         "match": match,
@@ -299,5 +336,37 @@ def visual_regression(
         "baseline_path": baseline_path,
         "diff_path": diff_path,
         "action": "compared",
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "visual_regression",
+        "status": "passed" if match else "failed",
+        "summary": {"match": match, "diff_pct": diff_pct, "baseline_name": baseline_name},
+        "details": {"diff_path": diff_path},
+        "repo_path": url,
+    }
+    return ret, persist
+
+
+async def visual_regression(
+    store: Any,
+    settings: Any,
+    *,
+    url: str,
+    baseline_name: str,
+    viewport: str = "desktop",
+    threshold_pct: float = 2.0,
+    update_baseline: bool = False,
+) -> dict:
+    """Compara screenshot atual com baseline via Pillow."""
+    ret, persist = await asyncio.to_thread(
+        _visual_regression_blocking,
+        settings,
+        url=url,
+        baseline_name=baseline_name,
+        viewport=viewport,
+        threshold_pct=threshold_pct,
+        update_baseline=update_baseline,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret

@@ -98,16 +98,16 @@ class TestCollectPhysicalInfo:
 
 
 class TestGetPhysicalInfoTool:
-    def test_success(self, mocked_psutil):
-        result = get_physical_info()
+    async def test_success(self, mocked_psutil):
+        result = await get_physical_info()
         assert result["success"] is True
         assert "cpu" in result
 
-    def test_failure_returns_error(self, monkeypatch):
+    async def test_failure_returns_error(self, monkeypatch):
         def boom():
             raise RuntimeError("collector down")
 
         monkeypatch.setattr("src.tools.sysinfo_tool.collect_physical_info", boom)
-        result = get_physical_info()
+        result = await get_physical_info()
         assert result["success"] is False
         assert result["error"] == "collector down"

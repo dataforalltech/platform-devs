@@ -12,8 +12,8 @@ Pontos gateway-ready:
      JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
      inner token chega em params._meta.twin_token.
   3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
-     cliente (SEC-035 / INV-3). As tools de services não o consomem (é só p/
-     governança), então o dispatcher o remove antes de chamar a função.
+     cliente (SEC-035 / INV-3). O tenant seleciona o banco do tenant: cada chamada abre
+     uma sessão tenant-scoped (`for_tenant`) e instancia um `ServiceStore` sobre ela.
   4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
   5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
 
@@ -22,9 +22,11 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: services-mcp é **stateful** (registry de serviços em PostgreSQL via
-``ServiceStore``), então o dispatcher recebe (store, settings) e injeta ambos nas
-tools — preservando a lógica original de src/tools/.
+NOTA: services-mcp é **stateful** (registry de serviços), migrado 100% para o ORM
+canônico (`platform_database.orm`), **tenant-scoped e dual-db** (credencial-zero,
+ORM-H-12). Não há mais store global: cada chamada resolve o tenant dos claims, abre uma
+sessão (`for_tenant`) e instancia um `ServiceStore`. `orm.configure(settings)` registra a
+fonte admin (ADMIN_DB_*) usada para resolver o tenant → credencial do seu banco.
 
 Tools (32):
   Registry (5):   register_service, get_service, list_services, update_service, unregister_service
@@ -52,9 +54,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import ServicesSettings, get_settings
+from ..db.schema import ensure_schema
 from ..db.store import ServiceStore
 from ..tools import (
     audit_env_files,
@@ -1227,11 +1234,44 @@ def _verify_inner_token(twin_token: str, settings: ServicesSettings) -> dict[str
     )
 
 
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: ServicesSettings, tenant_id: str) -> None:
+    """Garante a tabela `services` no banco do tenant (uma vez por processo). O engine é o
+    do dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: ServicesSettings, tenant_id: str
+) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = ServiceStore(session)
+        return await _dispatch(name, arguments, store, settings)
+
+
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: ServicesSettings, store: ServiceStore) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: ServicesSettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="services-mcp API",
         version="0.1.0",
@@ -1258,7 +1298,7 @@ def _build_http_app(settings: ServicesSettings, store: ServiceStore) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -1266,24 +1306,22 @@ def _build_http_app(settings: ServicesSettings, store: ServiceStore) -> FastAPI:
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
-        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
-        if name not in _EXEMPT_TOOLS:
-            twin_token = (params.get("_meta") or {}).get("twin_token")
-            if not twin_token:
-                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
-            try:
-                claims = _verify_inner_token(twin_token, settings)
-            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
-                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
-                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        # Toda tool do services toca estado do tenant → inner token obrigatório (não há
+        # _EXEMPT_TOOLS). O tenant vem SEMPRE dos claims (SEC-035 / INV-3), nunca do arg.
+        twin_token = (params.get("_meta") or {}).get("twin_token")
+        if not twin_token:
+            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+        try:
+            claims = _verify_inner_token(twin_token, settings)
+        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+            _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+        tenant_id = claims.get("tenant_id")
+        if not tenant_id:
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments, store, settings)
+            payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -1292,28 +1330,29 @@ def _build_http_app(settings: ServicesSettings, store: ServiceStore) -> FastAPI:
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def build_server() -> tuple[Any, ServicesSettings, ServiceStore, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
+def build_server() -> tuple[Any, ServicesSettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há mais store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    store = ServiceStore(settings.db_path, dsn=settings.pg_dsn)
-    http_app = _build_http_app(settings, store)
-    _log.info("services_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
-
-    # Descoberta eager no boot é opt-in (docker ps + port scan são I/O pesado).
-    if getattr(settings, "sync_on_startup", False):
-        try:
-            result = sync_registry(store, include_docker=True, probe_health=False)
-            _log.info("sync_registry done: upserted=%d", result.get("total_upserted", 0))
-        except Exception as exc:  # noqa: BLE001
-            _log.warning("sync_registry startup failed (ignored): %s", exc)
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    http_app = _build_http_app(settings)
+    _log.info("services_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("services-mcp-server")
 
@@ -1326,34 +1365,39 @@ def build_server() -> tuple[Any, ServicesSettings, ServiceStore, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, store, settings)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). services-mcp
+        # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
+        # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "services-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, settings, store, http_app
+    return server, settings, http_app
 
 
-# ── Dispatcher (stateful: store + settings injetados nas tools) ───────────────
+# ── Dispatcher (stateful: store tenant-scoped + settings injetados nas tools) ──
 
 
-def _dispatch(
+async def _dispatch(
     name: str,
     args: dict[str, Any],
     store: ServiceStore,
     settings: ServicesSettings,
 ) -> dict:
-    # tenant_id é injetado pelo PEP nos args (INV-3) só p/ governança; as tools de
-    # services não o consomem, então é removido antes da chamada.
-    args = {k: v for k, v in args.items() if k != "tenant_id"}
+    """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
+    o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
     # ── Registry ──────────────────────────────────────────────────────────────
     if name == "register_service":
-        return register_service(
+        return await register_service(
             store,
             name=args["name"],
             port=args["port"],
@@ -1366,9 +1410,9 @@ def _dispatch(
             environment=args.get("environment", "local"),
         )
     if name == "get_service":
-        return get_service(store, name=args["name"])
+        return await get_service(store, name=args["name"])
     if name == "list_services":
-        return list_services(
+        return await list_services(
             store,
             environment=args.get("environment"),
             tag=args.get("tag"),
@@ -1379,30 +1423,34 @@ def _dispatch(
         )
     if name == "update_service":
         update_args = {k: v for k, v in args.items() if k != "name"}
-        return update_service(store, name=args["name"], **update_args)
+        return await update_service(store, name=args["name"], **update_args)
     if name == "unregister_service":
-        return unregister_service(store, name=args["name"])
+        return await unregister_service(store, name=args["name"])
     # PortMap  #
     if name == "get_port_map":
-        return get_port_map(store)
+        return await get_port_map(store)
     if name == "find_by_port":
-        return find_by_port(store, port=args["port"])
+        return await find_by_port(store, port=args["port"])
     # Discovery  #
     if name == "scan_docker":
-        return scan_docker(store, timeout=args.get("timeout", settings.docker_timeout))
+        return await scan_docker(store, timeout=args.get("timeout", settings.docker_timeout))
     if name == "scan_processes":
-        return scan_processes(store, min_port=args.get("min_port", 1024))
+        return await scan_processes(store, min_port=args.get("min_port", 1024))
     if name == "check_health":
-        return check_health(store, name=args["name"], timeout=args.get("timeout", settings.health_timeout))
+        return await check_health(
+            store, name=args["name"], timeout=args.get("timeout", settings.health_timeout)
+        )
     if name == "check_all_health":
-        return check_all_health(store, timeout=args.get("timeout", settings.health_timeout))
+        return await check_all_health(store, timeout=args.get("timeout", settings.health_timeout))
     # Composite  #
     if name == "service_status":
-        return service_status(store, name=args["name"], timeout=args.get("timeout", settings.health_timeout))
+        return await service_status(
+            store, name=args["name"], timeout=args.get("timeout", settings.health_timeout)
+        )
     if name == "list_environments":
-        return list_environments(store)
+        return await list_environments(store)
     if name == "reload_service":
-        return reload_service(
+        return await reload_service(
             store,
             name=args["name"],
             wait_seconds=args.get("wait_seconds", 3.0),
@@ -1410,9 +1458,9 @@ def _dispatch(
         )
     # Gateway  #
     if name == "get_gateway_map":
-        return get_gateway_map(store)
+        return await get_gateway_map(store)
     if name == "update_service_gateway":
-        return update_service_gateway(
+        return await update_service_gateway(
             store,
             name=args["name"],
             internal_url=args.get("internal_url"),
@@ -1422,7 +1470,7 @@ def _dispatch(
             probe=args.get("probe", True),
         )
     if name == "sync_registry":
-        return sync_registry(
+        return await sync_registry(
             store,
             port_ranges=args.get("port_ranges"),
             service_names=args.get("service_names"),
@@ -1432,7 +1480,7 @@ def _dispatch(
         )
     # Launch  #
     if name == "launch_service":
-        return launch_service(
+        return await launch_service(
             store,
             name=args["name"],
             mode=args["mode"],
@@ -1454,7 +1502,7 @@ def _dispatch(
             detach=args.get("detach", True),
         )
     if name == "stop_service":
-        return stop_service(
+        return await stop_service(
             store,
             name=args["name"],
             mode=args.get("mode"),
@@ -1462,9 +1510,9 @@ def _dispatch(
         )
     # Env  #
     if name == "read_env_file":
-        return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
+        return await read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
     if name == "set_env_var":
-        return set_env_var(
+        return await set_env_var(
             store,
             path=args["path"],
             key=args["key"],
@@ -1473,7 +1521,7 @@ def _dispatch(
             comment=args.get("comment"),
         )
     if name == "sync_service_urls":
-        return sync_service_urls(
+        return await sync_service_urls(
             store,
             path=args["path"],
             url_map=args.get("url_map"),
@@ -1481,14 +1529,14 @@ def _dispatch(
             dry_run=args.get("dry_run", False),
         )
     if name == "audit_env_files":
-        return audit_env_files(
+        return await audit_env_files(
             store,
             directory=args["directory"],
             include_pattern=args.get("include_pattern", ".env*"),
             check_registry_urls=args.get("check_registry_urls", True),
         )
     if name == "redact_env_secrets":
-        return redact_env_secrets(
+        return await redact_env_secrets(
             store,
             paths=args["paths"],
             keys=args.get("keys"),
@@ -1497,7 +1545,7 @@ def _dispatch(
         )
     # -- Infra ------------------------------------------------------------------
     if name == "register_infra":
-        return register_infra(
+        return await register_infra(
             store,
             name=args["name"],
             kind=args["kind"],
@@ -1509,13 +1557,13 @@ def _dispatch(
             metadata=args.get("metadata"),
         )
     if name == "scan_infra":
-        return scan_infra(
+        return await scan_infra(
             store,
             timeout=args.get("timeout", 10),
             environment=args.get("environment", "local"),
         )
     if name == "sync_infra_env":
-        return sync_infra_env(
+        return await sync_infra_env(
             store,
             path=args["path"],
             dry_run=args.get("dry_run", False),
@@ -1523,14 +1571,14 @@ def _dispatch(
         )
     # -- Brokers ----------------------------------------------------------------
     if name == "kafka_status":
-        return kafka_status(store, bootstrap_servers=args.get("bootstrap_servers"))
+        return await kafka_status(store, bootstrap_servers=args.get("bootstrap_servers"))
     if name == "redis_status":
-        return redis_status(store, url=args.get("url"))
+        return await redis_status(store, url=args.get("url"))
     if name == "sync_broker_urls":
-        return sync_broker_urls(store, path=args["path"], dry_run=args.get("dry_run", False))
+        return await sync_broker_urls(store, path=args["path"], dry_run=args.get("dry_run", False))
     # -- Logs -------------------------------------------------------------------
     if name == "get_service_logs":
-        return get_service_logs(
+        return await get_service_logs(
             store,
             name=args["name"],
             lines=args.get("lines", 100),
@@ -1539,7 +1587,7 @@ def _dispatch(
             timestamps=args.get("timestamps", False),
         )
     if name == "search_logs":
-        return search_logs(
+        return await search_logs(
             store,
             name=args["name"],
             pattern=args["pattern"],
@@ -1557,7 +1605,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, settings, _store, http_app = build_server()
+    server, settings, http_app = build_server()
     cfg = uvicorn.Config(
         http_app,
         host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
@@ -1581,7 +1629,7 @@ def main() -> None:
     if os.getenv("MCP_HTTP_ONLY", "0") == "1":
         import uvicorn
 
-        _server, settings, _store, http_app = build_server()
+        _server, settings, http_app = build_server()
         uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
         return
     asyncio.run(_run())

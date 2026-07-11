@@ -1,6 +1,6 @@
 """Ferramentas de configuracao de workspace — paths locais e preferencias globais.
 
-Namespace no ConfigStore: ``workspace``
+Namespace no ConfigStore: ``workspace`` (async, tenant-scoped)
 
 Chaves canonicas
 ----------------
@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from ..knowledge.store import ConfigStore
+from ..db.store import ConfigStore
 
 _log = logging.getLogger(__name__)
 
@@ -66,7 +66,7 @@ def _validate_path(value: str) -> str | None:
     return None
 
 
-def get_workspace_config(
+async def get_workspace_config(
     store: ConfigStore,
     *,
     key: str | None = None,
@@ -78,7 +78,8 @@ def get_workspace_config(
     mais os valores padrao detectados do ambiente.
     """
     if key:
-        value = store.get(WORKSPACE_NS, key.upper())
+        stored_value = await store.get(WORKSPACE_NS, key.upper())
+        value = stored_value
         # Fallback: variavel de ambiente WORKSPACE_<KEY>
         if value is None:
             value = os.environ.get(f"WORKSPACE_{key.upper()}")
@@ -89,11 +90,11 @@ def get_workspace_config(
             "key": key.upper(),
             "value": value,
             "found": value is not None,
-            "source": "store" if store.get(WORKSPACE_NS, key.upper()) is not None else "env_fallback",
+            "source": "store" if stored_value is not None else "env_fallback",
         }
 
     # Todas as chaves
-    stored = store.get_namespace(WORKSPACE_NS)
+    stored = await store.get_namespace(WORKSPACE_NS)
 
     # Detecta REPOS_ROOT do ambiente se nao estiver no store
     env_repos_root = (
@@ -117,7 +118,7 @@ def get_workspace_config(
     }
 
 
-def set_workspace_config(
+async def set_workspace_config(
     store: ConfigStore,
     *,
     key: str,
@@ -152,7 +153,7 @@ def set_workspace_config(
                         "tip": "Use create_dir=true para criar o diretorio automaticamente.",
                     }
 
-    store.set(WORKSPACE_NS, key_upper, value)
+    await store.set(WORKSPACE_NS, key_upper, value)
 
     # Resolve caminho expandido para retorno
     resolved = str(Path(value).expanduser().resolve()) if key_upper == "REPOS_ROOT" else value
@@ -167,14 +168,14 @@ def set_workspace_config(
     }
 
 
-def list_workspace_config(
+async def list_workspace_config(
     store: ConfigStore,
 ) -> dict[str, Any]:
     """Lista todas as chaves do namespace workspace com valores e descricoes canonicas.
 
     Tambem mostra chaves canonicas ausentes para facilitar o setup inicial.
     """
-    stored = store.get_namespace(WORKSPACE_NS)
+    stored = await store.get_namespace(WORKSPACE_NS)
 
     env_fallbacks = {
         "REPOS_ROOT": (

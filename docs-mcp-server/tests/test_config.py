@@ -1,10 +1,11 @@
 """Testes de config: RUNTIME_ENV, enforce_security_invariants (STD-SEC-001/004/006),
-o Vault-fallback de segredos e o logging estruturado JSON (STD-OBS-001).
+conformidade com os protocolos DBSettings/AdminDBSettings do ORM (dual-db,
+credencial-zero), o Vault-fallback de segredos e o logging estruturado JSON (STD-OBS-001).
 
 Estes travam o contrato de compliance Tier-2: docs sempre off, audiência do inner
-token no formato mcp:<namespace>, JWKS + senha de DB obrigatórios em cloud, senha
-resolvida via Vault com degradação graciosa p/ env, e uma linha JSON por log record
-com identidade do serviço + campos de correlação.
+token no formato mcp:<namespace>, JWKS + conexão admin obrigatórios em cloud, senhas
+(tenant + admin) resolvidas via Vault com degradação graciosa p/ env, e uma linha JSON
+por log record com identidade do serviço + campos de correlação.
 """
 
 from __future__ import annotations
@@ -13,21 +14,27 @@ import json
 import logging
 
 import pytest
+from platform_database.settings import AdminDBSettings, DBSettings
 
+from src.config import settings as S
 from src.config.logging import JsonLogFormatter, configure_logging
-from src.config.settings import NAMESPACE, Settings, load_secret
+from src.config.settings import NAMESPACE, DocsSettings, Settings, load_secret
 
 
-def _settings(**overrides) -> Settings:
+def _settings(**overrides) -> DocsSettings:
     base = {
         "MCP_TWIN_AUDIENCE": f"mcp:{NAMESPACE}",
         "URL_ADMIN_TWIN_JWKS": "http://admin.local/jwks.json",
-        "DOCS_ENABLED": False,
-        "RUNTIME_ENV": "local",
-        "pg_password": "pw",
+        "ADMIN_DB_HOST": "admin-mysql",
+        "ADMIN_DB_PASSWORD": "pw",
     }
     base.update(overrides)
-    return Settings(**base)
+    return DocsSettings(**base)
+
+
+# ── Alias de compatibilidade ──────────────────────────────────────────────────
+def test_settings_alias_points_to_docs_settings():
+    assert Settings is DocsSettings
 
 
 # ── RUNTIME_ENV ───────────────────────────────────────────────────────────────
@@ -41,13 +48,21 @@ def test_runtime_env_rejects_unknown():
         _settings(RUNTIME_ENV="staging")
 
 
+# ── Conformidade com os protocolos do ORM ─────────────────────────────────────
+def test_satisfies_orm_protocols():
+    s = _settings()
+    assert isinstance(s, DBSettings)
+    assert isinstance(s, AdminDBSettings)
+    assert s.DB_ENGINE == "mysql"  # dual-db: engine default
+
+
 # ── enforce_security_invariants ───────────────────────────────────────────────
 def test_enforce_ok_local():
-    # Não levanta: docs off, aud mcp:, local dispensa JWKS/senha.
-    _settings(pg_password="").enforce_security_invariants()
+    # Não levanta: docs off, aud mcp:, local dispensa JWKS/admin.
+    DocsSettings().enforce_security_invariants()
 
 
-def test_enforce_ok_cloud_with_jwks_and_password():
+def test_enforce_ok_cloud_with_jwks_and_admin():
     _settings(RUNTIME_ENV="cloud").enforce_security_invariants()
 
 
@@ -66,21 +81,30 @@ def test_enforce_cloud_requires_jwks():
         _settings(RUNTIME_ENV="cloud", URL_ADMIN_TWIN_JWKS="").enforce_security_invariants()
 
 
-def test_enforce_cloud_requires_db_password():
+def test_enforce_cloud_requires_admin_db():
     with pytest.raises(RuntimeError, match="STD-SEC-004"):
-        _settings(RUNTIME_ENV="cloud", pg_password="").enforce_security_invariants()
+        _settings(RUNTIME_ENV="cloud", ADMIN_DB_PASSWORD="").enforce_security_invariants()
+    with pytest.raises(RuntimeError, match="STD-SEC-004"):
+        _settings(RUNTIME_ENV="cloud", ADMIN_DB_HOST="").enforce_security_invariants()
 
 
 # ── load_secret (Vault-fallback) ──────────────────────────────────────────────
 def test_load_secret_env_when_no_vault(monkeypatch):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
-    assert load_secret("docs-mcp/pg_password", "from-env") == "from-env"
+    assert load_secret("docs-mcp/db_password", "from-env") == "from-env"
 
 
 def test_load_secret_degrades_gracefully_when_vault_unavailable(monkeypatch):
     # VAULT_ADDR setado mas platform_crypto ausente → degrada p/ env (boot não quebra).
     monkeypatch.setenv("VAULT_ADDR", "http://vault.local:8200")
-    assert load_secret("docs-mcp/pg_password", "from-env") == "from-env"
+    assert load_secret("docs-mcp/db_password", "from-env") == "from-env"
+
+
+def test_settings_resolves_secrets_via_vault(monkeypatch):
+    monkeypatch.setattr(S, "load_secret", lambda _key, fallback: "resolved-pw")
+    s = DocsSettings(DB_PASSWORD="ignored", ADMIN_DB_PASSWORD="ignored")
+    assert s.DB_PASSWORD == "resolved-pw"
+    assert s.ADMIN_DB_PASSWORD == "resolved-pw"
 
 
 # ── JsonLogFormatter ──────────────────────────────────────────────────────────

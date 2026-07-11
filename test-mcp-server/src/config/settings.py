@@ -4,21 +4,29 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`test-mcp` é uma persona **DB-backed**: as tools persistem planos/cenários/
-checklists/bugs num PostgreSQL via ``TestStore`` (psycopg2). O "backend" aqui é o
-próprio banco (não há API REST HTTP a chamar), então NÃO há
-``ServiceApiClient``/``MCP_SERVICE_BASE_URL``/``MCP_SERVICE_TOKEN`` — a config de
-conexão (``TEST_PG_*``) permanece para a camada de store.
+`test-mcp` é uma persona **DB-backed**: as tools persistem planos/cenários/checklists/
+bugs. A persistência roda 100% sobre o ORM canônico (`platform_database.orm`),
+**tenant-scoped e dual-db**: credencial-zero (ORM-H-12) — o serviço só conhece o
+`tenant_id`; a credencial do banco do tenant vem de `ADMIN_DATAFORALL.PLATFORMS`
+(resolvida pela lib). Estas Settings expõem os protocolos `DBSettings` (`DB_*`,
+fallback compartilhado) e `AdminDBSettings` (`ADMIN_DB_*`, conexão admin que lê
+PLATFORMS) — o mesmo objeto é passado a `orm.configure()` no boot.
+
+STD-SEC-004: um único `.env` (discriminador `RUNTIME_ENV`); NENHUM valor com cara de
+credencial fica no código — host/senha do DB/admin vêm de env (ou Vault via `load_secret`).
 """
 
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .secrets import load_secret
+
+_log = logging.getLogger(__name__)
 
 # namespace canônico = name_microservice ('platform-test-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
@@ -26,15 +34,15 @@ NAMESPACE = "test-mcp"
 
 
 class Settings(BaseSettings):
-    # env_prefix='TEST_' aplica-se APENAS aos campos de DB (sem validation_alias);
-    # os campos do gateway usam aliases canônicos SEM prefixo (MCP_TWIN_AUDIENCE, …).
+    """Settings do test-mcp: gateway (Model C) + backend dual-db (ORM canônico)."""
+
     model_config = SettingsConfigDict(
-        env_prefix="TEST_", env_file=".env", extra="ignore", case_sensitive=False
+        env_file=".env", extra="ignore", case_sensitive=False, populate_by_name=True
     )
 
     # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
     # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
-    # é gated por RUNTIME_ENV ∈ {local, cloud}. Alias SEM o prefixo TEST_.
+    # é gated por RUNTIME_ENV ∈ {local, cloud}.
     runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
 
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
@@ -49,19 +57,36 @@ class Settings(BaseSettings):
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
 
-    # ── PostgreSQL (camada de store) — env_prefix TEST_ ───────────────────────
-    # STD-SEC-004: nenhum host/credencial hard-coded. host/senha default vazios →
-    # exigidos via env (TEST_PG_HOST/TEST_PG_PASSWORD) ou Vault; obrigatórios em
-    # cloud (enforce_security_invariants). A senha NUNCA fica no código.
-    pg_host: str = Field(default="", description="PostgreSQL host")
-    pg_port: int = Field(default=5432, description="PostgreSQL port")
-    pg_db: str = Field(default="app", description="PostgreSQL database name")
-    pg_user: str = Field(default="postgres", description="PostgreSQL user")
-    pg_password: str = Field(default="", description="PostgreSQL password (via env/Vault)")
-    pg_min_conn: int = Field(default=2, description="Minimum pool connections")
-    pg_max_conn: int = Field(default=10, description="Maximum pool connections")
+    # ── Backend do tenant (DBSettings — ORM canônico, dual-db) ────────────────
+    # Fallback compartilhado (shared-admin credential model): a credencial real do
+    # tenant vem de ADMIN_DATAFORALL.PLATFORMS; estes DB_* são o fallback quando a
+    # PLATFORMS row não traz o campo. DB_ENGINE decide o dialeto (mysql/postgresql).
+    # STD-SEC-004: nenhum valor com cara de credencial fica no código (env/Vault).
+    DB_ENGINE: str = Field(default="mysql", validation_alias="DB_ENGINE")
+    DB_HOST: str = Field(default="", validation_alias="DB_HOST")
+    DB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
+    DB_NAME: str = Field(default="", validation_alias="DB_NAME")
+    DB_USER: str = Field(default="root", validation_alias="DB_USER")
+    DB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
+    DB_POOL_MIN_SIZE: int = Field(default=1, validation_alias="DB_POOL_MIN_SIZE")
+    DB_POOL_MAX_SIZE: int = Field(default=10, validation_alias="DB_POOL_MAX_SIZE")
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
+        default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
+    )
+    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
+    DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
 
-    # Test-specific settings
+    # ── Conexão admin (AdminDBSettings — lê ADMIN_DATAFORALL.PLATFORMS) ────────
+    # Resolve o tenant -> credencial do seu banco. É a fonte passada a
+    # orm.configure()/get_pool_for_tenant(). O db name é fixo "ADMIN_DATAFORALL".
+    ADMIN_DB_HOST: str = Field(default="", validation_alias="ADMIN_DB_HOST")
+    ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
+    ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
+    ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
+
+    # Test-specific settings (preservado).
     default_list_limit: int = 20
 
     @field_validator("runtime_env")
@@ -72,42 +97,38 @@ class Settings(BaseSettings):
             raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
         return v
 
-    @property
-    def pg_password_resolved(self) -> str:
-        """Senha do DB resolvida via Vault→env (STD-SEC-004). Nunca hard-coded.
-
-        Vault (se `VAULT_ADDR`) → env `TEST_PG_PASSWORD` → o valor já carregado pelo
-        pydantic (também de env) → "". Degradação graciosa: o boot nunca quebra.
-        """
-        return load_secret("test-mcp/pg-password", env_var="TEST_PG_PASSWORD", default=self.pg_password)
-
-    @property
-    def pg_dsn(self) -> str:
-        """Return PostgreSQL connection string (senha resolvida via Vault→env)."""
-        return (
-            f"host={self.pg_host} port={self.pg_port} dbname={self.pg_db} "
-            f"user={self.pg_user} password={self.pg_password_resolved}"
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> Settings:
+        """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
+        self.DB_PASSWORD = load_secret(
+            f"{NAMESPACE}/db_password", env_var="DB_PASSWORD", default=self.DB_PASSWORD
         )
+        self.ADMIN_DB_PASSWORD = load_secret(
+            f"{NAMESPACE}/admin_db_password", env_var="ADMIN_DB_PASSWORD", default=self.ADMIN_DB_PASSWORD
+        )
+        return self
 
     def enforce_security_invariants(self) -> None:
         """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006). Chamado em build_server().
 
         - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
         - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
-        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
-        - Em cloud, a credencial do DB (senha) é obrigatória — nunca há default com
-          senha no código; a resolução real passa por load_secret (Vault→env).
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica) e a
+          conexão admin (host + senha p/ resolver o tenant via PLATFORMS) DEVE vir de
+          env/Vault (nunca de default no código).
         """
         if self.docs_enabled:
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
         if not self.mcp_twin_audience.startswith("mcp:"):
             raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
-        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
-            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
-        if self.runtime_env == "cloud" and not self.pg_password_resolved:
-            raise RuntimeError(
-                "INVARIANTE STD-SEC-004: senha do PostgreSQL (TEST_PG_PASSWORD/Vault) é obrigatória em cloud"
-            )
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
+                    "cloud (resolução credencial-zero do tenant via PLATFORMS; sem default no código)"
+                )
 
 
 # Alias de compatibilidade (a suíte histórica referencia ``TestSettings``).

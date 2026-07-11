@@ -1,9 +1,12 @@
-"""Testes do padrão Tier-2 de compliance (STD-SEC-001/004/006, STD-OBS-001).
+"""Testes do padrão Tier-2 de compliance (STD-SEC-001/004/006, STD-OBS-001) +
+conformidade com os protocolos DBSettings/AdminDBSettings do ORM (dual-db, credencial-zero).
 
 Cobre:
   - QASettings.runtime_env / _validate_runtime_env
+  - QASettings satisfaz DBSettings/AdminDBSettings (isinstance runtime_checkable)
   - QASettings.enforce_security_invariants (todas as invariantes, local e cloud)
-  - config.secrets.load_secret (env, default, Vault ok, Vault indisponível)
+  - QASettings._resolve_secrets (senhas via load_secret)
+  - config.secrets.load_secret (env, default, Vault ok, Vault indisponível, Vault vazio)
   - config.logging.JsonLogFormatter / configure_logging
 """
 
@@ -13,8 +16,10 @@ import json
 import logging
 
 import pytest
+from platform_database.settings import AdminDBSettings, DBSettings
 
 from src.config import secrets as S
+from src.config import settings as SET
 from src.config.logging import JsonLogFormatter, configure_logging
 from src.config.settings import NAMESPACE, QASettings
 
@@ -33,13 +38,22 @@ def test_runtime_env_invalid_raises():
         QASettings(runtime_env="staging")
 
 
+# ── Conformidade com os protocolos do ORM ─────────────────────────────────────
+def test_satisfies_orm_protocols():
+    s = QASettings(mcp_twin_audience="mcp:qa-mcp")
+    assert isinstance(s, DBSettings)
+    assert isinstance(s, AdminDBSettings)
+    assert s.DB_ENGINE == "mysql"  # dual-db: engine default
+
+
 # ── enforce_security_invariants ───────────────────────────────────────────────
 def _cloud(**over) -> QASettings:
     base = dict(
         runtime_env="cloud",
         mcp_twin_audience="mcp:qa-mcp",
         url_admin_twin_jwks="http://admin.local/jwks.json",
-        pg_dsn="postgresql://u:p@db:5432/qa",
+        ADMIN_DB_HOST="admin-mysql",
+        ADMIN_DB_PASSWORD="pw",
         docs_enabled=False,
     )
     base.update(over)
@@ -47,7 +61,7 @@ def _cloud(**over) -> QASettings:
 
 
 def test_enforce_ok_local_minimal():
-    # local: jwks e pg_dsn NÃO são exigidos.
+    # local: jwks e admin-db NÃO são exigidos.
     QASettings(mcp_twin_audience="mcp:qa-mcp", docs_enabled=False).enforce_security_invariants()
 
 
@@ -70,49 +84,66 @@ def test_enforce_cloud_requires_jwks():
         _cloud(url_admin_twin_jwks="").enforce_security_invariants()
 
 
-def test_enforce_cloud_requires_pg_dsn():
-    with pytest.raises(RuntimeError, match="PG_DSN"):
-        _cloud(pg_dsn="").enforce_security_invariants()
+def test_enforce_cloud_requires_admin_db(monkeypatch):
+    # env limpo p/ o model_validator não puxar ADMIN_DB_PASSWORD/VAULT do ambiente.
+    monkeypatch.delenv("ADMIN_DB_PASSWORD", raising=False)
+    monkeypatch.delenv("ADMIN_DB_HOST", raising=False)
+    monkeypatch.delenv("VAULT_ADDR", raising=False)
+    with pytest.raises(RuntimeError, match="STD-SEC-004"):
+        _cloud(ADMIN_DB_PASSWORD="").enforce_security_invariants()
+    with pytest.raises(RuntimeError, match="STD-SEC-004"):
+        _cloud(ADMIN_DB_HOST="").enforce_security_invariants()
+
+
+# ── _resolve_secrets (senhas via load_secret) ─────────────────────────────────
+def test_settings_resolves_secrets_via_load_secret(monkeypatch):
+    def _fake(_name, *, env_var, default=""):
+        return "resolved-pw"
+
+    monkeypatch.setattr(SET, "load_secret", _fake)
+    s = QASettings(DB_PASSWORD="ignored", ADMIN_DB_PASSWORD="ignored")
+    assert s.DB_PASSWORD == "resolved-pw"
+    assert s.ADMIN_DB_PASSWORD == "resolved-pw"
 
 
 # ── load_secret ───────────────────────────────────────────────────────────────
 def test_load_secret_from_env(monkeypatch):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
-    monkeypatch.setenv("PG_DSN", "postgresql://u:p@h/d")
-    assert S.load_secret("qa/pg", env_var="PG_DSN") == "postgresql://u:p@h/d"
+    monkeypatch.setenv("DB_PASSWORD", "pw-from-env")
+    assert S.load_secret("qa-mcp/db_password", env_var="DB_PASSWORD") == "pw-from-env"
 
 
 def test_load_secret_default_when_absent(monkeypatch):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
-    monkeypatch.delenv("PG_DSN", raising=False)
-    assert S.load_secret("qa/pg", env_var="PG_DSN", default="fallback") == "fallback"
+    monkeypatch.delenv("DB_PASSWORD", raising=False)
+    assert S.load_secret("qa-mcp/db_password", env_var="DB_PASSWORD", default="fallback") == "fallback"
 
 
 def test_load_secret_prefers_vault(monkeypatch):
     monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
-    monkeypatch.setenv("PG_DSN", "env-dsn")
+    monkeypatch.setenv("DB_PASSWORD", "env-pw")
 
     class _Client:
         def get_secret(self, name):
-            return "vault-dsn"
+            return "vault-pw"
 
     fake_mod = type(S)("platform_crypto")
     fake_mod.VaultSecretsClient = lambda *a, **k: _Client()
     monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
-    assert S.load_secret("qa/pg", env_var="PG_DSN") == "vault-dsn"
+    assert S.load_secret("qa-mcp/db_password", env_var="DB_PASSWORD") == "vault-pw"
 
 
 def test_load_secret_vault_unavailable_falls_back_to_env(monkeypatch):
     # VAULT_ADDR setado mas platform_crypto indisponível → cai para env (boot não quebra).
     monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
-    monkeypatch.setenv("PG_DSN", "env-dsn")
+    monkeypatch.setenv("DB_PASSWORD", "env-pw")
     monkeypatch.setitem(__import__("sys").modules, "platform_crypto", None)
-    assert S.load_secret("qa/pg", env_var="PG_DSN") == "env-dsn"
+    assert S.load_secret("qa-mcp/db_password", env_var="DB_PASSWORD") == "env-pw"
 
 
 def test_load_secret_vault_empty_falls_back_to_env(monkeypatch):
     monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
-    monkeypatch.setenv("PG_DSN", "env-dsn")
+    monkeypatch.setenv("DB_PASSWORD", "env-pw")
 
     class _Client:
         def get_secret(self, name):
@@ -121,7 +152,7 @@ def test_load_secret_vault_empty_falls_back_to_env(monkeypatch):
     fake_mod = type(S)("platform_crypto")
     fake_mod.VaultSecretsClient = lambda *a, **k: _Client()
     monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
-    assert S.load_secret("qa/pg", env_var="PG_DSN") == "env-dsn"
+    assert S.load_secret("qa-mcp/db_password", env_var="DB_PASSWORD") == "env-pw"
 
 
 # ── logging estruturado ───────────────────────────────────────────────────────

@@ -140,9 +140,9 @@ def _parse_ports(ports_str: str) -> list[tuple[int, int]]:
     return result
 
 
-def _find_in_registry(store: ServiceStore, kind: str) -> dict | None:
+async def _find_in_registry(store: ServiceStore, kind: str) -> dict | None:
     """Busca no registry: primeiro por type=kind, depois por nomes canonicos."""
-    all_svcs = store.list_all()
+    all_svcs = await store.list_all()
 
     # Tipo exato (type exato no banco)
     for svc in all_svcs:
@@ -210,7 +210,7 @@ def _rebuild_redis_url(cur_val: str, new_host: str, new_port: int) -> str:
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 
-def register_infra(
+async def register_infra(
     store: ServiceStore,
     *,
     name: str,
@@ -258,7 +258,7 @@ def register_infra(
     if container_name:
         fields["container_name"] = container_name
 
-    result = store.upsert(name, fields)
+    result = await store.upsert(name, fields)
     return {
         "name": name,
         "kind": kind_lower,
@@ -269,7 +269,7 @@ def register_infra(
     }
 
 
-def scan_infra(
+async def scan_infra(
     store: ServiceStore,
     *,
     timeout: int = 10,
@@ -338,7 +338,7 @@ def scan_infra(
         # Nome canonico: usa o nome do container ou o tipo
         svc_name = container_name or kind
 
-        reg = register_infra(
+        reg = await register_infra(
             store,
             name=svc_name,
             kind=kind,
@@ -366,7 +366,7 @@ def scan_infra(
     }
 
 
-def sync_infra_env(
+async def sync_infra_env(
     store: ServiceStore,
     *,
     path: str,
@@ -405,9 +405,9 @@ def sync_infra_env(
         db_type = db_kind or "mysql"  # fallback
 
     # Busca servicos no registry
-    db_svc = _find_in_registry(store, db_type)
-    redis_svc = _find_in_registry(store, "redis")
-    kafka_svc = _find_in_registry(store, "kafka")
+    db_svc = await _find_in_registry(store, db_type)
+    redis_svc = await _find_in_registry(store, "redis")
+    kafka_svc = await _find_in_registry(store, "kafka")
 
     changes: list[dict] = []
     not_found: list[str] = []

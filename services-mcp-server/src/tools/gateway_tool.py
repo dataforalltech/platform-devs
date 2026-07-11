@@ -94,7 +94,7 @@ def _probe_url(url: str, timeout: float = 2.0) -> bool:
 # Tools pÃºblicas
 
 
-def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
+async def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
     """Retorna o MAPPING_GATEWAY â€” mapa de serviÃ§os com URLs interna e externa.
 
     Para cada serviÃ§o registrado, retorna:
@@ -106,7 +106,7 @@ def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
     Use este mapa para rotear chamadas entre serviÃ§os corretamente, evitando
     divergÃªncias entre ambientes Docker e uvicorn local.
     """
-    rows = store.list_all()
+    rows = await store.list_all()
     in_docker = _is_docker()
     gateway: dict[str, dict[str, Any]] = {}
 
@@ -138,7 +138,7 @@ def get_gateway_map(store: ServiceStore) -> dict[str, Any]:
     }
 
 
-def update_service_gateway(
+async def update_service_gateway(
     store: ServiceStore,
     *,
     name: str,
@@ -158,7 +158,7 @@ def update_service_gateway(
     Use quando um serviÃ§o subir em um novo endereÃ§o (ex: mudanÃ§a de porta
     ou migraÃ§Ã£o Docker â†’ uvicorn) para manter o MAPPING_GATEWAY atualizado.
     """
-    row = store.get(name)
+    row = await store.get(name)
     if row is None:
         return {"error": "not_found", "name": name}
 
@@ -194,7 +194,7 @@ def update_service_gateway(
     if effective_port:
         fields["port"] = effective_port
 
-    store.upsert(name, fields)
+    await store.upsert(name, fields)
 
     return {
         "name": name,
@@ -206,7 +206,7 @@ def update_service_gateway(
     }
 
 
-def sync_registry(
+async def sync_registry(
     store: ServiceStore,
     *,
     port_ranges: str | None = None,
@@ -251,21 +251,21 @@ def sync_registry(
     # 1. Scan Docker  #
     docker_upserted = 0
     if include_docker:
-        docker_result = _scan_docker_with_gateway(store, timeout=docker_timeout)
+        docker_result = await _scan_docker_with_gateway(store, timeout=docker_timeout)
         results["docker_scan"] = docker_result
         docker_upserted = docker_result.get("upserted", 0)
 
     # 2. Scan de portas  #
     env_ranges = os.getenv("PORT_SCAN_RANGES", "8000-8100")
     raw_ranges = port_ranges or env_ranges
-    port_result = _scan_port_ranges(store, raw_ranges, probe=probe_health)
+    port_result = await _scan_port_ranges(store, raw_ranges, probe=probe_health)
     results["port_scan"] = port_result
 
     # 3. Scan por nomes de serviÃ§os  #
     names_env = os.getenv("SERVICE_NAMES", "")
     names_list = service_names or ([n.strip() for n in names_env.split(",") if n.strip()])
     if names_list:
-        name_result = _scan_by_names(store, names_list, probe=probe_health)
+        name_result = await _scan_by_names(store, names_list, probe=probe_health)
         results["name_scan"] = name_result
 
     # Totais  #
@@ -284,7 +284,7 @@ def sync_registry(
 # Helpers internos
 
 
-def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
+async def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict[str, Any]:
     """Scan docker ps salvando internal_url correta para cada container."""
     try:
         result = subprocess.run(
@@ -337,7 +337,7 @@ def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict
         if internal_url:
             fields["internal_url"] = internal_url
 
-        store.upsert(svc_name, fields)
+        await store.upsert(svc_name, fields)
         upserted += 1
         containers.append(
             {
@@ -352,7 +352,7 @@ def _scan_docker_with_gateway(store: ServiceStore, *, timeout: int = 10) -> dict
     return {"upserted": upserted, "containers": containers}
 
 
-def _scan_port_ranges(
+async def _scan_port_ranges(
     store: ServiceStore,
     ranges_str: str,
     *,
@@ -381,7 +381,7 @@ def _scan_port_ranges(
             if svc_name:
                 external_url = url
                 internal_url = _derive_internal_url(svc_name, port)
-                store.upsert(
+                await store.upsert(
                     svc_name,
                     {
                         "host": "localhost",
@@ -416,7 +416,7 @@ def _identify_service(port: int, *, timeout: float = 1.5) -> str | None:
     return None
 
 
-def _scan_by_names(
+async def _scan_by_names(
     store: ServiceStore,
     names: list[str],
     *,
@@ -428,7 +428,7 @@ def _scan_by_names(
     found = []
 
     for name in names:
-        row = store.get(name)
+        row = await store.get(name)
         port = row.get("port") if row else None
 
         # Tenta URL interna primeiro (Docker DNS) ou localhost
@@ -442,7 +442,7 @@ def _scan_by_names(
             if not probe or _probe_url(url, timeout=timeout):
                 internal_url = f"http://{name}:{port}" if port else None
                 external_url = f"http://localhost:{port}" if port else None
-                store.upsert(
+                await store.upsert(
                     name,
                     {
                         "internal_url": internal_url,

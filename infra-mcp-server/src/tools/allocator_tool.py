@@ -1,6 +1,6 @@
 """Tools MCP do VM allocator (Phase 2h — priority queue + preemption).
 
-9 tools que envolvem `AllocatorStore`:
+9 tools que envolvem `AllocatorStore` (agora **async**, tenant-scoped sobre o ORM):
 - request_vm
 - get_lease
 - release_lease
@@ -11,7 +11,7 @@
 - get_lease_ssh_key  (Phase 2f)
 - cancel_queued_request  (Phase 2h)
 
-Cada função recebe um `AllocatorStore` (instanciado uma vez no server) e os
+Cada função recebe um `AllocatorStore` (construído por-request de uma `TenantSession`) e os
 kwargs validados. Devolve dict serializável.
 """
 
@@ -41,7 +41,7 @@ def _error(tool: str, e: Exception) -> dict:
     return {"error": "internal_error", "details": str(e), "tool": tool}
 
 
-def request_vm(
+async def request_vm(
     store: AllocatorStore,
     spec: str,
     duration_min: int,
@@ -71,16 +71,16 @@ def request_vm(
             purpose=purpose,
             human_approved=human_approved,
         )
-        decision = store.request_vm(req)
+        decision = await store.request_vm(req)
         return decision.model_dump(mode="json")
     except ValueError as e:
         return _error("request_vm", e)
 
 
-def get_lease(store: AllocatorStore, lease_id: str) -> dict:
+async def get_lease(store: AllocatorStore, lease_id: str) -> dict:
     try:
         require_non_empty_string(lease_id, "lease_id")
-        lease = store.get_lease(lease_id)
+        lease = await store.get_lease(lease_id)
         if lease is None:
             return {"found": False, "lease_id": lease_id}
         return {"found": True, "lease": lease.model_dump(mode="json")}
@@ -88,34 +88,34 @@ def get_lease(store: AllocatorStore, lease_id: str) -> dict:
         return _error("get_lease", e)
 
 
-def release_lease(store: AllocatorStore, lease_id: str, by: str | None = None) -> dict:
+async def release_lease(store: AllocatorStore, lease_id: str, by: str | None = None) -> dict:
     try:
         require_non_empty_string(lease_id, "lease_id")
-        lease = store.release_lease(lease_id, by=by)
+        lease = await store.release_lease(lease_id, by=by)
         return {"lease": lease.model_dump(mode="json")}
     except (LeaseNotFound, AllocatorStoreError, ValueError) as e:
         return _error("release_lease", e)
 
 
-def extend_lease(store: AllocatorStore, lease_id: str, additional_min: int) -> dict:
+async def extend_lease(store: AllocatorStore, lease_id: str, additional_min: int) -> dict:
     try:
         require_non_empty_string(lease_id, "lease_id")
         if not isinstance(additional_min, int) or additional_min <= 0:
             raise ValueError("additional_min deve ser inteiro > 0")
-        lease = store.extend_lease(lease_id, additional_min)
+        lease = await store.extend_lease(lease_id, additional_min)
         return {"lease": lease.model_dump(mode="json")}
     except (LeaseNotFound, AllocatorStoreError, ValueError) as e:
         return _error("extend_lease", e)
 
 
-def list_my_leases(
+async def list_my_leases(
     store: AllocatorStore,
     owner: str,
     status: str | None = None,
 ) -> dict:
     try:
         require_non_empty_string(owner, "owner")
-        leases = store.list_leases(owner=owner, status=status)
+        leases = await store.list_leases(owner=owner, status=status)
         return {
             "owner": owner,
             "status_filter": status,
@@ -126,12 +126,12 @@ def list_my_leases(
         return _error("list_my_leases", e)
 
 
-def list_pool(store: AllocatorStore) -> dict:
-    snapshot = store.list_pool()
+async def list_pool(store: AllocatorStore) -> dict:
+    snapshot = await store.list_pool()
     return snapshot.model_dump(mode="json")
 
 
-def get_lease_ssh_key(
+async def get_lease_ssh_key(
     store: AllocatorStore,
     lease_id: str,
     owner: str,
@@ -151,7 +151,7 @@ def get_lease_ssh_key(
     try:
         require_non_empty_string(lease_id, "lease_id")
         require_non_empty_string(owner, "owner")
-        private_pem = store.get_lease_ssh_key(lease_id=lease_id, owner=owner)
+        private_pem = await store.get_lease_ssh_key(lease_id=lease_id, owner=owner)
         return {
             "lease_id": lease_id,
             "key_type": "ed25519",
@@ -165,7 +165,7 @@ def get_lease_ssh_key(
         return _error("get_lease_ssh_key", e)
 
 
-def query_capacity(
+async def query_capacity(
     store: AllocatorStore,
     spec: str,
     owner: str | None = None,
@@ -173,13 +173,13 @@ def query_capacity(
     try:
         if spec not in _VALID_SPECS:
             raise ValueError(f"spec inválida: {spec!r}. Opções: {sorted(_VALID_SPECS)}")
-        result = store.query_capacity(spec, owner=owner)
+        result = await store.query_capacity(spec, owner=owner)
         return result.model_dump(mode="json")
     except ValueError as e:
         return _error("query_capacity", e)
 
 
-def cancel_queued_request(
+async def cancel_queued_request(
     store: AllocatorStore,
     request_id: str,
     by: str | None = None,
@@ -192,6 +192,6 @@ def cancel_queued_request(
     """
     try:
         require_non_empty_string(request_id, "request_id")
-        return store.cancel_queued_request(request_id, by=by)
+        return await store.cancel_queued_request(request_id, by=by)
     except (AllocatorStoreError, ValueError) as e:
         return _error("cancel_queued_request", e)

@@ -1,23 +1,22 @@
-"""Tool get_audit_log — consulta a trilha de auditoria de decisões.
+"""Tool get_audit_log — consulta a trilha de auditoria de decisões (ORM, async).
 
-Expõe a trilha gerada pelo AuditStore de maneira consultável:
+Expõe a trilha gerada pelo AuditStore (ORM tenant-scoped) de maneira consultável:
   - Filtros por repo, risk_level, approved.
   - Paginação com offset.
   - Endpoint `stats` com métricas agregadas.
 
-A tool é somente-leitura. Escrita na trilha é responsabilidade do mcp_server.py,
-que grava automaticamente após cada chamada bem-sucedida de validate_agent_decision.
+A tool é somente-leitura. A escrita na trilha é responsabilidade do mcp_server.py,
+que grava (``await audit.record(...)``) após cada chamada bem-sucedida de
+validate_agent_decision.
 """
 
 from __future__ import annotations
 
-from ..knowledge.audit_store import AuditStore
-from ..knowledge.governance_repository import GovernanceRepository
+from ..db.store import AuditStore
 from ..utils.validators import coerce_bool
 
 
-def get_audit_log(
-    repo: GovernanceRepository,
+async def get_audit_log(
     audit_store: AuditStore,
     *,
     query: str | None = None,
@@ -38,7 +37,7 @@ def get_audit_log(
         offset:      Paginação — pular os primeiros N resultados.
     """
     if query == "stats":
-        return {"stats": audit_store.stats()}
+        return {"stats": await audit_store.stats()}
 
     approved_bool: bool | None = None
     if approved is not None:
@@ -47,7 +46,7 @@ def get_audit_log(
     limit = max(1, min(int(limit), 500))
     offset = max(0, int(offset))
 
-    entries = audit_store.query(
+    entries = await audit_store.query(
         repo=filter_repo,
         risk_level=risk_level,
         approved=approved_bool,
@@ -56,7 +55,6 @@ def get_audit_log(
     )
 
     # Truncar proposed_change a 100 chars na listagem para reduzir payload LLM.
-    # Use get_audit_entry(id) para o conteúdo completo quando necessário.
     truncated: list[dict] = []
     for entry in entries:
         e = dict(entry)

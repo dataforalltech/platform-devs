@@ -21,14 +21,18 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: ai-governance-mcp é compute-only (deriva diretrizes/políticas/validações da
-knowledge-base local; não há backend REST/Trinity), por isso não há ServiceApiClient —
-as tools puras em src/tools/ recebem o GovernanceRepository e devolvem dicts.
+NOTA: ai-governance-mcp é HÍBRIDO. A maioria das tools é compute-only (deriva
+diretrizes/políticas/validações da knowledge-base local read-only; não há backend
+REST/Trinity), servida pelo ``GovernanceRepository`` singleton compartilhado. Mas os
+DOIS stores mutáveis (mural de sugestões + trilha de auditoria) rodam sobre o ORM
+canônico, **tenant-scoped e credencial-zero**: são instanciados por-request a partir
+de ``for_tenant(tenant_id)`` (tenant dos claims do inner token, ORM-H-12) e o schema é
+garantido uma vez por tenant. As tools NÃO conhecem o SDK MCP nem o pool.
 
-As tools NÃO conhecem o SDK MCP nem o inner token. Esta camada:
-  1. Carrega a knowledge-base e instancia repositório/auditoria uma única vez (lazy).
-  2. Declara schema + policy de cada tool.
-  3. Roteia as chamadas para a função pura correspondente (_route via _dispatch).
+Split de dispatch:
+  * ``_run_compute`` — tools compute/grafo, síncronas, sobre o ``_get_repo()`` singleton.
+  * ``_run_tenant``  — tools de sugestão/auditoria, async, sobre stores tenant-scoped.
+stdio serve as compute; as tenant-scoped são gateway-only (recusa fail-closed sem tenant).
 """
 
 from __future__ import annotations
@@ -44,10 +48,15 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, Settings, get_settings
-from ..knowledge.audit_store import AuditStore
+from ..db.schema import ensure_schema
+from ..db.store import AuditStore, SuggestionStore
 from ..knowledge.governance_repository import GovernanceRepository
 from ..tools import (
     GraphUnavailable,
@@ -727,28 +736,18 @@ if set(_POLICY.keys()) != set(_TOOL_SCHEMAS.keys()):  # pragma: no cover - guard
 
 
 # ---------------------------------------------------------------------- #
-# Repositório / auditoria — singletons lazy (compute-only)               #
+# Repositório da KB — singleton lazy (compute-only, read-only)           #
+# A mural de sugestões e a trilha de auditoria NÃO são singletons: são    #
+# stores ORM tenant-scoped, criados por-request a partir da TenantSession.#
 # ---------------------------------------------------------------------- #
 _repo: GovernanceRepository | None = None
-_audit: AuditStore | None = None
 
 
 def _get_repo() -> GovernanceRepository:
     global _repo
     if _repo is None:
-        s = get_settings()
-        _repo = GovernanceRepository(
-            kb_path=s.kb_path,
-            suggestions_path=s.effective_suggestions_path,
-        )
+        _repo = GovernanceRepository(kb_path=get_settings().kb_path)
     return _repo
-
-
-def _get_audit() -> AuditStore:
-    global _audit
-    if _audit is None:
-        _audit = AuditStore(path=get_settings().effective_audit_path)
-    return _audit
 
 
 def _status() -> dict[str, Any]:
@@ -785,7 +784,24 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     )
 
 
-# ── Roteamento p/ as funções puras (tenant_id injetado pelo PEP; não usado) ───
+# ── Roteamento p/ as funções puras ───────────────────────────────────────────
+# As tools de sugestão/auditoria são tenant-scoped (tocam o DB do tenant); as demais
+# são compute puras sobre a KB read-only. O tenant vem SEMPRE dos claims do inner
+# token (SEC-035 / INV-3), nunca de argumento do cliente.
+_TENANT_SCOPED_TOOLS: frozenset[str] = frozenset(
+    {
+        "submit_suggestion",
+        "list_suggestions",
+        "get_suggestion",
+        "update_suggestion_status",
+        "validate_agent_decision",
+        "get_audit_log",
+    }
+)
+
+# Guarda de integridade: toda tool tenant-scoped precisa existir no catálogo.
+if not _TENANT_SCOPED_TOOLS <= set(_TOOL_SCHEMAS):  # pragma: no cover - guarda de import
+    raise RuntimeError("_TENANT_SCOPED_TOOLS referencia tool ausente em _TOOL_SCHEMAS")
 
 
 def _arg(args: dict[str, Any], key: str, default: Any = None) -> Any:
@@ -799,13 +815,12 @@ def _arg(args: dict[str, Any], key: str, default: Any = None) -> Any:
     return args.get(key, default)
 
 
-def _route(
+def _route_compute(
     name: str,
     args: dict[str, Any],
     repo: GovernanceRepository,
-    audit: AuditStore,
 ) -> dict[str, Any]:
-    """Roteia a chamada para a função pura correspondente. KeyError p/ tool desconhecida."""
+    """Roteia tools COMPUTE (síncronas, sobre a KB read-only). KeyError se desconhecida."""
     if name == "get_agent_guidelines":
         return get_agent_guidelines(
             repo,
@@ -817,25 +832,6 @@ def _route(
         return get_layer_policy(repo, layer=_arg(args, "layer"))
     if name == "get_forbidden_actions":
         return get_forbidden_actions(repo, context=_arg(args, "context"))
-    if name == "validate_agent_decision":
-        result = validate_agent_decision(
-            repo,
-            repository_name=_arg(args, "repository_name"),
-            task_description=_arg(args, "task_description"),
-            proposed_change=_arg(args, "proposed_change"),
-            affected_files=_arg(args, "affected_files"),
-            affected_layers=_arg(args, "affected_layers"),
-            changes_contracts=_arg(args, "changes_contracts", False),
-            adds_fallback=_arg(args, "adds_fallback", False),
-            adds_dependency=_arg(args, "adds_dependency", False),
-            modifies_security=_arg(args, "modifies_security", False),
-        )
-        # Persiste na trilha de auditoria; falha silenciosa NÃO — loga o erro.
-        try:
-            audit.record(result, result.get("input_summary"))
-        except Exception:  # noqa: BLE001
-            _log.warning("audit_write_failed", extra={"extras": {"tool": name}})
-        return result
     if name == "get_fallback_policy":
         return get_fallback_policy(
             repo,
@@ -889,39 +885,6 @@ def _route(
         )
     if name == "get_service_metadata":
         return get_service_metadata(repo, node_id=_arg(args, "node_id"))
-    if name == "submit_suggestion":
-        return submit_suggestion(
-            repo,
-            source_agent=_arg(args, "source_agent"),
-            source_repo=_arg(args, "source_repo"),
-            target_repo=_arg(args, "target_repo"),
-            category=_arg(args, "category"),
-            severity=_arg(args, "severity"),
-            title=_arg(args, "title"),
-            description=_arg(args, "description"),
-            related_files=_arg(args, "related_files"),
-            references=_arg(args, "references"),
-        )
-    if name == "list_suggestions":
-        return list_suggestions(
-            repo,
-            target_repo=_arg(args, "target_repo"),
-            status=_arg(args, "status"),
-            category=_arg(args, "category"),
-            severity=_arg(args, "severity"),
-            source_agent=_arg(args, "source_agent"),
-            limit=_arg(args, "limit"),
-        )
-    if name == "get_suggestion":
-        return get_suggestion(repo, suggestion_id=_arg(args, "suggestion_id"))
-    if name == "update_suggestion_status":
-        return update_suggestion_status(
-            repo,
-            suggestion_id=_arg(args, "suggestion_id"),
-            new_status=_arg(args, "new_status"),
-            note=_arg(args, "note"),
-            by=_arg(args, "by"),
-        )
     if name == "get_service_ownership":
         return get_service_ownership(repo, service_name=_arg(args, "service_name"))
     if name == "get_service_dependencies":
@@ -951,9 +914,73 @@ def _route(
             consequences=_arg(args, "consequences"),
             repo_path=_arg(args, "repo_path"),
         )
-    if name == "get_audit_log":
-        return get_audit_log(
+    raise KeyError(name)
+
+
+async def _route_tenant(
+    name: str,
+    args: dict[str, Any],
+    repo: GovernanceRepository,
+    suggestions: SuggestionStore,
+    audit: AuditStore,
+) -> dict[str, Any]:
+    """Roteia tools TENANT-SCOPED (async, sobre os stores do tenant). KeyError se desconhecida."""
+    if name == "submit_suggestion":
+        return await submit_suggestion(
             repo,
+            suggestions,
+            source_agent=_arg(args, "source_agent"),
+            source_repo=_arg(args, "source_repo"),
+            target_repo=_arg(args, "target_repo"),
+            category=_arg(args, "category"),
+            severity=_arg(args, "severity"),
+            title=_arg(args, "title"),
+            description=_arg(args, "description"),
+            related_files=_arg(args, "related_files"),
+            references=_arg(args, "references"),
+        )
+    if name == "list_suggestions":
+        return await list_suggestions(
+            repo,
+            suggestions,
+            target_repo=_arg(args, "target_repo"),
+            status=_arg(args, "status"),
+            category=_arg(args, "category"),
+            severity=_arg(args, "severity"),
+            source_agent=_arg(args, "source_agent"),
+            limit=_arg(args, "limit"),
+        )
+    if name == "get_suggestion":
+        return await get_suggestion(suggestions, suggestion_id=_arg(args, "suggestion_id"))
+    if name == "update_suggestion_status":
+        return await update_suggestion_status(
+            suggestions,
+            suggestion_id=_arg(args, "suggestion_id"),
+            new_status=_arg(args, "new_status"),
+            note=_arg(args, "note"),
+            by=_arg(args, "by"),
+        )
+    if name == "validate_agent_decision":
+        result = validate_agent_decision(
+            repo,
+            repository_name=_arg(args, "repository_name"),
+            task_description=_arg(args, "task_description"),
+            proposed_change=_arg(args, "proposed_change"),
+            affected_files=_arg(args, "affected_files"),
+            affected_layers=_arg(args, "affected_layers"),
+            changes_contracts=_arg(args, "changes_contracts", False),
+            adds_fallback=_arg(args, "adds_fallback", False),
+            adds_dependency=_arg(args, "adds_dependency", False),
+            modifies_security=_arg(args, "modifies_security", False),
+        )
+        # Persiste na trilha de auditoria do tenant; falha NÃO silenciosa — loga o erro.
+        try:
+            await audit.record(result, result.get("input_summary"))
+        except Exception:  # noqa: BLE001
+            _log.warning("audit_write_failed", extra={"extras": {"tool": name}})
+        return result
+    if name == "get_audit_log":
+        return await get_audit_log(
             audit,
             query=_arg(args, "query"),
             filter_repo=_arg(args, "filter_repo"),
@@ -965,45 +992,93 @@ def _route(
     raise KeyError(name)
 
 
-def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
-    """Despacha a chamada. Erros de domínio viram payload de erro claro; tool
-    desconhecida propaga KeyError (o handler HTTP mapeia p/ 404)."""
+def _graph_unavailable_payload(name: str) -> dict[str, Any]:
+    _log.warning("graph_unavailable", extra={"extras": {"tool": name}})
+    return {
+        "error": "ecosystem_graph_unavailable",
+        "details": (
+            "ecosystem.yaml ausente ou inválido. Crie/corrija o arquivo na "
+            "knowledge-base e reinicie o servidor."
+        ),
+        "tool": name,
+    }
+
+
+def _validation_error_payload(name: str, exc: ValueError) -> dict[str, Any]:
+    _log.warning("tool_validation_error", extra={"extras": {"tool": name, "error": str(exc)}})
+    return {"error": "validation_error", "details": str(exc), "tool": name}
+
+
+def _run_compute(name: str, args: dict[str, Any]) -> dict[str, Any]:
+    """Executa uma tool compute (síncrona). status é repo-free; as demais usam a KB.
+
+    Erros de domínio viram payload de erro claro; tool desconhecida propaga KeyError.
+    """
     if name == "status":
         return _status()
     repo = _get_repo()
-    audit = _get_audit()
     try:
-        return _route(name, args, repo, audit)
+        return _route_compute(name, args, repo)
     except GraphUnavailable:
-        _log.warning("graph_unavailable", extra={"extras": {"tool": name}})
-        return {
-            "error": "ecosystem_graph_unavailable",
-            "details": (
-                "ecosystem.yaml ausente ou inválido. Crie/corrija o arquivo na "
-                "knowledge-base e reinicie o servidor."
-            ),
-            "tool": name,
-        }
-    except SuggestionsUnavailable:
-        _log.warning("suggestions_unavailable", extra={"extras": {"tool": name}})
-        return {
-            "error": "suggestions_store_unavailable",
-            "details": (
-                "Store de sugestões indisponível (filesystem inacessível). "
-                "Verifique GOVERNANCE_SUGGESTIONS_PATH e permissões."
-            ),
-            "tool": name,
-        }
-    except ValueError as e:
-        _log.warning("tool_validation_error", extra={"extras": {"tool": name, "error": str(e)}})
-        return {"error": "validation_error", "details": str(e), "tool": name}
+        return _graph_unavailable_payload(name)
+    except ValueError as exc:
+        return _validation_error_payload(name, exc)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: Settings, tenant_id: str) -> None:
+    """Garante as tabelas no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tenant(name: str, args: dict[str, Any], settings: Settings, tenant_id: str) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha.
+
+    Os stores (sugestões + auditoria) são criados a partir da sessão do tenant; a KB
+    read-only continua vindo do singleton compartilhado (compute)."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    repo = _get_repo()
+    async with for_tenant(tenant_id) as session:
+        suggestions = SuggestionStore(session)
+        audit = AuditStore(session)
+        try:
+            return await _route_tenant(name, args, repo, suggestions, audit)
+        except GraphUnavailable:
+            return _graph_unavailable_payload(name)
+        except SuggestionsUnavailable:
+            _log.warning("suggestions_unavailable", extra={"extras": {"tool": name}})
+            return {
+                "error": "suggestions_store_unavailable",
+                "details": "Store de sugestões indisponível para este tenant.",
+                "tool": name,
+            }
+        except ValueError as exc:
+            return _validation_error_payload(name, exc)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
 def _build_http_app(settings: Settings) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: as tools tenant-scoped abrem uma sessão por-request
+    (credencial-zero) a partir do tenant nos claims do inner token; as compute usam a
+    KB read-only compartilhada."""
     app = FastAPI(
         title="ai-governance-mcp API",
         version="0.1.0",
@@ -1030,7 +1105,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -1039,6 +1114,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
         # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        tenant_id: str | None = None
         if name not in _EXEMPT_TOOLS:
             twin_token = (params.get("_meta") or {}).get("twin_token")
             if not twin_token:
@@ -1048,21 +1124,32 @@ def _build_http_app(settings: Settings) -> FastAPI:
             except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
                 _log.warning("inner_token_rejected", extra={"extras": {"tool": name, "detail": str(exc)}})
                 return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
+            claim_tenant = claims.get("tenant_id")
+            if not claim_tenant:
                 return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+            tenant_id = str(claim_tenant)
+
+        if name not in _TOOL_SCHEMAS:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
 
         try:
-            payload = _dispatch(name, arguments)
-        except KeyError:
-            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+            if name in _TENANT_SCOPED_TOOLS:
+                if tenant_id is None:  # tools tenant-scoped nunca são exempt (defense-in-depth)
+                    return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+                # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+                payload = await _run_tenant(name, arguments, settings, tenant_id)
+            else:
+                payload = _run_compute(name, arguments)
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
             _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
             payload = {"error": "internal_error", "detail": str(exc), "tool": name}
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
 
     return app
 
@@ -1071,12 +1158,19 @@ def _build_http_app(settings: Settings) -> FastAPI:
 
 
 def build_server() -> tuple[Any, Settings, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*) usada para resolver
+    o tenant → credencial do seu banco via PLATFORMS (credencial-zero, ORM-H-12)."""
     settings = get_settings()
-    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/006)
+    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
+    configure(settings)  # bootstrap credencial-zero: admin source p/ for_tenant
     http_app = _build_http_app(settings)
-    _log.info("ai_governance_mcp_ready", extra={"extras": {"tools": len(_TOOL_SCHEMAS)}})
+    _log.info(
+        "ai_governance_mcp_ready",
+        extra={"extras": {"tools": len(_TOOL_SCHEMAS), "engine": settings.DB_ENGINE}},
+    )
 
     server: Server = Server("ai-governance-mcp-server")
 
@@ -1089,16 +1183,30 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+        # O transporte stdio não carrega o inner token (logo, sem tenant). As tools
+        # tenant-scoped (sugestão/auditoria) são gateway-only: recusadas fail-closed
+        # aqui; o tenant vem dos claims verificados no sidecar HTTP. As compute (KB
+        # read-only) rodam normalmente no stdio.
         args = arguments or {}
         _log.info("tool_called", extra={"extras": {"tool": name, "args_keys": sorted(args.keys())}})
-        try:
-            payload = _dispatch(name, args)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
             _log.error("unknown_tool", extra={"extras": {"tool": name}})
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
+        elif name in _TENANT_SCOPED_TOOLS:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "tool tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
+        else:
+            try:
+                payload = _run_compute(name, args)
+            except Exception as exc:  # noqa: BLE001
+                payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+                _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     return server, settings, http_app

@@ -4,45 +4,76 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`session-mcp` é stateful: persiste sessões/tasks/sugestões/decisões num store
-(``SessionStore``). Por isso mantém as settings de backend (prefixo ``SESSION_``)
-e injeta o store no dispatcher. As settings do gateway (audiência do inner token,
-JWKS do platform-admin, porta do sidecar) usam ``validation_alias`` próprio — o
-prefixo ``SESSION_`` NÃO se aplica a campos com alias.
+`session-mcp` é uma persona **stateful** (mantém sessões/tasks/sugestões/decisões de
+trabalho Claude Code). A persistência roda 100% sobre o ORM canônico
+(`platform_database.orm`), **tenant-scoped e dual-db**: credencial-zero (ORM-H-12) — o
+serviço só conhece o `tenant_id`; a credencial do banco do tenant vem de
+`ADMIN_DATAFORALL.PLATFORMS` (resolvida pela lib). Estas Settings expõem os protocolos
+`DBSettings` (`DB_*`, fallback compartilhado) e `AdminDBSettings` (`ADMIN_DB_*`, conexão
+admin que lê PLATFORMS) — o mesmo objeto é passado a `orm.configure()` no boot.
+
+STD-SEC-004: um único `.env` (discriminador `RUNTIME_ENV`); NENHUM valor com cara de
+credencial fica no código — host/senha do DB/admin vêm de env (ou Vault via `load_secret`).
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from .secrets import load_secret
+_log = logging.getLogger(__name__)
 
 # namespace canônico = name_microservice ('platform-session-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
 NAMESPACE = "session-mcp"
 
 
+def load_secret(key: str, fallback: str = "") -> str:
+    """Resolve um segredo via Vault (STD-SEC-004), degradando p/ env com graça.
+
+    Só tenta o ``platform_crypto.VaultSecretsClient`` quando ``VAULT_ADDR`` está
+    setado; o import é LAZY (dentro do try) para não acoplar o boot ao Vault. Em
+    QUALQUER falha (Vault indisponível, import ausente, segredo vazio) degrada
+    para o valor de env (``fallback``) — o boot NUNCA quebra por causa do Vault.
+    Loga apenas a FONTE do segredo, nunca o valor (STD-OBS-001).
+    """
+    vault_addr = os.getenv("VAULT_ADDR", "").strip()
+    if not vault_addr:
+        _log.debug("secret_source key=%s source=env", key)
+        return fallback
+    try:
+        from platform_crypto import VaultSecretsClient  # lazy: só quando há Vault
+
+        value = VaultSecretsClient(vault_addr).get_secret(key)
+        if value:
+            _log.info("secret_source key=%s source=vault", key)
+            return value
+        _log.warning("secret_empty_from_vault key=%s source=env", key)
+        return fallback
+    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
+        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
+        return fallback
+
+
 class SessionSettings(BaseSettings):
-    """Settings do session-mcp: gateway (Model C) + backend de sessões."""
+    """Settings do session-mcp: gateway (Model C) + backend dual-db (ORM canônico)."""
 
     model_config = SettingsConfigDict(
-        env_prefix="SESSION_",
-        env_file=".env",
-        extra="ignore",
-        case_sensitive=False,
+        env_file=".env", extra="ignore", case_sensitive=False, populate_by_name=True
     )
 
     # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
     # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
-    # é gated por RUNTIME_ENV ∈ {local, cloud}. validation_alias ignora env_prefix.
+    # é gated por RUNTIME_ENV ∈ {local, cloud}.
     runtime_env: str = Field(default="local", validation_alias="RUNTIME_ENV")
 
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
-    # nº 1 é audiência divergente → 401). validation_alias ignora env_prefix.
+    # nº 1 é audiência divergente → 401).
     mcp_twin_audience: str = Field(default=f"mcp:{NAMESPACE}", validation_alias="MCP_TWIN_AUDIENCE")
     # JWKS do platform-admin (emissor do twin/inner token) — mesma de STD-SEC-006.
     url_admin_twin_jwks: str = Field(default="", validation_alias="URL_ADMIN_TWIN_JWKS")
@@ -52,40 +83,43 @@ class SessionSettings(BaseSettings):
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
 
-    # ── Backend de sessões (prefixo SESSION_) ─────────────────────────────────
-    # O SessionStore é SQLite embarcado (hermético); as settings PostgreSQL abaixo
-    # ficam prontas para o dual-write da Fase 2. STD-SEC-004: NENHUM default com cara
-    # de credencial no código — host/senha vêm do ambiente (ou do Vault via
-    # ``load_secret``); a senha nunca tem valor real hardcoded.
-    pg_host: str = Field(default="", description="PostgreSQL host (env: SESSION_PG_HOST)")
-    pg_port: int = Field(default=5432, description="PostgreSQL port")
-    pg_db: str = Field(default="app", description="PostgreSQL database name")
-    pg_user: str = Field(default="postgres", description="PostgreSQL user")
-    # Senha resolvida por load_secret: Vault (se VAULT_ADDR) → env → "" (fail-closed).
-    pg_password: str = Field(
-        default_factory=lambda: load_secret(
-            f"{NAMESPACE}/pg_password", env_var="SESSION_PG_PASSWORD", default=""
-        ),
-        description="PostgreSQL password (Vault/env — sem default no código)",
+    # ── Backend do tenant (DBSettings — ORM canônico, dual-db) ────────────────
+    # Fallback compartilhado (shared-admin credential model): a credencial real do
+    # tenant vem de ADMIN_DATAFORALL.PLATFORMS; estes DB_* são o fallback quando a
+    # PLATFORMS row não traz o campo. DB_ENGINE decide o dialeto (mysql/postgresql).
+    # STD-SEC-004: nenhum valor com cara de credencial fica no código (env/Vault).
+    DB_ENGINE: str = Field(default="mysql", validation_alias="DB_ENGINE")
+    DB_HOST: str = Field(default="", validation_alias="DB_HOST")
+    DB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
+    DB_NAME: str = Field(default="", validation_alias="DB_NAME")
+    DB_USER: str = Field(default="root", validation_alias="DB_USER")
+    DB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
+    DB_POOL_MIN_SIZE: int = Field(default=1, validation_alias="DB_POOL_MIN_SIZE")
+    DB_POOL_MAX_SIZE: int = Field(default=10, validation_alias="DB_POOL_MAX_SIZE")
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
+        default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
     )
-    pg_min_conn: int = Field(default=2, description="Minimum pool connections")
-    pg_max_conn: int = Field(default=10, description="Maximum pool connections")
+    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
+    DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
+
+    # ── Conexão admin (AdminDBSettings — lê ADMIN_DATAFORALL.PLATFORMS) ────────
+    # Resolve o tenant -> credencial do seu banco. É a fonte passada a
+    # orm.configure()/get_pool_for_tenant(). O db name é fixo "ADMIN_DATAFORALL".
+    ADMIN_DB_HOST: str = Field(default="", validation_alias="ADMIN_DB_HOST")
+    ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
+    ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
+    ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
 
     # ── Convenções de sessão ──────────────────────────────────────────────────
-    max_active_sessions: int = Field(default=50)
-    default_list_limit: int = Field(default=20)
+    max_active_sessions: int = Field(default=50, validation_alias="SESSION_MAX_ACTIVE_SESSIONS")
+    default_list_limit: int = Field(default=20, validation_alias="SESSION_DEFAULT_LIST_LIMIT")
     default_base_branch: str = Field(
         default="develop",
+        validation_alias="SESSION_DEFAULT_BASE_BRANCH",
         description="Branch base sugerida quando o agente cria a branch da sessão via deploy-mcp.",
     )
-
-    @property
-    def pg_dsn(self) -> str:
-        """Return PostgreSQL connection string."""
-        return (
-            f"host={self.pg_host} port={self.pg_port} dbname={self.pg_db} "
-            f"user={self.pg_user} password={self.pg_password}"
-        )
 
     @field_validator("runtime_env")
     @classmethod
@@ -95,14 +129,22 @@ class SessionSettings(BaseSettings):
             raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
         return v
 
-    def enforce_security_invariants(self) -> None:
-        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006). Chamado em build_server().
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> SessionSettings:
+        """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
+        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", self.DB_PASSWORD)
+        self.ADMIN_DB_PASSWORD = load_secret(f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD)
+        return self
 
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006).
+
+        Chamado em build_server():
         - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
         - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
-        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
-        - Em cloud, a credencial do backend (senha do Postgres) é obrigatória — nunca
-          um default hardcoded (STD-SEC-004); deve vir do Vault/env via ``load_secret``.
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica) e a
+          conexão admin (host + senha p/ resolver o tenant via PLATFORMS) DEVE vir de
+          env/Vault (nunca de default no código).
         """
         if self.docs_enabled:
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
@@ -111,14 +153,14 @@ class SessionSettings(BaseSettings):
         if self.runtime_env == "cloud":
             if not self.url_admin_twin_jwks:
                 raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
-            if not self.pg_password:
+            if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
                 raise RuntimeError(
-                    "INVARIANTE STD-SEC-004: credencial do backend (SESSION_PG_PASSWORD "
-                    "ou Vault) é obrigatória em cloud — nunca use default hardcoded"
+                    "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
+                    "cloud (resolução credencial-zero do tenant via PLATFORMS; sem default no código)"
                 )
 
 
-# Alias de compatibilidade com o padrão canônico (architecture usa `Settings`).
+# Alias de compatibilidade com o padrão do template (Settings).
 Settings = SessionSettings
 
 

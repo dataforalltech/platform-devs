@@ -1,9 +1,14 @@
-"""Tools MCP para sugestões cross-repo.
+"""Tools MCP para sugestões cross-repo (ORM tenant-scoped, async).
 
 submit_suggestion        — agente abre uma sugestão para outro repo
 list_suggestions         — listar com filtros (target_repo, status, etc.)
 get_suggestion           — payload completo de uma sugestão pelo id
 update_suggestion_status — muda o status, registrando histórico
+
+A persistência é o ``SuggestionStore`` do ORM (`..db.store`), ligado ao pool do tenant
+e passado por-request pelo servidor — as tools NÃO conhecem o SDK MCP nem o pool. O
+``GovernanceRepository`` (KB read-only) continua vindo junto só para a resolução de
+alias/deprecated do target_repo via ``EcosystemGraph`` (compute, síncrona).
 
 Resolução automática de target_repo: se o agente passa um nome alias ou
 deprecated_by, resolvemos para o canônico via EcosystemGraph e gravamos
@@ -15,8 +20,8 @@ from __future__ import annotations
 
 from typing import get_args
 
+from ..db.store import SuggestionStore, SuggestionStoreError
 from ..knowledge.governance_repository import GovernanceRepository
-from ..knowledge.suggestion_store import SuggestionStoreError
 from ..models.suggestion import (
     SuggestionCategory,
     SuggestionFilters,
@@ -38,13 +43,11 @@ _VALID_STATUSES = set(get_args(SuggestionStatus))
 
 
 class SuggestionsUnavailable(RuntimeError):
-    """Sinaliza que o store está indisponível — convertido em payload de erro pelo server."""
+    """Sinaliza que o store está indisponível — convertido em payload de erro pelo server.
 
-
-def _require_store(repo: GovernanceRepository):
-    if repo.suggestions is None:
-        raise SuggestionsUnavailable()
-    return repo.suggestions
+    Com o ORM tenant-scoped o store está sempre disponível dentro de uma sessão; esta
+    exceção permanece como parte do contrato de erro do servidor (back-compat).
+    """
 
 
 def _resolve_canonical_target(repo: GovernanceRepository, target_repo: str) -> tuple[str | None, list[str]]:
@@ -86,8 +89,10 @@ def _resolve_canonical_target(repo: GovernanceRepository, target_repo: str) -> t
 # ---------------------------------------------------------------------- #
 # submit_suggestion                                                       #
 # ---------------------------------------------------------------------- #
-def submit_suggestion(
+async def submit_suggestion(
     repo: GovernanceRepository,
+    store: SuggestionStore,
+    *,
     source_agent: str,
     target_repo: str,
     category: str,
@@ -99,8 +104,6 @@ def submit_suggestion(
     references: list[str] | str | None = None,
 ) -> dict:
     """Cria uma sugestão para outro serviço/repo."""
-    store = _require_store(repo)
-
     require_non_empty_string(source_agent, "source_agent")
     require_non_empty_string(target_repo, "target_repo")
     require_non_empty_string(title, "title")
@@ -120,7 +123,7 @@ def submit_suggestion(
 
     canonical, notes = _resolve_canonical_target(repo, target_repo)
 
-    suggestion = store.create(
+    suggestion = await store.create(
         source_agent=source_agent.strip(),
         source_repo=source_repo.strip() if isinstance(source_repo, str) and source_repo.strip() else None,
         target_repo=target_repo.strip(),
@@ -142,8 +145,10 @@ def submit_suggestion(
 # ---------------------------------------------------------------------- #
 # list_suggestions                                                        #
 # ---------------------------------------------------------------------- #
-def list_suggestions(
+async def list_suggestions(
     repo: GovernanceRepository,
+    store: SuggestionStore,
+    *,
     target_repo: str | None = None,
     status: str | None = None,
     category: str | None = None,
@@ -152,8 +157,6 @@ def list_suggestions(
     limit: int | None = None,
 ) -> dict:
     """Lista sugestões aplicando filtros. Default: 20, ordem cronológica reversa."""
-    store = _require_store(repo)
-
     filters_kwargs: dict = {}
     if target_repo:
         # Resolve alias/deprecated antes de filtrar.
@@ -182,7 +185,7 @@ def list_suggestions(
         filters_kwargs["limit"] = min(limit, 200)
 
     filters = SuggestionFilters(**filters_kwargs)
-    items = store.list(filters)
+    items = await store.list(filters)
     return {
         "filters": filters.model_dump(),
         "total": len(items),
@@ -193,11 +196,10 @@ def list_suggestions(
 # ---------------------------------------------------------------------- #
 # get_suggestion                                                          #
 # ---------------------------------------------------------------------- #
-def get_suggestion(repo: GovernanceRepository, suggestion_id: str) -> dict:
-    store = _require_store(repo)
+async def get_suggestion(store: SuggestionStore, *, suggestion_id: str) -> dict:
     require_non_empty_string(suggestion_id, "suggestion_id")
     try:
-        suggestion = store.get(suggestion_id)
+        suggestion = await store.get(suggestion_id)
     except SuggestionStoreError as e:
         raise ValueError(str(e)) from e
     if suggestion is None:
@@ -208,14 +210,14 @@ def get_suggestion(repo: GovernanceRepository, suggestion_id: str) -> dict:
 # ---------------------------------------------------------------------- #
 # update_suggestion_status                                                #
 # ---------------------------------------------------------------------- #
-def update_suggestion_status(
-    repo: GovernanceRepository,
+async def update_suggestion_status(
+    store: SuggestionStore,
+    *,
     suggestion_id: str,
     new_status: str,
     note: str | None = None,
     by: str | None = None,
 ) -> dict:
-    store = _require_store(repo)
     require_non_empty_string(suggestion_id, "suggestion_id")
     require_non_empty_string(new_status, "new_status")
 
@@ -224,7 +226,7 @@ def update_suggestion_status(
         raise ValueError(f"status inválido: {new_status!r}. Opções: {sorted(_VALID_STATUSES)}")
 
     try:
-        suggestion = store.update_status(
+        suggestion = await store.update_status(
             suggestion_id,
             s,  # type: ignore[arg-type]
             note=note.strip() if isinstance(note, str) and note.strip() else None,

@@ -1,4 +1,4 @@
-"""Testes das configurações (pydantic-settings, Model C)."""
+"""Testes das configurações (pydantic-settings, Model C + DBSettings/AdminDBSettings)."""
 
 from __future__ import annotations
 
@@ -16,33 +16,47 @@ class TestSettings:
         assert settings.mcp_twin_audience == "mcp:config-mcp"
 
     def test_sidecar_defaults(self, monkeypatch):
-        # o ambiente do dev pode exportar CONFIG_MCP_MASTER_KEY — isole o default
+        # o ambiente do dev pode exportar CONFIG_MCP_MASTER_KEY/VAULT_ADDR — isole o default
         monkeypatch.delenv("CONFIG_MCP_MASTER_KEY", raising=False)
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
         settings = Settings(_env_file=None)
         assert settings.mcp_port == 7100
         assert settings.docs_enabled is False
         assert settings.url_admin_twin_jwks == ""
         assert settings.master_key == ""
 
-    def test_env_overrides_gateway_and_store(self, monkeypatch):
+    def test_db_defaults(self, monkeypatch):
+        # backend do tenant (DBSettings): dual-db com engine mysql por padrão
+        for var in ("DB_HOST", "DB_NAME", "DB_PASSWORD", "ADMIN_DB_HOST", "ADMIN_DB_PASSWORD"):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        settings = Settings(_env_file=None)
+        assert settings.DB_ENGINE == "mysql"
+        assert settings.DB_PORT == 3306
+        assert settings.ADMIN_DB_PORT == 3306
+
+    def test_env_overrides_gateway_and_db(self, monkeypatch):
+        monkeypatch.delenv("VAULT_ADDR", raising=False)
         monkeypatch.setenv("MCP_TWIN_AUDIENCE", "mcp:custom")
         monkeypatch.setenv("URL_ADMIN_TWIN_JWKS", "http://admin/.well-known/jwks.json")
         monkeypatch.setenv("MCP_PORT", "9000")
         monkeypatch.setenv("DOCS_ENABLED", "true")
         monkeypatch.setenv("CONFIG_MCP_MASTER_KEY", "k")
-        monkeypatch.setenv("CONFIG_MCP_STORE_PATH", "/tmp/store.json")
+        monkeypatch.setenv("DB_HOST", "db.internal")
+        monkeypatch.setenv("ADMIN_DB_HOST", "admin.internal")
         settings = Settings(_env_file=None)
         assert settings.mcp_twin_audience == "mcp:custom"
         assert settings.url_admin_twin_jwks.endswith("jwks.json")
         assert settings.mcp_port == 9000
         assert settings.docs_enabled is True
         assert settings.master_key == "k"
-        assert settings.store_path == "/tmp/store.json"
+        assert settings.DB_HOST == "db.internal"
+        assert settings.ADMIN_DB_HOST == "admin.internal"
 
     def test_backcompat_alias(self):
         assert ConfigMcpSettings is Settings
 
-    def test_get_settings_is_cached(self, monkeypatch):
+    def test_get_settings_is_cached(self):
         get_settings.cache_clear()
         s1 = get_settings()
         s2 = get_settings()
@@ -67,6 +81,8 @@ class TestEnforceSecurityInvariants:
             "MCP_TWIN_AUDIENCE": "mcp:config-mcp",
             "URL_ADMIN_TWIN_JWKS": "http://admin/jwks.json",
             "CONFIG_MCP_MASTER_KEY": "k",
+            "ADMIN_DB_HOST": "admin.internal",
+            "ADMIN_DB_PASSWORD": "admin-pw",
             "_env_file": None,
         }
         base.update(kw)
@@ -87,10 +103,14 @@ class TestEnforceSecurityInvariants:
         with pytest.raises(RuntimeError, match="URL_ADMIN_TWIN_JWKS"):
             self._s(RUNTIME_ENV="cloud", URL_ADMIN_TWIN_JWKS="").enforce_security_invariants()
 
+    def test_cloud_requires_admin_db(self):
+        with pytest.raises(RuntimeError, match="ADMIN_DB_HOST"):
+            self._s(RUNTIME_ENV="cloud", ADMIN_DB_HOST="").enforce_security_invariants()
+
     def test_cloud_requires_master_key(self, monkeypatch):
         monkeypatch.delenv("VAULT_ADDR", raising=False)
         monkeypatch.delenv("CONFIG_MCP_MASTER_KEY", raising=False)
-        with pytest.raises(RuntimeError, match="STD-SEC-004"):
+        with pytest.raises(RuntimeError, match="CONFIG_MCP_MASTER_KEY"):
             self._s(RUNTIME_ENV="cloud", CONFIG_MCP_MASTER_KEY="").enforce_security_invariants()
 
     def test_cloud_ok_with_all(self):

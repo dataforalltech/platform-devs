@@ -40,7 +40,7 @@ _DEFAULT_HEALTH_TIMEOUT = 2.0  # timeout por requisiÃ§Ã£o HTTP de health
 # Entry point pÃºblico
 
 
-def launch_service(
+async def launch_service(
     store: ServiceStore,
     *,
     name: str,
@@ -173,7 +173,7 @@ def launch_service(
             }
         )
 
-    store.upsert(name, fields)
+    await store.upsert(name, fields)
     _log.info(
         "launch_service name=%s mode=%s port=%d healthy=%s",
         name,
@@ -409,7 +409,7 @@ def _wait_healthy(
 # stop_service (complementar)
 
 
-def stop_service(
+async def stop_service(
     store: ServiceStore,
     *,
     name: str,
@@ -423,7 +423,7 @@ def stop_service(
     - process (uvicorn): kill pelo PID registrado
     - docker-compose: `docker compose stop <service>`
     """
-    row = store.get(name)
+    row = await store.get(name)
     if row is None:
         return {"error": "not_found", "name": name}
 
@@ -468,6 +468,6 @@ def stop_service(
         result["error"] = f"tipo '{svc_type}' nÃ£o suportado para stop. Use mode='docker' ou mode='process'"
 
     if result.get("stopped"):
-        store.upsert(name, {"status": "stopped"})
+        await store.upsert(name, {"status": "stopped"})
 
     return result

@@ -43,7 +43,7 @@ def _last_modified_iso(path: Path) -> str:
     return datetime.fromtimestamp(ts, tz=UTC).isoformat()
 
 
-def scan_docs(
+async def scan_docs(
     store: Any,
     settings: Any,
     *,
@@ -110,7 +110,7 @@ def scan_docs(
             size_kb = round(size_bytes / 1024, 2)
 
             # Update index in store
-            store.upsert_doc_index(
+            await store.upsert_doc_index(
                 repo_path=repo_path,
                 file_path=rel_path,
                 doc_type=doc_type,

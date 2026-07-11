@@ -4,7 +4,7 @@ from ..config.settings import AuditSettings
 from ..db.store import AuditStore
 
 
-def get_audit_report(
+async def get_audit_report(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -14,7 +14,7 @@ def get_audit_report(
 ) -> dict:
     """Retorna relatório consolidado de conformidade."""
     try:
-        audits = store.list_audits(
+        audits = await store.list_audits(
             service=service,
             env=env,
             limit=100,
@@ -78,7 +78,7 @@ def get_audit_report(
         return {"error": "InternalError", "details": str(e), "tool": "get_audit_report"}
 
 
-def list_audits(
+async def list_audits(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -89,7 +89,7 @@ def list_audits(
 ) -> dict:
     """Lista auditorias com filtros."""
     try:
-        audits = store.list_audits(status=status, env=env, service=service, limit=limit)
+        audits = await store.list_audits(status=status, env=env, service=service, limit=limit)
 
         return {
             "total": len(audits),

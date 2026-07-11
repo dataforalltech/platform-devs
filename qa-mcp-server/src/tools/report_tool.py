@@ -1,5 +1,13 @@
+"""Tools de relatório (coverage / QA report agregado) — async, ORM-backed.
+
+`get_coverage_report` roda subprocess/leitura de arquivo em `asyncio.to_thread`.
+`generate_qa_report` só faz leituras de banco (`await store.list_runs`) + cálculo puro,
+então corre direto no contexto async. O store é tenant-scoped (dual-db).
+"""
+
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from datetime import UTC, datetime
@@ -11,20 +19,19 @@ def _now() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def get_coverage_report(
-    store: Any,
+def _get_coverage_report_blocking(
     settings: Any,
     *,
     repo_path: str,
-    framework: str = "auto",
-) -> dict:
+    framework: str,
+) -> tuple[dict, dict[str, Any] | None]:
     """Lê relatório de cobertura: Python (coverage.json) ou Jest (coverage-summary.json)."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "get_coverage_report",
-        }
+        }, None
 
     p = Path(repo_path)
     is_node = (p / "package.json").exists()
@@ -63,7 +70,7 @@ def get_coverage_report(
                 "error": "coverage_not_found",
                 "details": "Run jest with --coverage first",
                 "tool": "get_coverage_report",
-            }
+            }, None
     else:
         # Python: coverage.json
         cov_json = p / "coverage.json"
@@ -100,23 +107,11 @@ def get_coverage_report(
                 "error": "coverage_not_found",
                 "details": "Run pytest --cov first to generate coverage data",
                 "tool": "get_coverage_report",
-            }
+            }, None
 
     meets_threshold = overall_pct >= settings.coverage_threshold
 
-    run_id = store.save_run(
-        run_type="coverage",
-        status="passed" if meets_threshold else "failed",
-        summary={
-            "overall_pct": overall_pct,
-            "meets_threshold": meets_threshold,
-        },
-        details={"modules": modules[:20]},
-        repo_path=repo_path,
-        framework=actual_fw,
-    )
-
-    return {
+    ret = {
         "framework": actual_fw,
         "overall_pct": overall_pct,
         "lines_covered": lines_covered,
@@ -124,8 +119,38 @@ def get_coverage_report(
         "threshold_pct": settings.coverage_threshold,
         "meets_threshold": meets_threshold,
         "modules": modules,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "coverage",
+        "status": "passed" if meets_threshold else "failed",
+        "summary": {
+            "overall_pct": overall_pct,
+            "meets_threshold": meets_threshold,
+        },
+        "details": {"modules": modules[:20]},
+        "repo_path": repo_path,
+        "framework": actual_fw,
+    }
+    return ret, persist
+
+
+async def get_coverage_report(
+    store: Any,
+    settings: Any,
+    *,
+    repo_path: str,
+    framework: str = "auto",
+) -> dict:
+    """Lê relatório de cobertura: Python (coverage.json) ou Jest (coverage-summary.json)."""
+    ret, persist = await asyncio.to_thread(
+        _get_coverage_report_blocking,
+        settings,
+        repo_path=repo_path,
+        framework=framework,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
 
 
 def _compute_category_score(runs: list[dict], category: str) -> dict[str, Any]:
@@ -197,7 +222,7 @@ def _grade(score: int) -> str:
     return "F"
 
 
-def generate_qa_report(
+async def generate_qa_report(
     store: Any,
     settings: Any,
     *,
@@ -234,7 +259,7 @@ def generate_qa_report(
     overall_score = 0.0
 
     for cat, run_type in run_type_map.items():
-        runs = store.list_runs(repo_path=repo_path, run_type=run_type, limit=last_n_runs)
+        runs = await store.list_runs(repo_path=repo_path, run_type=run_type, limit=last_n_runs)
         cat_data = _compute_category_score(runs, cat)
         categories[cat] = cat_data
         overall_score += cat_data["score"] * weights[cat]
@@ -262,7 +287,7 @@ def generate_qa_report(
     if unit.get("score", 100) < 100:
         recommendations.append(f"Fix failing tests: {unit.get('summary', '')}")
 
-    run_id = store.save_run(
+    run_id = await store.save_run(
         run_type="qa_report",
         status="passed" if overall_int >= 75 else "failed",
         summary={"overall_score": overall_int, "grade": grade},

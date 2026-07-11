@@ -21,9 +21,12 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: qa-mcp executa testes/análises e PERSISTE runs num store PostgreSQL local
-(QAStore) — não fala com um backend REST, então não há ServiceApiClient. O store é
-construído em build_server() e injetado no sidecar (_build_http_app(settings, store)).
+NOTA: qa-mcp executa testes/análises e PERSISTE runs num log append-only sobre o ORM
+canônico (`platform_database.orm`), **tenant-scoped e dual-db** (MySQL banco-por-tenant /
+PostgreSQL schema-por-tenant). Não há backend REST intermediário (sem ServiceApiClient).
+Não há store global: a persistência é resolvida por-request, credencial-zero — cada
+chamada abre uma sessão tenant-scoped (`for_tenant`) a partir do tenant nos claims do
+inner token verificado. A tool `status` é compute-only (tokenless, sem tenant/store).
 """
 
 from __future__ import annotations
@@ -39,9 +42,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, QASettings, get_settings
+from ..db.schema import ensure_schema
 from ..db.store import QAStore
 from ..tools.analysis_tool import (
     analyze_complexity,
@@ -526,17 +534,17 @@ def _verify_inner_token(twin_token: str, settings: QASettings) -> dict[str, Any]
     )
 
 
-# ── Dispatcher (tenant_id injetado pelo PEP; store persiste os runs) ──────────
+# ── Dispatcher (async; store tenant-scoped ligado ao pool do tenant) ──────────
 
 
-def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QAStore) -> dict:
-    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
-    args (INV-3) mas as tools de QA não o consomem (governança só)."""
+async def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QAStore) -> dict:
+    """Despacha a chamada para a função de tool (async). O tenant NÃO viaja nos args
+    (INV-3): o ``store`` já está ligado ao pool do tenant (resolvido dos claims)."""
     if name == "status":
         return _status()
     # ---- test_tool ----
     if name == "run_unit_tests":
-        return run_unit_tests(
+        return await run_unit_tests(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
@@ -546,7 +554,7 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
             timeout=args.get("timeout"),
         )
     if name == "run_e2e_tests":
-        return run_e2e_tests(
+        return await run_e2e_tests(
             store,
             settings,
             test_path=args.get("test_path", ""),
@@ -557,7 +565,7 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
         )
     # ---- api_tool ----
     if name == "run_api_tests":
-        return run_api_tests(
+        return await run_api_tests(
             store,
             settings,
             base_url=args.get("base_url", ""),
@@ -565,7 +573,7 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
             timeout=args.get("timeout"),
         )
     if name == "generate_test_matrix":
-        return generate_test_matrix(
+        return await generate_test_matrix(
             store,
             settings,
             base_url=args.get("base_url", ""),
@@ -573,7 +581,7 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
         )
     # ---- browser_tool ----
     if name == "screenshot_page":
-        return screenshot_page(
+        return await screenshot_page(
             store,
             settings,
             url=args.get("url", ""),
@@ -582,14 +590,14 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
             output_dir=args.get("output_dir"),
         )
     if name == "check_accessibility":
-        return check_accessibility(
+        return await check_accessibility(
             store,
             settings,
             url=args.get("url", ""),
             standard=args.get("standard", "WCAG2AA"),
         )
     if name == "visual_regression":
-        return visual_regression(
+        return await visual_regression(
             store,
             settings,
             url=args.get("url", ""),
@@ -600,7 +608,7 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
         )
     # ---- analysis_tool ----
     if name == "run_linter":
-        return run_linter(
+        return await run_linter(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
@@ -608,27 +616,27 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
             fix=args.get("fix", False),
         )
     if name == "run_security_scan":
-        return run_security_scan(
+        return await run_security_scan(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
             framework=args.get("framework", "auto"),
         )
     if name == "check_dependencies":
-        return check_dependencies(
+        return await check_dependencies(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
         )
     if name == "run_type_check":
-        return run_type_check(
+        return await run_type_check(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
             framework=args.get("framework", "auto"),
         )
     if name == "analyze_complexity":
-        return analyze_complexity(
+        return await analyze_complexity(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
@@ -636,14 +644,14 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
         )
     # ---- report_tool ----
     if name == "get_coverage_report":
-        return get_coverage_report(
+        return await get_coverage_report(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
             framework=args.get("framework", "auto"),
         )
     if name == "generate_qa_report":
-        return generate_qa_report(
+        return await generate_qa_report(
             store,
             settings,
             repo_path=args.get("repo_path", ""),
@@ -652,11 +660,45 @@ def _dispatch(name: str, args: dict[str, Any], settings: QASettings, store: QASt
     raise KeyError(name)
 
 
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: QASettings, tenant_id: str) -> None:
+    """Garante a tabela no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: QASettings, tenant_id: str
+) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = QAStore(session)
+        return await _dispatch(name, arguments, settings, store)
+
+
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: QASettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada (não-exempt) abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token. A tool `status` é
+    exempt e compute-only (sem tenant/store)."""
     app = FastAPI(
         title="qa-mcp API",
         version="0.1.0",
@@ -682,8 +724,12 @@ def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
             tools.append(entry)
         return {"result": {"tools": tools}}
 
+    def _envelope(payload: dict[str, Any]) -> dict[str, Any]:
+        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -691,31 +737,39 @@ def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
-        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
-        if name not in _EXEMPT_TOOLS:
-            twin_token = (params.get("_meta") or {}).get("twin_token")
-            if not twin_token:
-                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
-            try:
-                claims = _verify_inner_token(twin_token, settings)
-            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
-                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
-                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        # Tools exempt (status): compute-only, tokenless, SEM tenant/store.
+        if name in _EXEMPT_TOOLS:
+            if name not in _TOOL_SCHEMAS:
+                return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+            return _envelope(_status())
+
+        # Execução (não-exempt) exige inner token válido; tenant vem SEMPRE dos claims
+        # (SEC-035 / INV-3), nunca de argumento do cliente.
+        twin_token = (params.get("_meta") or {}).get("twin_token")
+        if not twin_token:
+            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+        try:
+            claims = _verify_inner_token(twin_token, settings)
+        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+            _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+        tenant_id = claims.get("tenant_id")
+        if not tenant_id:
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments, settings, store)
+            payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
             _log.exception("tool_internal_error: %s", name)
             payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+        return _envelope(payload)
+
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
 
     return app
 
@@ -723,14 +777,18 @@ def _build_http_app(settings: QASettings, store: QAStore) -> FastAPI:
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def build_server() -> tuple[Server, QASettings, QAStore, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o store e o sidecar HTTP."""
+def build_server() -> tuple[Server, QASettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    store = QAStore(db_path=settings.db_path, dsn=settings.pg_dsn or None)
-    http_app = _build_http_app(settings, store)
-    _log.info("qa_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    http_app = _build_http_app(settings)
+    _log.info("qa_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("qa-mcp-server")
 
@@ -743,17 +801,26 @@ def build_server() -> tuple[Server, QASettings, QAStore, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, settings, store)
-        except KeyError:
+        # `status` é compute-only (tokenless) → servida sobre stdio. As demais tools são
+        # tenant-scoped e gateway-only: o transporte stdio não carrega o inner token
+        # (logo, sem tenant) → recusa fail-closed. A execução real entra pelo sidecar
+        # HTTP (/mcp/tools/call), onde o tenant vem dos claims verificados.
+        if name == "status":
+            payload: dict[str, Any] = _status()
+        elif name not in _TOOL_SCHEMAS:
             payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "qa-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, settings, store, http_app
+    return server, settings, http_app
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -763,7 +830,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, settings, _store, http_app = build_server()
+    server, settings, http_app = build_server()
     cfg = uvicorn.Config(
         http_app,
         host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
@@ -787,7 +854,7 @@ def main() -> None:
     if os.getenv("MCP_HTTP_ONLY", "0") == "1":
         import uvicorn
 
-        _server, settings, _store, http_app = build_server()
+        _server, settings, http_app = build_server()
         uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
         return
     asyncio.run(_run())

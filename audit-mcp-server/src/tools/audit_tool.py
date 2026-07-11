@@ -18,7 +18,7 @@ class _Checker(Protocol):
     def run(repo_path: str, env: str = "dev") -> dict[str, Any]: ...
 
 
-def run_audit(
+async def run_audit(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -39,8 +39,8 @@ def run_audit(
                 "tool": "run_audit",
             }
 
-        criticality = store.get_service_criticality(service)
-        audit_id = store.create_audit(
+        criticality = await store.get_service_criticality(service)
+        audit_id = await store.create_audit(
             service=service,
             repo=repo,
             env=env,
@@ -65,7 +65,7 @@ def run_audit(
             result = checker_cls.run(resolved_path, env)
             for item in result["items"]:
                 all_items.append(item)
-                store.add_audit_item(
+                await store.add_audit_item(
                     audit_id,
                     item["category"],
                     item["name"],
@@ -83,10 +83,10 @@ def run_audit(
         auto_approve_if_score = approval_rule.get("auto_approve_if_score")
         if auto_approve_if_score and score >= auto_approve_if_score:
             status = "auto_approved"
-            store.update_audit_status(audit_id, status, score, True)
+            await store.update_audit_status(audit_id, status, score, True)
         else:
             status = "pending_approval"
-            store.update_audit_status(audit_id, status, score, score >= policy["min_score"])
+            await store.update_audit_status(audit_id, status, score, score >= policy["min_score"])
 
         return {
             "audit_id": audit_id,
@@ -106,7 +106,7 @@ def run_audit(
         return {"error": "InternalError", "details": str(e), "tool": "run_audit"}
 
 
-def get_audit_status(
+async def get_audit_status(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -115,7 +115,7 @@ def get_audit_status(
 ) -> dict:
     """Retorna status da auditoria mais recente."""
     try:
-        audit = store.get_latest_audit(service, env)
+        audit = await store.get_latest_audit(service, env)
 
         if not audit:
             return {
@@ -126,8 +126,8 @@ def get_audit_status(
                 "score": None,
             }
 
-        items = store.get_audit_items(audit["id"])
-        approvals = store.get_approvals(audit["id"])
+        items = await store.get_audit_items(audit["id"])
+        approvals = await store.get_approvals(audit["id"])
 
         return {
             "audit_id": audit["id"],

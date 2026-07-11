@@ -1,4 +1,4 @@
-"""Ferramentas de validação, findings e double-check de planos de teste."""
+"""Ferramentas de validação, findings e double-check de planos de teste (async — store ORM)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ _VALID_SEVERITIES = {"critical", "high", "medium", "low"}
 _VALID_FINDING_STATUSES = {"open", "resolved", "accepted"}
 
 
-def add_finding(
+async def add_finding(
     store: TestStore,
     *,
     plan_id: str,
@@ -34,10 +34,10 @@ def add_finding(
             "error": "ValidationError",
             "details": f"severity deve ser um de: {sorted(_VALID_SEVERITIES)}",
         }
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
-    result = store.add_finding(
+    result = await store.add_finding(
         plan_id=plan_id,
         severity=severity,
         title=title,
@@ -51,7 +51,7 @@ def add_finding(
     return result
 
 
-def double_check(
+async def double_check(
     store: TestStore,
     *,
     plan_id: str,
@@ -59,10 +59,10 @@ def double_check(
     """Executa double-check completo do plano: cenários não executados, falhas abertas e findings críticos."""
     if not plan_id:
         return {"error": "ValidationError", "details": "plan_id é obrigatório"}
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
-    result = store.double_check(plan_id)
+    result = await store.double_check(plan_id)
     summary = result.get("summary", {})
 
     if summary.get("ready_to_ship"):
@@ -82,7 +82,7 @@ def double_check(
     return result
 
 
-def get_validation_status(
+async def get_validation_status(
     store: TestStore,
     *,
     plan_id: str,
@@ -90,10 +90,10 @@ def get_validation_status(
     """Retorna status completo de validação: cobertura, pass rate, findings por severidade e grade."""
     if not plan_id:
         return {"error": "ValidationError", "details": "plan_id é obrigatório"}
-    if not store.get_plan(plan_id):
+    if not await store.get_plan(plan_id):
         return {"error": "not_found", "details": f"Plano '{plan_id}' não encontrado"}
 
-    result = store.get_validation_status(plan_id)
+    result = await store.get_validation_status(plan_id)
 
     # Adicionar interpretação do grade
     grade = result.get("grade", "?")

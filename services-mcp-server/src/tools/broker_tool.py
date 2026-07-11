@@ -125,9 +125,9 @@ def _write_env_lines(path: Path, lines: list[tuple[str, str]]) -> None:
 # ── Lookup de servicos no registry ───────────────────────────────────────────
 
 
-def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
+async def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
     """Busca servico no registry pelo tipo (kafka/redis) ou por nome canonico."""
-    all_services = store.list_all()
+    all_services = await store.list_all()
     # Prioridade: tipo exato, entao nome
     for svc in all_services:
         if svc.get("type", "").lower() == service_type:
@@ -146,7 +146,7 @@ def _find_broker(store: ServiceStore, service_type: str) -> dict | None:
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
 
-def kafka_status(
+async def kafka_status(
     store: ServiceStore,
     *,
     bootstrap_servers: str | None = None,
@@ -159,7 +159,7 @@ def kafka_status(
     servers = bootstrap_servers
 
     if not servers:
-        svc = _find_broker(store, "kafka")
+        svc = await _find_broker(store, "kafka")
         if svc:
             host = svc.get("host", "localhost")
             port = svc.get("port", 9092)
@@ -198,7 +198,7 @@ def kafka_status(
     }
 
 
-def redis_status(
+async def redis_status(
     store: ServiceStore,
     *,
     url: str | None = None,
@@ -210,9 +210,9 @@ def redis_status(
     redis_url = url
 
     if not redis_url:
-        svc = _find_broker(store, "redis")
+        svc = await _find_broker(store, "redis")
         if not svc:
-            svc = _find_broker(store, "cache")
+            svc = await _find_broker(store, "cache")
         if svc:
             host = svc.get("host", "localhost")
             port = svc.get("port", 6379)
@@ -261,7 +261,7 @@ def redis_status(
     }
 
 
-def sync_broker_urls(
+async def sync_broker_urls(
     store: ServiceStore,
     *,
     path: str,
@@ -285,8 +285,8 @@ def sync_broker_urls(
     lines = _parse_env_file(env_path)
 
     # Descobre servicos do registry uma vez
-    kafka_svc = _find_broker(store, "kafka")
-    redis_svc = _find_broker(store, "redis") or _find_broker(store, "cache")
+    kafka_svc = await _find_broker(store, "kafka")
+    redis_svc = await _find_broker(store, "redis") or await _find_broker(store, "cache")
 
     changes: list[dict] = []
     not_found: list[str] = []

@@ -1,211 +1,240 @@
-"""Fixtures compartilhadas para os testes do test-mcp-server.
+"""Fixtures da Suíte Canônica do test-mcp (§16 — PA-01 / FID-02).
 
-O ``TestStore`` foi migrado de SQLite para PostgreSQL (psycopg2 + connection
-pool). Para manter os testes **herméticos** (sem rede, sem banco real) e ainda
-exercitar o SQL real do store, este conftest substitui a camada psycopg2 por um
-backend SQLite in-memory equivalente:
+**Banco REAL, nunca mockado** (FID-02): os testes do store/tools/servidor rodam contra
+um MySQL 8.x real com **2 tenants** (banco-por-tenant), exercitando o caminho canônico
+`get_pool_for_tenant -> Repository -> dialeto MySQL`. O único "duplo" é o
+``platform_lookup`` (linha estática que substitui a consulta ao admin-mysql PLATFORMS) —
+a credencial do tenant, não o banco. RS256 é **real** (chave gerada, token assinado,
+verificador real) — nunca bypass (STD-QA-001 / Test Doubles Policy).
 
-* ``psycopg2.pool.ThreadedConnectionPool`` -> pool fake sobre uma única conexão
-  SQLite in-memory (com o schema esperado pelo store criado no __init__).
-* ``psycopg2.extras.RealDictCursor``       -> cursor fake que devolve linhas como
-  ``dict`` e traduz os poucos dialetos PG usados (placeholders ``%s`` -> ``?`` e a
-  única query com ``LEFT JOIN LATERAL``, que o SQLite não suporta).
-
-Assim ``TestStore.__init__``, ``_get_conn``, ``close`` e todo o SQL rodam de
-verdade — só o driver por baixo muda.
+Config via env (o CI provê o serviço MySQL):
+  MYSQL_ROOT_PASSWORD  — senha root (obrigatória; sem ela os testes de DB são SKIPADOS)
+  PILOT_MYSQL_HOST     — default 127.0.0.1
+  PILOT_MYSQL_PORT     — default 3306
 """
 
 from __future__ import annotations
 
-import re
-import sqlite3
+import os
+import socket
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import psycopg2.extras
-import psycopg2.pool
+import aiomysql
+import jwt
 import pytest
+import pytest_asyncio
+from cryptography.hazmat.primitives.asymmetric import rsa
+from platform_core.request_context import reset_tenant_id, set_tenant_id
+from platform_database import close_tenant_pools
+from platform_database.orm import configure
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.orm.tenant import TenantSession
+from platform_database.tenant_resolver import get_pool_for_tenant
 
+from src.config.settings import Settings
+from src.db.schema import ensure_schema
 from src.db.store import TestStore
 
-# ── Schema equivalente ao esperado pelo store em PostgreSQL ─────────────────── #
-# PKs INTEGER usam AUTOINCREMENT (equivalente a SERIAL). booleanos viram INTEGER
-# (0/1); o SQLite 3.35+ aceita RETURNING, ON CONFLICT ... DO UPDATE e literais
-# true/false nativamente, então nenhuma tradução extra é necessária para eles.
-_SCHEMA = """
-CREATE TABLE test_plans (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    scope TEXT NOT NULL,
-    feature TEXT,
-    status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-);
-CREATE TABLE test_scenarios (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    category TEXT NOT NULL,
-    priority TEXT NOT NULL DEFAULT 'medium',
-    preconditions TEXT,
-    steps TEXT NOT NULL,
-    expected_result TEXT NOT NULL,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE test_cases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    scenario_id INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    actual_result TEXT,
-    notes TEXT,
-    evidence TEXT,
-    executed_at TEXT NOT NULL
-);
-CREATE TABLE bug_reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    plan_id INTEGER NOT NULL,
-    severity TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    evidence TEXT,
-    status TEXT NOT NULL DEFAULT 'open',
-    created_at TEXT NOT NULL
-);
-CREATE TABLE quality_gates (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    type TEXT NOT NULL,
-    plan_id INTEGER,
-    created_at TEXT NOT NULL
-);
-CREATE TABLE checklist_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    checklist_id TEXT NOT NULL,
-    order_num INTEGER NOT NULL,
-    description TEXT NOT NULL,
-    required INTEGER NOT NULL DEFAULT 1,
-    category TEXT
-);
-CREATE TABLE checklist_runs (
-    id TEXT PRIMARY KEY,
-    checklist_id TEXT NOT NULL,
-    status TEXT NOT NULL,
-    executor TEXT,
-    started_at TEXT NOT NULL,
-    completed_at TEXT
-);
-CREATE TABLE checklist_results (
-    run_id TEXT NOT NULL,
-    item_id INTEGER NOT NULL,
-    status TEXT NOT NULL,
-    notes TEXT,
-    checked_at TEXT NOT NULL,
-    UNIQUE (run_id, item_id)
-);
-"""
+_HOST = os.environ.get("PILOT_MYSQL_HOST", "127.0.0.1")
+_PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
+_PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
 
-# A única query PG que o SQLite não entende é o LEFT JOIN LATERAL de
-# get_scenarios(); reescrevemos para uma subquery escalar correlacionada
-# (semanticamente idêntica: último status por cenário).
-_LATERAL_RE = re.compile(
-    r"SELECT\s+s\.\*,\s*tc\.status\s+as\s+last_status\s+FROM\s+test_scenarios\s+s\s+"
-    r"LEFT\s+JOIN\s+LATERAL\s*\(.*?\)\s*tc\s+ON\s+true\s+"
-    r"WHERE\s+s\.plan_id\s*=\s*%s\s+ORDER\s+BY\s+s\.category,\s*s\.priority",
-    re.IGNORECASE | re.DOTALL,
-)
-_LATERAL_REWRITE = (
-    "SELECT s.*, ("
-    "SELECT status FROM test_cases WHERE scenario_id = s.id AND plan_id = %s "
-    "ORDER BY executed_at DESC LIMIT 1"
-    ") as last_status "
-    "FROM test_scenarios s WHERE s.plan_id = %s "
-    "ORDER BY s.category, s.priority"
+TENANT_A = "test_mcp_a"
+TENANT_B = "test_mcp_b"
+
+# Ordem de limpeza (filhos primeiro; não há FK física, mas mantém a semântica clara).
+_TABLES = (
+    "checklist_results",
+    "checklist_runs",
+    "checklist_items",
+    "checklists",
+    "bug_reports",
+    "test_cases",
+    "test_scenarios",
+    "test_plans",
 )
 
 
-def _translate(sql: str) -> str:
-    """Traduz o SQL PostgreSQL do store para SQLite."""
-    sql = _LATERAL_RE.sub(_LATERAL_REWRITE, sql)
-    # placeholders posicionais: %s -> ? (o store nunca usa %(name)s)
-    sql = sql.replace("%s", "?")
-    return sql
+def _mysql_up() -> bool:
+    if not _PW:
+        return False
+    try:
+        with socket.create_connection((_HOST, _PORT), timeout=2):
+            return True
+    except OSError:
+        return False
 
 
-class _FakeCursor:
-    """Emula psycopg2 RealDictCursor sobre um cursor SQLite (linhas como dict)."""
-
-    def __init__(self, conn: sqlite3.Connection) -> None:
-        self._cur = conn.cursor()
-
-    def execute(self, sql: str, params: Any = None) -> _FakeCursor:
-        self._cur.execute(_translate(sql), tuple(params) if params else ())
-        return self
-
-    def fetchone(self) -> dict[str, Any] | None:
-        row = self._cur.fetchone()
-        return dict(row) if row is not None else None
-
-    def fetchall(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self._cur.fetchall()]
-
-    def __enter__(self) -> _FakeCursor:
-        return self
-
-    def __exit__(self, *exc: object) -> None:
-        self._cur.close()
+requires_mysql = pytest.mark.skipif(
+    not _mysql_up(),
+    reason="MySQL real indisponível (defina MYSQL_ROOT_PASSWORD/PILOT_MYSQL_HOST/PILOT_MYSQL_PORT)",
+)
 
 
-class _FakeConn:
-    """Emula uma conexão psycopg2 sobre uma conexão SQLite."""
-
-    def __init__(self, sqlite_conn: sqlite3.Connection) -> None:
-        self._conn = sqlite_conn
-
-    def cursor(self, cursor_factory: Any = None) -> _FakeCursor:
-        # o store sempre pede RealDictCursor; ignoramos o factory e sempre
-        # devolvemos dicts (comportamento do RealDictCursor).
-        return _FakeCursor(self._conn)
-
-    def commit(self) -> None:
-        self._conn.commit()
-
-    def rollback(self) -> None:
-        self._conn.rollback()
-
-
-class _FakePool:
-    """Emula psycopg2 ThreadedConnectionPool sobre uma conexão SQLite in-memory."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        self._sqlite = sqlite3.connect(":memory:", check_same_thread=False)
-        self._sqlite.row_factory = sqlite3.Row
-        self._sqlite.executescript(_SCHEMA)
-        self._conn = _FakeConn(self._sqlite)
-
-    def getconn(self) -> _FakeConn:
-        return self._conn
-
-    def putconn(self, conn: _FakeConn) -> None:
-        # conexão única compartilhada; nada a devolver.
-        pass
-
-    def closeall(self) -> None:
-        self._sqlite.close()
+def _test_settings(**over: Any) -> Settings:
+    kw: dict[str, Any] = dict(
+        MCP_TWIN_AUDIENCE="mcp:test-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        DB_ENGINE="mysql",
+        DB_HOST=_HOST,
+        DB_PORT=_PORT,
+        DB_USER="root",
+        DB_PASSWORD=_PW,
+        ADMIN_DB_HOST=_HOST,
+        ADMIN_DB_PORT=_PORT,
+        ADMIN_DB_USER="root",
+        ADMIN_DB_PASSWORD=_PW,
+    )
+    kw.update(over)
+    return Settings(**kw)
 
 
-@pytest.fixture
-def store(monkeypatch) -> TestStore:
-    """TestStore real com a camada psycopg2 trocada por SQLite in-memory."""
-    # RealDictCursor é referenciado no store; o _FakeConn.cursor o ignora, mas
-    # deixamos o símbolo intacto (não precisa patch). Só o pool precisa ser fake.
-    monkeypatch.setattr(psycopg2.pool, "ThreadedConnectionPool", _FakePool)
-    from src.config.settings import TestSettings
+def _platform_row(tenant_id: str) -> dict[str, Any]:
+    return {
+        "tenant_id": tenant_id,
+        "db_engine": "mysql",
+        "db_host": _HOST,
+        "db_port": _PORT,
+        "db_name": tenant_id,  # banco-por-tenant: o db do tenant é o próprio id
+        "db_user": "root",
+        "db_password": _PW,
+    }
 
-    return TestStore(settings=TestSettings())
+
+async def _lookup(tenant_id: str, _settings: Any) -> dict[str, Any] | None:
+    return _platform_row(tenant_id) if tenant_id in (TENANT_A, TENANT_B) else None
 
 
-@pytest.fixture
-def plan(store: TestStore) -> dict:
-    """Plano de teste pré-criado."""
-    return store.create_plan(title="Plano de Teste", scope="Endpoint GET /api/items", feature="items-list")
+# Pools aiomysql são atados ao event loop. pytest-asyncio usa um loop por função;
+# cada fixture cria os pools no loop do teste e `close_tenant_pools()` no teardown
+# limpa o registry (close_all) p/ o próximo teste recriar no seu próprio loop.
+async def _make_store(tenant_id: str) -> tuple[TestStore, Any]:
+    settings = _test_settings()
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tenant_id} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+    pool = await get_pool_for_tenant(settings, tenant_id, platform_lookup=_lookup, strict=True)
+    await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+    # Estado limpo por teste (tabelas já existem; TRUNCATE é idempotente e rápido).
+    for table in _TABLES:
+        await pool.execute(f"TRUNCATE TABLE {table}")
+    token = set_tenant_id(tenant_id)
+    return TestStore(TenantSession(pool, tenant_id)), token
+
+
+@pytest_asyncio.fixture
+async def store_a():
+    store, token = await _make_store(TENANT_A)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def store_b():
+    store, token = await _make_store(TENANT_B)
+    yield store
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+@pytest_asyncio.fixture
+async def store(store_a: TestStore) -> TestStore:
+    """Alias de tenant único (tenant A) para os testes de tool/unidade."""
+    return store_a
+
+
+@pytest_asyncio.fixture
+async def plan(store_a: TestStore) -> dict[str, Any]:
+    """Plano de teste pré-criado no tenant A."""
+    return await store_a.create_plan(
+        title="Plano de Teste", scope="Endpoint GET /api/items", feature="items-list"
+    )
+
+
+@pytest_asyncio.fixture
+async def seed_platforms():
+    """Semeia ADMIN_DATAFORALL.PLATFORMS no MySQL de teste + `configure()`.
+
+    Exercita o caminho credencial-zero REAL (for_tenant -> get_platform -> PLATFORMS),
+    não o platform_lookup estático. A tabela é mínima (só as colunas que o resolver lê)."""
+    from platform_tenant.platform_client import close_admin_pools, invalidate_cache
+
+    conn = await aiomysql.connect(host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True)
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute("CREATE DATABASE IF NOT EXISTS ADMIN_DATAFORALL CHARACTER SET utf8mb4")
+            await cur.execute(
+                """CREATE TABLE IF NOT EXISTS ADMIN_DATAFORALL.PLATFORMS (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    tenant_id VARCHAR(255) NOT NULL,
+                    db_engine VARCHAR(32), db_host VARCHAR(255), db_port INT,
+                    db_name VARCHAR(255), db_user VARCHAR(255), db_password VARCHAR(500),
+                    active SMALLINT DEFAULT 1, excluded SMALLINT DEFAULT 0,
+                    UNIQUE KEY uq_platforms_tenant (tenant_id))"""
+            )
+            for tid in (TENANT_A, TENANT_B):
+                await cur.execute("DELETE FROM ADMIN_DATAFORALL.PLATFORMS WHERE tenant_id=%s", (tid,))
+                await cur.execute(
+                    "INSERT INTO ADMIN_DATAFORALL.PLATFORMS (tenant_id, db_engine, db_host, "
+                    "db_port, db_name, db_user, db_password, active, excluded) "
+                    "VALUES (%s,'mysql',%s,%s,%s,'root',%s,1,0)",
+                    (tid, _HOST, _PORT, tid, _PW),
+                )
+                await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tid} CHARACTER SET utf8mb4")
+    finally:
+        conn.close()
+
+    invalidate_cache()
+    configure(_test_settings())
+    yield
+    invalidate_cache()
+    await close_admin_pools()
+    await close_tenant_pools()
+
+
+# ── RS256 real (STD-QA-001: sem HS*, sem bypass) ──────────────────────────────
+@pytest.fixture(scope="session")
+def rsa_key() -> rsa.RSAPrivateKey:
+    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
+
+
+def mint_token(
+    rsa_key: rsa.RSAPrivateKey,
+    *,
+    tenant_id: str | None = TENANT_A,
+    aud: str = "mcp:test-mcp",
+    jti: str = "jti-1",
+    exp_delta: int = 300,
+    include_jti: bool = True,
+) -> str:
+    """Assina um inner Twin Token RS256 real (aud=mcp:<ns>, jti, exp, tenant_id)."""
+    now = datetime.now(UTC)
+    claims: dict[str, Any] = {"aud": aud, "exp": now + timedelta(seconds=exp_delta), "iat": now}
+    if include_jti:
+        claims["jti"] = jti
+    if tenant_id is not None:
+        claims["tenant_id"] = tenant_id
+    return jwt.encode(claims, rsa_key, algorithm="RS256")
+
+
+def patch_jwks(monkeypatch: pytest.MonkeyPatch, rsa_key: rsa.RSAPrivateKey) -> None:
+    """Faz o PyJWKClient servir a chave pública local — a verificação RS256 é REAL
+    (só evita o fetch de rede do JWKS; nada de bypass)."""
+    public_key = rsa_key.public_key()
+
+    class _SigningKey:
+        key = public_key
+
+    class _Client:
+        def __init__(self, _url: str) -> None:
+            pass
+
+        def get_signing_key_from_jwt(self, _token: str) -> _SigningKey:
+            return _SigningKey()
+
+    monkeypatch.setattr(jwt, "PyJWKClient", _Client)

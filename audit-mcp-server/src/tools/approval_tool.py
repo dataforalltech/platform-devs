@@ -2,7 +2,7 @@ from ..config.settings import AuditSettings
 from ..db.store import AuditStore
 
 
-def submit_audit_approval(
+async def submit_audit_approval(
     store: AuditStore,
     settings: AuditSettings,
     *,
@@ -14,7 +14,7 @@ def submit_audit_approval(
 ) -> dict:
     """Submete aprovação manual de uma auditoria."""
     try:
-        audit = store.get_audit(audit_id)
+        audit = await store.get_audit(audit_id)
 
         if not audit:
             return {
@@ -31,14 +31,14 @@ def submit_audit_approval(
                 "tool": "submit_audit_approval",
             }
 
-        store.add_approval(audit_id, approved_by, decision, role, notes)
+        await store.add_approval(audit_id, approved_by, decision, role, notes)
 
         if decision == "approved":
-            store.update_audit_status(audit_id, "approved", audit["score"], audit["passed"])
+            await store.update_audit_status(audit_id, "approved", audit["score"], audit["passed"])
         elif decision == "rejected":
-            store.update_audit_status(audit_id, "rejected", audit["score"], False)
+            await store.update_audit_status(audit_id, "rejected", audit["score"], False)
 
-        approvals = store.get_approvals(audit_id)
+        approvals = await store.get_approvals(audit_id)
 
         return {
             "audit_id": audit_id,

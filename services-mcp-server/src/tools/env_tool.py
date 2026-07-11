@@ -75,7 +75,7 @@ def _write_env_lines(path: Path, lines: list[tuple[str, str]]) -> None:
 # ── Tools públicas ────────────────────────────────────────────────────────────
 
 
-def read_env_file(
+async def read_env_file(
     _store: ServiceStore,
     *,
     path: str,
@@ -104,7 +104,7 @@ def read_env_file(
     }
 
 
-def set_env_var(
+async def set_env_var(
     _store: ServiceStore,
     *,
     path: str,
@@ -176,7 +176,7 @@ def set_env_var(
     }
 
 
-def sync_service_urls(
+async def sync_service_urls(
     store: ServiceStore,
     *,
     path: str,
@@ -208,7 +208,7 @@ def sync_service_urls(
     url_map = url_map or {}
 
     # Pega todos os serviços do registry de uma vez
-    all_services = store.list_all()
+    all_services = await store.list_all()
     svc_by_name: dict[str, dict] = {s["name"].lower(): s for s in all_services}
 
     def _resolve_service(env_key: str) -> dict | None:
@@ -362,7 +362,7 @@ def _is_ref_value(value: str) -> bool:
 # ── audit_env_files ───────────────────────────────────────────────────────────
 
 
-def audit_env_files(
+async def audit_env_files(
     store: ServiceStore,
     *,
     directory: str,
@@ -477,7 +477,7 @@ def audit_env_files(
     # Verifica URLs contra registry
     url_issues: list[dict] = []
     if check_registry_urls:
-        all_services = store.list_all()
+        all_services = await store.list_all()
         svc_by_name = {s["name"].lower(): s for s in all_services}
 
         for fname, variables in all_vars.items():
@@ -543,7 +543,7 @@ def audit_env_files(
 # ── redact_env_secrets ────────────────────────────────────────────────────────
 
 
-def redact_env_secrets(
+async def redact_env_secrets(
     _store: ServiceStore,
     *,
     paths: list[str],

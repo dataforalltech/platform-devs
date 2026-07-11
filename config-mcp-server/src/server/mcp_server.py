@@ -23,9 +23,13 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: config-mcp é uma persona **stateful** (serve credenciais/ambientes/tenants a
-partir de um ConfigStore encriptado local). O store É o backend — não há REST a
-chamar —, por isso não há ServiceApiClient; o dispatcher recebe o `store` diretamente.
+NOTA: config-mcp é uma persona **stateful**. A persistência roda 100% sobre o ORM
+canônico (`platform_database.orm`), **tenant-scoped e dual-db** (credencial-zero,
+ORM-H-12): o serviço só conhece o `tenant_id` (dos claims do inner token); a credencial
+do banco do tenant vem de `ADMIN_DATAFORALL.PLATFORMS`. Não há Trinity backend HTTP, então
+não há ServiceApiClient; cada chamada abre uma sessão tenant-scoped e cria o `ConfigStore`
+por-request. Os valores continuam encriptados com Fernet no `value_encrypted` (a
+encriptação at-rest é da app, não delegada ao DB — defense-in-depth).
 """
 
 from __future__ import annotations
@@ -41,11 +45,16 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import Settings, get_settings
+from ..db.schema import ensure_schema
+from ..db.store import ConfigStore
 from ..knowledge.encryptor import Encryptor
-from ..knowledge.store import ConfigStore
 from ..tools import (
     audit_env_files,
     delete_credential,
@@ -588,19 +597,30 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     )
 
 
-# ── Dispatcher (stateful: recebe o ConfigStore) ───────────────────────────────
+# ── Dispatcher ────────────────────────────────────────────────────────────────
+# Tools sem store nem tenant (status/health + sysinfo compute-only) são despachadas
+# sem abrir sessão de tenant (dispatch storeless). As demais recebem um ConfigStore
+# já ligado ao pool do tenant (resolvido dos claims do inner token — INV-3).
+_STORELESS_TOOLS: frozenset[str] = frozenset({"status", "get_physical_info"})
 
 
-def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
-    args a partir das claims (INV-3) e consumido pelas tools tenants.*."""
+async def _dispatch_storeless(name: str) -> dict[str, Any]:
+    """Despacha as tools que não tocam o store (status/sysinfo). Async por uniformidade."""
     if name == "status":
         return {"status": "ok", "service": "config-mcp", "tools": len(_TOOL_SCHEMAS)}
+    if name == "get_physical_info":
+        return await get_physical_info()
+    raise KeyError(name)
+
+
+async def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, Any]:
+    """Despacha (async) para a tool ligada ao store do tenant. tenant_id é injetado
+    pelo PEP nos args a partir das claims (INV-3) e consumido pelas tools tenants.*."""
     # ── Credentials ───────────────────────────────────────────────────────── #
     if name == "get_credential":
-        return get_credential(store, namespace=args["namespace"], key=args["key"])
+        return await get_credential(store, namespace=args["namespace"], key=args["key"])
     if name == "set_credential":
-        return set_credential(
+        return await set_credential(
             store,
             namespace=args["namespace"],
             key=args["key"],
@@ -608,41 +628,41 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, 
             description=args.get("description"),
         )
     if name == "set_credential_secure":
-        return set_credential_secure(store, namespace=args["namespace"], key=args["key"])
+        return await set_credential_secure(store, namespace=args["namespace"], key=args["key"])
     if name == "list_credentials":
-        return list_credentials(store, namespace=args.get("namespace"))
+        return await list_credentials(store, namespace=args.get("namespace"))
     if name == "delete_credential":
-        return delete_credential(store, namespace=args["namespace"], key=args["key"])
+        return await delete_credential(store, namespace=args["namespace"], key=args["key"])
     # ── Env ───────────────────────────────────────────────────────────────── #
     if name == "get_env_config":
-        return get_env_config(
+        return await get_env_config(
             store,
             environment=args["environment"],
             key_pattern=args.get("key_pattern"),
             limit=args.get("limit", 50),
         )
     if name == "set_env_var":
-        return set_env_var(store, environment=args["environment"], key=args["key"], value=args["value"])
+        return await set_env_var(store, environment=args["environment"], key=args["key"], value=args["value"])
     if name == "list_environments":
-        return list_environments(store)
+        return await list_environments(store)
     if name == "sync_env_file":
-        return sync_env_file(
+        return await sync_env_file(
             store,
             target_path=args["target_path"],
             environment=args["environment"],
             merge=args.get("merge", True),
         )
     if name == "read_env_file":
-        return read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
+        return await read_env_file(store, path=args["path"], key_filter=args.get("key_filter"))
     if name == "audit_env_files":
-        return audit_env_files(
+        return await audit_env_files(
             store,
             directory=args["directory"],
             include_pattern=args.get("include_pattern", ".env*"),
             check_store=args.get("check_store", True),
         )
     if name == "redact_env_secrets":
-        return redact_env_secrets(
+        return await redact_env_secrets(
             store,
             paths=args["paths"],
             keys=args.get("keys"),
@@ -650,7 +670,7 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, 
             dry_run=args.get("dry_run", False),
         )
     if name == "push_env_to_store":
-        return push_env_to_store(
+        return await push_env_to_store(
             store,
             path=args["path"],
             environment=args["environment"],
@@ -659,25 +679,22 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, 
         )
     # ── Workspace ─────────────────────────────────────────────────────────── #
     if name == "get_workspace_config":
-        return get_workspace_config(store, key=args.get("key"))
+        return await get_workspace_config(store, key=args.get("key"))
     if name == "set_workspace_config":
-        return set_workspace_config(
+        return await set_workspace_config(
             store,
             key=args["key"],
             value=args["value"],
             create_dir=args.get("create_dir", False),
         )
     if name == "list_workspace_config":
-        return list_workspace_config(store)
-    # ── Sysinfo ───────────────────────────────────────────────────────────── #
-    if name == "get_physical_info":
-        return get_physical_info()
+        return await list_workspace_config(store)
     # ── Tenants (tenant_id das claims — INV-3) ─────────────────────────────── #
     if name == "get_tenant_config":
         tenant_id = args.get("tenant_id")
         if not tenant_id:
             return {"error": "missing_tenant", "hint": "tenant_id resolvido das claims do token."}
-        return get_tenant_config(
+        return await get_tenant_config(
             store,
             tenant_id=tenant_id,
             key_pattern=args.get("key_pattern"),
@@ -687,34 +704,80 @@ def _dispatch(name: str, args: dict[str, Any], store: ConfigStore) -> dict[str, 
         tenant_id = args.get("tenant_id")
         if not tenant_id:
             return {"error": "missing_tenant", "hint": "tenant_id resolvido das claims do token."}
-        return set_tenant_config(store, tenant_id=tenant_id, key=args["key"], value=args["value"])
+        return await set_tenant_config(store, tenant_id=tenant_id, key=args["key"], value=args["value"])
     if name == "list_tenants":
-        return list_tenants(store)
+        return await list_tenants(store)
     if name == "get_session_tenant_config":
-        return get_session_tenant_config(store)
+        return await get_session_tenant_config(store)
 
     raise KeyError(name)
 
 
-# ── ConfigStore bootstrap (valida a chave Fernet — fail-fast) ─────────────────
+# ── Encryptor bootstrap (valida a chave Fernet — fail-fast) ───────────────────
 
 
-def _build_store(settings: Settings) -> ConfigStore:
-    """Constrói o ConfigStore e valida a master key imediatamente (fail-fast)."""
+def _build_encryptor(settings: Settings) -> Encryptor:
+    """Constrói o Encryptor e valida a master key imediatamente (fail-fast).
+
+    A encriptação at-rest é da app (defense-in-depth): o Encryptor é construído uma
+    vez no boot e reusado por-request; o banco só guarda a CIFRA no ``value_encrypted``.
+    """
     try:
         encryptor = Encryptor(settings.resolve_master_key())
         encryptor.decrypt(encryptor.encrypt("_health_check_"))
     except Exception as exc:  # noqa: BLE001 — chave ausente/inválida = boot inviável
         _log.critical("invalid_or_missing_master_key — abortando.")
         raise SystemExit(1) from exc
-    return ConfigStore(settings.store_path, encryptor)
+    return encryptor
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: Settings, tenant_id: str) -> None:
+    """Garante a tabela no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str,
+    arguments: dict[str, Any],
+    settings: Settings,
+    tenant_id: str,
+    encryptor: Encryptor,
+) -> dict[str, Any]:
+    """Despacha a tool. Storeless (status/sysinfo) sem tenant; as demais abrem uma
+    sessão tenant-scoped (credencial-zero), garantem o schema e criam o ConfigStore."""
+    if name not in _TOOL_SCHEMAS:
+        raise KeyError(name)
+    if name in _STORELESS_TOOLS:
+        return await _dispatch_storeless(name)
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = ConfigStore(session, encryptor)
+        return await _dispatch(name, arguments, store)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: Settings, encryptor: Encryptor) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="config-mcp API",
         version="0.1.0",
@@ -741,7 +804,7 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -750,6 +813,7 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
         # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
+        tenant_id = ""
         if name not in _EXEMPT_TOOLS:
             twin_token = (params.get("_meta") or {}).get("twin_token")
             if not twin_token:
@@ -759,14 +823,15 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
             except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha
                 _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
                 return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
+            claim_tenant = claims.get("tenant_id")
+            if not claim_tenant:
                 return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
             # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
+            tenant_id = str(claim_tenant)
             arguments["tenant_id"] = tenant_id
 
         try:
-            payload = _dispatch(name, arguments, store)
+            payload = await _run_tool(name, arguments, settings, tenant_id, encryptor)
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -775,6 +840,11 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
@@ -782,13 +852,19 @@ def _build_http_app(settings: Settings, store: ConfigStore) -> FastAPI:
 
 
 def build_server() -> tuple[Any, Settings, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o ConfigStore e o sidecar HTTP."""
+    """Inicializa o MCP Server (stdio), settings, o Encryptor e o sidecar HTTP.
+
+    Não há mais store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS. O Encryptor
+    (master key Fernet) é validado no boot (fail-fast) e reusado por-request."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    store = _build_store(settings)
-    http_app = _build_http_app(settings, store)
-    _log.info("config_mcp_ready tools=%d store=%s", len(_TOOL_SCHEMAS), settings.store_path)
+    encryptor = _build_encryptor(settings)  # fail-fast: valida a master key Fernet
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    http_app = _build_http_app(settings, encryptor)
+    _log.info("config_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("config-mcp-server")
 
@@ -801,14 +877,28 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, store)
-        except KeyError:
+        # O transporte stdio não carrega o inner token (logo, sem tenant). As tools
+        # tenant-scoped são gateway-only: a execução real entra pelo sidecar HTTP
+        # (/mcp/tools/call), onde o tenant vem dos claims verificados. Só as tools
+        # storeless (status/get_physical_info) — que não precisam de tenant — respondem
+        # no stdio; as demais recusam fail-closed.
+        if name in _STORELESS_TOOLS:
+            try:
+                payload = await _dispatch_storeless(name)
+            except Exception as exc:  # noqa: BLE001
+                payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+                _log.exception("tool_internal_error: %s", name)
+        elif name in _TOOL_SCHEMAS:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "config-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
+        else:
             payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     return server, settings, http_app

@@ -15,7 +15,7 @@ from dataclasses import replace as dc_replace
 from datetime import UTC, datetime
 from typing import Any
 
-from ..db.token_store import TokenStore
+from ..db.store import TokenStore
 from ..knowledge.session import (
     SessionManager,
     UserSession,
@@ -39,11 +39,11 @@ _COMPACT_WARN_CALLS = 80  # aviso
 _COMPACT_URGE_CALLS = 150  # recomendação forte
 
 
-def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
+async def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
     """Autentica o usuário/agente e inicializa a sessão.
 
     PRIMEIRA TOOL A SER CHAMADA em toda sessão. Valida o token contra
-    a tabela de tokens e carrega o perfil do usuário.
+    a tabela de tokens (tenant-scoped) e carrega o perfil do usuário.
 
     Contexto de ambiente (git, OS) é coletado de forma lazy em get_twin_context()
     — authenticate() retorna em ~100ms sem bloquear.
@@ -51,7 +51,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
     Args:
         token: Token do usuário/agente (TWIN_TOKEN do ambiente).
     """
-    record = store.validate(token)
+    record = await store.validate(token)
     if not record:
         return {
             "authenticated": False,
@@ -74,7 +74,7 @@ def authenticate(store: TokenStore, token: str) -> dict[str, Any]:
         context={},  # contexto coletado de forma lazy em get_twin_context()
     )
     SessionManager.set(session)
-    store.touch(record["user_id"])
+    await store.touch(record["user_id"])
 
     # --- Load env config from config-mcp (non-blocking) ---
     env_config_loaded = False

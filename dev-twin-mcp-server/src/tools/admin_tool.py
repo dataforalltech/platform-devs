@@ -13,7 +13,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
-from ..db.token_store import TokenStore
+from ..db.store import TokenStore
 
 
 def _check_admin(admin_token: str, provided: str) -> dict[str, Any] | None:
@@ -28,7 +28,7 @@ def _check_admin(admin_token: str, provided: str) -> dict[str, Any] | None:
     return None
 
 
-def register_token(
+async def register_token(
     store: TokenStore,
     admin_token_configured: str,
     admin_token: str,
@@ -44,7 +44,7 @@ def register_token(
     if err := _check_admin(admin_token_configured, admin_token):
         return err
 
-    record = store.register(
+    record = await store.register(
         name=name,
         email=email,
         role=role,
@@ -66,7 +66,7 @@ def register_token(
     }
 
 
-def revoke_token(
+async def revoke_token(
     store: TokenStore,
     admin_token_configured: str,
     admin_token: str,
@@ -76,7 +76,7 @@ def revoke_token(
     if err := _check_admin(admin_token_configured, admin_token):
         return err
 
-    result = store.revoke(identifier)
+    result = await store.revoke(identifier)
     return {
         "success": result["revoked"],
         "identifier": identifier,
@@ -84,7 +84,7 @@ def revoke_token(
     }
 
 
-def rotate_token(
+async def rotate_token(
     store: TokenStore,
     admin_token_configured: str,
     admin_token: str,
@@ -95,7 +95,7 @@ def rotate_token(
         return err
 
     try:
-        record = store.rotate(identifier)
+        record = await store.rotate(identifier)
         return {
             "success": True,
             "new_token": record["token"],
@@ -107,7 +107,7 @@ def rotate_token(
         return {"success": False, "error": str(exc)}
 
 
-def list_tokens(
+async def list_tokens(
     store: TokenStore,
     admin_token_configured: str,
     admin_token: str,
@@ -119,5 +119,5 @@ def list_tokens(
     if err := _check_admin(admin_token_configured, admin_token):
         return err
 
-    records = store.list_all(include_revoked=include_revoked, limit=limit, offset=offset)
+    records = await store.list_all(include_revoked=include_revoked, limit=limit, offset=offset)
     return {"tokens": records, "count": len(records)}

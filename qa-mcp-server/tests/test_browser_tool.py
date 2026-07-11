@@ -1,9 +1,20 @@
+"""Tools de browser (async) contra MySQL real (§16 / FID-02).
+
+O banco (store) é REAL (tenant-scoped); o Playwright síncrono e o Pillow são mockados
+(FID-01 — duplo de serviço/lib externa)."""
+
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from src.tools.browser_tool import check_accessibility, screenshot_page, visual_regression
+
+from .conftest import requires_mysql
+
+pytestmark = [pytest.mark.integration, requires_mysql]
 
 
 def _make_playwright_mock(page_evaluate_return: dict | None = None):
@@ -36,11 +47,11 @@ def _make_playwright_mock(page_evaluate_return: dict | None = None):
     return sync_pw_cm, page
 
 
-def test_screenshot_page_desktop(store, settings, tmp_path):
+async def test_screenshot_page_desktop(store_a, settings, tmp_path):
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(update={"screenshots_dir": str(tmp_path)})
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = screenshot_page(store, settings, url="http://example.com")
+        result = await screenshot_page(store_a, settings, url="http://example.com")
     assert result["width"] == 1280
     assert result["height"] == 720
     assert result["viewport"] == "desktop"
@@ -49,35 +60,35 @@ def test_screenshot_page_desktop(store, settings, tmp_path):
     assert "run_id" in result
 
 
-def test_screenshot_page_mobile(store, settings, tmp_path):
+async def test_screenshot_page_mobile(store_a, settings, tmp_path):
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(update={"screenshots_dir": str(tmp_path)})
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = screenshot_page(store, settings, url="http://example.com", viewport="mobile")
+        result = await screenshot_page(store_a, settings, url="http://example.com", viewport="mobile")
     assert result["width"] == 375
     assert result["height"] == 812
     assert result["viewport"] == "mobile"
 
 
-def test_screenshot_page_with_selector(store, settings, tmp_path):
+async def test_screenshot_page_with_selector(store_a, settings, tmp_path):
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(update={"screenshots_dir": str(tmp_path)})
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = screenshot_page(store, settings, url="http://example.com", selector="nav.header")
+        result = await screenshot_page(store_a, settings, url="http://example.com", selector="nav.header")
     assert result["selector"] == "nav.header"
     # element screenshot should be called
     page.locator.assert_called_once_with("nav.header")
 
 
-def test_screenshot_playwright_not_installed(store, settings, tmp_path):
+async def test_screenshot_playwright_not_installed(store_a, settings, tmp_path):
     settings = settings.model_copy(update={"screenshots_dir": str(tmp_path)})
     with patch("src.tools.browser_tool.sync_playwright", None):
-        result = screenshot_page(store, settings, url="http://example.com")
+        result = await screenshot_page(store_a, settings, url="http://example.com")
     assert result["error"] == "playwright_not_installed"
     assert "playwright install" in result["details"]
 
 
-def test_check_accessibility_no_violations(store, settings):
+async def test_check_accessibility_no_violations(store_a, settings):
     sync_pw_cm, page = _make_playwright_mock(
         page_evaluate_return={
             "violations": [],
@@ -86,14 +97,14 @@ def test_check_accessibility_no_violations(store, settings):
         }
     )
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = check_accessibility(store, settings, url="http://example.com")
+        result = await check_accessibility(store_a, settings, url="http://example.com")
     assert result["violations_count"] == 0
     assert result["passes_count"] == 2
     assert result["violations"] == []
     assert "run_id" in result
 
 
-def test_check_accessibility_with_violations(store, settings):
+async def test_check_accessibility_with_violations(store_a, settings):
     sync_pw_cm, page = _make_playwright_mock(
         page_evaluate_return={
             "violations": [
@@ -110,7 +121,7 @@ def test_check_accessibility_with_violations(store, settings):
         }
     )
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = check_accessibility(store, settings, url="http://example.com")
+        result = await check_accessibility(store_a, settings, url="http://example.com")
     assert result["violations_count"] == 1
     assert result["incomplete_count"] == 1
     assert result["violations"][0]["id"] == "color-contrast"
@@ -118,7 +129,7 @@ def test_check_accessibility_with_violations(store, settings):
     assert result["violations"][0]["impact"] == "serious"
 
 
-def test_visual_regression_baseline_created(store, settings, tmp_path):
+async def test_visual_regression_baseline_created(store_a, settings, tmp_path):
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(
         update={
@@ -135,13 +146,15 @@ def test_visual_regression_baseline_created(store, settings, tmp_path):
     page.screenshot.side_effect = fake_screenshot
 
     with patch("src.tools.browser_tool.sync_playwright", return_value=sync_pw_cm):
-        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
+        result = await visual_regression(
+            store_a, settings, url="http://example.com", baseline_name="homepage"
+        )
     assert result["action"] == "baseline_created"
     assert result["match"] is True
     assert "run_id" in result
 
 
-def test_visual_regression_match(store, settings, tmp_path):
+async def test_visual_regression_match(store_a, settings, tmp_path):
     """Pillow mock: diff_pct=0.1, match=True."""
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(
@@ -185,14 +198,16 @@ def test_visual_regression_match(store, settings, tmp_path):
         mock_image_mod.LANCZOS = 1
         mock_chops.difference.return_value = mock_diff
 
-        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
+        result = await visual_regression(
+            store_a, settings, url="http://example.com", baseline_name="homepage"
+        )
 
     assert result["match"] is True
     assert result["diff_pct"] <= 2.0
     assert result["action"] == "compared"
 
 
-def test_visual_regression_mismatch(store, settings, tmp_path):
+async def test_visual_regression_mismatch(store_a, settings, tmp_path):
     """diff_pct=10.5, match=False."""
     sync_pw_cm, page = _make_playwright_mock()
     settings = settings.model_copy(
@@ -235,7 +250,9 @@ def test_visual_regression_mismatch(store, settings, tmp_path):
         mock_image_mod.LANCZOS = 1
         mock_chops.difference.return_value = mock_diff
 
-        result = visual_regression(store, settings, url="http://example.com", baseline_name="homepage")
+        result = await visual_regression(
+            store_a, settings, url="http://example.com", baseline_name="homepage"
+        )
 
     assert result["match"] is False
     assert result["diff_pct"] > 2.0

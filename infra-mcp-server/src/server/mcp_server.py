@@ -12,8 +12,9 @@ Pontos gateway-ready:
      JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
      inner token chega em params._meta.twin_token.
   3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
-     cliente (SEC-035 / INV-3). As tools de infra não o consomem (é só p/
-     governança), então o dispatcher o remove antes de chamar a função.
+     cliente (SEC-035 / INV-3). As tools de allocator são tenant-scoped (o store abre a
+     sessão do tenant resolvida dos claims); as tools compute-only (terraform/checkov/
+     infracost) não tocam dados do tenant.
   4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
   5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
 
@@ -22,10 +23,13 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: infra-mcp NÃO fala com um Trinity backend/REST — as tools operam sobre CLIs
-locais (terraform/checkov/infracost) e um allocator SQLite embarcado
-(``AllocatorStore``). O dispatcher recebe (settings, allocator) e injeta ambos nas
-tools — preservando a lógica original de src/tools/.
+NOTA: infra-mcp NÃO fala com um Trinity backend/REST. As 6 tools compute-only
+(terraform/checkov/infracost) operam sobre CLIs locais (rodam em thread via
+``asyncio.to_thread``). As 9 tools do **allocator** persistem 100% sobre o ORM canônico,
+**tenant-scoped e dual-db**: por-request o server resolve o pool do tenant (credencial-zero
+via ``for_tenant``), garante o schema (1x/tenant) e constrói um ``AllocatorStore`` ligado à
+``TenantSession``. O provisioner (terraform/mock) e o segredo Fernet vivem no nível de
+processo. stdio é gateway-only (recusa fail-closed): a execução real entra pelo sidecar HTTP.
 """
 
 from __future__ import annotations
@@ -40,12 +44,17 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.secrets import load_secret
 from ..config.settings import Settings, get_settings
 from ..db.allocator_store import AllocatorPolicy, AllocatorStore
-from ..db.provisioner import ImmediateProvisioner, TerraformProvisioner
+from ..db.provisioner import ImmediateProvisioner, Provisioner, TerraformProvisioner
+from ..db.schema import ensure_schema
 from ..tools import (
     cancel_queued_request,
     cost_estimate_infracost,
@@ -441,23 +450,30 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     )
 
 
-# ── Dispatcher (backend-backed: settings + allocator injetados nas tools) ─────
+# ── Dispatchers (compute-only sync × allocator async tenant-scoped) ───────────
+
+# As 9 tools do allocator são async e tenant-scoped (recebem um AllocatorStore ligado à
+# TenantSession do request). As 6 compute-only são sync (rodam CLIs) e recebem só settings.
+_ALLOCATOR_TOOLS: frozenset[str] = frozenset(
+    {
+        "request_vm",
+        "get_lease",
+        "release_lease",
+        "extend_lease",
+        "list_my_leases",
+        "list_pool",
+        "query_capacity",
+        "get_lease_ssh_key",
+        "cancel_queued_request",
+    }
+)
 
 
-def _dispatch(
-    name: str,
-    args: dict[str, Any],
-    settings: Settings,
-    allocator: AllocatorStore,
-) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool, preservando as assinaturas
-    originais ``tool(settings, ...)`` (terraform/checkov/infracost) e
-    ``tool(allocator, ...)`` (allocator).
+def _dispatch_compute(name: str, a: dict[str, Any], settings: Settings) -> dict[str, Any]:
+    """Despacha as tools compute-only (terraform/checkov/infracost) — ``tool(settings, ...)``.
 
-    ``tenant_id`` é injetado pelo PEP nos args (INV-3) apenas para governança; as
-    tools de infra não o consomem, então é removido antes da chamada.
+    Roda em thread (``asyncio.to_thread``) para não bloquear o event loop com subprocessos.
     """
-    a = {k: v for k, v in args.items() if k != "tenant_id"}
     if name == "terraform_validate":
         return terraform_validate(settings, path=a.get("path"))
     if name == "terraform_fmt_check":
@@ -485,10 +501,14 @@ def _dispatch(
             delta_usd_threshold=a.get("delta_usd_threshold"),
             delta_pct_threshold=a.get("delta_pct_threshold"),
         )
-    # ---- Phase 2a — VM allocator ----
+    raise KeyError(name)
+
+
+async def _dispatch_allocator(name: str, a: dict[str, Any], store: AllocatorStore) -> dict[str, Any]:
+    """Despacha as tools do allocator (async). O ``store`` já está ligado ao pool do tenant."""
     if name == "request_vm":
-        return request_vm(
-            allocator,
+        return await request_vm(
+            store,
             spec=cast(str, a.get("spec")),
             duration_min=cast(int, a.get("duration_min")),
             owner=cast(str, a.get("owner")),
@@ -498,36 +518,82 @@ def _dispatch(
             human_approved=a.get("human_approved", False),
         )
     if name == "get_lease":
-        return get_lease(allocator, lease_id=cast(str, a.get("lease_id")))
+        return await get_lease(store, lease_id=cast(str, a.get("lease_id")))
     if name == "release_lease":
-        return release_lease(allocator, lease_id=cast(str, a.get("lease_id")), by=a.get("by"))
+        return await release_lease(store, lease_id=cast(str, a.get("lease_id")), by=a.get("by"))
     if name == "extend_lease":
-        return extend_lease(
-            allocator,
+        return await extend_lease(
+            store,
             lease_id=cast(str, a.get("lease_id")),
             additional_min=cast(int, a.get("additional_min")),
         )
     if name == "list_my_leases":
-        return list_my_leases(allocator, owner=cast(str, a.get("owner")), status=a.get("status"))
+        return await list_my_leases(store, owner=cast(str, a.get("owner")), status=a.get("status"))
     if name == "list_pool":
-        return list_pool(allocator)
+        return await list_pool(store)
     if name == "query_capacity":
-        return query_capacity(allocator, spec=cast(str, a.get("spec")), owner=a.get("owner"))
+        return await query_capacity(store, spec=cast(str, a.get("spec")), owner=a.get("owner"))
     if name == "get_lease_ssh_key":
-        return get_lease_ssh_key(
-            allocator, lease_id=cast(str, a.get("lease_id")), owner=cast(str, a.get("owner"))
+        return await get_lease_ssh_key(
+            store, lease_id=cast(str, a.get("lease_id")), owner=cast(str, a.get("owner"))
         )
-    # ---- Phase 2h — priority queue ----
     if name == "cancel_queued_request":
-        return cancel_queued_request(allocator, request_id=cast(str, a.get("request_id")), by=a.get("by"))
+        return await cancel_queued_request(store, request_id=cast(str, a.get("request_id")), by=a.get("by"))
     raise KeyError(name)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: Settings, tenant_id: str) -> None:
+    """Garante as tabelas do allocator no banco do tenant (uma vez por processo). O engine é
+    o do dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str,
+    arguments: dict[str, Any],
+    settings: Settings,
+    tenant_id: str,
+    provisioner: Provisioner,
+    fernet_key: bytes | None,
+) -> dict[str, Any]:
+    """Executa uma tool. Allocator → abre sessão tenant-scoped (credencial-zero) + schema;
+    compute-only → roda o CLI em thread."""
+    if name in _ALLOCATOR_TOOLS:
+        await _ensure_tenant_schema(settings, tenant_id)
+        async with for_tenant(tenant_id) as session:
+            store = AllocatorStore(
+                session,
+                provisioner=provisioner,
+                policy=AllocatorPolicy(),
+                fernet_key=fernet_key,
+                tf_modules_root=settings.tf_modules_root,
+                provision_timeout_sec=settings.provision_timeout_sec,
+            )
+            return await _dispatch_allocator(name, arguments, store)
+    return await asyncio.to_thread(_dispatch_compute, name, arguments, settings)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: Settings, allocator: AllocatorStore) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: Settings, provisioner: Provisioner, fernet_key: bytes | None) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto ao store: cada chamada de tool do allocator abre uma sessão
+    tenant-scoped (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="infra-mcp API",
         version="0.1.0",
@@ -554,7 +620,7 @@ def _build_http_app(settings: Settings, allocator: AllocatorStore) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -575,11 +641,11 @@ def _build_http_app(settings: Settings, allocator: AllocatorStore) -> FastAPI:
             tenant_id = claims.get("tenant_id")
             if not tenant_id:
                 return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        else:  # pragma: no cover - infra-mcp não tem tools exempt
+            tenant_id = None
 
         try:
-            payload = _dispatch(name, arguments, settings, allocator)
+            payload = await _run_tool(name, arguments, settings, str(tenant_id), provisioner, fernet_key)
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -588,14 +654,35 @@ def _build_http_app(settings: Settings, allocator: AllocatorStore) -> FastAPI:
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def _build_allocator(settings: Settings) -> AllocatorStore:
-    """Constrói o AllocatorStore (SQLite) + provisioner (terraform real ou mock)."""
+def _stdio_refuse(name: str) -> dict[str, Any]:
+    """stdio não carrega o inner token (logo, sem tenant). infra-mcp é gateway-only: a
+    execução real entra pelo sidecar HTTP (/mcp/tools/call), onde o tenant vem dos claims
+    verificados. Aqui recusamos fail-closed (sem tenant)."""
+    if name not in _TOOL_SCHEMAS:
+        return {"error": "unknown_tool", "tool": name}
+    return {
+        "error": "tenant_context_required",
+        "tool": name,
+        "detail": (
+            "infra-mcp é gateway-only; chame via o sidecar HTTP (/mcp/tools/call) com o "
+            "inner Twin Token — o tenant (e o schema do allocator) vem dos claims."
+        ),
+    }
+
+
+def _build_provisioner(settings: Settings) -> Provisioner:
+    """Constrói o provisioner (terraform real ou mock) — nível de processo, stateless."""
     if settings.tf_modules_root is not None:
         backend_config: dict[str, str] = {}
         if settings.tf_backend_config_json:
@@ -606,7 +693,7 @@ def _build_allocator(settings: Settings) -> AllocatorStore:
                     "backend_config_json_parse_error",
                     extra={"extras": {"raw": settings.tf_backend_config_json[:200]}},
                 )
-        provisioner: Any = TerraformProvisioner(
+        provisioner: Provisioner = TerraformProvisioner(
             terraform_bin=settings.terraform_bin,
             backend_type=settings.tf_backend_type,
             backend_config=backend_config,
@@ -626,38 +713,30 @@ def _build_allocator(settings: Settings) -> AllocatorStore:
     else:
         provisioner = ImmediateProvisioner()
         _log.info("provisioner_immediate", extra={"extras": {}})
-
-    # Segredo Fernet (cifra chaves SSH): Vault-fallback → env (STD-SEC-004).
-    lease_secret = load_secret("INFRA_LEASE_SECRET", env_fallback=settings.lease_secret)
-    allocator = AllocatorStore(
-        db_path=settings.db_path,
-        policy=AllocatorPolicy(),
-        provisioner=provisioner,
-        tf_modules_root=settings.tf_modules_root,
-        provision_timeout_sec=settings.provision_timeout_sec,
-        lease_secret=lease_secret,
-    )
-    _log.info(
-        "allocator_ready",
-        extra={
-            "extras": {
-                "db_path": settings.db_path,
-                "provisioner": type(provisioner).__name__,
-                "max_cost_usd_per_hour": allocator.policy.max_cost_usd_per_hour,
-            }
-        },
-    )
-    return allocator
+    return provisioner
 
 
-def build_server() -> tuple[Any, Settings, AllocatorStore, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o allocator e o sidecar HTTP."""
+def build_server() -> tuple[Any, Settings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há store global: a persistência do allocator é tenant-scoped e resolvida
+    por-request (credencial-zero). ``orm.configure(settings)`` registra a fonte admin
+    (ADMIN_DB_*) usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()
     configure_logging(settings)
-    allocator = _build_allocator(settings)
-    http_app = _build_http_app(settings, allocator)
-    _log.info("infra_mcp_ready", extra={"extras": {"tools": len(_TOOL_SCHEMAS)}})
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+
+    provisioner = _build_provisioner(settings)
+    # Segredo Fernet (cifra chaves SSH): Vault-fallback → env (STD-SEC-004).
+    fernet_raw = load_secret("INFRA_LEASE_SECRET", env_fallback=settings.lease_secret)
+    fernet_key = fernet_raw.encode() if fernet_raw else None
+
+    http_app = _build_http_app(settings, provisioner, fernet_key)
+    _log.info(
+        "infra_mcp_ready",
+        extra={"extras": {"tools": len(_TOOL_SCHEMAS), "engine": settings.DB_ENGINE}},
+    )
 
     server: Server = Server("infra-mcp-server")
 
@@ -670,17 +749,10 @@ def build_server() -> tuple[Any, Settings, AllocatorStore, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, settings, allocator)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error", extra={"extras": {"tool": name}})
+        payload = _stdio_refuse(name)
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, settings, allocator, http_app
+    return server, settings, http_app
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -690,7 +762,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, settings, _allocator, http_app = build_server()
+    server, settings, http_app = build_server()
     cfg = uvicorn.Config(
         http_app,
         host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
@@ -714,7 +786,7 @@ def main() -> None:
     if os.getenv("MCP_HTTP_ONLY", "0") == "1":
         import uvicorn
 
-        _server, settings, _allocator, http_app = build_server()
+        _server, settings, http_app = build_server()
         uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
         return
     asyncio.run(_run())

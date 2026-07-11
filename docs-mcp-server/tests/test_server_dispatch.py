@@ -1,11 +1,16 @@
+"""Roteamento do `_dispatch` (async) + integridade do catálogo `_TOOL_SCHEMAS`.
+
+As 10 tools compute-only roteiam com ``store=None`` (herméticas); as 4 tools de
+persistência (scan_docs/audit_repo/get_audit_history/generate_doc_report) roteiam
+contra MySQL real (@integration)."""
+
 from __future__ import annotations
 
 import pytest
 
-from src.config.settings import DocsSettings
 from src.server.mcp_server import _TOOL_SCHEMAS, _dispatch
 
-from .conftest import FakeDocsStore
+from .conftest import requires_mysql
 
 _EXPECTED_TOOLS = {
     "scan_docs",
@@ -24,26 +29,17 @@ _EXPECTED_TOOLS = {
     "generate_doc_report",
 }
 
-
-@pytest.fixture
-def dispatch_store():
-    s = FakeDocsStore()
-    yield s
-    s.close()
+_README = ("# Svc\n\n## Installation\n\nInstall it.\n\n## Usage\n\nUse it.\n") * 6
+_CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
 
 
-@pytest.fixture
-def dispatch_settings():
-    return DocsSettings(
-        stale_days_threshold=90,
-        check_external_links=False,
-        http_timeout=5.0,
-    )
+def _seed_repo(tmp_path):
+    (tmp_path / "README.md").write_text(_README, encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text(_CHANGELOG, encoding="utf-8")
+    return tmp_path
 
 
-# ---------- Schema tests ----------
-
-
+# ── Schema / catálogo (sem dispatch) ──────────────────────────────────────────
 def test_all_tools_registered():
     assert set(_TOOL_SCHEMAS.keys()) == _EXPECTED_TOOLS
 
@@ -66,158 +62,127 @@ def test_required_fields_in_properties():
             assert req_field in props, f"{name}: required field '{req_field}' not in properties"
 
 
-def test_unknown_tool_raises_key_error(dispatch_store, dispatch_settings):
+# ── Dispatch hermético (compute-only, store=None) ─────────────────────────────
+async def test_unknown_tool_raises_key_error(settings):
     with pytest.raises(KeyError):
-        _dispatch("does_not_exist", {}, dispatch_settings, dispatch_store)
+        await _dispatch("does_not_exist", {}, settings, None)
 
 
-# ---------- Dispatch tests ----------
-
-
-def test_list_templates_dispatch(dispatch_store, dispatch_settings):
-    """list_templates sem args → count=6."""
-    result = _dispatch("list_templates", {}, dispatch_settings, dispatch_store)
+async def test_list_templates_dispatch(settings):
+    result = await _dispatch("list_templates", {}, settings, None)
     assert result["count"] == 6
     assert len(result["templates"]) == 6
 
 
-def test_check_required_docs_dispatch(dispatch_store, dispatch_settings, tmp_path):
-    """check_required_docs com tmp_repo → passed status presente."""
-    (tmp_path / "README.md").write_text("# Readme\n\nContent\n", encoding="utf-8")
-    (tmp_path / "CHANGELOG.md").write_text(
-        "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n",
-        encoding="utf-8",
-    )
-
-    result = _dispatch(
+async def test_check_required_docs_dispatch(settings, tmp_path):
+    _seed_repo(tmp_path)
+    result = await _dispatch(
         "check_required_docs",
         {"repo_path": str(tmp_path), "standard": "standard"},
-        dispatch_settings,
-        dispatch_store,
+        settings,
+        None,
     )
-
     assert "passed" in result
     assert "present" in result
     assert "missing" in result
 
 
-def test_scan_docs_dispatch_missing_repo(dispatch_store, dispatch_settings):
-    result = _dispatch("scan_docs", {}, dispatch_settings, dispatch_store)
+async def test_scan_docs_dispatch_missing_repo(settings):
+    result = await _dispatch("scan_docs", {}, settings, None)
     assert result["error"] == "ValidationError"
 
 
-def test_search_docs_dispatch_missing_query(dispatch_store, dispatch_settings, tmp_path):
-    result = _dispatch(
-        "search_docs",
-        {"repo_path": str(tmp_path)},
-        dispatch_settings,
-        dispatch_store,
-    )
+async def test_search_docs_dispatch_missing_query(settings, tmp_path):
+    result = await _dispatch("search_docs", {"repo_path": str(tmp_path)}, settings, None)
     assert result["error"] == "ValidationError"
 
 
-def test_validate_doc_dispatch_missing_file(dispatch_store, dispatch_settings):
-    result = _dispatch("validate_doc", {}, dispatch_settings, dispatch_store)
+async def test_validate_doc_dispatch_missing_file(settings):
+    result = await _dispatch("validate_doc", {}, settings, None)
     assert result["error"] == "ValidationError"
 
 
-def test_generate_doc_dispatch_invalid_template(dispatch_store, dispatch_settings):
-    result = _dispatch(
-        "generate_doc",
-        {"template_name": "FAKE", "variables": {}},
-        dispatch_settings,
-        dispatch_store,
-    )
+async def test_generate_doc_dispatch_invalid_template(settings):
+    result = await _dispatch("generate_doc", {"template_name": "FAKE", "variables": {}}, settings, None)
     assert result["error"] == "ValidationError"
 
 
-def test_get_audit_history_dispatch_empty(dispatch_store, dispatch_settings):
-    result = _dispatch("get_audit_history", {}, dispatch_settings, dispatch_store)
-    assert result["total"] == 0
-    assert result["audits"] == []
-
-
-# ---------- Dispatch routing for every remaining tool ----------
-
-_README = ("# Svc\n\n## Installation\n\nInstall it.\n\n## Usage\n\nUse it.\n") * 6
-_CHANGELOG = "# Changelog\n\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n\n### Added\n- Initial\n"
-
-
-def _seed_repo(tmp_path):
-    (tmp_path / "README.md").write_text(_README, encoding="utf-8")
-    (tmp_path / "CHANGELOG.md").write_text(_CHANGELOG, encoding="utf-8")
-    return tmp_path
-
-
-def test_scan_docs_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_search_docs_dispatch_ok(settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch("scan_docs", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
-    assert result["total"] == 2
-
-
-def test_search_docs_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
-    _seed_repo(tmp_path)
-    result = _dispatch(
-        "search_docs",
-        {"repo_path": str(tmp_path), "query": "Install"},
-        dispatch_settings,
-        dispatch_store,
-    )
+    result = await _dispatch("search_docs", {"repo_path": str(tmp_path), "query": "Install"}, settings, None)
     assert result["total_matches"] >= 1
 
 
-def test_get_doc_tree_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_get_doc_tree_dispatch_ok(settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch("get_doc_tree", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("get_doc_tree", {"repo_path": str(tmp_path)}, settings, None)
     assert result["summary"]["total_files"] == 2
 
 
-def test_validate_doc_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_validate_doc_dispatch_ok(settings, tmp_path):
     f = tmp_path / "README.md"
     f.write_text(_README, encoding="utf-8")
-    result = _dispatch("validate_doc", {"file_path": str(f)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("validate_doc", {"file_path": str(f)}, settings, None)
     assert result["doc_type"] == "readme"
 
 
-def test_check_links_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_check_links_dispatch_ok(settings, tmp_path):
     f = tmp_path / "README.md"
     f.write_text("# R\n\nSee [x](https://example.com)\n", encoding="utf-8")
-    result = _dispatch("check_links", {"file_path": str(f)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("check_links", {"file_path": str(f)}, settings, None)
     assert result["total_links"] == 1
 
 
-def test_lint_markdown_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_lint_markdown_dispatch_ok(settings, tmp_path):
     f = tmp_path / "doc.md"
     f.write_text("# Title\n\n## Section\n\nContent.\n", encoding="utf-8")
-    result = _dispatch("lint_markdown", {"file_path": str(f)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("lint_markdown", {"file_path": str(f)}, settings, None)
     assert result["passed"] is True
 
 
-def test_check_doc_standards_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_check_doc_standards_dispatch_ok(settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch("check_doc_standards", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("check_doc_standards", {"repo_path": str(tmp_path)}, settings, None)
     assert "overall_score" in result
 
 
-def test_audit_repo_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+async def test_find_stale_docs_dispatch_ok(settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch("audit_repo", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
-    assert "audit_id" in result
-
-
-def test_find_stale_docs_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
-    _seed_repo(tmp_path)
-    result = _dispatch(
-        "find_stale_docs",
-        {"repo_path": str(tmp_path), "days_threshold": 5},
-        dispatch_settings,
-        dispatch_store,
+    result = await _dispatch(
+        "find_stale_docs", {"repo_path": str(tmp_path), "days_threshold": 5}, settings, None
     )
     assert "stale_count" in result
 
 
-def test_generate_doc_report_dispatch_ok(dispatch_store, dispatch_settings, tmp_path):
+# ── Dispatch com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_get_audit_history_dispatch_empty(store_a, settings):
+    result = await _dispatch("get_audit_history", {}, settings, store_a)
+    assert result["total"] == 0
+    assert result["audits"] == []
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_scan_docs_dispatch_ok(store_a, settings, tmp_path):
     _seed_repo(tmp_path)
-    result = _dispatch("generate_doc_report", {"repo_path": str(tmp_path)}, dispatch_settings, dispatch_store)
+    result = await _dispatch("scan_docs", {"repo_path": str(tmp_path)}, settings, store_a)
+    assert result["total"] == 2
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_audit_repo_dispatch_ok(store_a, settings, tmp_path):
+    _seed_repo(tmp_path)
+    result = await _dispatch("audit_repo", {"repo_path": str(tmp_path)}, settings, store_a)
+    assert "audit_id" in result
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_generate_doc_report_dispatch_ok(store_a, settings, tmp_path):
+    _seed_repo(tmp_path)
+    result = await _dispatch("generate_doc_report", {"repo_path": str(tmp_path)}, settings, store_a)
     assert "score" in result
     assert "trend" in result

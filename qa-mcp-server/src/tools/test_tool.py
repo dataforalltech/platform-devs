@@ -1,5 +1,14 @@
+"""Tools de teste (unit/e2e) — async, ORM-backed.
+
+O trabalho pesado e bloqueante (subprocess de pytest/jest/playwright) roda em
+`asyncio.to_thread` (não trava o event loop do sidecar); só a persistência
+(`await store.save_run(...)`) fica no contexto async. O store é tenant-scoped
+(ORM canônico, dual-db) — resolvido credencial-zero por-request.
+"""
+
 from __future__ import annotations
 
+import asyncio
 import re
 import subprocess
 import time
@@ -41,23 +50,22 @@ def _parse_jest_output(output: str) -> dict[str, int]:
     return {"passed": passed, "failed": failed, "errors": 0, "skipped": 0}
 
 
-def run_unit_tests(
-    store: Any,
+def _run_unit_tests_blocking(
     settings: Any,
     *,
     repo_path: str,
-    framework: str = "auto",
-    test_path: str = ".",
-    coverage: bool = False,
-    timeout: int | None = None,
-) -> dict:
-    """Roda pytest ou jest no repo e retorna resultado estruturado."""
+    framework: str,
+    test_path: str,
+    coverage: bool,
+    timeout: int | None,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de run_unit_tests. Retorna (resposta, kwargs de persistência|None)."""
     if not repo_path:
         return {
             "error": "ValidationError",
             "details": "repo_path is required",
             "tool": "run_unit_tests",
-        }
+        }, None
 
     p = Path(repo_path)
     if not p.exists():
@@ -65,7 +73,7 @@ def run_unit_tests(
             "error": "ValidationError",
             "details": f"repo_path does not exist: {repo_path}",
             "tool": "run_unit_tests",
-        }
+        }, None
 
     actual_framework = framework if framework != "auto" else _detect_framework(repo_path)
     timeout_sec = timeout if timeout is not None else settings.subprocess_timeout
@@ -91,14 +99,14 @@ def run_unit_tests(
             "error": "timeout",
             "details": f"Test run exceeded {timeout_sec}s",
             "tool": "run_unit_tests",
-        }
+        }, None
     except FileNotFoundError as exc:
         return {
             "error": "tool_not_found",
             "tool": actual_framework,
             "hint": "pip install pytest" if actual_framework == "pytest" else "npm install jest",
             "details": str(exc),
-        }
+        }, None
 
     duration_ms = int((time.monotonic() - start) * 1000)
     output = (result.stdout + "\n" + result.stderr)[:5000]
@@ -125,42 +133,65 @@ def run_unit_tests(
         if cov is not None:
             ret["coverage_pct"] = cov
 
-    run_id = store.save_run(
-        run_type="unit",
-        status=status,
-        summary={k: counts[k] for k in ("passed", "failed", "errors", "skipped")},
-        details={"output": output[:500]},
+    persist = {
+        "run_type": "unit",
+        "status": status,
+        "summary": {k: counts[k] for k in ("passed", "failed", "errors", "skipped")},
+        "details": {"output": output[:500]},
+        "repo_path": repo_path,
+        "framework": actual_framework,
+        "duration_ms": duration_ms,
+    }
+    return ret, persist
+
+
+async def run_unit_tests(
+    store: Any,
+    settings: Any,
+    *,
+    repo_path: str,
+    framework: str = "auto",
+    test_path: str = ".",
+    coverage: bool = False,
+    timeout: int | None = None,
+) -> dict:
+    """Roda pytest ou jest no repo e retorna resultado estruturado."""
+    ret, persist = await asyncio.to_thread(
+        _run_unit_tests_blocking,
+        settings,
         repo_path=repo_path,
-        framework=actual_framework,
-        duration_ms=duration_ms,
+        framework=framework,
+        test_path=test_path,
+        coverage=coverage,
+        timeout=timeout,
     )
-    ret["run_id"] = run_id
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
     return ret
 
 
-def run_e2e_tests(
-    store: Any,
+def _run_e2e_tests_blocking(
     settings: Any,
     *,
     test_path: str,
     base_url: str,
-    browser: str = "chromium",
-    headless: bool = True,
-    timeout: int | None = None,
-) -> dict:
-    """Roda testes Playwright (test_*.py ou *.spec.ts) em test_path."""
+    browser: str,
+    headless: bool,
+    timeout: int | None,
+) -> tuple[dict, dict[str, Any] | None]:
+    """Corpo bloqueante de run_e2e_tests. Retorna (resposta, kwargs de persistência|None)."""
     if not base_url:
         return {
             "error": "ValidationError",
             "details": "base_url is required",
             "tool": "run_e2e_tests",
-        }
+        }, None
     if not test_path:
         return {
             "error": "ValidationError",
             "details": "test_path is required",
             "tool": "run_e2e_tests",
-        }
+        }, None
 
     timeout_sec = timeout if timeout is not None else settings.subprocess_timeout
 
@@ -206,14 +237,14 @@ def run_e2e_tests(
             "error": "timeout",
             "details": f"E2E test run exceeded {timeout_sec}s",
             "tool": "run_e2e_tests",
-        }
+        }, None
     except FileNotFoundError as exc:
         return {
             "error": "tool_not_found",
             "tool": "playwright",
             "hint": "pip install playwright && playwright install",
             "details": str(exc),
-        }
+        }, None
 
     duration_ms = int((time.monotonic() - start) * 1000)
     output = (result.stdout + "\n" + result.stderr)[:5000]
@@ -233,16 +264,7 @@ def run_e2e_tests(
     if result.returncode not in (0, 1):
         status = "error"
 
-    run_id = store.save_run(
-        run_type="e2e",
-        status=status,
-        summary={"passed": passed, "failed": failed},
-        details={"output": output[:500], "base_url": base_url},
-        framework="playwright",
-        duration_ms=duration_ms,
-    )
-
-    return {
+    ret = {
         "browser": browser,
         "base_url": base_url,
         "passed": passed,
@@ -250,5 +272,38 @@ def run_e2e_tests(
         "duration_ms": duration_ms,
         "output": output,
         "status": status,
-        "run_id": run_id,
     }
+    persist = {
+        "run_type": "e2e",
+        "status": status,
+        "summary": {"passed": passed, "failed": failed},
+        "details": {"output": output[:500], "base_url": base_url},
+        "framework": "playwright",
+        "duration_ms": duration_ms,
+    }
+    return ret, persist
+
+
+async def run_e2e_tests(
+    store: Any,
+    settings: Any,
+    *,
+    test_path: str,
+    base_url: str,
+    browser: str = "chromium",
+    headless: bool = True,
+    timeout: int | None = None,
+) -> dict:
+    """Roda testes Playwright (test_*.py ou *.spec.ts) em test_path."""
+    ret, persist = await asyncio.to_thread(
+        _run_e2e_tests_blocking,
+        settings,
+        test_path=test_path,
+        base_url=base_url,
+        browser=browser,
+        headless=headless,
+        timeout=timeout,
+    )
+    if persist is not None:
+        ret["run_id"] = await store.save_run(**persist)
+    return ret
