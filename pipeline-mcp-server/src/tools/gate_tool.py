@@ -7,7 +7,7 @@ from ..db.store import VALID_GATE_TYPES, PipelineStore
 _log = logging.getLogger(__name__)
 
 
-def add_gate_result(
+async def add_gate_result(
     store: PipelineStore,
     service: str,
     env: str,
@@ -23,11 +23,11 @@ def add_gate_result(
             "valid_types": sorted(VALID_GATE_TYPES),
         }
 
-    pipeline = store.get_pipeline(service)
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
 
-    result = store.upsert_gate(
+    result = await store.upsert_gate(
         service=service,
         env=env,
         gate_type=gate_type,
@@ -38,14 +38,14 @@ def add_gate_result(
     return {"gate_recorded": True, "gate": result}
 
 
-def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
-    pipeline = store.get_pipeline(service)
+async def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
 
     gates_config: dict = pipeline.get("gates_config") or {}
     required_gates = gates_config.get(env, [])
-    gate_results = store.get_gates(service=service, env=env)
+    gate_results = await store.get_gates(service=service, env=env)
     gate_map = {g["gate_type"]: g for g in gate_results}
 
     summary = []
@@ -97,10 +97,10 @@ def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
     }
 
 
-def clear_gates(store: PipelineStore, service: str, env: str) -> dict:
-    pipeline = store.get_pipeline(service)
+async def clear_gates(store: PipelineStore, service: str, env: str) -> dict:
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
 
-    deleted = store.clear_gates(service=service, env=env)
+    deleted = await store.clear_gates(service=service, env=env)
     return {"cleared": True, "service": service, "env": env, "deleted_count": deleted}

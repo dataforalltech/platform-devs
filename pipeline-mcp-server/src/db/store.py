@@ -1,18 +1,40 @@
+"""Store do pipeline-mcp — 100% sobre o ORM canônico (`platform_database.orm`).
+
+Reescrito do psycopg2 cru para o **Repository** de alto nível + Query IR, ligado ao
+pool **do tenant** (resolvido credencial-zero via `for_tenant`/`get_pool_for_tenant`,
+ORM-H-12). Roda dual-db: o mesmo código serve MySQL (banco-por-tenant) e PostgreSQL
+(schema-por-tenant) — o dialeto do pool decide o SQL.
+
+Sem SQL manual: cada read/write cai no Repository (`find`/`insert`/`update_where`/
+`upsert`/`delete_where`). As 3 operações que "não encaixam" no CRUD trivial resolvem
+canonicamente:
+  * register por chave natural `service`  -> find_one + insert/update_where (preserva
+    a semântica: no update só troca repo/base_branch, não reseta env/gates);
+  * gate por (service, env, gate_type)     -> `upsert(conflict_columns=[...])`
+    (ON DUPLICATE KEY no MySQL / ON CONFLICT no PG);
+  * overview (contagens por env)           -> agregação em Python sobre `find().rows()`
+    (dado minúsculo; evita GROUP BY e mantém orm-lint --strict limpo).
+
+Convenções: `PLATFORM_CONVENTIONS` (soft-delete `excluded=0`, auditoria
+`id_user_*`/`timestamp_refresh`). Como `id_user_created` é NOT NULL sem default, todo
+write carimba o usuário-sistema (`_SYSTEM_USER`) — os atores de negócio (promoted_by/
+blocked_by/evaluated_by) continuam sendo strings em colunas próprias.
+"""
+
 from __future__ import annotations
 
 import json
-import logging
-import os
-import threading
-from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from typing import Any
 
-import psycopg2
-import psycopg2.extras
-import psycopg2.pool
+from platform_database.orm import Sort, SortDirection
 
-_log = logging.getLogger(__name__)
+from ..models import GateRow, PipelineRow, PromotionRow
+from .schema import GATES_TABLE, PIPELINES_TABLE, PROMOTIONS_TABLE
+
+# Usuário-sistema carimbado nas colunas de auditoria (id_user_created/id_user_modify).
+# O ator de negócio real viaja em colunas próprias (promoted_by, blocked_by, ...).
+_SYSTEM_USER = 0
 
 
 def _now() -> str:
@@ -36,206 +58,150 @@ VALID_GATE_TYPES = {
 }
 
 
-class PipelineStore:
-    def __init__(self, dsn: str | None = None, *, minconn: int = 2, maxconn: int = 10) -> None:
-        # STD-SEC-004: o DSN (com a senha resolvida via env/Vault) vem das settings.
-        # Fallback local sem credencial p/ execução direta/testes (o pool é mockado
-        # nos testes; nenhum default com cara de segredo fica no código).
-        self._pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=minconn,
-            maxconn=maxconn,
-            dsn=dsn or os.getenv("PG_DSN", "postgresql://localhost/pipeline_mcp"),
-        )
-        self._lock = threading.Lock()
-        self._migrate()
+def _jsonable(row: dict[str, Any]) -> dict[str, Any]:
+    """Converte datetimes das colunas padrão (create_on/timestamp_refresh) em ISO str,
+    para o `json.dumps` do envelope MCP não quebrar."""
+    out: dict[str, Any] = {}
+    for key, value in row.items():
+        out[key] = value.isoformat() if isinstance(value, (datetime, date)) else value
+    return out
 
-        # Initialize PostgreSQL sync layer (legacy)
-        self._postgres_sync = None
 
-    @contextmanager
-    def _get_conn(self):
-        conn = self._pool.getconn()
+def _shape_pipeline(row: dict[str, Any]) -> dict[str, Any]:
+    """Forma canônica da linha de pipeline: datetimes -> ISO, gates_config JSON -> dict."""
+    shaped = _jsonable(row)
+    gates_config = shaped.get("gates_config")
+    if isinstance(gates_config, str):
         try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            self._pool.putconn(conn)
+            shaped["gates_config"] = json.loads(gates_config)
+        except (json.JSONDecodeError, TypeError):
+            shaped["gates_config"] = {}
+    return shaped
 
-    def _migrate(self) -> None:
-        with self._get_conn() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS pipelines (
-                        service         TEXT PRIMARY KEY,
-                        repo            TEXT NOT NULL,
-                        base_branch     TEXT NOT NULL DEFAULT 'develop',
-                        current_env     TEXT NOT NULL DEFAULT 'dev',
-                        current_version TEXT,
-                        blocked         INTEGER NOT NULL DEFAULT 0,
-                        block_reason    TEXT,
-                        blocked_by      TEXT,
-                        blocked_at      TEXT,
-                        gates_config    TEXT NOT NULL DEFAULT '{}',
-                        registered_at   TEXT NOT NULL,
-                        updated_at      TEXT NOT NULL
-                    );
-                """
-                )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS promotions (
-                        id             SERIAL PRIMARY KEY,
-                        service        TEXT NOT NULL,
-                        from_env       TEXT NOT NULL,
-                        to_env         TEXT NOT NULL,
-                        promoted_by    TEXT NOT NULL,
-                        reason         TEXT,
-                        gates_snapshot TEXT,
-                        deploy_ref     TEXT,
-                        pr_number      INTEGER,
-                        pr_url         TEXT,
-                        approved_by    TEXT,
-                        approved_at    TEXT,
-                        status         TEXT NOT NULL DEFAULT 'pending',
-                        created_at     TEXT NOT NULL,
-                        completed_at   TEXT
-                    );
-                """
-                )
-                cur.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS gates (
-                        id           SERIAL PRIMARY KEY,
-                        service      TEXT NOT NULL,
-                        env          TEXT NOT NULL,
-                        gate_type    TEXT NOT NULL,
-                        passed       INTEGER NOT NULL,
-                        details      TEXT,
-                        evaluated_by TEXT,
-                        evaluated_at TEXT NOT NULL,
-                        UNIQUE(service, env, gate_type)
-                    );
-                """
-                )
 
-    # ── Pipelines ──────────────────────────────────────────────────────────── #
+class PipelineStore:
+    """Store tenant-scoped: 3 repositórios ligados ao pool do tenant.
 
-    def register_pipeline(self, service: str, repo: str, base_branch: str = "develop") -> dict:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("SELECT service FROM pipelines WHERE service=%s", (service,))
-                    existing = cur.fetchone()
-                    default_config = json.dumps(DEFAULT_GATES)
-                    if existing is None:
-                        cur.execute(
-                            """INSERT INTO pipelines
-                               (service, repo, base_branch, current_env, blocked,
-                                gates_config, registered_at, updated_at)
-                               VALUES (%s,%s,%s,%s,%s,%s,%s,%s)""",
-                            (service, repo, base_branch, "dev", 0, default_config, now, now),
-                        )
-                        action = "created"
-                    else:
-                        cur.execute(
-                            "UPDATE pipelines SET repo=%s, base_branch=%s, updated_at=%s WHERE service=%s",
-                            (repo, base_branch, now, service),
-                        )
-                        action = "updated"
-                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
-                    row = cur.fetchone()
-                    result = {"action": action, "pipeline": _pipeline_row(row)}
+    Recebe uma ``TenantSession`` (de ``platform_database.orm.for_tenant``) e cria os
+    repositórios canônicos por ela — ``require_tenant=True`` (fail-closed ORM-H-02),
+    credencial-zero (a sessão nunca expõe senha/host).
+    """
 
-        return result
+    def __init__(self, session: Any) -> None:
+        self._pipelines = session.repository(PipelineRow, table_name=PIPELINES_TABLE)
+        self._promotions = session.repository(PromotionRow, table_name=PROMOTIONS_TABLE)
+        self._gates = session.repository(GateRow, table_name=GATES_TABLE)
 
-    def get_pipeline(self, service: str) -> dict | None:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
-                    row = cur.fetchone()
-                    if row is None:
-                        return None
-                    pipeline = _pipeline_row(row)
-                    cur.execute(
-                        "SELECT * FROM promotions WHERE service=%s ORDER BY created_at DESC LIMIT 10",
-                        (service,),
-                    )
-                    promotions = cur.fetchall()
-                    pipeline["recent_promotions"] = [dict(p) for p in promotions]
-                    return pipeline
+    # -- helpers de leitura (dict cru, forma back-compat) ---------------------- #
 
-    def list_pipelines(self, env: str | None = None, status: str | None = None) -> list[dict]:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    query = "SELECT * FROM pipelines WHERE 1=1"
-                    params: list[Any] = []
-                    if env:
-                        query += " AND current_env=%s"
-                        params.append(env)
-                    if status == "blocked":
-                        query += " AND blocked=1"
-                    elif status == "active":
-                        query += " AND blocked=0"
-                    query += " ORDER BY service"
-                    cur.execute(query, params)
-                    rows = cur.fetchall()
-                    return [_pipeline_row(r) for r in rows]
+    async def _pipeline_row(self, service: str) -> dict[str, Any] | None:
+        res = await self._pipelines.find(where={"service": service}, limit=1)
+        rows = res.rows()
+        return rows[0] if rows else None
 
-    def update_pipeline_env(
-        self,
-        service: str,
-        env: str,
-        version: str | None = None,
-    ) -> None:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE pipelines SET current_env=%s, current_version=%s, updated_at=%s WHERE service=%s",  # noqa: E501
-                        (env, version, now, service),
-                    )
+    async def _promotion_row(self, promotion_id: int) -> dict[str, Any] | None:
+        res = await self._promotions.find(where={"id": promotion_id}, limit=1)
+        rows = res.rows()
+        return rows[0] if rows else None
 
-    def block_pipeline(self, service: str, reason: str, blocked_by: str) -> dict:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        """UPDATE pipelines
-                           SET blocked=1, block_reason=%s, blocked_by=%s, blocked_at=%s, updated_at=%s
-                           WHERE service=%s""",
-                        (reason, blocked_by, now, now, service),
-                    )
-                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
-                    row = cur.fetchone()
-                    result = _pipeline_row(row) if row else {}
+    async def _gate_row(self, service: str, env: str, gate_type: str) -> dict[str, Any] | None:
+        res = await self._gates.find(where={"service": service, "env": env, "gate_type": gate_type}, limit=1)
+        rows = res.rows()
+        return rows[0] if rows else None
 
-        return result
+    # -- Pipelines ------------------------------------------------------------- #
 
-    def set_gates_config(self, service: str, gates_required: dict) -> dict:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "UPDATE pipelines SET gates_config=%s, updated_at=%s WHERE service=%s",
-                        (json.dumps(gates_required), now, service),
-                    )
-                    cur.execute("SELECT * FROM pipelines WHERE service=%s", (service,))
-                    row = cur.fetchone()
-                    return _pipeline_row(row) if row else {}
+    async def register_pipeline(self, service: str, repo: str, base_branch: str = "develop") -> dict:
+        now = _now()
+        existing = await self._pipeline_row(service)
+        if existing is None:
+            await self._pipelines.insert(
+                {
+                    "service": service,
+                    "repo": repo,
+                    "base_branch": base_branch,
+                    "current_env": "dev",
+                    "blocked": 0,
+                    "gates_config": json.dumps(DEFAULT_GATES),
+                    "registered_at": now,
+                    "updated_at": now,
+                },
+                user_id=_SYSTEM_USER,
+            )
+            action = "created"
+        else:
+            # Semântica preservada: no re-register só atualiza repo/base_branch —
+            # current_env/blocked/gates_config permanecem intactos.
+            await self._pipelines.update_where(
+                {"service": service},
+                {"repo": repo, "base_branch": base_branch, "updated_at": now},
+                user_id=_SYSTEM_USER,
+            )
+            action = "updated"
+        row = await self._pipeline_row(service)
+        return {"action": action, "pipeline": _shape_pipeline(row) if row else {}}
 
-    # ── Promotions ─────────────────────────────────────────────────────────── #
+    async def get_pipeline(self, service: str) -> dict | None:
+        row = await self._pipeline_row(service)
+        if row is None:
+            return None
+        pipeline = _shape_pipeline(row)
+        promos = await self._promotions.find(
+            where={"service": service},
+            order_by=[Sort(column="created_at", direction=SortDirection.DESC)],
+            limit=10,
+        )
+        pipeline["recent_promotions"] = [_jsonable(p) for p in promos.rows()]
+        return pipeline
 
-    def add_promotion(
+    async def list_pipelines(self, env: str | None = None, status: str | None = None) -> list[dict]:
+        where: dict[str, Any] = {}
+        if env:
+            where["current_env"] = env
+        if status == "blocked":
+            where["blocked"] = 1
+        elif status == "active":
+            where["blocked"] = 0
+        res = await self._pipelines.find(
+            where=where or None, order_by=[Sort(column="service", direction=SortDirection.ASC)]
+        )
+        return [_shape_pipeline(r) for r in res.rows()]
+
+    async def update_pipeline_env(self, service: str, env: str, version: str | None = None) -> None:
+        await self._pipelines.update_where(
+            {"service": service},
+            {"current_env": env, "current_version": version, "updated_at": _now()},
+            user_id=_SYSTEM_USER,
+        )
+
+    async def block_pipeline(self, service: str, reason: str, blocked_by: str) -> dict:
+        now = _now()
+        await self._pipelines.update_where(
+            {"service": service},
+            {
+                "blocked": 1,
+                "block_reason": reason,
+                "blocked_by": blocked_by,
+                "blocked_at": now,
+                "updated_at": now,
+            },
+            user_id=_SYSTEM_USER,
+        )
+        row = await self._pipeline_row(service)
+        return _shape_pipeline(row) if row else {}
+
+    async def set_gates_config(self, service: str, gates_required: dict) -> dict:
+        await self._pipelines.update_where(
+            {"service": service},
+            {"gates_config": json.dumps(gates_required), "updated_at": _now()},
+            user_id=_SYSTEM_USER,
+        )
+        row = await self._pipeline_row(service)
+        return _shape_pipeline(row) if row else {}
+
+    # -- Promotions ------------------------------------------------------------ #
+
+    async def add_promotion(
         self,
         service: str,
         from_env: str,
@@ -248,87 +214,54 @@ class PipelineStore:
         pr_number: int | None = None,
         pr_url: str | None = None,
     ) -> int:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        """INSERT INTO promotions
-                           (service, from_env, to_env, promoted_by, reason,
-                            gates_snapshot, deploy_ref, pr_number, pr_url, status, created_at)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                           RETURNING id""",
-                        (
-                            service,
-                            from_env,
-                            to_env,
-                            promoted_by,
-                            reason,
-                            json.dumps(gates_snapshot),
-                            deploy_ref,
-                            pr_number,
-                            pr_url,
-                            status,
-                            now,
-                        ),
-                    )
-                    promotion_id = cur.fetchone()[0]
+        res = await self._promotions.insert(
+            {
+                "service": service,
+                "from_env": from_env,
+                "to_env": to_env,
+                "promoted_by": promoted_by,
+                "reason": reason,
+                "gates_snapshot": json.dumps(gates_snapshot),
+                "deploy_ref": deploy_ref,
+                "pr_number": pr_number,
+                "pr_url": pr_url,
+                "status": status,
+                "created_at": _now(),
+            },
+            user_id=_SYSTEM_USER,
+        )
+        return int(res.returned_id) if res.returned_id is not None else 0
 
-        return promotion_id  # type: ignore[return-value]
+    async def complete_promotion(self, promotion_id: int, status: str) -> None:
+        await self._promotions.update(
+            promotion_id, {"status": status, "completed_at": _now()}, user_id=_SYSTEM_USER
+        )
 
-    def complete_promotion(self, promotion_id: int, status: str) -> None:
-        with self._lock:
-            completed_at = _now()
-            with self._get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute(
-                        "UPDATE promotions SET status=%s, completed_at=%s WHERE id=%s",
-                        (status, completed_at, promotion_id),
-                    )
+    async def approve_promotion(self, promotion_id: int, approved_by: str) -> dict | None:
+        now = _now()
+        await self._promotions.update(
+            promotion_id,
+            {"approved_by": approved_by, "approved_at": now, "status": "approved", "completed_at": now},
+            user_id=_SYSTEM_USER,
+        )
+        row = await self._promotion_row(promotion_id)
+        return _jsonable(row) if row else None
 
-    def approve_promotion(self, promotion_id: int, approved_by: str) -> dict | None:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "UPDATE promotions SET approved_by=%s, approved_at=%s, status='approved', completed_at=%s WHERE id=%s",  # noqa: E501
-                        (approved_by, now, now, promotion_id),
-                    )
-                    cur.execute("SELECT * FROM promotions WHERE id=%s", (promotion_id,))
-                    row = cur.fetchone()
-                    result = dict(row) if row else None
+    async def get_promotion(self, promotion_id: int) -> dict | None:
+        row = await self._promotion_row(promotion_id)
+        return _jsonable(row) if row else None
 
-        return result
+    async def get_promotion_history(self, service: str | None = None, limit: int = 20) -> list[dict]:
+        res = await self._promotions.find(
+            where={"service": service} if service else None,
+            order_by=[Sort(column="created_at", direction=SortDirection.DESC)],
+            limit=limit,
+        )
+        return [_jsonable(r) for r in res.rows()]
 
-    def get_promotion(self, promotion_id: int) -> dict | None:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute("SELECT * FROM promotions WHERE id=%s", (promotion_id,))
-                    row = cur.fetchone()
-                    return dict(row) if row else None
+    # -- Gates ----------------------------------------------------------------- #
 
-    def get_promotion_history(self, service: str | None = None, limit: int = 20) -> list[dict]:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    if service:
-                        cur.execute(
-                            "SELECT * FROM promotions WHERE service=%s ORDER BY created_at DESC LIMIT %s",
-                            (service, limit),
-                        )
-                    else:
-                        cur.execute(
-                            "SELECT * FROM promotions ORDER BY created_at DESC LIMIT %s",
-                            (limit,),
-                        )
-                    rows = cur.fetchall()
-                    return [dict(r) for r in rows]
-
-    # ── Gates ──────────────────────────────────────────────────────────────── #
-
-    def upsert_gate(
+    async def upsert_gate(
         self,
         service: str,
         env: str,
@@ -337,91 +270,60 @@ class PipelineStore:
         details: str | None = None,
         evaluated_by: str | None = None,
     ) -> dict:
-        with self._lock:
-            now = _now()
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        """INSERT INTO gates
-                               (service, env, gate_type, passed, details, evaluated_by, evaluated_at)
-                           VALUES (%s,%s,%s,%s,%s,%s,%s)
-                           ON CONFLICT(service, env, gate_type) DO UPDATE SET
-                               passed=EXCLUDED.passed,
-                               details=EXCLUDED.details,
-                               evaluated_by=EXCLUDED.evaluated_by,
-                               evaluated_at=EXCLUDED.evaluated_at""",
-                        (service, env, gate_type, 1 if passed else 0, details, evaluated_by, now),
-                    )
-                    cur.execute(
-                        "SELECT * FROM gates WHERE service=%s AND env=%s AND gate_type=%s",
-                        (service, env, gate_type),
-                    )
-                    row = cur.fetchone()
-                    result = dict(row) if row else {}
+        await self._gates.upsert(
+            {
+                "service": service,
+                "env": env,
+                "gate_type": gate_type,
+                "passed": 1 if passed else 0,
+                "details": details,
+                "evaluated_by": evaluated_by,
+                "evaluated_at": _now(),
+            },
+            conflict_columns=["service", "env", "gate_type"],
+            user_id=_SYSTEM_USER,
+        )
+        row = await self._gate_row(service, env, gate_type)
+        return _jsonable(row) if row else {}
 
-        return result
+    async def get_gates(self, service: str, env: str) -> list[dict]:
+        res = await self._gates.find(
+            where={"service": service, "env": env},
+            order_by=[Sort(column="gate_type", direction=SortDirection.ASC)],
+        )
+        return [_jsonable(r) for r in res.rows()]
 
-    def get_gates(self, service: str, env: str) -> list[dict]:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT * FROM gates WHERE service=%s AND env=%s ORDER BY gate_type",
-                        (service, env),
-                    )
-                    rows = cur.fetchall()
-                    return [dict(r) for r in rows]
+    async def clear_gates(self, service: str, env: str) -> int:
+        # Soft-delete canônico (excluded=1): as leituras filtram excluded=0, então os
+        # gates "somem"; um novo add_gate_result reativa a linha via upsert.
+        res = await self._gates.delete_where({"service": service, "env": env}, user_id=_SYSTEM_USER)
+        return res.rowcount
 
-    def clear_gates(self, service: str, env: str) -> int:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor() as cur:
-                    cur.execute("DELETE FROM gates WHERE service=%s AND env=%s", (service, env))
-                    return cur.rowcount
+    async def get_pipeline_overview(self) -> dict:
+        pipelines = (await self._pipelines.find()).rows()
+        overview: dict[str, Any] = {}
+        total = 0
+        for pipeline in pipelines:
+            env = pipeline["current_env"]
+            total += 1
+            bucket = overview.setdefault(env, {"total": 0, "blocked": 0, "active": 0})
+            bucket["total"] += 1
+            if pipeline.get("blocked"):
+                bucket["blocked"] += 1
+            else:
+                bucket["active"] += 1
 
-    def get_pipeline_overview(self) -> dict:
-        with self._lock:
-            with self._get_conn() as conn:
-                with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-                    cur.execute(
-                        "SELECT current_env, blocked, COUNT(*) as cnt FROM pipelines GROUP BY current_env, blocked"  # noqa: E501
-                    )
-                    rows = cur.fetchall()
-                    overview: dict[str, Any] = {}
-                    total = 0
-                    for r in rows:
-                        env = r["current_env"]
-                        cnt = r["cnt"]
-                        total += cnt
-                        if env not in overview:
-                            overview[env] = {"total": 0, "blocked": 0, "active": 0}
-                        overview[env]["total"] += cnt
-                        if r["blocked"]:
-                            overview[env]["blocked"] += cnt
-                        else:
-                            overview[env]["active"] += cnt
+        failed_rows = (await self._gates.find(where={"passed": 0})).rows()
+        failed_counts: dict[tuple[str, str], int] = {}
+        for gate in failed_rows:
+            key = (gate["service"], gate["env"])
+            failed_counts[key] = failed_counts.get(key, 0) + 1
 
-                    cur.execute(
-                        """SELECT service, env, COUNT(*) as failed
-                           FROM gates WHERE passed=0 GROUP BY service, env"""
-                    )
-                    pending_gates = cur.fetchall()
-                    return {
-                        "total_services": total,
-                        "by_env": overview,
-                        "services_with_failed_gates": [dict(r) for r in pending_gates],
-                    }
-
-    def close(self) -> None:
-        if self._pool:
-            self._pool.closeall()
-
-
-def _pipeline_row(row: dict) -> dict:
-    d = dict(row) if row else {}
-    if "gates_config" in d and isinstance(d["gates_config"], str):
-        try:
-            d["gates_config"] = json.loads(d["gates_config"])
-        except (json.JSONDecodeError, TypeError):
-            d["gates_config"] = {}
-    return d
+        return {
+            "total_services": total,
+            "by_env": overview,
+            "services_with_failed_gates": [
+                {"service": service, "env": env, "failed": count}
+                for (service, env), count in failed_counts.items()
+            ],
+        }

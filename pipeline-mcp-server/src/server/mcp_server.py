@@ -51,9 +51,14 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import PipelineSettings, get_settings
+from ..db.schema import ensure_schema
 from ..db.store import PipelineStore
 from ..tools import (
     add_gate_result,
@@ -511,28 +516,28 @@ def _verify_inner_token(twin_token: str, settings: PipelineSettings) -> dict[str
 # ── Dispatcher (stateful: recebe store; tenant_id só p/ governança) ───────────
 
 
-def _dispatch(
+async def _dispatch(
     name: str,
     args: dict[str, Any],
     settings: PipelineSettings,
     store: PipelineStore,
 ) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
-    args (INV-3); as tools de pipeline leem apenas as chaves declaradas no schema."""
+    """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
+    o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
     # ── Pipeline ──────────────────────────────────────────────────────────── #
     if name == "register_pipeline":
-        return register_pipeline(
+        return await register_pipeline(
             store,
             service=args["service"],
             repo=args["repo"],
             base_branch=args.get("base_branch", "develop"),
         )
     if name == "get_pipeline":
-        return get_pipeline(store, service=args["service"])
+        return await get_pipeline(store, service=args["service"])
     if name == "list_pipeline":
-        return list_pipeline(store, env=args.get("env"), status=args.get("status"))
+        return await list_pipeline(store, env=args.get("env"), status=args.get("status"))
     if name == "promote_service":
-        return promote_service(
+        return await promote_service(
             store,
             service=args["service"],
             from_env=args["from_env"],
@@ -543,7 +548,7 @@ def _dispatch(
             github_org=settings.github_org,
         )
     if name == "approve_promotion":
-        return approve_promotion(
+        return await approve_promotion(
             store,
             promotion_id=args["promotion_id"],
             approved_by=args["approved_by"],
@@ -551,21 +556,21 @@ def _dispatch(
             github_org=settings.github_org,
         )
     if name == "watch_prs":
-        return watch_prs(
+        return await watch_prs(
             store,
             github_token=settings.github_token,
             github_org=settings.github_org,
             repos=args.get("repos"),
         )
     if name == "block_service":
-        return block_service(
+        return await block_service(
             store,
             service=args["service"],
             reason=args["reason"],
             blocked_by=args["blocked_by"],
         )
     if name == "rollback":
-        return rollback(
+        return await rollback(
             store,
             service=args["service"],
             env=args["env"],
@@ -575,7 +580,7 @@ def _dispatch(
         )
     # ── Gates ─────────────────────────────────────────────────────────────── #
     if name == "add_gate_result":
-        return add_gate_result(
+        return await add_gate_result(
             store,
             service=args["service"],
             env=args["env"],
@@ -585,24 +590,59 @@ def _dispatch(
             evaluated_by=args.get("evaluated_by"),
         )
     if name == "get_gate_status":
-        return get_gate_status(store, service=args["service"], env=args["env"])
+        return await get_gate_status(store, service=args["service"], env=args["env"])
     if name == "clear_gates":
-        return clear_gates(store, service=args["service"], env=args["env"])
+        return await clear_gates(store, service=args["service"], env=args["env"])
     # ── History ───────────────────────────────────────────────────────────── #
     if name == "get_promotion_history":
-        return get_promotion_history(store, service=args.get("service"), limit=args.get("limit", 20))
+        return await get_promotion_history(store, service=args.get("service"), limit=args.get("limit", 20))
     if name == "get_pipeline_overview":
-        return get_pipeline_overview(store)
+        return await get_pipeline_overview(store)
     if name == "set_pipeline_config":
-        return set_pipeline_config(store, service=args["service"], gates_required=args["gates_required"])
+        return await set_pipeline_config(
+            store, service=args["service"], gates_required=args["gates_required"]
+        )
     raise KeyError(name)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: PipelineSettings, tenant_id: str) -> None:
+    """Garante as tabelas no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: PipelineSettings, tenant_id: str
+) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = PipelineStore(session)
+        return await _dispatch(name, arguments, settings, store)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: PipelineSettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="pipeline-mcp API",
         version="0.1.0",
@@ -629,7 +669,7 @@ def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -637,24 +677,22 @@ def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
-        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
-        if name not in _EXEMPT_TOOLS:
-            twin_token = (params.get("_meta") or {}).get("twin_token")
-            if not twin_token:
-                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
-            try:
-                claims = _verify_inner_token(twin_token, settings)
-            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
-                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
-                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        # Toda tool do pipeline toca estado do tenant → inner token obrigatório (não há
+        # _EXEMPT_TOOLS). O tenant vem SEMPRE dos claims (SEC-035 / INV-3), nunca do arg.
+        twin_token = (params.get("_meta") or {}).get("twin_token")
+        if not twin_token:
+            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+        try:
+            claims = _verify_inner_token(twin_token, settings)
+        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+            _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+        tenant_id = claims.get("tenant_id")
+        if not tenant_id:
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments, settings, store)
+            payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -663,20 +701,29 @@ def _build_http_app(store: PipelineStore, settings: PipelineSettings) -> FastAPI
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
-    """Inicializa o MCP Server (stdio), store, settings e o sidecar HTTP."""
+def build_server() -> tuple[Any, PipelineSettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    Não há mais store global: a persistência é tenant-scoped e resolvida por-request
+    (credencial-zero). ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*)
+    usada para resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast STD-SEC-001/004/006
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    store = PipelineStore(dsn=settings.pg_dsn, minconn=settings.pg_min_conn, maxconn=settings.pg_max_conn)
-    http_app = _build_http_app(store, settings)
-    _log.info("pipeline_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    http_app = _build_http_app(settings)
+    _log.info("pipeline_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("pipeline-mcp-server")
 
@@ -689,17 +736,23 @@ def build_server() -> tuple[Any, PipelineStore, PipelineSettings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, settings, store)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). pipeline-mcp
+        # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
+        # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "pipeline-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
-    return server, store, settings, http_app
+    return server, settings, http_app
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
@@ -709,7 +762,7 @@ async def _run() -> None:
     import uvicorn
     from mcp.server.stdio import stdio_server
 
-    server, _store, settings, http_app = build_server()
+    server, settings, http_app = build_server()
     cfg = uvicorn.Config(
         http_app,
         host="0.0.0.0",  # noqa: S104 — bind interno do container; ingress só via gateway (INV-1)
@@ -733,7 +786,7 @@ def main() -> None:
     if os.getenv("MCP_HTTP_ONLY", "0") == "1":
         import uvicorn
 
-        _server, _store, settings, http_app = build_server()
+        _server, settings, http_app = build_server()
         uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
         return
     asyncio.run(_run())

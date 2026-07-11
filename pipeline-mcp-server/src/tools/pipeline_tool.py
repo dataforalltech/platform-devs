@@ -22,28 +22,28 @@ _AUTO_APPROVE_TARGETS = {"develop"}
 _HUMAN_APPROVAL_REQUIRED = {"homol", "prod"}
 
 
-def register_pipeline(
+async def register_pipeline(
     store: PipelineStore,
     service: str,
     repo: str,
     base_branch: str = "develop",
 ) -> dict:
-    return store.register_pipeline(service=service, repo=repo, base_branch=base_branch)
+    return await store.register_pipeline(service=service, repo=repo, base_branch=base_branch)
 
 
-def get_pipeline(store: PipelineStore, service: str) -> dict:
-    pipeline = store.get_pipeline(service)
+async def get_pipeline(store: PipelineStore, service: str) -> dict:
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
     return pipeline
 
 
-def list_pipeline(
+async def list_pipeline(
     store: PipelineStore,
     env: str | None = None,
     status: str | None = None,
 ) -> dict:
-    pipelines = store.list_pipelines(env=env, status=status)
+    pipelines = await store.list_pipelines(env=env, status=status)
     return {
         "total": len(pipelines),
         "filters": {"env": env, "status": status},
@@ -51,7 +51,7 @@ def list_pipeline(
     }
 
 
-def promote_service(
+async def promote_service(
     store: PipelineStore,
     service: str,
     from_env: str,
@@ -66,7 +66,7 @@ def promote_service(
     DEV→HML e HML→PROD: cria PR via GitHub e aguarda aprovação humana.
     O merge só ocorre quando humano chama approve_promotion().
     """
-    pipeline = store.get_pipeline(service)
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service, "can_promote": False}
 
@@ -90,7 +90,7 @@ def promote_service(
     # Verify gates
     gates_config: dict[str, list[str]] = pipeline.get("gates_config") or {}
     required_gates = gates_config.get(to_env, [])
-    gate_results = store.get_gates(service, from_env)
+    gate_results = await store.get_gates(service, from_env)
     gate_map = {g["gate_type"]: g for g in gate_results}
     failed_gates = [gt for gt in required_gates if not gate_map.get(gt, {}).get("passed")]
     gates_snapshot = {g["gate_type"]: bool(g["passed"]) for g in gate_results}
@@ -150,7 +150,7 @@ def promote_service(
             "error": pr_result.get("error"),
         }
 
-    promo_id = store.add_promotion(
+    promo_id = await store.add_promotion(
         service=service,
         from_env=from_env,
         to_env=to_env,
@@ -182,7 +182,7 @@ def promote_service(
     }
 
 
-def approve_promotion(
+async def approve_promotion(
     store: PipelineStore,
     promotion_id: int,
     approved_by: str,
@@ -190,7 +190,7 @@ def approve_promotion(
     github_org: str = "",
 ) -> dict:
     """Registra aprovação humana e executa o merge da PR de HML/PROD."""
-    promotion = store.get_promotion(promotion_id)
+    promotion = await store.get_promotion(promotion_id)
     if promotion is None:
         return {"error": "not_found", "promotion_id": promotion_id}
 
@@ -203,7 +203,7 @@ def approve_promotion(
         }
 
     service = promotion["service"]
-    pipeline = store.get_pipeline(service)
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "service_not_found", "service": service}
 
@@ -229,8 +229,8 @@ def approve_promotion(
             "message": "Aprovação registrada mas merge falhou. Execute o merge manualmente.",
         }
 
-    store.approve_promotion(promotion_id=promotion_id, approved_by=approved_by)
-    store.update_pipeline_env(service=service, env=promotion["to_env"])
+    await store.approve_promotion(promotion_id=promotion_id, approved_by=approved_by)
+    await store.update_pipeline_env(service=service, env=promotion["to_env"])
 
     return {
         "approved": True,
@@ -245,7 +245,7 @@ def approve_promotion(
     }
 
 
-def watch_prs(
+async def watch_prs(
     store: PipelineStore,
     github_token: str = "",
     github_org: str = "",
@@ -266,7 +266,7 @@ def watch_prs(
     if repos:
         repo_list = repos
     else:
-        pipelines = store.list_pipelines()
+        pipelines = await store.list_pipelines()
         repo_list = list({p["repo"] for p in pipelines if p.get("repo")})
 
     if not repo_list:
@@ -290,13 +290,13 @@ def watch_prs(
 
             if base in _AUTO_APPROVE_TARGETS:
                 # Find service for this repo
-                service = _find_service_for_repo(store, repo)
+                service = await _find_service_for_repo(store, repo)
                 can_auto = True
                 gate_details = "no gates required for dev"
 
                 if service:
                     # Check if qa_tests gate passed for this service/dev
-                    gates = store.get_gates(service, "dev")
+                    gates = await store.get_gates(service, "dev")
                     gate_map = {g["gate_type"]: g for g in gates}
                     qa = gate_map.get("qa_tests")
                     if qa and not qa["passed"]:
@@ -360,15 +360,15 @@ def watch_prs(
     }
 
 
-def block_service(store: PipelineStore, service: str, reason: str, blocked_by: str) -> dict:
-    pipeline = store.get_pipeline(service)
+async def block_service(store: PipelineStore, service: str, reason: str, blocked_by: str) -> dict:
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
-    result = store.block_pipeline(service=service, reason=reason, blocked_by=blocked_by)
+    result = await store.block_pipeline(service=service, reason=reason, blocked_by=blocked_by)
     return {"blocked": True, "service": service, "pipeline": result}
 
 
-def rollback(
+async def rollback(
     store: PipelineStore,
     service: str,
     env: str,
@@ -376,12 +376,12 @@ def rollback(
     rolled_back_by: str,
     reason: str | None = None,
 ) -> dict:
-    pipeline = store.get_pipeline(service)
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
 
-    store.update_pipeline_env(service=service, env="rollback", version=to_version)
-    promo_id = store.add_promotion(
+    await store.update_pipeline_env(service=service, env="rollback", version=to_version)
+    promo_id = await store.add_promotion(
         service=service,
         from_env=env,
         to_env="rollback",
@@ -391,7 +391,7 @@ def rollback(
         deploy_ref=to_version,
         status="success",
     )
-    store.complete_promotion(promo_id, "success")
+    await store.complete_promotion(promo_id, "success")
     return {
         "rolled_back": True,
         "service": service,
@@ -402,20 +402,22 @@ def rollback(
     }
 
 
-def get_promotion_history(store: PipelineStore, service: str | None = None, limit: int = 20) -> dict:
-    history = store.get_promotion_history(service=service, limit=limit)
+async def get_promotion_history(store: PipelineStore, service: str | None = None, limit: int = 20) -> dict:
+    history = await store.get_promotion_history(service=service, limit=limit)
     return {"total": len(history), "service": service, "limit": limit, "promotions": history}
 
 
-def get_pipeline_overview(store: PipelineStore) -> dict:
-    return store.get_pipeline_overview()
+async def get_pipeline_overview(store: PipelineStore) -> dict:
+    return await store.get_pipeline_overview()
 
 
-def set_pipeline_config(store: PipelineStore, service: str, gates_required: dict[str, list[str]]) -> dict:
-    pipeline = store.get_pipeline(service)
+async def set_pipeline_config(
+    store: PipelineStore, service: str, gates_required: dict[str, list[str]]
+) -> dict:
+    pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
-    result = store.set_gates_config(service=service, gates_required=gates_required)
+    result = await store.set_gates_config(service=service, gates_required=gates_required)
     return {"updated": True, "service": service, "pipeline": result}
 
 
@@ -528,8 +530,8 @@ def _list_open_prs(
         return {"success": False, "error": str(exc)}
 
 
-def _find_service_for_repo(store: PipelineStore, repo: str) -> str | None:
-    pipelines = store.list_pipelines()
+async def _find_service_for_repo(store: PipelineStore, repo: str) -> str | None:
+    pipelines = await store.list_pipelines()
     repo_slug = repo.split("/")[-1] if "/" in repo else repo
     for p in pipelines:
         p_repo = p.get("repo", "")
