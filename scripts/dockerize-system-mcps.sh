@@ -11,6 +11,7 @@ set -uo pipefail
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 GATEWAY_CONTAINER="${GATEWAY_CONTAINER:-platform-mcp}"
 ADMIN_MYSQL="${ADMIN_MYSQL:-dataforall-admin-mysql}"
+TENANT_MYSQL="${TENANT_MYSQL:-dataforall-tenant-mysql}"
 NETWORK="${NETWORK:-platform-local}"
 TWIN_JWKS="$(docker exec "$GATEWAY_CONTAINER" printenv URL_ADMIN_TWIN_JWKS 2>/dev/null || echo 'http://platform-admin:8000/api/v1/twin/jwks.json')"
 PW="$(docker exec platform-admin printenv ADMIN_DB_PASSWORD 2>/dev/null)"
@@ -37,9 +38,17 @@ for dir in $DIRS; do
     echo "  ⚠️ build FALHOU"; fail=$((fail+1)); continue
   fi
   docker rm -f "$cname" >/dev/null 2>&1 || true
+  # ORM canônico dual-db (tenant-scoped credencial-zero): os servers com estado resolvem
+  # o tenant via ADMIN_DATAFORALL.PLATFORMS (ADMIN_DB_*) e conectam ao store do tenant
+  # (DB_* fallback / db-per-tenant no tenant-mysql). Sem ADMIN_DB_* o 1º tool call falha
+  # (get_platform sem admin pool). Os compute-only ignoram esse env — é inócuo.
+  # Os DBs precisam estar na mesma rede ($NETWORK); use os nomes/aliases de container.
   docker run -d --name "$cname" --network "$NETWORK" --restart unless-stopped \
     -e MCP_HTTP_ONLY=1 -e MCP_PORT=7100 -e DOCS_ENABLED=false \
     -e URL_ADMIN_TWIN_JWKS="$TWIN_JWKS" -e MCP_TWIN_AUDIENCE="mcp:$ns" \
+    -e DB_ENGINE=mysql \
+    -e ADMIN_DB_HOST="$ADMIN_MYSQL" -e ADMIN_DB_PORT=3306 -e ADMIN_DB_USER=root -e ADMIN_DB_PASSWORD="$PW" \
+    -e DB_HOST="$TENANT_MYSQL" -e DB_PORT=3306 -e DB_USER=root -e DB_PASSWORD="$PW" \
     "$cname:local" >/dev/null 2>&1 && echo "  container up" || echo "  ⚠️ run FALHOU"
   sleep 3
   h="$(docker exec "$cname" python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:7100/v1/health',timeout=4).status==200 else 1)" 2>/dev/null && echo ok || echo down)"
