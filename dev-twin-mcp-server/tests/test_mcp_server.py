@@ -12,6 +12,7 @@ import json
 import jwt
 import pytest
 from fastapi.testclient import TestClient
+from platform_database import close_tenant_pools
 
 from src.config.settings import DevTwinSettings
 from src.server import mcp_server as M
@@ -272,6 +273,10 @@ async def test_call_authenticate_tenant_from_claims(seed_platforms, monkeypatch,
         _test_settings(),
         TENANT_A,
     )
+    # O register acima criou o pool do tenant no loop DESTE teste; o TestClient roda num
+    # loop separado (portal anyio). Fecha os pools p/ o TestClient recriar no seu loop
+    # (senão: "Future attached to a different loop"). O token registrado persiste no DB.
+    await close_tenant_pools()
     tok = mint_token(rsa_key, tenant_id=TENANT_A)
     r = client.post(
         "/mcp/tools/call",

@@ -163,8 +163,15 @@ async def make_store():
 
     yield _make
 
+    # O set_tenant_id roda no contexto do teste (quando _make é chamado); este teardown
+    # roda no contexto do fixture-fábrica. reset_tenant_id exige o MESMO contexto do set,
+    # então cross-contexto levanta ValueError — o ContextVar é task-local (não vaza entre
+    # testes), logo o reset é só higiene: ignora quando o contexto difere.
     for token in reversed(tokens):
-        reset_tenant_id(token)
+        try:
+            reset_tenant_id(token)
+        except ValueError:
+            pass
     await close_tenant_pools()
 
 

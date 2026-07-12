@@ -17,7 +17,7 @@ from src.config.settings import Settings
 from src.db.provisioner import ImmediateProvisioner
 from src.server import mcp_server as M
 
-from .conftest import TENANT_A, mint_token, patch_jwks, requires_mysql
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
 
 def _settings() -> Settings:
@@ -254,7 +254,9 @@ def test_stdio_refuses_fail_closed():
 @requires_mysql
 def test_end_to_end_request_vm(monkeypatch, rsa_key, seed_platforms):
     patch_jwks(monkeypatch, rsa_key)
-    app = M._build_http_app(_settings(), ImmediateProvisioner(), None)
+    # E2E credencial-zero: o app precisa das settings COM ADMIN_DB_*/DB_* (o _run_tool
+    # resolve o tenant via get_platform→PLATFORMS); _settings() bare não tem senha.
+    app = M._build_http_app(_test_settings(), ImmediateProvisioner(), None)
     monkeypatch.setattr(M, "_SCHEMA_READY", set())
     token = mint_token(rsa_key, tenant_id=TENANT_A, aud="mcp:infra-mcp")
     with TestClient(app) as client:

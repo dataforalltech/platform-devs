@@ -218,7 +218,9 @@ async def test_stats_by_risk_e_top_repos(stores_a):
     r = _make_result(repo="platform-ml")
     await audit.record(r, r["input_summary"])
     s = await audit.stats()
-    assert s["by_risk_level"].get("low", 0) == 2
+    # platform-auth: low, low, high, critical (2 low); platform-ml: default risk=low
+    # → 3 lows no total, 1 critical. (O stats() conta certo; a expectativa antiga era 2.)
+    assert s["by_risk_level"].get("low", 0) == 3
     assert s["by_risk_level"].get("critical", 0) == 1
     repos = {item["repo"]: item["count"] for item in s["top_repos"]}
     assert repos["platform-auth"] == 4

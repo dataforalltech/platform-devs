@@ -23,11 +23,15 @@ seleção de preempção, VM compatível, GC) são computadas em **Python** sobr
 — o pool é pequeno (cost-capped), o que mantém o orm-lint ``--strict`` limpo e evita
 GROUP BY/subquery no IR (mesma filosofia do piloto pipeline-mcp).
 
-Concorrência: o ``threading.RLock`` in-process foi removido. A atomicidade multi-statement
-é garantida pelo ``UnitOfWork``. As decisões *read-then-write* de admission control (cost
-cap, quota, seleção de preempção) NÃO tomam lock de linha (``SELECT … FOR UPDATE``) — em DB
-compartilhado entre réplicas isso é um TOCTOU conhecido; endurecer com advisory-lock
-tenant-scoped é follow-up dedicado (fora do escopo desta migração de dados).
+Concorrência: o admission control (cost cap, quota por owner, seleção de preempção) faz
+decisões *read-then-write* sobre agregados; é serializado POR TENANT por um
+``asyncio.Lock`` in-process (``_ADMISSION_LOCKS``), restaurando a garantia do
+``threading.RLock`` original (agora async). Os pontos de entrada mutantes que dirigem
+admission/fila — ``request_vm``, ``release_lease`` e os callbacks de reconciliação — tomam
+o lock; os helpers internos NÃO (sem reentrância → sem deadlock). A atomicidade
+multi-statement segue no ``UnitOfWork``. Cross-réplica (DB compartilhado entre réplicas)
+permanece um TOCTOU conhecido: endurecer com advisory-lock tenant-scoped
+(``pg_advisory_xact_lock`` / ``GET_LOCK``) é follow-up dedicado.
 
 Bridge thread→loop: os callbacks do ``TerraformProvisioner`` chegam de uma thread daemon;
 como o store é async, eles são agendados no event loop via ``run_coroutine_threadsafe`` e
@@ -80,6 +84,22 @@ _log = get_logger(__name__)
 _SYSTEM_USER = 0
 
 _ACTIVE_STATES = ("PENDING", "ACTIVE")
+
+# Serialização do admission control POR TENANT (in-process). Restaura a garantia do
+# threading.RLock original — que serializava as decisões read-then-write de cost cap /
+# quota / preempção num único processo — agora com asyncio.Lock (o store é async).
+# Cross-réplica continua sendo um TOCTOU (endurecer via advisory-lock é follow-up).
+_ADMISSION_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _admission_lock_for(tenant_id: str) -> asyncio.Lock:
+    """Lock de admission por-tenant (criado sob demanda; sem await entre get/set = atômico
+    no event loop, uma única thread/loop por processo)."""
+    lock = _ADMISSION_LOCKS.get(tenant_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _ADMISSION_LOCKS[tenant_id] = lock
+    return lock
 
 
 # --------------------------------------------------------------------- #
@@ -203,6 +223,8 @@ class AllocatorStore:
         self._pool = session._pool
         self._tenant_id: str = session.tenant_id
         self._dialect = dialect_for_pool(self._pool)
+        # Serializa admission control (read-then-write de agregados) por-tenant, in-process.
+        self._admission_lock = _admission_lock_for(self._tenant_id)
 
         # Repositórios não-transacionais (reads + writes simples).
         self._vms = session.repository(VmRow, table_name=VMS_TABLE)
@@ -267,6 +289,12 @@ class AllocatorStore:
     # API pública                                                          #
     # ------------------------------------------------------------------ #
     async def request_vm(self, request: VMRequest) -> AllocationDecision:
+        # Admission control (cost cap / quota / preempção) é read-then-write sobre agregados
+        # → serializa por-tenant (in-process) p/ evitar over-commit em requests concorrentes.
+        async with self._admission_lock:
+            return await self._request_vm_locked(request)
+
+    async def _request_vm_locked(self, request: VMRequest) -> AllocationDecision:
         await self._gc_expired()
 
         # 1. Approval hard stop
@@ -405,6 +433,11 @@ class AllocatorStore:
         return _lease_from_row(row) if row else None
 
     async def release_lease(self, lease_id: str, by: str | None = None) -> VMLease:
+        # Release dispara processamento da fila (admission) → serializa por-tenant.
+        async with self._admission_lock:
+            return await self._release_lease_locked(lease_id, by)
+
+    async def _release_lease_locked(self, lease_id: str, by: str | None = None) -> VMLease:
         await self._gc_expired()
         row = await self._lease_row(lease_id)
         if row is None:
@@ -641,15 +674,20 @@ class AllocatorStore:
             coro.close()
 
     async def _reconcile_vm_ready(self, vm_id: str, hint: str) -> None:
-        """Reabre uma sessão do tenant (a do request pode ter fechado) e aplica o READY."""
-        async with for_tenant(self._tenant_id) as session:
-            store = self._child_store(session)
-            await store._apply_vm_ready(vm_id, hint)
+        """Reabre uma sessão do tenant (a do request pode ter fechado) e aplica o READY.
+
+        Callback vindo de thread daemon → toma o admission lock (a reconciliação dispara
+        _try_fulfill_queued = admission da fila) para serializar com request_vm/release."""
+        async with self._admission_lock:
+            async with for_tenant(self._tenant_id) as session:
+                store = self._child_store(session)
+                await store._apply_vm_ready(vm_id, hint)
 
     async def _reconcile_vm_failed(self, vm_id: str, error: str) -> None:
-        async with for_tenant(self._tenant_id) as session:
-            store = self._child_store(session)
-            await store._apply_vm_failed(vm_id, error)
+        async with self._admission_lock:
+            async with for_tenant(self._tenant_id) as session:
+                store = self._child_store(session)
+                await store._apply_vm_failed(vm_id, error)
 
     def _child_store(self, session: Any) -> AllocatorStore:
         return AllocatorStore(
@@ -816,9 +854,12 @@ class AllocatorStore:
 
         async with UnitOfWork(self._pool) as uow:
             vms, _leases, keys = self._uow_repos(uow)
+            # returning=None: o RETURNING é emulado no MySQLPool, NÃO no UnitOfWork —
+            # e a chave é natural (vm_id), o id surrogate não é usado.
             await vms.insert(
                 {"vm_id": vm_id, "spec": spec, "status": "PROVISIONING", "created_at": now_str},
                 user_id=_SYSTEM_USER,
+                returning=None,
             )
             await keys.insert(
                 {
@@ -828,6 +869,7 @@ class AllocatorStore:
                     "created_at": now_str,
                 },
                 user_id=_SYSTEM_USER,
+                returning=None,
             )
         return (
             VMInfo(
@@ -870,6 +912,7 @@ class AllocatorStore:
                     "connection_hint": connection_hint,
                 },
                 user_id=_SYSTEM_USER,
+                returning=None,  # RETURNING não é emulado no UnitOfWork; lease_id é a chave
             )
             if request.exclusive and initial_status == "ACTIVE":
                 # Só bloqueia se a VM já está READY (share path).
