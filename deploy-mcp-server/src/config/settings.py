@@ -13,22 +13,57 @@ Prefixo das vars do serviço: DEPLOY_ (ex.: DEPLOY_GITHUB_TOKEN). As vars de
 integração com o gateway (MCP_TWIN_AUDIENCE, URL_ADMIN_TWIN_JWKS, MCP_PORT,
 DOCS_ENABLED, MCP_SERVICE_LOG_LEVEL) usam o nome EXATO via validation_alias
 (o alias tem precedência sobre o env_prefix).
+
+STD-SEC-004: um único `.env` (discriminador `RUNTIME_ENV`); NENHUM valor com cara
+de credencial fica no código — o GitHub PAT e a senha do ACR vêm de env (ou de
+Vault via `load_secret`, que tem precedência quando `VAULT_ADDR` está setado).
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+_log = logging.getLogger(__name__)
+
 # namespace canônico = name_microservice ('platform-deploy-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
 NAMESPACE = "deploy-mcp"
+
+
+def load_secret(key: str, fallback: str = "") -> str:
+    """Resolve um segredo via Vault (STD-SEC-004), degradando p/ env com graça.
+
+    Só tenta o ``platform_crypto.VaultSecretsClient`` quando ``VAULT_ADDR`` está
+    setado; o import é LAZY (dentro do try) para não acoplar o boot ao Vault. Em
+    QUALQUER falha (Vault indisponível, import ausente, segredo vazio) degrada
+    para o valor de env (``fallback``) — o boot NUNCA quebra por causa do Vault.
+    Loga apenas a FONTE do segredo, nunca o valor (STD-OBS-001).
+    """
+    vault_addr = os.getenv("VAULT_ADDR", "").strip()
+    if not vault_addr:
+        _log.debug("secret_source key=%s source=env", key)
+        return fallback
+    try:
+        from platform_crypto import VaultSecretsClient  # lazy: só quando há Vault
+
+        value = VaultSecretsClient(vault_addr).get_secret(key)
+        if value:
+            _log.info("secret_source key=%s source=vault", key)
+            return value
+        _log.warning("secret_empty_from_vault key=%s source=env", key)
+        return fallback
+    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
+        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
+        return fallback
 
 
 class DeploySettings(BaseSettings):
@@ -111,6 +146,21 @@ class DeploySettings(BaseSettings):
             raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
         return v
 
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> DeploySettings:
+        """Resolve as credenciais do backend via Vault-fallback (STD-SEC-004).
+
+        O valor de env (``DEPLOY_GITHUB_TOKEN`` / ``DEPLOY_ACR_PASSWORD``) é o
+        fallback; o Vault (quando ``VAULT_ADDR`` está setado) tem precedência. Sem
+        Vault, o comportamento é idêntico ao de antes (segredo vem do env). Nenhum
+        valor com cara de credencial fica no código.
+        """
+        self.github_token = load_secret(f"{NAMESPACE}/github_token", self.github_token)
+        # acr_password é opcional (str | None): mantém o None quando nem env nem
+        # Vault trazem valor, preservando o contrato "não configurado".
+        self.acr_password = load_secret(f"{NAMESPACE}/acr_password", self.acr_password or "") or None
+        return self
+
     def enforce_security_invariants(self) -> None:
         """Fail-fast no boot (STD-SEC-001 / STD-SEC-006). Chamado em build_server().
 
@@ -139,7 +189,7 @@ class DeploySettings(BaseSettings):
 
         # Fallback: variaveis de ambiente comuns
         for env_key in ("REPOS_ROOT", "WORKSPACE_REPOS_ROOT"):
-            val = __import__("os").environ.get(env_key)
+            val = os.environ.get(env_key)
             if val:
                 return Path(val).expanduser().resolve()
 

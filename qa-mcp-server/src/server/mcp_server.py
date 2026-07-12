@@ -36,6 +36,7 @@ import json
 import logging
 import os
 from typing import Any
+from uuid import uuid4
 
 import jwt  # PyJWT — verificação RS256 do inner token via JWKS
 from fastapi import FastAPI
@@ -46,8 +47,10 @@ from platform_database import close_tenant_pools
 from platform_database.orm import configure, for_tenant
 from platform_database.orm.dialects import dialect_for_pool
 from platform_database.tenant_resolver import get_pool_for_tenant
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from ..config.logging import configure_logging
+from ..config.logging import bind_log_context, configure_logging, reset_log_context
 from ..config.settings import NAMESPACE, QASettings, get_settings
 from ..db.schema import ensure_schema
 from ..db.store import QAStore
@@ -693,6 +696,42 @@ async def _run_tool(
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
+class CorrelationMiddleware:
+    """Middleware ASGI puro de rastreabilidade por-request (T-OBS / CI-8).
+
+    Por request: deriva um request-id (honra `X-Request-Id`, senão `X-Correlation-Id`
+    do cliente; senão gera um) e um correlation-id; liga ambos ao contexto de log
+    (`trace_id`/`correlation_id`) para que TODO log da request os carregue; e ecoa
+    `X-Request-Id`/`X-Correlation-Id` na resposta. `tenant_id`/`tool` são ligados depois,
+    no handler /mcp/tools/call, só após a verificação do inner token (o tenant vem dos
+    claims — nunca do cliente). ASGI puro (sem task boundary) → os ContextVars ligados
+    aqui propagam para o handler; o `reset` no finally evita vazamento entre requests."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        request_id = headers.get("x-request-id") or headers.get("x-correlation-id") or uuid4().hex
+        correlation_id = headers.get("x-correlation-id") or request_id
+        tokens = bind_log_context(trace_id=request_id, correlation_id=correlation_id)
+
+        async def send_with_correlation(message: Message) -> None:
+            if message["type"] == "http.response.start":
+                out = MutableHeaders(scope=message)
+                out["x-request-id"] = request_id
+                out["x-correlation-id"] = correlation_id
+            await send(message)
+
+        try:
+            await self.app(scope, receive, send_with_correlation)
+        finally:
+            reset_log_context(tokens)
+
+
 def _build_http_app(settings: QASettings) -> FastAPI:
     """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
 
@@ -706,6 +745,8 @@ def _build_http_app(settings: QASettings) -> FastAPI:
         redoc_url=None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
     )
+    # Rastreabilidade por-request: correlação nos logs + echo dos headers (T-OBS / CI-8).
+    app.add_middleware(CorrelationMiddleware)
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
@@ -757,6 +798,9 @@ def _build_http_app(settings: QASettings) -> FastAPI:
         if not tenant_id:
             return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
+        # tenant_id vem SEMPRE dos claims verificados (SEC-035 / INV-3); liga tenant/tool
+        # ao contexto de log só agora, para os logs da execução carregarem a correlação.
+        ctx_tokens = bind_log_context(tenant_id=str(tenant_id), tool=name)
         try:
             payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
@@ -764,6 +808,8 @@ def _build_http_app(settings: QASettings) -> FastAPI:
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
             _log.exception("tool_internal_error: %s", name)
             payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+        finally:
+            reset_log_context(ctx_tokens)
         return _envelope(payload)
 
     @app.on_event("shutdown")

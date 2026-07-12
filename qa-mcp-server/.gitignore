@@ -1,0 +1,2 @@
+# Artefatos de build do setuptools (regeneráveis; nunca versionar) — gap de auditoria.
+*.egg-info/

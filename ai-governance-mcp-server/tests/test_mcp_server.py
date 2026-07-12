@@ -125,6 +125,17 @@ def test_call_invalid_twin_token(client: TestClient, monkeypatch, rsa_key):
     assert r.json()["error"] == "invalid_twin_token"
 
 
+def test_call_missing_jti_twin_token(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → verificador real rejeita (JTI_REQUIRED)
+    r = client.post(
+        "/mcp/tools/call",
+        json={"params": {"name": "get_port_map", "arguments": {}, "_meta": {"twin_token": tok}}},
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
 def test_call_valid_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
     patch_jwks(monkeypatch, rsa_key)
     tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims

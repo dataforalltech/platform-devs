@@ -1,7 +1,7 @@
 [project]
 name = "audit-mcp"
 version = "0.1.0"
-description = "MCP sidecar (kind=mcp_http, Model C) do audit — auditoria/compliance com backend PostgreSQL, gateway-ready."
+description = "MCP sidecar (kind=mcp_http, Model C) do audit — auditoria/compliance com backend MySQL dual-db (ORM canônico), gateway-ready."
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team" }]
@@ -55,8 +55,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "S"]
-# Desvios justificados p/ um sidecar backend-backed (audit persiste em PostgreSQL
-# e roda checkers via subprocess) — diferente da persona compute-only:
+# Desvios justificados p/ um sidecar backend-backed (audit persiste via ORM
+# canônico em MySQL dual-db e roda checkers via subprocess) — diferente da persona
+# compute-only:
 #   S104 — bind 0.0.0.0: ingress só via gateway (INV-1), justificado no código.
 #   S603/S607 — subprocess de comando fixo `ruff check` (checker de lint), sem shell.
 #   S608 — SQL "dinâmico" só concatena fragmentos estáticos; valores via %s (parametrizado).

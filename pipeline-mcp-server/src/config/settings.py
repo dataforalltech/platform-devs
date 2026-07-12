@@ -60,7 +60,7 @@ def load_secret(key: str, fallback: str = "") -> str:
 
 
 class PipelineSettings(BaseSettings):
-    """Settings do pipeline-mcp: gateway (Model C) + backend PostgreSQL."""
+    """Settings do pipeline-mcp: gateway (Model C) + backend MySQL (ORM canônico, dual-db)."""
 
     model_config = SettingsConfigDict(
         env_file=".env", extra="ignore", case_sensitive=False, populate_by_name=True

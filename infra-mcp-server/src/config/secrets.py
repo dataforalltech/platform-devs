@@ -1,7 +1,9 @@
 """Resolução de segredos com Vault-fallback (STD-SEC-004).
 
-Um único segredo neste server: ``INFRA_LEASE_SECRET`` (Fernet key que cifra as chaves
-SSH privadas por VM). Não há senha de banco — o allocator persiste em SQLite embarcado.
+Segredos deste server (todos resolvidos por esta função): as senhas de banco
+(``<ns>/db_password`` e ``<ns>/admin_db_password`` — o allocator persiste no ORM
+canônico, dual-db, então há credencial de DB de verdade) e o ``INFRA_LEASE_SECRET``
+(Fernet key que cifra as chaves SSH privadas por VM).
 
 Padrão de resolução (fail-open p/ env, NUNCA quebra o boot):
   1. Se ``VAULT_ADDR`` estiver setado, tenta ``platform_crypto.VaultSecretsClient``

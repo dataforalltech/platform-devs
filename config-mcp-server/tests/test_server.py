@@ -115,6 +115,32 @@ def test_missing_tenant_scope_rejected(monkeypatch, rsa_key) -> None:
     assert resp.json()["error"] == "missing_tenant_scope"
 
 
+def test_missing_jti_rejected(monkeypatch, rsa_key) -> None:
+    # Inner token sem jti → options require:[jti] falha na verificação RS256 REAL
+    # (MissingRequiredClaimError) → 401. Rejeitado no PEP, antes de qualquer DB.
+    patch_jwks(monkeypatch, rsa_key)
+    no_jti = mint_token(rsa_key, include_jti=False)
+    resp = _client().post(
+        "/mcp/tools/call",
+        json={"params": {"name": "get_physical_info", "arguments": {}, "_meta": {"twin_token": no_jti}}},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"] == "invalid_twin_token"
+
+
+def test_expired_token_rejected(monkeypatch, rsa_key) -> None:
+    # exp no passado → ExpiredSignatureError na verificação RS256 REAL → 401.
+    # Rejeitado no PEP, antes de qualquer DB.
+    patch_jwks(monkeypatch, rsa_key)
+    expired = mint_token(rsa_key, exp_delta=-10)
+    resp = _client().post(
+        "/mcp/tools/call",
+        json={"params": {"name": "get_physical_info", "arguments": {}, "_meta": {"twin_token": expired}}},
+    )
+    assert resp.status_code == 401
+    assert resp.json()["error"] == "invalid_twin_token"
+
+
 def test_valid_token_storeless_dispatch(monkeypatch, rsa_key) -> None:
     # Token RS256 válido → get_physical_info (storeless) roda sem abrir sessão de tenant.
     patch_jwks(monkeypatch, rsa_key)

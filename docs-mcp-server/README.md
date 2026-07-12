@@ -38,9 +38,9 @@ cliente (SEC-035 / INV-3).
 ## Configuração
 
 Copie `.env.example` para `.env` (gitignored). Discriminador de ambiente:
-`RUNTIME_ENV ∈ {local, cloud}`. A senha do banco (`DOCS_PG_PASSWORD`) **nunca** é
+`RUNTIME_ENV ∈ {local, cloud}`. A senha do banco (`DB_PASSWORD`) **nunca** é
 versionada — vem de env ou do Vault (`VAULT_ADDR` setado → chave
-`docs-mcp/pg_password`, com degradação graciosa p/ env). Registro no gateway: ver
+`docs-mcp/db_password`, com degradação graciosa p/ env). Registro no gateway: ver
 [`gateway/README.md`](./gateway/README.md).
 
 ## Desenvolvimento

@@ -1,0 +1,13 @@
+# Artefatos de build / cobertura (nunca versionar — regeneráveis)
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Metadados de packaging (cruft do editable install / rename)
+*.egg-info/
+
+# Caches de ferramentas
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/

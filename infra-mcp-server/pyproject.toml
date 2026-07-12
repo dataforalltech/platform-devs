@@ -1,7 +1,7 @@
 [project]
 name = "infra-mcp"
 version = "0.1.0"
-description = "MCP sidecar (kind=mcp_http, Model C) do infra — operações de infraestrutura (terraform, policy scan, cost estimate) e alocação de VMs (allocator SQLite embarcado), gateway-ready. Read+write: além das tools de leitura, expõe tools de mutação do allocator (request_vm, release_lease, extend_lease, cancel_queued_request, get_lease_ssh_key)."
+description = "MCP sidecar (kind=mcp_http, Model C) do infra — operações de infraestrutura (terraform, policy scan, cost estimate) e alocação de VMs (allocator no ORM canônico, dual-db, tenant-scoped), gateway-ready. Read+write: além das tools de leitura, expõe tools de mutação do allocator (request_vm, release_lease, extend_lease, cancel_queued_request, get_lease_ssh_key)."
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team" }]
@@ -53,12 +53,12 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "S"]
 # Desvios justificados p/ um sidecar backend-backed (infra opera CLIs via subprocess
-# e persiste o allocator em SQLite embarcado) — diferente da persona compute-only:
+# e persiste o allocator no ORM canônico, dual-db) — diferente da persona compute-only:
 #   S104 — bind 0.0.0.0: ingress só via gateway (INV-1), justificado no código.
 #   S603/S607 — subprocess de comandos fixos (terraform/checkov/infracost), sem shell.
-#   S608 — SQL "dinâmico" só concatena fragmentos estáticos; valores via ? (parametrizado).
 #   S110 — try/except/pass best-effort (falha de parse não derruba a operação).
-ignore = ["S104", "S603", "S607", "S608", "S110"]
+# (Sem S608: não há mais SQL manual — persistência 100% via ORM/DDL IR, orm-lint --strict=0.)
+ignore = ["S104", "S603", "S607", "S110"]
 
 [tool.ruff.lint.per-file-ignores]
 # S101 assert em testes; S105/S106 tokens/senhas fake em test doubles (sem I/O real).

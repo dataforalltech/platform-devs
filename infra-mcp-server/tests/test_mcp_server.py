@@ -9,8 +9,10 @@ build_server. As unidades mockam ``_run_tool`` (sem I/O de DB); o teste end-to-e
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
+from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from src.config.settings import Settings
@@ -72,16 +74,49 @@ def test_call_missing_twin_token(client: TestClient):
     assert r.json()["error"] == "missing_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
-    r = client.post(
+# ── /mcp/tools/call — matriz de rejeição do inner token com _verify_inner_token REAL ──
+# Estes usam o verificador REAL (patch_jwks serve a chave pública local; RS256 real, sem
+# bypass) — NÃO monkeypatch-raise. O PEP rejeita ANTES do _run_tool, logo não tocam DB.
+def _post_call(client: TestClient, token: str) -> Any:
+    return client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "list_pool", "arguments": {}, "_meta": {"twin_token": "tok"}}},
+        json={"params": {"name": "list_pool", "arguments": {}, "_meta": {"twin_token": token}}},
     )
+
+
+# assinatura inválida: token assinado por OUTRA chave ≠ a servida pelo JWKS → 401
+def test_call_invalid_signature_real(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    wrong_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    token = mint_token(wrong_key, tenant_id=TENANT_A, aud="mcp:infra-mcp")
+    r = _post_call(client, token)
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+# audiência errada: assinatura válida, mas aud ≠ mcp:infra-mcp → 401 (a falha nº 1)
+def test_call_wrong_audience_real(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id=TENANT_A, aud="mcp:errado")
+    r = _post_call(client, token)
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+# sem jti: assinatura/aud válidas, mas options require jti → 401 (JTI_REQUIRED)
+def test_call_missing_jti_real(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id=TENANT_A, aud="mcp:infra-mcp", include_jti=False)
+    r = _post_call(client, token)
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+# expirado: exp no passado → ExpiredSignatureError → 401
+def test_call_expired_real(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id=TENANT_A, aud="mcp:infra-mcp", exp_delta=-10)
+    r = _post_call(client, token)
     assert r.status_code == 401
     assert r.json()["error"] == "invalid_twin_token"
 

@@ -169,6 +169,63 @@ def test_call_happy_path_real_token(client: TestClient, monkeypatch, rsa_key):
     assert payload["status"] == "active"
 
 
+# ── /mcp/tools/call — matriz do inner token via _verify_inner_token REAL ──────
+# RS256 real (patch_jwks serve a chave pública); o PEP rejeita ANTES de tocar o DB,
+# então estes negativos rodam sem MySQL. Sem monkeypatch-raise: a verificação é real.
+def test_call_missing_jti_real_token(client: TestClient, monkeypatch, rsa_key):
+    """Token válido porém SEM jti → require=['jti'] rejeita → 401 (JTI_REQUIRED)."""
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id="T-1", include_jti=False)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_test_plans",
+                "arguments": {},
+                "_meta": {"twin_token": token},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+def test_call_wrong_audience_real_token(client: TestClient, monkeypatch, rsa_key):
+    """Audiência divergente (mcp:errado) → 401 (a falha de integração nº 1)."""
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id="T-1", aud="mcp:errado")
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_test_plans",
+                "arguments": {},
+                "_meta": {"twin_token": token},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
+def test_call_expired_real_token(client: TestClient, monkeypatch, rsa_key):
+    """Token expirado (exp no passado) → 401 (ExpiredSignatureError, fail-closed)."""
+    patch_jwks(monkeypatch, rsa_key)
+    token = mint_token(rsa_key, tenant_id="T-1", exp_delta=-10)
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "list_test_plans",
+                "arguments": {},
+                "_meta": {"twin_token": token},
+            }
+        },
+    )
+    assert r.status_code == 401
+    assert r.json()["error"] == "invalid_twin_token"
+
+
 # ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
 def test_call_excluded_tool(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"list_test_plans"}))
