@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import pytest
 
+from src.knowledge.encryptor import EncryptionError
+
 from .conftest import requires_mysql
 
 pytestmark = [pytest.mark.integration, requires_mysql]
@@ -96,6 +98,46 @@ async def test_delete_namespace(store_a):
     assert await store_a.delete_namespace("env.stage") is True
     assert await store_a.get_namespace("env.stage") == {}
     assert await store_a.delete_namespace("env.stage") is False
+
+
+async def test_get_null_value_returns_none(store_a):
+    # Linha viva com value_encrypted NULL (não passou pelo set/encrypt): get() → None.
+    await store_a._repo.upsert(
+        {"namespace": "raw.ns", "config_key": "NULL_KEY", "value_encrypted": None},
+        conflict_columns=["namespace", "config_key"],
+        user_id=0,
+    )
+    assert await store_a.get("raw.ns", "NULL_KEY") is None
+
+
+async def test_get_propagates_decrypt_error(store_a):
+    # get() propaga a falha de decriptação (contrato legado: StoreError → erro da tool).
+    await store_a._repo.upsert(
+        {"namespace": "raw.ns", "config_key": "GARBAGE", "value_encrypted": "not-a-fernet-token"},
+        conflict_columns=["namespace", "config_key"],
+        user_id=0,
+    )
+    with pytest.raises(EncryptionError):
+        await store_a.get("raw.ns", "GARBAGE")
+
+
+async def test_get_namespace_degrades_on_bad_cipher(store_a):
+    # get_namespace NÃO derruba a leitura em lote: NULL → "" e cifra inválida → sentinela.
+    await store_a.set("mixed.ns", "GOOD", "plain")
+    await store_a._repo.upsert(
+        {"namespace": "mixed.ns", "config_key": "NULLED", "value_encrypted": None},
+        conflict_columns=["namespace", "config_key"],
+        user_id=0,
+    )
+    await store_a._repo.upsert(
+        {"namespace": "mixed.ns", "config_key": "BADCIPHER", "value_encrypted": "corrupt"},
+        conflict_columns=["namespace", "config_key"],
+        user_id=0,
+    )
+    got = await store_a.get_namespace("mixed.ns")
+    assert got["GOOD"] == "plain"
+    assert got["NULLED"] == ""
+    assert got["BADCIPHER"] == "<decrypt_error>"
 
 
 # ── Isolamento por tenant (banco-por-tenant, dual-db) ─────────────────────────
