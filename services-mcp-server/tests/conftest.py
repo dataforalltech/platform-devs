@@ -158,7 +158,13 @@ async def seed_platforms():
                     "VALUES (%s,'mysql',%s,%s,%s,'root',%s,1,0)",
                     (tid, _HOST, _PORT, tid, _PW),
                 )
-                await cur.execute(f"CREATE DATABASE IF NOT EXISTS {tid} CHARACTER SET utf8mb4")
+                # Banco do tenant PRISTINO por invocação (DROP+CREATE, não IF NOT EXISTS):
+                # o E2E credencial-zero afirma contagens absolutas e os fixtures `stores_*`
+                # truncam no setup — não no teardown —, então linhas de um teste anterior
+                # sobre o mesmo tenant persistiriam e furariam o assert. Recriar o schema é
+                # gated por `_SCHEMA_READY.discard(...)` no próprio teste.
+                await cur.execute(f"DROP DATABASE IF EXISTS {tid}")
+                await cur.execute(f"CREATE DATABASE {tid} CHARACTER SET utf8mb4")
     finally:
         conn.close()
 
