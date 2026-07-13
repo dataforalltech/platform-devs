@@ -1,29 +1,57 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown), _dispatch
-e _verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado — os
-testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (happy
+path / dispatch / unknown) roda contra MySQL real via `_run_tool`/`_dispatch`.
 """
 
 from __future__ import annotations
 
-import json
-
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.settings import Settings
+from src.config.settings import ProductOwnerSettings
 from src.server import mcp_server as M
 
-# Total de tools registradas no catálogo do product-owner-mcp.
-_TOOL_COUNT = 17
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
+
+_EXPECTED_TOOLS = {
+    "save_user_story",
+    "list_user_stories",
+    "get_user_story",
+    "update_user_story",
+    "delete_user_story",
+    "set_mvp_scope",
+    "list_mvp_scopes",
+    "get_mvp_scope",
+    "delete_mvp_scope",
+    "set_product_vision",
+    "list_product_visions",
+    "get_product_vision",
+    "delete_product_vision",
+    "save_user_persona",
+    "list_user_personas",
+    "get_user_persona",
+    "update_user_persona",
+    "delete_user_persona",
+    "save_backlog_item",
+    "list_backlog_items",
+    "get_backlog_item",
+    "update_backlog_item",
+    "delete_backlog_item",
+    "save_po_artifact",
+    "list_po_artifacts",
+    "get_po_artifact",
+    "delete_po_artifact",
+}
 
 
-def _settings() -> Settings:
-    return Settings(
+def _settings(**over) -> ProductOwnerSettings:
+    return ProductOwnerSettings(
         MCP_TWIN_AUDIENCE="mcp:product-owner-mcp",
-        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        **over,
     )
 
 
@@ -32,226 +60,192 @@ def client() -> TestClient:
     return TestClient(M._build_http_app(_settings()))
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 27
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "product-owner-mcp", "tools": _TOOL_COUNT}
+    assert r.json() == {"status": "ok", "service": "product-owner-mcp", "tools": 27}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
-    assert len(tools) == _TOOL_COUNT
-    assert {t["name"] for t in tools} == {
-        "analyze_product_problem",
-        "calculate_rice_score",
-        "prioritize_backlog",
-        "map_product_risks",
-        "map_user_journey",
-        "map_user_personas",
-        "generate_discovery_questions",
-        "define_mvp_scope",
-        "define_product_metrics",
-        "define_product_vision",
-        "generate_feature_spec",
-        "generate_go_to_market_brief",
-        "generate_handoff_to_architecture",
-        "generate_handoff_to_design",
-        "generate_handoff_to_engineering",
-        "generate_release_plan",
-        "generate_user_stories",
-    }
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
-            assert t[field], f"{t['name']} sem {field}"
-        # capability = <namespace>.<tool>
-        assert t["capability"] == f"product-owner-mcp.{t['name']}"
-        # required_scope no formato dominio:tipo:acao
+            assert t[field]
         assert t["required_scope"].count(":") == 2
-    # geradores usam verbo :write; análise/cálculo são :read.
-    by_name = {t["name"]: t for t in tools}
-    assert by_name["generate_user_stories"]["required_scope"].endswith(":write")
-    assert by_name["calculate_rice_score"]["required_scope"].endswith(":read")
+        assert t["capability"] == f"product-owner-mcp.{t['name']}"
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_tool_without_token(client: TestClient, monkeypatch):
-    # product-owner não tem tool exempt por padrão; simula uma p/ cobrir o ramo.
-    monkeypatch.setattr(M, "_EXEMPT_TOOLS", frozenset({"analyze_product_problem"}))
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "analyze_product_problem", "arguments": {"problem_statement": "X"}}},
-    )
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert json.loads(text)["problem_statement"] == "X"
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_user_story", "arguments": {"id": 1}}})
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
+
+
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "generate_user_stories", "arguments": {"feature": "F"}}},
+        json={"params": {"name": "get_user_story", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_user_stories",
-                "arguments": {"feature": "F"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_user_story", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_user_stories",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"feature": "F", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_user_story", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_user_stories"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "generate_user_stories", "arguments": {}, "_meta": {"twin_token": "t"}}},
+        json={"params": {"name": "get_user_story", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
 def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"calculate_rice_score"}))
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "calculate_rice_score", "arguments": {}}},
-    )
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_user_story"}))
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_user_story", "arguments": {"id": 1}}})
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
-
-
-# ── /mcp/tools/call — erro interno da tool vira payload de erro (200) ──────────
-def test_call_internal_error_is_wrapped(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(_name, _args):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_user_stories",
-                "arguments": {"feature": "F"},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["error"] == "internal_error"
-    assert "kaboom" in payload["detail"]
-
-
-# ── _dispatch cobre as 17 tools + KeyError ────────────────────────────────────
-def test_dispatch_routes_all_tools():
-    assert "root_cause_hypotheses" in M._dispatch("analyze_product_problem", {"problem_statement": "X"})
-    assert (
-        M._dispatch("calculate_rice_score", {"reach": 10, "impact": 1, "confidence": 1, "effort": 1})["score"]
-        == 10.0
-    )
-    assert "prioritized_items" in M._dispatch("prioritize_backlog", {"items": [{"name": "A", "score": 5}]})
-    assert "total_risks" in M._dispatch("map_product_risks", {"feature": "F", "risks": []})
-    assert "stages" in M._dispatch("map_user_journey", {"persona": "Ana", "steps": ["a"]})
-    assert M._dispatch("map_user_personas", {"personas": ["P"]})["count"] == 1
-    assert "research_questions" in M._dispatch("generate_discovery_questions", {"hypothesis": "H"})
-    assert "mvp_scope" in M._dispatch("define_mvp_scope", {"product": "P", "features": ["a"]})
-    assert "kpis" in M._dispatch("define_product_metrics", {"product": "P", "objectives": ["o"]})
-    assert "vision" in M._dispatch(
-        "define_product_vision", {"product": "P", "target_audience": "a", "problem": "b"}
-    )
-    assert M._dispatch("generate_feature_spec", {"feature": "F"})["feature"] == "F"
-    assert "key_messages" in M._dispatch(
-        "generate_go_to_market_brief",
-        {"product": "P", "target_segment": "s", "value_proposition": "v"},
-    )
-    assert "tech_requirements" in M._dispatch("generate_handoff_to_architecture", {"feature": "F"})
-    assert "wireframes_brief" in M._dispatch("generate_handoff_to_design", {"feature": "F"})
-    assert "definition_of_ready" in M._dispatch("generate_handoff_to_engineering", {"feature": "F"})
-    assert "phases" in M._dispatch("generate_release_plan", {"product": "P", "features": ["f"]})
-    assert M._dispatch("generate_user_stories", {"feature": "F"})["count"] >= 1
-    with pytest.raises(KeyError):
-        M._dispatch("unknown", {})
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    s = ProductOwnerSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server) ───────────────────────
-def test_build_server_smoke(monkeypatch):
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
+    with pytest.raises(jwt.InvalidAudienceError):
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
-    settings_mod.get_settings.cache_clear()
+
+# ── stdio call_tool → smoke do build_server (gateway-only) ────────────────────
+def test_build_server_stdio_and_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
     server, settings, http_app = M.build_server()
-    assert server is not None
     assert settings.mcp_twin_audience == "mcp:product-owner-mcp"
     assert http_app.title.startswith("product-owner-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "product-owner-mcp"
+
+
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_all_tools(store_a):
+    async def d(name, args):
+        return await M._dispatch(name, args, store_a)
+
+    # User Stories
+    story = (await d("save_user_story", {"feature": "f", "role": "u"}))["user_story"]
+    assert (await d("list_user_stories", {}))["total"] == 1
+    assert (await d("get_user_story", {"id": story["id"]}))["feature"] == "f"
+    assert (await d("update_user_story", {"id": story["id"], "status": "ready"}))["updated"] is True
+    assert (await d("delete_user_story", {"id": story["id"]}))["deleted"] is True
+
+    # MVP Scopes (upsert por product)
+    assert (await d("set_mvp_scope", {"product": "p", "content": {"core_features": []}}))["saved"] is True
+    assert (await d("list_mvp_scopes", {}))["total"] == 1
+    assert (await d("get_mvp_scope", {"product": "p"}))["product"] == "p"
+    assert (await d("delete_mvp_scope", {"product": "p"}))["deleted"] is True
+
+    # Product Visions (upsert por product)
+    assert (await d("set_product_vision", {"product": "v", "vision": "x"}))["saved"] is True
+    assert (await d("list_product_visions", {}))["total"] == 1
+    assert (await d("get_product_vision", {"product": "v"}))["product"] == "v"
+    assert (await d("delete_product_vision", {"product": "v"}))["deleted"] is True
+
+    # User Personas
+    persona = (await d("save_user_persona", {"name": "Ana", "goals": ["g"]}))["user_persona"]
+    assert (await d("list_user_personas", {}))["total"] == 1
+    assert (await d("get_user_persona", {"id": persona["id"]}))["name"] == "Ana"
+    assert (await d("update_user_persona", {"id": persona["id"], "segment": "B2B"}))["updated"] is True
+    assert (await d("delete_user_persona", {"id": persona["id"]}))["deleted"] is True
+
+    # Backlog Items (score RICE calculado de reach/impact/confidence/effort)
+    saved = await d(
+        "save_backlog_item", {"name": "b", "reach": 1000, "impact": 2, "confidence": 0.8, "effort": 4}
+    )
+    item = saved["backlog_item"]
+    assert item["score"] == 400.0
+    assert (await d("list_backlog_items", {}))["total"] == 1
+    assert (await d("get_backlog_item", {"id": item["id"]}))["name"] == "b"
+    assert (await d("update_backlog_item", {"id": item["id"], "status": "done"}))["updated"] is True
+    assert (await d("delete_backlog_item", {"id": item["id"]}))["deleted"] is True
+
+    # PO Artifacts
+    art = (await d("save_po_artifact", {"kind": "journey", "target": "onb", "content": {"s": 1}}))["artifact"]
+    assert (await d("list_po_artifacts", {}))["total"] == 1
+    assert (await d("get_po_artifact", {"id": art["id"]}))["kind"] == "journey"
+    assert (await d("delete_po_artifact", {"id": art["id"]}))["deleted"] is True
+
+    with pytest.raises(KeyError):
+        await d("does_not_exist", {})
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_validation_paths(store_a):
+    # kind inválido de artefato → erro sem persistir
+    bad = await M._dispatch("save_po_artifact", {"kind": "nope", "target": "x"}, store_a)
+    assert bad["error"] == "invalid_kind"
+    # get de id inexistente → not_found
+    missing = await M._dispatch("get_user_story", {"id": 999999}, store_a)
+    assert missing["error"] == "not_found"
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> ProductOwnerStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    saved = await M._run_tool(
+        "save_backlog_item",
+        {"name": "e2e", "reach": 500, "impact": 1, "confidence": 1.0, "effort": 2},
+        settings,
+        TENANT_A,
+    )
+    assert saved["saved"] is True and saved["backlog_item"]["score"] == 250.0
+    listed = await M._run_tool("list_backlog_items", {}, settings, TENANT_A)
+    assert listed["total"] == 1
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

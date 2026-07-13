@@ -1,5 +1,7 @@
 """Config do backend-mcp."""
 
-from .settings import NAMESPACE, Settings, get_settings
+from __future__ import annotations
 
-__all__ = ["NAMESPACE", "Settings", "get_settings"]
+from .settings import NAMESPACE, BackendSettings, Settings, get_settings, load_secret
+
+__all__ = ["NAMESPACE", "BackendSettings", "Settings", "get_settings", "load_secret"]
