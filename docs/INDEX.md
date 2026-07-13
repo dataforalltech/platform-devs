@@ -19,7 +19,7 @@ Snapshots históricos em **[archive/](archive/README.md)**. Última organizaçã
 - [MCP_CONSTRUCTION_GUIDE](../MCP_CONSTRUCTION_GUIDE.md) · [MCP_CONVERSION_PATTERN](../MCP_CONVERSION_PATTERN.md) · [MCP_FASTAPI_DOCKER](../MCP_FASTAPI_DOCKER.md)
 - [docs/mcp-discovery](mcp-discovery.md) · [docs/mcp-healthcheck-standard](mcp-healthcheck-standard.md)
 - **Twin PEP (autz):** [MCP_PHASE1_TWINPEP_MIGRATION](../MCP_PHASE1_TWINPEP_MIGRATION.md) · **Frontdoor OAuth:** [MCP_OAUTH_FRONTDOOR_DESIGN](../MCP_OAUTH_FRONTDOOR_DESIGN.md)
-- **Gateway:** [GATEWAY_QUICK_START](../GATEWAY_QUICK_START.md) · **Registrar backends no gateway:** [register-mcp-backends](runbooks/register-mcp-backends.md)
+- **Gateway:** [GATEWAY_QUICK_START](../GATEWAY_QUICK_START.md) · **Registrar backends no gateway:** `register-mcp-backends` → movido para [platform-infra](https://github.com/dataforalltech/platform-infra/blob/main/docs/runbooks/register-mcp-backends.md)
 - **Catálogo (gaps):** [docs/catalog-gaps/runbooks-wave1](catalog-gaps/runbooks-wave1.md) · **Decisão Trinity:** [docs/decisions/adr-0001](decisions/adr-0001.md)
 
 ## 🤖 DevTeam & Agentes
