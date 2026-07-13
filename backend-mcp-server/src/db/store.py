@@ -63,6 +63,20 @@ def _dumps(value: Any) -> str | None:
     return None if value is None else json.dumps(value, ensure_ascii=False)
 
 
+def _prune(record: dict[str, Any]) -> dict[str, Any]:
+    """Payload de upsert com semântica de *merge*: descarta as chaves com valor ``None``.
+
+    O ``upsert`` do ORM deriva o ``SET`` do ON DUPLICATE KEY UPDATE de TODAS as colunas
+    não-chave presentes no payload (``update_columns=None``). Se um campo omitido viajar
+    como ``None``, o update-path o sobrescreve com ``NULL``, apagando o valor já gravado
+    numa chamada anterior. Podando os ``None`` antes do upsert, só as colunas fornecidas
+    entram no INSERT e no ``SET`` — os campos omitidos preservam o valor persistido. As
+    chaves naturais (``endpoint``+``method`` em api_contracts, ``resource`` em
+    auth_policies) são sempre não-``None``, então nunca são podadas.
+    """
+    return {k: v for k, v in record.items() if v is not None}
+
+
 def _jsonable(row: dict[str, Any]) -> dict[str, Any]:
     """Datetimes das colunas padrão (create_on/timestamp_refresh) -> ISO str, para o
     `json.dumps` do envelope MCP não quebrar."""
@@ -123,15 +137,17 @@ class BackendStore:
         status: str | None = None,
     ) -> dict[str, Any]:
         await self._contracts.upsert(
-            {
-                "endpoint": endpoint,
-                "method": method,
-                "description": description,
-                "request_schema": _dumps(request_schema),
-                "response_schema": _dumps(response_schema),
-                "status_codes": _dumps(status_codes),
-                "status": status,
-            },
+            _prune(
+                {
+                    "endpoint": endpoint,
+                    "method": method,
+                    "description": description,
+                    "request_schema": _dumps(request_schema),
+                    "response_schema": _dumps(response_schema),
+                    "status_codes": _dumps(status_codes),
+                    "status": status,
+                }
+            ),
             conflict_columns=["endpoint", "method"],
             user_id=_SYSTEM_USER,
         )
@@ -258,14 +274,16 @@ class BackendStore:
         status: str | None = None,
     ) -> dict[str, Any]:
         await self._policies.upsert(
-            {
-                "resource": resource,
-                "auth_type": auth_type,
-                "roles": _dumps(roles),
-                "data_sensitivity": data_sensitivity,
-                "rules": _dumps(rules),
-                "status": status,
-            },
+            _prune(
+                {
+                    "resource": resource,
+                    "auth_type": auth_type,
+                    "roles": _dumps(roles),
+                    "data_sensitivity": data_sensitivity,
+                    "rules": _dumps(rules),
+                    "status": status,
+                }
+            ),
             conflict_columns=["resource"],
             user_id=_SYSTEM_USER,
         )

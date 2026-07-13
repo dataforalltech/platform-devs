@@ -63,6 +63,19 @@ def _dumps(value: Any) -> str | None:
     return None if value is None else json.dumps(value, ensure_ascii=False)
 
 
+def _prune(record: dict[str, Any]) -> dict[str, Any]:
+    """Payload de upsert com semântica de *merge*: descarta as chaves com valor ``None``.
+
+    O ``upsert`` do ORM deriva o ``SET`` do ON DUPLICATE KEY UPDATE de TODAS as colunas
+    não-chave presentes no payload (``update_columns=None``). Se um campo omitido viajar
+    como ``None``, o update-path o sobrescreve com ``NULL``, apagando o valor já gravado
+    numa chamada anterior. Podando os ``None`` antes do upsert, só as colunas fornecidas
+    entram no INSERT e no ``SET`` — os campos omitidos preservam o valor persistido. A
+    chave natural (``product``) é sempre não-``None``, então nunca é podada.
+    """
+    return {k: v for k, v in record.items() if v is not None}
+
+
 def _jsonable(row: dict[str, Any]) -> dict[str, Any]:
     """Datetimes das colunas padrão (create_on/timestamp_refresh) -> ISO str, para o
     `json.dumps` do envelope MCP não quebrar."""
@@ -304,13 +317,15 @@ class ProductManagerStore:
         status: str | None = None,
     ) -> dict[str, Any]:
         await self._visions.upsert(
-            {
-                "product": product,
-                "vision": vision,
-                "mission": mission,
-                "goals": _dumps(goals),
-                "status": status,
-            },
+            _prune(
+                {
+                    "product": product,
+                    "vision": vision,
+                    "mission": mission,
+                    "goals": _dumps(goals),
+                    "status": status,
+                }
+            ),
             conflict_columns=["product"],
             user_id=_SYSTEM_USER,
         )
