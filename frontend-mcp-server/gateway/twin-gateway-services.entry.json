@@ -8,7 +8,7 @@
     "healthPath": "/v1/health",
     "toolsListPath": "/mcp/tools/list",
     "toolsCallPath": "/mcp/tools/call",
-    "exemptTools": ["status"],
+    "exemptTools": [],
     "excludeTools": []
   }
 ]
