@@ -2,41 +2,61 @@
 
 Persona **QA Engineer** exposta como sidecar MCP `kind=mcp_http` no padrão canônico
 **Model C** (inner Twin Token) do platform-service-template. Serviço Python
-**compute-only**: gera artefatos de teste/QA a partir dos inputs — não há backend
-REST/Trinity a chamar. Fica sempre atrás do `platform-mcp-gateway` (ingress só via
-gateway, INV-1).
+**stateful**: no modelo *"o agente gera o conteúdo, a tool persiste"*, o agente
+chamador fornece o artefato (plano, caso, bug, código de teste) e as tools o
+**persistem** no banco do tenant. A persistência roda 100% sobre o **ORM canônico**
+(`platform_database.orm`), **tenant-scoped e dual-db**, credencial-zero (ORM-H-12):
+o serviço só conhece o `tenant_id`; a credencial do banco vem de
+`ADMIN_DATAFORALL.PLATFORMS`. Fica sempre atrás do `platform-mcp-gateway` (ingress só
+via gateway, INV-1).
 
 ## Arquitetura
 
-- Transporte: **stdio** (MCP primário) + **sidecar HTTP** (`:MCP_PORT`, default `7124`).
+- Transporte: **stdio** (MCP primário — gateway-only: recusa fail-closed sem tenant)
+  + **sidecar HTTP** (`:MCP_PORT`, default `7124`).
 - `GET  /v1/health` — liveness (sem token).
 - `GET  /mcp/tools/list` — catálogo governado (por tool: `inputSchema` +
   `capability` / `required_scope` / `resource_type` / `data_domain`).
 - `POST /mcp/tools/call` — execução. Re-verifica o **inner Twin Token**
   (`aud=mcp:qa-engineer-mcp`, RS256 via JWKS do platform-admin, `jti` obrigatório —
   STD-SEC-006). O `tenant_id` vem SEMPRE das claims do token, nunca de argumento do
-  cliente (SEC-035 / INV-3).
+  cliente (SEC-035 / INV-3); a sessão do store é aberta credencial-zero por-request
+  (`for_tenant`).
 
 Standards: `STD-MCP-001` (contrato de integração), `STD-SEC-001/004/006` (RS256, um
 único `.env`, inner token), `STD-OBS-001` (logging JSON estruturado).
 
-## Tools (19)
+## Modelo de dados (5 entidades, dual-db)
 
-**Leitura / análise (`:read`)** — `analyze_quality_requirement`,
-`classify_bug_severity`, `validate_story_testability`, `review_test_coverage`.
+`qa_test_plans`, `qa_test_cases`, `qa_bug_reports`, `qa_quality_gates` (chave natural
+única `service` → upsert), `qa_artifacts` (histórico append-only do código/cenário
+gerado). Dados estruturados são JSON serializado em `TEXT` (dual-db safe).
 
-**Geração de artefatos (`:write`)** — `generate_test_plan`, `generate_test_cases`,
-`generate_gherkin_scenarios`, `generate_e2e_tests`, `generate_api_tests`,
-`generate_unit_tests`, `generate_playwright_tests`, `generate_cypress_tests`,
-`generate_postman_collection`, `generate_bug_report`, `generate_quality_gate`,
-`generate_uat_checklist`, `generate_k6_performance_test`,
-`generate_regression_suite`, `generate_smoke_test_suite`.
+## Tools (23) — CRUD que persiste
+
+Cada entidade expõe `save`/`set` (persiste o artefato do agente), `list` (filtros),
+`get` e `delete` (soft-delete); plans/cases/bugs também têm `update`:
+
+- **Test Plans** — `save_test_plan`, `list_test_plans`, `get_test_plan`,
+  `update_test_plan`, `delete_test_plan`.
+- **Test Cases** — `save_test_case`, `list_test_cases`, `get_test_case`,
+  `update_test_case`, `delete_test_case`.
+- **Bug Reports** — `save_bug_report` (calcula severidade P1–P4 + score de
+  impacto×frequência quando ausentes), `list_bug_reports`, `get_bug_report`,
+  `update_bug_status`, `delete_bug_report`.
+- **Quality Gates** — `set_quality_gate` (upsert por `service`), `list_quality_gates`,
+  `get_quality_gate`, `delete_quality_gate`.
+- **Artifacts** — `save_artifact` (kind ∈ e2e|api|unit|gherkin|playwright|cypress|
+  postman|k6|regression|smoke|uat|coverage|analysis|testability), `list_artifacts`,
+  `get_artifact`, `delete_artifact`.
 
 ## Configuração
 
 Um único `.env` (STD-SEC-004), discriminado por `RUNTIME_ENV ∈ {local, cloud}`.
-Copie `.env.example` para `.env` e ajuste. Em `cloud`, `URL_ADMIN_TWIN_JWKS` é
-obrigatório. Swagger/OpenAPI nunca é exposto (`DOCS_ENABLED=false`).
+Copie `.env.example` para `.env` e ajuste (`DB_*` do tenant + `ADMIN_DB_*` que resolve
+o tenant via PLATFORMS). Em `cloud`, `URL_ADMIN_TWIN_JWKS` e `ADMIN_DB_HOST`/
+`ADMIN_DB_PASSWORD` são obrigatórios. Swagger/OpenAPI nunca é exposto
+(`DOCS_ENABLED=false`).
 
 ## Desenvolvimento
 
