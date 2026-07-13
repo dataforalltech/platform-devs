@@ -1,6 +1,10 @@
 """Servidor MCP deploy — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-24 tools para Git, PR, GitHub Actions, pipeline CI/CD, ACR e workspace local:
+deploy-mcp é COMPUTE + STATEFUL: cada tool de ação FAZ a operação real (git, GitHub,
+deploy, ACR, CI) via o `GitHubClient` e, DEPOIS do sucesso, **registra a operação num
+ledger persistido** (dual-db, tenant-scoped, credencial-zero). Padrão: "faz a ação →
+registra no ledger". 30 tools:
+
   Git (4):            list_repos, create_branch, list_branches, commit_files
   PR (4):             create_pr, get_pr, merge_pr, list_prs
   Workflow (4):       trigger_workflow, list_workflow_runs, get_workflow_run, cancel_workflow_run
@@ -9,6 +13,8 @@
   ACR (3):            setup_repo, acr_build, list_acr_images
   Healthcheck (1):    ensure_all_repos_healthy
   Local Workspace (4): get_repos_root, set_repos_root, list_local_repos, clone_repo
+  Ledger (6, novas — leem o histórico persistido): list_deployments, get_deployment,
+     list_deploy_events, list_pr_history, list_workflow_history, list_registered_repos
 
 Implementa o contrato de integração com o MCP Gateway central (platform-mcp-gateway):
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
@@ -21,17 +27,18 @@ Pontos gateway-ready:
      JWKS do platform-admin, na PRÓPRIA audiência (defense in depth — CI-4/CI-5). O
      inner token chega em params._meta.twin_token.
   3. tenant_id vem SEMPRE dos claims do token verificado — nunca de argumento do
-     cliente (SEC-035 / INV-3).
-  4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
-  5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
+     cliente (SEC-035 / INV-3); o ledger é escrito/lido no banco DESSE tenant.
+  4. _EXCLUDE_TOOLS (denylist fail-safe). /docs desabilitado (DOCS_ENABLED=false).
 
-Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
+Persistência: as tools de ação usam o `GitHubClient` (síncrono, inalterado) para a
+ação; o `_run_tool` (async) abre uma sessão tenant-scoped (`for_tenant`, credencial-
+zero, ORM-H-12) e persiste o ledger via `DeployStore`. Tools puramente compute/read
+(templates, workspace, list_* live do GitHub) NÃO abrem pool — só rodam e retornam.
+
+Transporte: stdio (primário, MCP — fail-closed, sem tenant) + sidecar HTTP (:MCP_PORT):
   GET  /v1/health        — liveness (health_path do registro, sem token)
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
-  POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
-
-NOTA: deploy-mcp fala com um BACKEND (GitHub REST API + ACR) via o GitHubClient
-(src/knowledge/github_client.py) — o cliente de backend do serviço (Bearer = PAT).
+  POST /mcp/tools/call   — execução (inner token obrigatório; tenant dos claims)
 """
 
 from __future__ import annotations
@@ -47,9 +54,15 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
 from ..config.settings import NAMESPACE, DeploySettings, get_settings
+from ..db.schema import ensure_schema
+from ..db.store import DeployStore
 from ..knowledge.github_client import GitHubClient
 from ..tools import (
     acr_build,
@@ -61,15 +74,21 @@ from ..tools import (
     deploy,
     ensure_all_repos_healthy,
     get_deploy_status,
+    get_deployment,
     get_pipeline_templates,
     get_pr,
     get_repos_root,
     get_workflow_run,
     list_acr_images,
     list_branches,
+    list_deploy_events,
+    list_deployments,
     list_local_repos,
+    list_pr_history,
     list_prs,
+    list_registered_repos,
     list_repos,
+    list_workflow_history,
     list_workflow_runs,
     merge_pr,
     scaffold_pipeline,
@@ -773,6 +792,84 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    # ── Ledger (consulta do histórico persistido — dual-db, tenant-scoped) ──── #
+    "list_deployments": {
+        "description": (
+            "Lista o histórico de deploys persistido no ledger do tenant, com filtros "
+            "opcionais por service/environment/status. Lê do banco (não do GitHub)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "service": {"type": "string", "description": "Filtrar por serviço."},
+                "environment": {
+                    "type": "string",
+                    "enum": ["dev", "hml", "prod"],
+                    "description": "Filtrar por ambiente.",
+                },
+                "status": {"type": "string", "description": "Filtrar por status."},
+            },
+        },
+    },
+    "get_deployment": {
+        "description": "Retorna um registro de deploy do ledger por id.",
+        "schema": {
+            "type": "object",
+            "required": ["id"],
+            "additionalProperties": False,
+            "properties": {"id": {"type": "integer", "description": "Id do deploy no ledger."}},
+        },
+    },
+    "list_deploy_events": {
+        "description": (
+            "Lista os eventos genéricos do ledger (clone/commit/acr_build/cancel_run/"
+            "scaffold_pipeline/trigger_workflow), com filtros opcionais por kind/target."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "kind": {"type": "string", "description": "Filtrar por tipo de evento."},
+                "target": {"type": "string", "description": "Filtrar por alvo (repo/imagem/run)."},
+            },
+        },
+    },
+    "list_pr_history": {
+        "description": (
+            "Lista o histórico de Pull Requests persistido no ledger (upsert por "
+            "repo+number), com filtros opcionais por repo/state. Lê do banco."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "repo": {"type": "string", "description": "Filtrar por repositório."},
+                "state": {"type": "string", "description": "Filtrar por estado (open/closed/merged)."},
+            },
+        },
+    },
+    "list_workflow_history": {
+        "description": (
+            "Lista o histórico de workflow runs persistido no ledger (upsert por "
+            "repo+run_id), com filtros opcionais por repo/status. Lê do banco."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "repo": {"type": "string", "description": "Filtrar por repositório."},
+                "status": {"type": "string", "description": "Filtrar por status do run."},
+            },
+        },
+    },
+    "list_registered_repos": {
+        "description": (
+            "Lista os repositórios registrados no ledger (via setup_repo) com sua "
+            "config e status. Lê do banco do tenant."
+        ),
+        "schema": {"type": "object", "additionalProperties": False, "properties": {}},
+    },
 }
 
 
@@ -913,6 +1010,37 @@ _POLICY: dict[str, dict[str, str]] = {
         "resource_type": "workspace",
         "data_domain": "workspace",
     },
+    # ── Ledger (consulta do histórico persistido — :read, tenant-scoped) ──────
+    "list_deployments": {
+        "required_scope": f"{NAMESPACE}:deployment:read",
+        "resource_type": "deployment",
+        "data_domain": "cicd",
+    },
+    "get_deployment": {
+        "required_scope": f"{NAMESPACE}:deployment:read",
+        "resource_type": "deployment",
+        "data_domain": "cicd",
+    },
+    "list_deploy_events": {
+        "required_scope": f"{NAMESPACE}:event:read",
+        "resource_type": "event",
+        "data_domain": "cicd",
+    },
+    "list_pr_history": {
+        "required_scope": f"{NAMESPACE}:pr:read",
+        "resource_type": "pull_request",
+        "data_domain": "source_control",
+    },
+    "list_workflow_history": {
+        "required_scope": f"{NAMESPACE}:workflow:read",
+        "resource_type": "workflow",
+        "data_domain": "cicd",
+    },
+    "list_registered_repos": {
+        "required_scope": f"{NAMESPACE}:repo:read",
+        "resource_type": "repo",
+        "data_domain": "cicd",
+    },
 }
 
 assert set(_POLICY.keys()) == set(_TOOL_SCHEMAS.keys()), "_POLICY cobre todas as tools"  # noqa: S101
@@ -923,11 +1051,24 @@ for _name, _meta in _TOOL_SCHEMAS.items():
     _meta["capability"] = f"{NAMESPACE}.{_name}"
     _meta.update(_POLICY[_name])
 
-# Tools encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless). deploy-mcp
-# não tem tool de status/health (o liveness é o endpoint /v1/health), então vazio.
+# deploy-mcp é tenant-scoped e gateway-only: TODA tool exige inner token válido (com
+# tenant nos claims). Não há tool tokenless — o liveness é o endpoint /v1/health.
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que retornam segredo NUNCA saem pelo gateway (CI-7).
 _EXCLUDE_TOOLS: frozenset[str] = frozenset()
+
+# Tools NOVAS que LEEM o ledger persistido (abrem sessão tenant-scoped p/ ler do DB).
+# São roteadas para `_dispatch_ledger` (async), não para o `_dispatch` compute/GitHub.
+_LEDGER_QUERY_TOOLS: frozenset[str] = frozenset(
+    {
+        "list_deployments",
+        "get_deployment",
+        "list_deploy_events",
+        "list_pr_history",
+        "list_workflow_history",
+        "list_registered_repos",
+    }
+)
 
 # Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
 _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
@@ -956,6 +1097,269 @@ def _verify_inner_token(twin_token: str, settings: DeploySettings) -> dict[str, 
         audience=settings.mcp_twin_audience,  # a falha de integração nº 1
         options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
+
+
+# ── Ledger: mapa ação → persistência (após a ação ter SUCESSO) ────────────────
+# Cada persister recebe (store, args, result) e grava a row/evento certo. O ledger é
+# best-effort: a ação já teve sucesso no GitHub/ACR/git; uma falha ao gravar o ledger
+# é logada mas NUNCA desfaz nem esconde a ação (as ações existentes não podem quebrar).
+
+
+def _is_ok(payload: Any) -> bool:
+    """True se o payload da ação não carrega um `error` (só então persistimos o ledger)."""
+    return isinstance(payload, dict) and "error" not in payload
+
+
+async def _persist_deploy(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.record_deployment(
+        service=result.get("service") or args.get("service") or "",
+        environment=result.get("environment") or args.get("environment") or "",
+        status="dispatched" if result.get("dispatched") else "unknown",
+        ref=result.get("ref"),
+        repo=result.get("repo"),
+        workflow=result.get("workflow"),
+        detail=result,
+    )
+
+
+async def _persist_create_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    number = result.get("number")
+    if number is None:
+        return
+    await store.upsert_pull_request(
+        repo=args.get("repo") or "",
+        number=int(number),
+        title=result.get("title"),
+        base=result.get("base"),
+        head=result.get("head"),
+        url=result.get("url"),
+        state=result.get("state"),
+    )
+
+
+async def _persist_get_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    number = result.get("number") or args.get("pr_number")
+    if number is None:
+        return
+    await store.upsert_pull_request(
+        repo=args.get("repo") or "",
+        number=int(number),
+        title=result.get("title"),
+        base=result.get("base"),
+        head=result.get("head"),
+        url=result.get("url"),
+        state=result.get("state"),
+    )
+
+
+async def _persist_merge_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    number = args.get("pr_number")
+    if number is None:
+        return
+    # Só state='merged' — _prune preserva título/base/head do create_pr/get_pr anterior.
+    await store.upsert_pull_request(repo=args.get("repo") or "", number=int(number), state="merged")
+
+
+async def _persist_create_branch(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.upsert_branch(
+        repo=result.get("repo") or args.get("repo") or "",
+        branch=result.get("branch") or args.get("branch") or "",
+        from_ref=args.get("from_ref", "develop"),
+        status="created",
+    )
+
+
+async def _persist_trigger_workflow(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    # O dispatch do GitHub NÃO retorna run_id (a chave natural (repo, run_id) do
+    # WorkflowRunRow exige um); então o disparo entra como evento append-only. O run
+    # real, com id, é gravado por get_workflow_run (upsert refresh). Ver relatório.
+    await store.record_event(
+        kind="trigger_workflow",
+        target=f"{args.get('repo')}/{args.get('workflow_id')}",
+        status="dispatched" if result.get("dispatched") else "unknown",
+        detail=result,
+    )
+
+
+async def _persist_get_workflow_run(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    run_id = result.get("id") or args.get("run_id")
+    if run_id is None:
+        return
+    await store.upsert_workflow_run(
+        repo=args.get("repo") or "",
+        run_id=str(run_id),
+        workflow=result.get("name"),
+        status=result.get("status"),
+        conclusion=result.get("conclusion"),
+        detail=result,
+    )
+
+
+async def _persist_cancel_workflow_run(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
+    await store.record_event(
+        kind="cancel_run",
+        target=f"{args.get('repo')}#{args.get('run_id')}",
+        status="cancelled" if result.get("cancelled") else "cancel_requested",
+        detail=result,
+    )
+
+
+async def _persist_commit_files(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.record_event(
+        kind="commit",
+        target=f"{args.get('repo')}@{args.get('branch')}",
+        status="committed",
+        detail={"sha": result.get("sha"), "url": result.get("url"), "files": result.get("files")},
+    )
+
+
+async def _persist_acr_build(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.record_event(
+        kind="acr_build",
+        target=result.get("image") or args.get("image_name"),
+        status="success" if result.get("success") else "built",
+        detail=result,
+    )
+
+
+async def _persist_scaffold_pipeline(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
+    await store.record_event(
+        kind="scaffold_pipeline",
+        target=result.get("repo") or args.get("repo"),
+        status="committed" if result.get("committed") else "done",
+        detail={
+            "sha": result.get("sha"),
+            "branch": result.get("branch"),
+            "files_installed": result.get("files_installed"),
+        },
+    )
+
+
+async def _persist_clone_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.record_event(
+        kind="clone",
+        target=result.get("repo") or args.get("repo"),
+        status=result.get("action") or "cloned",
+        detail={
+            "path": result.get("path"),
+            "branch": result.get("branch"),
+            "last_commit": result.get("last_commit"),
+        },
+    )
+
+
+async def _persist_setup_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+    await store.upsert_repo(
+        repo=result.get("repo") or args.get("repo") or "",
+        config={
+            "image_name": result.get("image_name"),
+            "registry": result.get("registry"),
+            "configured": result.get("configured"),
+        },
+        status="configured" if result.get("success") else "partial",
+    )
+
+
+# Só as tools de AÇÃO persistem. As compute/read (templates, workspace, list_* live do
+# GitHub) NÃO estão aqui — rodam e retornam sem abrir pool.
+_LEDGER_PERSISTERS: dict[str, Any] = {
+    "deploy": _persist_deploy,
+    "create_pr": _persist_create_pr,
+    "get_pr": _persist_get_pr,
+    "merge_pr": _persist_merge_pr,
+    "create_branch": _persist_create_branch,
+    "trigger_workflow": _persist_trigger_workflow,
+    "get_workflow_run": _persist_get_workflow_run,
+    "cancel_workflow_run": _persist_cancel_workflow_run,
+    "commit_files": _persist_commit_files,
+    "acr_build": _persist_acr_build,
+    "scaffold_pipeline": _persist_scaffold_pipeline,
+    "clone_repo": _persist_clone_repo,
+    "setup_repo": _persist_setup_repo,
+}
+
+
+# ── Dispatcher do ledger (async: recebe o store ligado ao pool do tenant) ──────
+
+
+async def _dispatch_ledger(name: str, args: dict[str, Any], store: DeployStore) -> dict[str, Any]:
+    """Despacha as tools NOVAS de consulta do ledger (leem do banco do tenant)."""
+    if name == "list_deployments":
+        return await list_deployments(
+            store,
+            service=args.get("service"),
+            environment=args.get("environment"),
+            status=args.get("status"),
+        )
+    if name == "get_deployment":
+        return await get_deployment(store, deployment_id=args["id"])
+    if name == "list_deploy_events":
+        return await list_deploy_events(store, kind=args.get("kind"), target=args.get("target"))
+    if name == "list_pr_history":
+        return await list_pr_history(store, repo=args.get("repo"), state=args.get("state"))
+    if name == "list_workflow_history":
+        return await list_workflow_history(store, repo=args.get("repo"), status=args.get("status"))
+    if name == "list_registered_repos":
+        return await list_registered_repos(store)
+    raise KeyError(name)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: DeploySettings, tenant_id: str) -> None:
+    """Garante as tabelas do ledger no banco do tenant (uma vez por processo). O engine
+    é o do dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str,
+    arguments: dict[str, Any],
+    settings: DeploySettings,
+    client: GitHubClient,
+    tenant_id: str,
+) -> dict[str, Any]:
+    """Executa a tool e, para as tools de ação, persiste o ledger no banco do tenant.
+
+    - Tools de CONSULTA do ledger → abrem sessão tenant-scoped e leem do DB.
+    - Tools de AÇÃO → rodam a ação (GitHubClient, síncrona, inalterada) e DEPOIS
+      persistem o ledger (best-effort; a ação nunca é desfeita por falha de ledger).
+    - Tools compute/read → só rodam e retornam (não abrem pool).
+    """
+    # Consultas do ledger: leem do banco (não tocam o GitHub).
+    if name in _LEDGER_QUERY_TOOLS:
+        await _ensure_tenant_schema(settings, tenant_id)
+        async with for_tenant(tenant_id) as session:
+            return await _dispatch_ledger(name, arguments, DeployStore(session))
+
+    # Ação/compute existente (síncrona, inalterada). KeyError p/ tool desconhecida.
+    payload = _dispatch(name, arguments, settings, client)
+
+    # Persiste o ledger APÓS a ação ter sucesso (só as tools de ação têm persister).
+    persister = _LEDGER_PERSISTERS.get(name)
+    if persister is not None and _is_ok(payload):
+        try:
+            await _ensure_tenant_schema(settings, tenant_id)
+            async with for_tenant(tenant_id) as session:
+                await persister(DeployStore(session), arguments, payload)
+        except Exception:  # noqa: BLE001 — ledger best-effort: a ação já teve sucesso
+            _log.exception("ledger_persist_failed tool=%s tenant=%s", name, tenant_id)
+    return payload
 
 
 # ── HTTP Sidecar (health + bridge governado /mcp/tools/*) ─────────────────────
@@ -993,7 +1397,7 @@ def _build_http_app(settings: DeploySettings, client: GitHubClient | None = None
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -1001,24 +1405,22 @@ def _build_http_app(settings: DeploySettings, client: GitHubClient | None = None
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
-        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
-        if name not in _EXEMPT_TOOLS:
-            twin_token = (params.get("_meta") or {}).get("twin_token")
-            if not twin_token:
-                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
-            try:
-                claims = _verify_inner_token(twin_token, settings)
-            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha
-                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
-                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        # Toda tool exige inner token válido; o tenant vem SEMPRE dos claims (SEC-035 /
+        # INV-3), nunca de argumento do cliente. O ledger é escrito/lido nesse tenant.
+        twin_token = (params.get("_meta") or {}).get("twin_token")
+        if not twin_token:
+            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+        try:
+            claims = _verify_inner_token(twin_token, settings)
+        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha
+            _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+        tenant_id = claims.get("tenant_id")
+        if not tenant_id:
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments, settings, client)
+            payload = await _run_tool(name, arguments, settings, client, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -1027,23 +1429,34 @@ def _build_http_app(settings: DeploySettings, client: GitHubClient | None = None
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 def build_server() -> tuple[Any, DeploySettings, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings, o GitHubClient e o sidecar HTTP."""
+    """Inicializa o MCP Server (stdio), settings, o GitHubClient e o sidecar HTTP.
+
+    O ledger é tenant-scoped e resolvido por-request (credencial-zero).
+    ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*) usada para
+    resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/004/006)
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
 
     client = GitHubClient(settings)
     http_app = _build_http_app(settings, client)
     _log.info(
-        "deploy_mcp_ready tools=%d github_org=%s acr_registry=%s",
+        "deploy_mcp_ready tools=%d github_org=%s acr_registry=%s engine=%s",
         len(_TOOL_SCHEMAS),
         settings.github_org,
         settings.acr_registry,
+        settings.DB_ENGINE,
     )
 
     server: Server = Server("deploy-mcp-server")
@@ -1057,14 +1470,21 @@ def build_server() -> tuple[Any, DeploySettings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args, settings, client)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). deploy-mcp é
+        # tenant-scoped e gateway-only: a execução real entra pelo sidecar HTTP
+        # (/mcp/tools/call), onde o tenant vem dos claims verificados. Aqui recusamos
+        # fail-closed (sem tenant não há como escrever/ler o ledger).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "deploy-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     return server, settings, http_app

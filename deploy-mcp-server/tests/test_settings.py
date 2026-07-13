@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 from src.config import settings as S
 from src.config.settings import DeploySettings, load_secret
 
@@ -128,3 +130,72 @@ def test_acr_password_empty_becomes_none(monkeypatch):
     monkeypatch.setattr(S, "load_secret", lambda _key, _fallback: "")
     s = _settings()
     assert s.acr_password is None
+
+
+# ── DB/Admin settings (ledger dual-db, credencial-zero) ───────────────────────
+def test_db_settings_defaults():
+    s = _settings()
+    assert s.DB_ENGINE == "mysql"
+    assert s.DB_PORT == 3306
+    assert s.DB_USER == "root"
+    assert s.ADMIN_DB_PORT == 3306
+
+
+def test_db_password_resolved_via_vault(monkeypatch):
+    monkeypatch.setattr(
+        S,
+        "load_secret",
+        lambda key, fallback: "resolved-db" if key.endswith("/db_password") else fallback,
+    )
+    s = _settings(DB_PASSWORD="ignored")
+    assert s.DB_PASSWORD == "resolved-db"
+
+
+def test_admin_db_password_resolved_via_vault(monkeypatch):
+    monkeypatch.setattr(
+        S,
+        "load_secret",
+        lambda key, fallback: "resolved-admin" if key.endswith("/admin_db_password") else fallback,
+    )
+    s = _settings(ADMIN_DB_PASSWORD="ignored")
+    assert s.ADMIN_DB_PASSWORD == "resolved-admin"
+
+
+# ── enforce_security_invariants (fail-fast no boot) ───────────────────────────
+def test_enforce_ok_local():
+    _settings(RUNTIME_ENV="local").enforce_security_invariants()  # não levanta
+
+
+def test_enforce_docs_enabled_forbidden():
+    with pytest.raises(RuntimeError, match="STD-SEC-001"):
+        _settings(DOCS_ENABLED=True).enforce_security_invariants()
+
+
+def test_enforce_bad_audience():
+    with pytest.raises(RuntimeError, match="STD-SEC-006"):
+        _settings(MCP_TWIN_AUDIENCE="deploy-mcp").enforce_security_invariants()
+
+
+def test_enforce_cloud_requires_jwks():
+    with pytest.raises(RuntimeError, match="URL_ADMIN_TWIN_JWKS"):
+        _settings(RUNTIME_ENV="cloud", URL_ADMIN_TWIN_JWKS="").enforce_security_invariants()
+
+
+def test_enforce_cloud_requires_github_token():
+    with pytest.raises(RuntimeError, match="DEPLOY_GITHUB_TOKEN"):
+        _settings(
+            RUNTIME_ENV="cloud",
+            github_token="",
+            URL_ADMIN_TWIN_JWKS="http://a/jwks",
+        ).enforce_security_invariants()
+
+
+def test_enforce_cloud_requires_admin_db():
+    with pytest.raises(RuntimeError, match="ADMIN_DB_HOST/ADMIN_DB_PASSWORD"):
+        _settings(
+            RUNTIME_ENV="cloud",
+            github_token="ghp_x",
+            URL_ADMIN_TWIN_JWKS="http://a/jwks",
+            ADMIN_DB_HOST="",
+            ADMIN_DB_PASSWORD="",
+        ).enforce_security_invariants()
