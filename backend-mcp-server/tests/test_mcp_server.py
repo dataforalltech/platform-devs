@@ -1,26 +1,51 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown) e
-_verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
-os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (happy
+path / dispatch / unknown) roda contra MySQL real via `_run_tool`/`_dispatch`.
 """
 
 from __future__ import annotations
 
-import json
-
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.settings import Settings
+from src.config.settings import BackendSettings
 from src.server import mcp_server as M
 
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
-def _settings() -> Settings:
-    return Settings(
+_EXPECTED_TOOLS = {
+    "save_api_contract",
+    "list_api_contracts",
+    "get_api_contract",
+    "delete_api_contract",
+    "save_database_schema",
+    "list_database_schemas",
+    "get_database_schema",
+    "update_database_schema",
+    "delete_database_schema",
+    "save_auth_policy",
+    "list_auth_policies",
+    "get_auth_policy",
+    "delete_auth_policy",
+    "save_artifact",
+    "list_artifacts",
+    "get_artifact",
+    "delete_artifact",
+    "save_code_review",
+    "list_code_reviews",
+    "get_code_review",
+    "delete_code_review",
+}
+
+
+def _settings(**over) -> BackendSettings:
+    return BackendSettings(
         MCP_TWIN_AUDIENCE="mcp:backend-mcp",
-        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        **over,
     )
 
 
@@ -29,289 +54,191 @@ def client() -> TestClient:
     return TestClient(M._build_http_app(_settings()))
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 21
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "backend-mcp", "tools": 13}
+    assert r.json() == {"status": "ok", "service": "backend-mcp", "tools": 21}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {
-        "analyze_backend_requirement",
-        "review_backend_code",
-        "optimize_query",
-        "generate_api_contract",
-        "generate_auth_policy",
-        "generate_database_schema",
-        "generate_fastapi_router",
-        "generate_nestjs_controller",
-        "generate_migration",
-        "generate_repository_layer",
-        "generate_service_layer",
-        "generate_openapi_spec",
-        "map_integration_flow",
-    }
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
-        assert t["inputSchema"]["additionalProperties"] is False
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
-            assert t[field], f"{t['name']} sem {field}"
-        # capability é o id estável <namespace>.<tool>
-        assert t["capability"] == f"backend-mcp.{t['name']}"
-        # required_scope no formato dominio:tipo:acao
+            assert t[field]
         assert t["required_scope"].count(":") == 2
-        assert t["required_scope"].startswith("backend-mcp:")
-    by_name = {t["name"]: t for t in tools}
-    # análise/revisão/otimização são :read; geradores/mapeamento são :write.
-    assert by_name["analyze_backend_requirement"]["required_scope"].endswith(":read")
-    assert by_name["review_backend_code"]["required_scope"].endswith(":read")
-    assert by_name["optimize_query"]["required_scope"].endswith(":read")
-    assert by_name["generate_api_contract"]["required_scope"].endswith(":write")
-    assert by_name["generate_database_schema"]["required_scope"].endswith(":write")
-    assert by_name["map_integration_flow"]["required_scope"].endswith(":write")
-    # data_domain sensível: a auth_policy é security, o resto é backend.
-    assert by_name["generate_auth_policy"]["data_domain"] == "security"
+        assert t["capability"] == f"backend-mcp.{t['name']}"
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_tool_without_token(client: TestClient, monkeypatch):
-    # backend-mcp não tem tool tokenless por padrão; exercita o caminho _EXEMPT.
-    monkeypatch.setattr(M, "_EXEMPT_TOOLS", frozenset({"analyze_backend_requirement"}))
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "analyze_backend_requirement", "arguments": {"requirement": "X"}}},
-    )
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    payload = json.loads(text)
-    assert payload["analysis"] == "Analyzed backend requirement: X"
-    # tool exempt não recebe injeção de tenant (não passou pelo PEP).
-    assert "tenant_id" not in payload
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
     r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "generate_api_contract", "arguments": {"endpoint": "/x"}}},
+        "/mcp/tools/call", json={"params": {"name": "get_database_schema", "arguments": {"id": 1}}}
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {
-                "name": "generate_api_contract",
-                "arguments": {"endpoint": "/x"},
-                "_meta": {"twin_token": "tok"},
-            }
+            "params": {"name": "get_database_schema", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}
         },
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {
-                "name": "generate_api_contract",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"endpoint": "/x", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
+            "params": {"name": "get_database_schema", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}
         },
     )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_api_contract"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {
-                "name": "generate_api_contract",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
+            "params": {"name": "get_database_schema", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}
         },
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {"name": "get_database_schema", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}
+        },
+    )
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
+
+
 def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"optimize_query"}))
-    r = client.post("/mcp/tools/call", json={"params": {"name": "optimize_query", "arguments": {}}})
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
-
-
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_database_schema"}))
     r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
+        "/mcp/tools/call", json={"params": {"name": "get_database_schema", "arguments": {"id": 1}}}
     )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
-# ── /mcp/tools/call — happy path real (token válido → dispatch real) ───────────
-def test_call_valid_token_dispatches_real_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-9", "jti": "j"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_auth_policy",
-                "arguments": {"resource": "orders", "auth_type": "jwt", "roles": ["admin"]},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["resource"] == "orders"
-    assert payload["auth_type"] == "jwt"
-    assert payload["roles"] == ["admin"]
-
-
-# ── /mcp/tools/call — erro interno da tool vira payload internal_error ─────────
-def test_call_tool_internal_error_is_wrapped(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(_name, _args):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_api_contract",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["error"] == "internal_error"
-    assert payload["detail"] == "kaboom"
-
-
-# ── /mcp/tools/call — body sem envelope 'params' (params = body) ───────────────
-def test_call_without_params_envelope(client: TestClient):
-    # params.get(...) usa o próprio body quando não há 'params' → tool não-exempt sem token.
-    r = client.post("/mcp/tools/call", json={"name": "generate_api_contract", "arguments": {}})
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
-
-
-# ── _dispatch cobre as 13 tools + KeyError ────────────────────────────────────
-def test_dispatch_routes_all_tools():
-    assert "analysis" in M._dispatch("analyze_backend_requirement", {"requirement": "R"})
-    assert "security_score" in M._dispatch("review_backend_code", {"code": "x", "language": "py"})
-    assert "optimizations" in M._dispatch("optimize_query", {"query": "SELECT 1", "database": "pg"})
-    assert "status_codes" in M._dispatch("generate_api_contract", {"endpoint": "/x", "method": "GET"})
-    assert "encryption" in M._dispatch(
-        "generate_auth_policy", {"resource": "r", "auth_type": "jwt", "roles": []}
-    )
-    assert "indexes" in M._dispatch(
-        "generate_database_schema", {"entity": "user", "attributes": [], "database": "pg"}
-    )
-    assert "router_name" in M._dispatch("generate_fastapi_router", {"name": "u", "base_path": "/u"})
-    assert "controller_name" in M._dispatch("generate_nestjs_controller", {"name": "U", "base_path": "/u"})
-    assert "migration_name" in M._dispatch(
-        "generate_migration", {"title": "init", "operations": [], "database": "pg"}
-    )
-    assert "methods" in M._dispatch("generate_repository_layer", {"entity": "u", "database": "pg"})
-    assert "service_name" in M._dispatch("generate_service_layer", {"name": "u", "methods": []})
-    assert "openapi" in M._dispatch(
-        "generate_openapi_spec", {"api_name": "API", "version": "1", "endpoints": []}
-    )
-    assert "retry_policy" in M._dispatch(
-        "map_integration_flow", {"integration_name": "i", "external_service": "s"}
-    )
-    with pytest.raises(KeyError):
-        M._dispatch("unknown", {})
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    s = BackendSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── _verify_inner_token configurado usa JWKS + jwt.decode (mockados) ───────────
-def test_verify_inner_token_uses_jwks_and_decode(monkeypatch):
-    class _FakeKey:
-        key = "SIGNING-KEY"
-
-    class _FakeJWKClient:
-        def __init__(self, url):
-            self.url = url
-
-        def get_signing_key_from_jwt(self, _tok):
-            return _FakeKey()
-
-    captured: dict = {}
-
-    def _fake_decode(token, key, algorithms, audience, options):
-        captured.update(token=token, key=key, algorithms=algorithms, audience=audience, options=options)
-        return {"tenant_id": "T-1", "jti": "j"}
-
-    monkeypatch.setattr(M.jwt, "PyJWKClient", _FakeJWKClient)
-    monkeypatch.setattr(M.jwt, "decode", _fake_decode)
-
-    claims = M._verify_inner_token("tok", _settings())
-    assert claims["tenant_id"] == "T-1"
-    assert captured["algorithms"] == ["RS256"]
-    assert captured["audience"] == "mcp:backend-mcp"
-    assert set(captured["options"]["require"]) == {"exp", "aud", "jti"}
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
+    with pytest.raises(jwt.InvalidAudienceError):
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server) ───────────────────────
-def test_build_server_smoke(monkeypatch):
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
-
-    settings_mod.get_settings.cache_clear()
+# ── stdio call_tool → smoke do build_server (gateway-only) ────────────────────
+def test_build_server_stdio_and_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
     server, settings, http_app = M.build_server()
-    assert server is not None
     assert settings.mcp_twin_audience == "mcp:backend-mcp"
     assert http_app.title.startswith("backend-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "backend-mcp"
+
+
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_all_tools(store_a):
+    async def d(name, args):
+        return await M._dispatch(name, args, store_a)
+
+    # API Contracts (upsert por endpoint+method; método normalizado)
+    contract = (await d("save_api_contract", {"endpoint": "/x", "method": "post"}))["api_contract"]
+    assert contract["method"] == "POST"  # normalize_method
+    assert (await d("list_api_contracts", {}))["total"] == 1
+    assert (await d("get_api_contract", {"endpoint": "/x", "method": "POST"}))["endpoint"] == "/x"
+    assert (await d("delete_api_contract", {"endpoint": "/x", "method": "POST"}))["deleted"] is True
+
+    # Database Schemas
+    schema = (await d("save_database_schema", {"entity": "e", "database_name": "mysql"}))["database_schema"]
+    assert (await d("list_database_schemas", {}))["total"] == 1
+    assert (await d("get_database_schema", {"id": schema["id"]}))["entity"] == "e"
+    assert (await d("update_database_schema", {"id": schema["id"], "status": "ok"}))["updated"] is True
+    assert (await d("delete_database_schema", {"id": schema["id"]}))["deleted"] is True
+
+    # Auth Policies (upsert por resource)
+    assert (await d("save_auth_policy", {"resource": "r", "auth_type": "jwt"}))["saved"] is True
+    assert (await d("list_auth_policies", {}))["total"] == 1
+    assert (await d("get_auth_policy", {"resource": "r"}))["resource"] == "r"
+    assert (await d("delete_auth_policy", {"resource": "r"}))["deleted"] is True
+
+    # Backend Artifacts
+    art = (await d("save_artifact", {"kind": "router", "target": "t", "content": "code"}))["artifact"]
+    assert (await d("list_artifacts", {}))["total"] == 1
+    assert (await d("get_artifact", {"id": art["id"]}))["kind"] == "router"
+    assert (await d("delete_artifact", {"id": art["id"]}))["deleted"] is True
+
+    # Code Reviews
+    rev = (await d("save_code_review", {"target": "f.py", "language": "python"}))["code_review"]
+    assert (await d("list_code_reviews", {}))["total"] == 1
+    assert (await d("get_code_review", {"id": rev["id"]}))["language"] == "python"
+    assert (await d("delete_code_review", {"id": rev["id"]}))["deleted"] is True
+
+    with pytest.raises(KeyError):
+        await d("does_not_exist", {})
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_validation_paths(store_a):
+    # kind inválido de artefato → erro sem persistir
+    bad = await M._dispatch("save_artifact", {"kind": "nope", "target": "x", "content": "c"}, store_a)
+    assert bad["error"] == "invalid_kind"
+    # método HTTP inválido de contrato → erro sem persistir
+    bad_m = await M._dispatch("save_api_contract", {"endpoint": "/x", "method": "FETCH"}, store_a)
+    assert bad_m["error"] == "invalid_method"
+    # get de id inexistente → not_found
+    missing = await M._dispatch("get_database_schema", {"id": 999999}, store_a)
+    assert missing["error"] == "not_found"
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> BackendStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    saved = await M._run_tool("save_auth_policy", {"resource": "e2e", "auth_type": "jwt"}, settings, TENANT_A)
+    assert saved["saved"] is True and saved["auth_policy"]["resource"] == "e2e"
+    listed = await M._run_tool("list_auth_policies", {}, settings, TENANT_A)
+    assert listed["total"] == 1
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

@@ -1,26 +1,48 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown) e
-_verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
-os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (happy
+path / dispatch / unknown) roda contra MySQL real via `_run_tool`/`_dispatch`.
 """
 
 from __future__ import annotations
 
-import json
-
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.settings import Settings
+from src.config.settings import ArchitectureSettings
 from src.server import mcp_server as M
 
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
-def _settings() -> Settings:
-    return Settings(
+_EXPECTED_TOOLS = {
+    "save_architecture_blueprint",
+    "list_architecture_blueprints",
+    "get_architecture_blueprint",
+    "update_architecture_blueprint",
+    "delete_architecture_blueprint",
+    "set_c4_diagram",
+    "list_c4_diagrams",
+    "get_c4_diagram",
+    "delete_c4_diagram",
+    "save_solution_blueprint",
+    "list_solution_blueprints",
+    "get_solution_blueprint",
+    "update_solution_blueprint",
+    "delete_solution_blueprint",
+    "save_artifact",
+    "list_artifacts",
+    "get_artifact",
+    "delete_artifact",
+}
+
+
+def _settings(**over) -> ArchitectureSettings:
+    return ArchitectureSettings(
         MCP_TWIN_AUDIENCE="mcp:architecture-mcp",
-        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        **over,
     )
 
 
@@ -29,157 +51,208 @@ def client() -> TestClient:
     return TestClient(M._build_http_app(_settings()))
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 18
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "architecture-mcp", "tools": 4}
+    assert r.json() == {"status": "ok", "service": "architecture-mcp", "tools": 18}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {
-        "status",
-        "generate_c4_diagram",
-        "generate_solution_blueprint",
-        "generate_architecture",
-    }
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
-            assert t[field], f"{t['name']} sem {field}"
-        # required_scope no formato dominio:tipo:acao
+            assert t[field]
         assert t["required_scope"].count(":") == 2
-    # geradores usam verbo :write; status é :read
-    by_name = {t["name"]: t for t in tools}
-    assert by_name["generate_c4_diagram"]["required_scope"].endswith(":write")
-    assert by_name["status"]["required_scope"].endswith(":read")
+        assert t["capability"] == f"architecture-mcp.{t['name']}"
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_status_without_token(client: TestClient):
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert json.loads(text)["status"] == "ok"
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
     r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "generate_c4_diagram", "arguments": {"system_name": "X"}}},
+        "/mcp/tools/call", json={"params": {"name": "get_architecture_blueprint", "arguments": {"id": 1}}}
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
         json={
             "params": {
-                "name": "generate_c4_diagram",
-                "arguments": {"system_name": "X"},
-                "_meta": {"twin_token": "tok"},
+                "name": "get_architecture_blueprint",
+                "arguments": {"id": 1},
+                "_meta": {"twin_token": tok},
             }
         },
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
         json={
             "params": {
-                "name": "generate_c4_diagram",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"system_name": "X", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
+                "name": "get_architecture_blueprint",
+                "arguments": {"id": 1},
+                "_meta": {"twin_token": tok},
             }
         },
     )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_c4_diagram"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "generate_c4_diagram", "arguments": {}, "_meta": {"twin_token": "t"}}},
+        json={
+            "params": {
+                "name": "get_architecture_blueprint",
+                "arguments": {"id": 1},
+                "_meta": {"twin_token": tok},
+            }
+        },
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
+    r = client.post(
+        "/mcp/tools/call",
+        json={
+            "params": {
+                "name": "get_architecture_blueprint",
+                "arguments": {"id": 1},
+                "_meta": {"twin_token": tok},
+            }
+        },
+    )
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
+
+
 def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"status"}))
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
-
-
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_architecture_blueprint"}))
     r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
+        "/mcp/tools/call", json={"params": {"name": "get_architecture_blueprint", "arguments": {"id": 1}}}
     )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
-# ── _dispatch cobre as 4 tools + KeyError ─────────────────────────────────────
-def test_dispatch_routes_all_tools():
-    assert M._dispatch("status", {})["status"] == "ok"
-    assert "levels" in M._dispatch("generate_c4_diagram", {"system_name": "S"})
-    assert "chosen_patterns" in M._dispatch("generate_solution_blueprint", {"requirements": "cache"})
-    assert "proposed_style" in M._dispatch("generate_architecture", {"domain": "iot"})
-    with pytest.raises(KeyError):
-        M._dispatch("unknown", {})
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    s = ArchitectureSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server) ───────────────────────
-def test_build_server_smoke(monkeypatch):
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
+    with pytest.raises(jwt.InvalidAudienceError):
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
-    settings_mod.get_settings.cache_clear()
+
+# ── stdio call_tool → smoke do build_server (gateway-only) ────────────────────
+def test_build_server_stdio_and_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
     server, settings, http_app = M.build_server()
-    assert server is not None
     assert settings.mcp_twin_audience == "mcp:architecture-mcp"
     assert http_app.title.startswith("architecture-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "architecture-mcp"
+
+
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_all_tools(store_a):
+    async def d(name, args):
+        return await M._dispatch(name, args, store_a)
+
+    # Architecture Blueprints (estilo derivado do domínio)
+    saved = await d("save_architecture_blueprint", {"domain": "e-commerce stream", "constraints": ["kafka"]})
+    bp = saved["architecture_blueprint"]
+    assert saved["saved"] is True and bp["style"] == "Event-Driven Microservices"
+    assert (await d("list_architecture_blueprints", {}))["total"] == 1
+    assert (await d("get_architecture_blueprint", {"id": bp["id"]}))["domain"] == "e-commerce stream"
+    assert (await d("update_architecture_blueprint", {"id": bp["id"], "status": "ok"}))["updated"] is True
+    assert (await d("delete_architecture_blueprint", {"id": bp["id"]}))["deleted"] is True
+
+    # C4 Diagrams (upsert por system_name; modelo derivado do builder)
+    c4 = await d("set_c4_diagram", {"system_name": "billing", "actors": ["Customer"]})
+    assert c4["saved"] is True
+    assert (await d("list_c4_diagrams", {}))["total"] == 1
+    assert (await d("get_c4_diagram", {"system_name": "billing"}))["system_name"] == "billing"
+    assert (await d("delete_c4_diagram", {"system_name": "billing"}))["deleted"] is True
+
+    # Solution Blueprints (camadas/padrões derivados dos requisitos)
+    sol = await d("save_solution_blueprint", {"requirements": "cache de leitura", "solution_name": "Portal"})
+    sb = sol["solution_blueprint"]
+    assert sol["saved"] is True
+    assert (await d("list_solution_blueprints", {}))["total"] == 1
+    assert (await d("get_solution_blueprint", {"id": sb["id"]}))["solution_name"] == "Portal"
+    assert (await d("update_solution_blueprint", {"id": sb["id"], "status": "final"}))["updated"] is True
+    assert (await d("delete_solution_blueprint", {"id": sb["id"]}))["deleted"] is True
+
+    # Artifacts
+    art = (await d("save_artifact", {"kind": "adr", "target": "platform", "content": "# ADR"}))["artifact"]
+    assert (await d("list_artifacts", {}))["total"] == 1
+    assert (await d("get_artifact", {"id": art["id"]}))["kind"] == "adr"
+    assert (await d("delete_artifact", {"id": art["id"]}))["deleted"] is True
+
+    with pytest.raises(KeyError):
+        await d("does_not_exist", {})
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_validation_paths(store_a):
+    # kind inválido de artefato → erro sem persistir
+    bad = await M._dispatch("save_artifact", {"kind": "nope", "target": "x", "content": "c"}, store_a)
+    assert bad["error"] == "invalid_kind"
+    # get de id inexistente → not_found
+    missing = await M._dispatch("get_architecture_blueprint", {"id": 999999}, store_a)
+    assert missing["error"] == "not_found"
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> ArchitectureStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    saved = await M._run_tool(
+        "save_architecture_blueprint",
+        {"domain": "fintech", "quality_attributes": ["security"]},
+        settings,
+        TENANT_A,
+    )
+    assert saved["saved"] is True and saved["architecture_blueprint"]["domain"] == "fintech"
+    listed = await M._run_tool("list_architecture_blueprints", {}, settings, TENANT_A)
+    assert listed["total"] == 1
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

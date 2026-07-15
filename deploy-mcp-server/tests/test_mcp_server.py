@@ -1,15 +1,14 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) + ledger tenant-scoped — §16.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown),
-_verify_inner_token não configurado, _dispatch (rota das 24 tools) e os handlers
-stdio de build_server. O PyJWKClient/JWKS é sempre mockado — os testes nunca fazem
-I/O de rede (Test Doubles Policy). O GitHubClient (backend) também é mockado.
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (persiste
+o ledger / lê o ledger) roda contra MySQL real via `_run_tool`/`DeployStore`. As tools
+de ação FAZEM a ação (FakeGitHubClient, duplo do backend externo — FID-01) e DEPOIS
+persistem o ledger no banco do tenant (FID-02).
 """
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock
 
 import jwt
@@ -19,7 +18,25 @@ from fastapi.testclient import TestClient
 from src.config.settings import DeploySettings
 from src.server import mcp_server as M
 
-_EXPECTED_TOOLS = {
+from .conftest import (
+    TENANT_A,
+    FakeGitHubClient,
+    _test_settings,
+    mint_token,
+    patch_jwks,
+    requires_mysql,
+)
+
+_LEDGER_TOOLS = {
+    "list_deployments",
+    "get_deployment",
+    "list_deploy_events",
+    "list_pr_history",
+    "list_workflow_history",
+    "list_registered_repos",
+}
+
+_ACTION_COMPUTE_TOOLS = {
     # git
     "list_repos",
     "create_branch",
@@ -54,281 +71,229 @@ _EXPECTED_TOOLS = {
     "clone_repo",
 }
 
+_EXPECTED_TOOLS = _ACTION_COMPUTE_TOOLS | _LEDGER_TOOLS
 
-def _settings() -> DeploySettings:
+
+def _settings(**over) -> DeploySettings:
     return DeploySettings(
         github_token="test_token_ghp_xxx",
         github_org="test-org",
         MCP_TWIN_AUDIENCE="mcp:deploy-mcp",
         URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        **over,
     )
 
 
 @pytest.fixture()
 def client() -> TestClient:
-    # GitHubClient mockado — nenhuma chamada real à API/rede.
-    return TestClient(M._build_http_app(_settings(), MagicMock()))
+    s = _settings()
+    # Backend externo mockado (FakeGitHubClient) — nenhuma chamada real à API.
+    return TestClient(M._build_http_app(s, FakeGitHubClient(s)))
 
 
 @pytest.fixture()
 def gh_client() -> MagicMock:
-    # Backend mockado para os testes de roteamento do _dispatch (tools stubadas).
     return MagicMock()
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# Schemas / catálogo (sem DB)
+# ══════════════════════════════════════════════════════════════════════════════
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 30
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "deploy-mcp", "tools": 24}
+    assert r.json() == {"status": "ok", "service": "deploy-mcp", "tools": 30}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
     assert {t["name"] for t in tools} == _EXPECTED_TOOLS
+    by_name = {t["name"]: t for t in tools}
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
             assert t[field], f"{t['name']} sem {field}"
-        # required_scope no formato dominio:tipo:acao (3 segmentos)
         assert t["required_scope"].count(":") == 2
         assert t["required_scope"].startswith("deploy-mcp:")
         assert t["capability"] == f"deploy-mcp.{t['name']}"
-    by_name = {t["name"]: t for t in tools}
-    # geradores/mutadores usam verbo :write; consultas :read
+    # ledger (consulta) usa verbo :read; mutadores usam :write
+    for name in _LEDGER_TOOLS:
+        assert by_name[name]["required_scope"].endswith(":read")
     assert by_name["deploy"]["required_scope"].endswith(":write")
     assert by_name["merge_pr"]["required_scope"].endswith(":write")
-    assert by_name["list_repos"]["required_scope"].endswith(":read")
-    assert by_name["get_deploy_status"]["required_scope"].endswith(":read")
 
 
-def test_tools_list_count():
-    assert len(M._TOOL_SCHEMAS) == 24
-    assert set(M._TOOL_SCHEMAS.keys()) == _EXPECTED_TOOLS
-
-
-def test_required_fields_are_in_properties():
-    for name, meta in M._TOOL_SCHEMAS.items():
-        schema = meta["schema"]
-        props = set(schema.get("properties", {}).keys())
-        required = set(schema.get("required", []))
-        assert not (required - props), f"{name}: required fora de properties"
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# /mcp/tools/call — PEP (RS256 real), caminhos que retornam ANTES do DB
+# ══════════════════════════════════════════════════════════════════════════════
 def test_call_missing_twin_token(client: TestClient):
+    r = client.post("/mcp/tools/call", json={"params": {"name": "list_repos", "arguments": {}}})
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
+
+
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "list_repos", "arguments": {}}},
+        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_repos",
-                "arguments": {},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args, settings, client):  # assinatura do _dispatch do deploy
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "list_repos",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    assert captured["name"] == "list_repos"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": "t"}}},
+        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_tool_without_token(client: TestClient, monkeypatch):
-    # deploy-mcp não tem exempt por default; exercita o branch tokenless.
-    monkeypatch.setattr(M, "_EXEMPT_TOOLS", frozenset({"get_pipeline_templates"}))
+def test_call_excluded_tool(client: TestClient, monkeypatch):
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"list_repos"}))
+    r = client.post("/mcp/tools/call", json={"params": {"name": "list_repos", "arguments": {}}})
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
+
+
+def test_call_valid_token_compute_tool_no_db(client: TestClient, monkeypatch, rsa_key):
+    """Happy path SEM DB: tool compute (get_pipeline_templates) roda via _run_tool sem
+    abrir pool — exercita o handler async + verificação RS256 real + tenant dos claims."""
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id="T-42")
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "get_pipeline_templates", "arguments": {}}},
+        json={"params": {"name": "get_pipeline_templates", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
     assert r.status_code == 200
+    import json
+
     text = r.json()["result"]["content"][0]["text"]
     assert "templates" in json.loads(text)
 
 
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
-def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_pipeline_templates"}))
+def test_call_unknown_tool_404(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id="T-1")
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "get_pipeline_templates", "arguments": {}}},
+        json={"params": {"name": "does_not_exist", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
+    assert r.status_code == 404 and r.json()["error"] == "unknown_tool"
 
 
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
-
-
-# ── /mcp/tools/call — exceção interna vira payload internal_error (200) ────────
-def test_call_internal_error_payload(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(name, args, settings, client):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert "internal_error" in text and "kaboom" in text
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ══════════════════════════════════════════════════════════════════════════════
+# _verify_inner_token (RS256 real)
+# ══════════════════════════════════════════════════════════════════════════════
 def test_verify_inner_token_unconfigured():
     s = DeploySettings(github_token="t", MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── _verify_inner_token — round-trip RS256 real (JWKS mockado, sem rede) ───────
-def _rsa_keypair():
-    from cryptography.hazmat.primitives.asymmetric import rsa
-
-    return rsa.generate_private_key(public_exponent=65537, key_size=2048)
-
-
-def _sign(priv, *, aud="mcp:deploy-mcp", **extra) -> str:
-    import time
-
-    payload = {"aud": aud, "jti": "jti-1", "exp": int(time.time()) + 300, "tenant_id": "T-1"}
-    payload.update(extra)
-    return jwt.encode(payload, priv, algorithm="RS256")
-
-
-def test_verify_inner_token_valid_rs256(monkeypatch):
-    priv = _rsa_keypair()
-    token = _sign(priv)
-
-    class _Key:
-        key = priv.public_key()
-
-    monkeypatch.setattr(
-        M.jwt,
-        "PyJWKClient",
-        lambda url: MagicMock(get_signing_key_from_jwt=lambda t: _Key()),
-    )
-    claims = M._verify_inner_token(token, _settings())
-    assert claims["tenant_id"] == "T-1"
-    assert claims["jti"] == "jti-1"
-
-
-def test_verify_inner_token_wrong_audience_raises(monkeypatch):
-    priv = _rsa_keypair()
-    token = _sign(priv, aud="mcp:someone-else")
-
-    class _Key:
-        key = priv.public_key()
-
-    monkeypatch.setattr(
-        M.jwt,
-        "PyJWKClient",
-        lambda url: MagicMock(get_signing_key_from_jwt=lambda t: _Key()),
-    )
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
     with pytest.raises(jwt.InvalidAudienceError):
-        M._verify_inner_token(token, _settings())
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
 
-def test_verify_inner_token_missing_jti_raises(monkeypatch):
-    priv = _rsa_keypair()
-    # jwt.encode não coloca jti; o require=["jti"] deve rejeitar.
-    import time
-
-    token = jwt.encode(
-        {"aud": "mcp:deploy-mcp", "exp": int(time.time()) + 300},
-        priv,
-        algorithm="RS256",
-    )
-
-    class _Key:
-        key = priv.public_key()
-
-    monkeypatch.setattr(
-        M.jwt,
-        "PyJWKClient",
-        lambda url: MagicMock(get_signing_key_from_jwt=lambda t: _Key()),
-    )
+def test_verify_inner_token_missing_jti(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
     with pytest.raises(jwt.MissingRequiredClaimError):
-        M._verify_inner_token(token, _settings())
+        M._verify_inner_token(mint_token(rsa_key, include_jti=False), _settings())
 
 
-# ── build_server smoke (fábrica + stdio Server + sidecar) ─────────────────────
-def test_build_server_smoke(settings, mock_github, monkeypatch):
-    monkeypatch.setattr(M, "get_settings", lambda: settings)
-    server, s, http_app = M.build_server()
-    assert server is not None
-    assert s.mcp_twin_audience == "mcp:deploy-mcp"  # default via NAMESPACE
+# ══════════════════════════════════════════════════════════════════════════════
+# build_server smoke + stdio (gateway-only, fail-closed)
+# ══════════════════════════════════════════════════════════════════════════════
+def test_build_server_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
+    server, settings, http_app = M.build_server()
+    assert settings.mcp_twin_audience == "mcp:deploy-mcp"
     assert http_app.title.startswith("deploy-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "deploy-mcp"
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# _dispatch — cobre cada braço chamando a tool subjacente (stubada)            #
-# ─────────────────────────────────────────────────────────────────────────── #
+def _handlers(monkeypatch):
+    from mcp.types import CallToolRequest, ListToolsRequest
+
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
+    server, _s, _http = M.build_server()
+    return server.request_handlers[ListToolsRequest], server.request_handlers[CallToolRequest]
+
+
+async def test_list_tools_handler_returns_all_30(monkeypatch):
+    from mcp.types import ListToolsRequest
+
+    list_tools, _ = _handlers(monkeypatch)
+    res = await list_tools(ListToolsRequest(method="tools/list"))
+    tools = res.root.tools
+    assert len(tools) == 30
+    assert {t.name for t in tools} == _EXPECTED_TOOLS
+
+
+async def test_call_tool_handler_is_fail_closed(monkeypatch):
+    from mcp.types import CallToolRequest, CallToolRequestParams
+
+    _, call_tool = _handlers(monkeypatch)
+    req = CallToolRequest(
+        method="tools/call",
+        params=CallToolRequestParams(name="list_repos", arguments={}),
+    )
+    res = await call_tool(req)
+    assert "tenant_context_required" in res.root.content[0].text
+
+
+async def test_call_tool_handler_unknown_tool(monkeypatch):
+    from mcp.types import CallToolRequest, CallToolRequestParams
+
+    _, call_tool = _handlers(monkeypatch)
+    req = CallToolRequest(
+        method="tools/call",
+        params=CallToolRequestParams(name="does_not_exist", arguments={}),
+    )
+    res = await call_tool(req)
+    assert "unknown_tool" in res.root.content[0].text
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# _dispatch — roteia cada uma das 24 tools compute/ação (stubada, sem DB)
+# ══════════════════════════════════════════════════════════════════════════════
 _DISPATCH_CASES = {
     "list_repos": ("list_repos", {}),
     "create_branch": ("create_branch", {"repo": "r", "branch": "b"}),
@@ -357,8 +322,8 @@ _DISPATCH_CASES = {
 }
 
 
-def test_dispatch_cases_cover_all_tools():
-    assert set(_DISPATCH_CASES.keys()) == _EXPECTED_TOOLS
+def test_dispatch_cases_cover_all_action_tools():
+    assert set(_DISPATCH_CASES.keys()) == _ACTION_COMPUTE_TOOLS
 
 
 @pytest.mark.parametrize("tool_name", sorted(_DISPATCH_CASES.keys()))
@@ -366,8 +331,7 @@ def test_dispatch_routes_to_correct_tool(tool_name, settings, gh_client, monkeyp
     symbol, args = _DISPATCH_CASES[tool_name]
     sentinel = {"routed": tool_name}
     monkeypatch.setattr(M, symbol, MagicMock(return_value=sentinel))
-    result = M._dispatch(tool_name, args, settings, gh_client)
-    assert result == sentinel
+    assert M._dispatch(tool_name, args, settings, gh_client) == sentinel
 
 
 def test_dispatch_unknown_raises_key_error(settings, gh_client):
@@ -375,60 +339,113 @@ def test_dispatch_unknown_raises_key_error(settings, gh_client):
         M._dispatch("does_not_exist", {}, settings, gh_client)
 
 
-# ─────────────────────────────────────────────────────────────────────────── #
-# stdio handlers (list_tools / call_tool) do MCP Server                        #
-# ─────────────────────────────────────────────────────────────────────────── #
-def _handlers(settings, monkeypatch):
-    from mcp.types import CallToolRequest, ListToolsRequest
-
-    monkeypatch.setattr(M, "get_settings", lambda: settings)
-    server, _s, _http = M.build_server()
-    return server.request_handlers[ListToolsRequest], server.request_handlers[CallToolRequest]
+async def test_dispatch_ledger_unknown_raises_key_error():
+    # tool desconhecida no dispatcher do ledger (não toca o store → sem DB).
+    with pytest.raises(KeyError):
+        await M._dispatch_ledger("nope", {}, store=None)  # type: ignore[arg-type]
 
 
-async def test_list_tools_handler_returns_all_24(settings, mock_github, monkeypatch):
-    from mcp.types import ListToolsRequest
-
-    list_tools, _ = _handlers(settings, monkeypatch)
-    res = await list_tools(ListToolsRequest(method="tools/list"))
-    tools = res.root.tools
-    assert len(tools) == 24
-    assert {t.name for t in tools} == _EXPECTED_TOOLS
+def test_is_ok_helper():
+    assert M._is_ok({"ok": True}) is True
+    assert M._is_ok({"error": "x"}) is False
+    assert M._is_ok("not a dict") is False
 
 
-async def test_call_tool_handler_serializes_payload(settings, mock_github, monkeypatch):
-    from mcp.types import CallToolRequest, CallToolRequestParams
+# ══════════════════════════════════════════════════════════════════════════════
+# Execução com estado (MySQL real): _run_tool faz a ação e persiste o ledger,
+# e as query tools leem o histórico — tudo credencial-zero (PLATFORMS).
+# ══════════════════════════════════════════════════════════════════════════════
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_persists_and_reads_ledger(seed_platforms, monkeypatch):
+    M._SCHEMA_READY.discard(TENANT_A)
+    s = _test_settings()
+    c = FakeGitHubClient(s)
 
-    _, call_tool = _handlers(settings, monkeypatch)
-    req = CallToolRequest(
-        method="tools/call",
-        params=CallToolRequestParams(name="get_pipeline_templates", arguments={}),
+    async def run(name, args):
+        return await M._run_tool(name, args, s, c, TENANT_A)
+
+    # deploy → DeploymentRow (append-only)
+    dep = await run("deploy", {"service": "svc", "environment": "dev"})
+    assert dep["dispatched"] is True
+    depl = await run("list_deployments", {})
+    assert depl["total"] == 1
+    assert depl["deployments"][0]["service"] == "svc"
+    assert depl["deployments"][0]["environment"] == "dev"
+    assert depl["deployments"][0]["detail"]["workflow"] == "cd-dev.yml"  # JSON round-trip
+    got = await run("get_deployment", {"id": depl["deployments"][0]["id"]})
+    assert got["workflow"] == "cd-dev.yml"
+
+    # create_pr → PR upsert; merge_pr → state='merged' (mesma (repo,number), sem dup)
+    await run("create_pr", {"repo": "svc", "title": "feat: x", "head": "feature/x"})
+    await run("merge_pr", {"repo": "svc", "pr_number": 7})
+    prs = await run("list_pr_history", {})
+    assert prs["total"] == 1  # upsert, não duplica
+    assert prs["pull_requests"][0]["state"] == "merged"
+    assert prs["pull_requests"][0]["title"] == "feat: x"  # preservado (merge semantics)
+
+    # get_pr → PR upsert refresh (mesmo número, ainda 1 linha)
+    await run("get_pr", {"repo": "svc", "pr_number": 7})
+    assert (await run("list_pr_history", {"repo": "svc"}))["total"] == 1
+
+    # trigger_workflow → DeployEvent(kind=trigger_workflow) (dispatch não traz run_id)
+    await run("trigger_workflow", {"repo": "svc", "workflow_id": "ci.yml", "ref": "develop"})
+    assert (await run("list_deploy_events", {"kind": "trigger_workflow"}))["total"] == 1
+
+    # get_workflow_run → WorkflowRun upsert (run_id do GitHub — VARCHAR)
+    await run("get_workflow_run", {"repo": "svc", "run_id": 10000000000})
+    wf = await run("list_workflow_history", {})
+    assert wf["total"] == 1
+    assert wf["workflow_runs"][0]["run_id"] == "10000000000"
+    assert wf["workflow_runs"][0]["conclusion"] == "success"
+
+    # cancel_workflow_run → DeployEvent(kind=cancel_run)
+    await run("cancel_workflow_run", {"repo": "svc", "run_id": 999})
+    assert (await run("list_deploy_events", {"kind": "cancel_run"}))["total"] == 1
+
+    # commit_files → DeployEvent(kind=commit)
+    await run(
+        "commit_files",
+        {"repo": "svc", "branch": "develop", "message": "m", "files": [{"path": "a", "content": "c"}]},
     )
-    res = await call_tool(req)
-    assert "templates" in res.root.content[0].text
+    assert (await run("list_deploy_events", {"kind": "commit"}))["total"] == 1
 
+    # scaffold_pipeline → DeployEvent(kind=scaffold_pipeline) (usa client.commit_files)
+    await run("scaffold_pipeline", {"repo": "svc", "templates": ["ci"]})
+    assert (await run("list_deploy_events", {"kind": "scaffold_pipeline"}))["total"] == 1
 
-async def test_call_tool_handler_unknown_tool(settings, mock_github, monkeypatch):
-    from mcp.types import CallToolRequest, CallToolRequestParams
+    # setup_repo → Repo upsert
+    await run("setup_repo", {"repo": "svc", "image_name": "svc"})
+    repos = await run("list_registered_repos", {})
+    assert repos["total"] == 1 and repos["repos"][0]["repo"] == "svc"
 
-    _, call_tool = _handlers(settings, monkeypatch)
-    req = CallToolRequest(
-        method="tools/call",
-        params=CallToolRequestParams(name="does_not_exist", arguments={}),
+    # clone_repo / acr_build usam subprocess → stub direto do símbolo p/ persistir evento
+    monkeypatch.setattr(
+        M, "clone_repo", lambda *a, **k: {"repo": "org/svc", "path": "/x", "action": "cloned"}
     )
-    res = await call_tool(req)
-    assert "unknown_tool" in res.root.content[0].text
+    monkeypatch.setattr(M, "acr_build", lambda *a, **k: {"success": True, "image": "img:v1", "tag": "v1"})
+    await run("clone_repo", {"repo": "svc"})
+    await run("acr_build", {"repo_path": "/x", "image_name": "svc"})
+    assert (await run("list_deploy_events", {"kind": "clone"}))["total"] == 1
+    assert (await run("list_deploy_events", {"kind": "acr_build"}))["total"] == 1
+
+    # create_branch → BranchRow (sem query tool → confirma via _run_tool não-erro + count)
+    br = await run("create_branch", {"repo": "svc", "branch": "feature/y"})
+    assert br["branch"] == "feature/y"
+
+    # tool desconhecida → KeyError (propaga p/ o handler HTTP virar 404)
+    with pytest.raises(KeyError):
+        await run("does_not_exist", {})
 
 
-async def test_call_tool_handler_internal_error(settings, mock_github, monkeypatch):
-    from mcp.types import CallToolRequest, CallToolRequestParams
-
-    _, call_tool = _handlers(settings, monkeypatch)
-    monkeypatch.setattr(M, "_dispatch", MagicMock(side_effect=RuntimeError("kaboom")))
-    req = CallToolRequest(
-        method="tools/call",
-        params=CallToolRequestParams(name="get_pipeline_templates", arguments={}),
-    )
-    res = await call_tool(req)
-    text = res.root.content[0].text
-    assert "internal_error" in text and "kaboom" in text
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_skips_ledger_on_action_error(seed_platforms):
+    """Se a ação retorna erro (ex.: environment inválido), o ledger NÃO persiste."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    s = _test_settings()
+    c = FakeGitHubClient(s)
+    bad = await M._run_tool("deploy", {"service": "svc", "environment": "nope"}, s, c, TENANT_A)
+    assert bad["error"] == "ValidationError"
+    listed = await M._run_tool("list_deployments", {}, s, c, TENANT_A)
+    assert listed["total"] == 0  # nada persistido

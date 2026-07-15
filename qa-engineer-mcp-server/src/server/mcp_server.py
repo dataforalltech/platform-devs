@@ -1,7 +1,6 @@
 """Servidor MCP do qa-engineer — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-Reescrito para o padrão canônico do platform-service-template (v2.0). Implementa o
-contrato de integração com o MCP Gateway central (platform-mcp-gateway):
+Implementa o contrato de integração com o MCP Gateway central (platform-mcp-gateway):
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md          (inner token / audiência)
 
@@ -16,14 +15,15 @@ Pontos gateway-ready:
   4. _EXEMPT_TOOLS (tokenless) e _EXCLUDE_TOOLS (denylist fail-safe).
   5. /docs desabilitado (DOCS_ENABLED=false — HTTP-01).
 
-Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7124):
+Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT):
   GET  /v1/health        — liveness (health_path do registro, sem token)
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: qa-engineer-mcp é compute-only (gera artefatos de teste/QA a partir dos
-inputs; não há backend REST), por isso não há ServiceApiClient — as tools são
-chamadas diretamente.
+NOTA: qa-engineer-mcp é stateful — "o agente gera o conteúdo, a tool persiste": as
+tools persistem planos/casos/bugs/quality gates/artefatos num MySQL via
+`QAEngineerStore` (tenant-scoped, dual-db, credencial-zero). Não há backend REST
+intermediário; o dispatcher recebe o store já ligado ao pool do tenant.
 """
 
 from __future__ import annotations
@@ -39,29 +39,39 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
+from platform_database import close_tenant_pools
+from platform_database.orm import configure, for_tenant
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.tenant_resolver import get_pool_for_tenant
 
 from ..config.logging import configure_logging
-from ..config.settings import Settings, get_settings
-from ..tools.qa_engineer_tools import (
-    analyze_quality_requirement,
-    classify_bug_severity,
-    generate_api_tests,
-    generate_bug_report,
-    generate_cypress_tests,
-    generate_e2e_tests,
-    generate_gherkin_scenarios,
-    generate_k6_performance_test,
-    generate_playwright_tests,
-    generate_postman_collection,
-    generate_quality_gate,
-    generate_regression_suite,
-    generate_smoke_test_suite,
-    generate_test_cases,
-    generate_test_plan,
-    generate_uat_checklist,
-    generate_unit_tests,
-    review_test_coverage,
-    validate_story_testability,
+from ..config.settings import QAEngineerSettings, get_settings
+from ..db.schema import ensure_schema
+from ..db.store import QAEngineerStore
+from ..tools import (
+    delete_artifact,
+    delete_bug_report,
+    delete_quality_gate,
+    delete_test_case,
+    delete_test_plan,
+    get_artifact,
+    get_bug_report,
+    get_quality_gate,
+    get_test_case,
+    get_test_plan,
+    list_artifacts,
+    list_bug_reports,
+    list_quality_gates,
+    list_test_cases,
+    list_test_plans,
+    save_artifact,
+    save_bug_report,
+    save_test_case,
+    save_test_plan,
+    set_quality_gate,
+    update_bug_status,
+    update_test_case,
+    update_test_plan,
 )
 
 _log = logging.getLogger(__name__)
@@ -69,285 +79,341 @@ _log = logging.getLogger(__name__)
 # ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
 # Cada tool declara description/schema + os 4 campos de política:
 #   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
-#   required_scope — escopo de execução <namespace>:<resource_type>:<acao> (least-privilege)
+#   required_scope — escopo <namespace>:<resource_type>:<acao> (least-privilege)
 #   resource_type  — tipo de recurso tocado
 #   data_domain    — domínio de dado (governa HITL floor / classificação LGPD)
-# inputSchema MUST ser type=object com properties. Análise/revisão/validação/
-# classificação são :read (não geram artefato novo); geradores são :write.
+# inputSchema MUST ser type=object com properties. Consultas (list/get) usam :read;
+# mutações (save/set/update/delete) usam :write.
 # ─────────────────────────────────────────────────────────────────────────────
-_ARR = {"type": "array"}
-_STR_ARR = {"type": "array", "items": {"type": "string"}}
-_OBJ = {"type": "object"}
 _STR = {"type": "string"}
 _INT = {"type": "integer"}
 _NUM = {"type": "number"}
+_OBJ = {"type": "object"}
+_ARR = {"type": "array"}
 
 
-def _schema(props: dict[str, Any]) -> dict[str, Any]:
-    return {"type": "object", "additionalProperties": False, "properties": props}
+def _schema(props: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
+    s: dict[str, Any] = {"type": "object", "additionalProperties": False, "properties": props}
+    if required:
+        s["required"] = required
+    return s
+
+
+def _meta(cap: str, scope: str, rtype: str, domain: str, desc: str, schema: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "description": desc,
+        "capability": f"qa-engineer-mcp.{cap}",
+        "required_scope": f"qa-engineer-mcp:{scope}",
+        "resource_type": rtype,
+        "data_domain": domain,
+        "schema": schema,
+    }
 
 
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
-    # ── Leitura / análise / revisão / validação (:read) ────────────────────────
-    "analyze_quality_requirement": {
-        "description": "Analisa requisito de qualidade: dimensões, riscos, tipos de teste e critérios.",
-        "capability": "qa-engineer-mcp.analyze_quality_requirement",
-        "required_scope": "qa-engineer-mcp:requirement:read",
-        "resource_type": "requirement",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "requirement": dict(_STR, description="Requisito de qualidade a analisar."),
-                "context": dict(_OBJ, description="Contexto adicional (opcional)."),
-            }
-        ),
-    },
-    "classify_bug_severity": {
-        "description": "Classifica severidade de bug (P1–P4) por impacto e frequência, com SLA.",
-        "capability": "qa-engineer-mcp.classify_bug_severity",
-        "required_scope": "qa-engineer-mcp:bug_severity:read",
-        "resource_type": "bug_severity",
-        "data_domain": "operational",
-        "schema": _schema(
-            {
-                "description": dict(_STR, description="Descrição do bug."),
-                "impact": dict(_STR, description="Impacto (critical/high/medium/low)."),
-                "frequency": dict(_STR, description="Frequência (always/often/sometimes/rarely)."),
-            }
-        ),
-    },
-    "validate_story_testability": {
-        "description": "Valida a testabilidade de uma user story e seus critérios de aceite.",
-        "capability": "qa-engineer-mcp.validate_story_testability",
-        "required_scope": "qa-engineer-mcp:story:read",
-        "resource_type": "story",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "story": dict(_STR, description="User story a validar."),
-                "acceptance_criteria": dict(_STR_ARR, description="Critérios de aceite (opcional)."),
-            }
-        ),
-    },
-    "review_test_coverage": {
-        "description": "Revisa a cobertura de testes de um módulo e aponta gaps e recomendações.",
-        "capability": "qa-engineer-mcp.review_test_coverage",
-        "required_scope": "qa-engineer-mcp:test_coverage:read",
-        "resource_type": "test_coverage",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "module": dict(_STR, description="Módulo avaliado."),
-                "current_coverage": dict(_NUM, description="Cobertura atual em % (opcional)."),
-            }
-        ),
-    },
-    # ── Geração de artefatos / testes (:write) ─────────────────────────────────
-    "generate_test_plan": {
-        "description": "Gera plano de teste com objetivos, níveis, ambientes e cronograma.",
-        "capability": "qa-engineer-mcp.generate_test_plan",
-        "required_scope": "qa-engineer-mcp:test_plan:write",
-        "resource_type": "test_plan",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    # ── Test Plans ─────────────────────────────────────────────────────────── #
+    "save_test_plan": _meta(
+        "save_test_plan",
+        "test_plan:write",
+        "test_plan",
+        "qa-engineer",
+        "Persiste um plano de teste fornecido pelo agente (o conteúdo vem do agente).",
+        _schema(
             {
                 "feature": dict(_STR, description="Funcionalidade alvo."),
-                "scope": dict(_STR, description="Escopo (full/partial; opcional)."),
+                "content": dict(
+                    _OBJ, description="Conteúdo do plano (objectives/levels/environments/schedule)."
+                ),
+                "scope": dict(_STR, description="Escopo (full/partial; default full)."),
                 "team": dict(_STR, description="Time responsável (opcional)."),
+                "status": dict(_STR, description="Status do plano (opcional)."),
+            },
+            required=["feature", "content"],
+        ),
+    ),
+    "list_test_plans": _meta(
+        "list_test_plans",
+        "test_plan:read",
+        "test_plan",
+        "qa-engineer",
+        "Lista planos de teste persistidos, com filtros opcionais.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Filtrar por funcionalidade (opcional)."),
+                "status": dict(_STR, description="Filtrar por status (opcional)."),
             }
         ),
-    },
-    "generate_test_cases": {
-        "description": "Gera casos de teste estruturados para uma funcionalidade.",
-        "capability": "qa-engineer-mcp.generate_test_cases",
-        "required_scope": "qa-engineer-mcp:test_case:write",
-        "resource_type": "test_case",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    ),
+    "get_test_plan": _meta(
+        "get_test_plan",
+        "test_plan:read",
+        "test_plan",
+        "qa-engineer",
+        "Retorna um plano de teste por id.",
+        _schema({"id": dict(_INT, description="Id do plano.")}, required=["id"]),
+    ),
+    "update_test_plan": _meta(
+        "update_test_plan",
+        "test_plan:write",
+        "test_plan",
+        "qa-engineer",
+        "Atualiza campos mutáveis de um plano de teste (scope/team/content/status).",
+        _schema(
+            {
+                "id": dict(_INT, description="Id do plano."),
+                "scope": dict(_STR, description="Novo escopo (opcional)."),
+                "team": dict(_STR, description="Novo time (opcional)."),
+                "content": dict(_OBJ, description="Novo conteúdo (opcional)."),
+                "status": dict(_STR, description="Novo status (opcional)."),
+            },
+            required=["id"],
+        ),
+    ),
+    "delete_test_plan": _meta(
+        "delete_test_plan",
+        "test_plan:write",
+        "test_plan",
+        "qa-engineer",
+        "Soft-delete de um plano de teste por id.",
+        _schema({"id": dict(_INT, description="Id do plano.")}, required=["id"]),
+    ),
+    # ── Test Cases ─────────────────────────────────────────────────────────── #
+    "save_test_case": _meta(
+        "save_test_case",
+        "test_case:write",
+        "test_case",
+        "qa-engineer",
+        "Persiste um caso de teste fornecido pelo agente (passos/dados vêm do agente).",
+        _schema(
             {
                 "feature": dict(_STR, description="Funcionalidade alvo."),
-                "test_type": dict(_STR, description="Tipo de teste (functional/...; opcional)."),
-                "count": dict(_INT, description="Quantidade de casos (opcional)."),
-            }
+                "title": dict(_STR, description="Título do caso."),
+                "steps": dict(_ARR, description="Passos do caso (lista)."),
+                "test_type": dict(_STR, description="Tipo (functional/e2e/api/...; default functional)."),
+                "priority": dict(_STR, description="Prioridade (high/medium/low; default medium)."),
+                "preconditions": dict(_ARR, description="Pré-condições (opcional)."),
+                "expected_result": dict(_STR, description="Resultado esperado (opcional)."),
+                "test_data": dict(_OBJ, description="Dados de teste (opcional)."),
+                "status": dict(_STR, description="Status (opcional)."),
+            },
+            required=["feature", "title", "steps"],
         ),
-    },
-    "generate_gherkin_scenarios": {
-        "description": "Gera cenários Gherkin (BDD) para uma funcionalidade.",
-        "capability": "qa-engineer-mcp.generate_gherkin_scenarios",
-        "required_scope": "qa-engineer-mcp:gherkin:write",
-        "resource_type": "gherkin",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    ),
+    "list_test_cases": _meta(
+        "list_test_cases",
+        "test_case:read",
+        "test_case",
+        "qa-engineer",
+        "Lista casos de teste persistidos, com filtros opcionais.",
+        _schema(
             {
-                "feature": dict(_STR, description="Funcionalidade alvo."),
-                "scenarios": dict(_STR_ARR, description="Cenários a converter (opcional)."),
+                "feature": dict(_STR, description="Filtrar por funcionalidade (opcional)."),
+                "test_type": dict(_STR, description="Filtrar por tipo (opcional)."),
+                "status": dict(_STR, description="Filtrar por status (opcional)."),
             }
         ),
-    },
-    "generate_e2e_tests": {
-        "description": "Gera testes end-to-end (Playwright/Cypress) para uma funcionalidade.",
-        "capability": "qa-engineer-mcp.generate_e2e_tests",
-        "required_scope": "qa-engineer-mcp:e2e_test:write",
-        "resource_type": "e2e_test",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    ),
+    "get_test_case": _meta(
+        "get_test_case",
+        "test_case:read",
+        "test_case",
+        "qa-engineer",
+        "Retorna um caso de teste por id.",
+        _schema({"id": dict(_INT, description="Id do caso.")}, required=["id"]),
+    ),
+    "update_test_case": _meta(
+        "update_test_case",
+        "test_case:write",
+        "test_case",
+        "qa-engineer",
+        "Atualiza campos mutáveis de um caso de teste.",
+        _schema(
             {
-                "feature": dict(_STR, description="Funcionalidade alvo."),
-                "framework": dict(_STR, description="Framework (playwright/cypress; opcional)."),
-                "base_url": dict(_STR, description="URL base da app (opcional)."),
-            }
+                "id": dict(_INT, description="Id do caso."),
+                "title": dict(_STR, description="Novo título (opcional)."),
+                "test_type": dict(_STR, description="Novo tipo (opcional)."),
+                "priority": dict(_STR, description="Nova prioridade (opcional)."),
+                "preconditions": dict(_ARR, description="Novas pré-condições (opcional)."),
+                "steps": dict(_ARR, description="Novos passos (opcional)."),
+                "expected_result": dict(_STR, description="Novo resultado esperado (opcional)."),
+                "test_data": dict(_OBJ, description="Novos dados de teste (opcional)."),
+                "status": dict(_STR, description="Novo status (opcional)."),
+            },
+            required=["id"],
         ),
-    },
-    "generate_api_tests": {
-        "description": "Gera testes de API (pytest+httpx) para um endpoint.",
-        "capability": "qa-engineer-mcp.generate_api_tests",
-        "required_scope": "qa-engineer-mcp:api_test:write",
-        "resource_type": "api_test",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "endpoint": dict(_STR, description="Path do endpoint."),
-                "method": dict(_STR, description="Método HTTP (opcional)."),
-                "base_url": dict(_STR, description="URL base da API (opcional)."),
-            }
-        ),
-    },
-    "generate_unit_tests": {
-        "description": "Gera testes unitários (pytest/vitest) para um módulo.",
-        "capability": "qa-engineer-mcp.generate_unit_tests",
-        "required_scope": "qa-engineer-mcp:unit_test:write",
-        "resource_type": "unit_test",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "module": dict(_STR, description="Módulo alvo."),
-                "language": dict(_STR, description="Linguagem (python/typescript; opcional)."),
-            }
-        ),
-    },
-    "generate_playwright_tests": {
-        "description": "Gera testes E2E em Playwright para uma funcionalidade.",
-        "capability": "qa-engineer-mcp.generate_playwright_tests",
-        "required_scope": "qa-engineer-mcp:playwright_test:write",
-        "resource_type": "playwright_test",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "feature": dict(_STR, description="Funcionalidade alvo."),
-                "base_url": dict(_STR, description="URL base da app (opcional)."),
-            }
-        ),
-    },
-    "generate_cypress_tests": {
-        "description": "Gera testes E2E em Cypress para uma funcionalidade.",
-        "capability": "qa-engineer-mcp.generate_cypress_tests",
-        "required_scope": "qa-engineer-mcp:cypress_test:write",
-        "resource_type": "cypress_test",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "feature": dict(_STR, description="Funcionalidade alvo."),
-                "base_url": dict(_STR, description="URL base da app (opcional)."),
-            }
-        ),
-    },
-    "generate_postman_collection": {
-        "description": "Gera coleção Postman com requests e testes para uma API.",
-        "capability": "qa-engineer-mcp.generate_postman_collection",
-        "required_scope": "qa-engineer-mcp:postman_collection:write",
-        "resource_type": "postman_collection",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
-            {
-                "api_name": dict(_STR, description="Nome da API/coleção."),
-                "base_url": dict(_STR, description="URL base da API (opcional)."),
-                "endpoints": dict(_STR_ARR, description="Endpoints (opcional)."),
-            }
-        ),
-    },
-    "generate_bug_report": {
-        "description": "Gera relatório de bug estruturado com passos e severidade.",
-        "capability": "qa-engineer-mcp.generate_bug_report",
-        "required_scope": "qa-engineer-mcp:bug_report:write",
-        "resource_type": "bug_report",
-        "data_domain": "operational",
-        "schema": _schema(
+    ),
+    "delete_test_case": _meta(
+        "delete_test_case",
+        "test_case:write",
+        "test_case",
+        "qa-engineer",
+        "Soft-delete de um caso de teste por id.",
+        _schema({"id": dict(_INT, description="Id do caso.")}, required=["id"]),
+    ),
+    # ── Bug Reports ────────────────────────────────────────────────────────── #
+    "save_bug_report": _meta(
+        "save_bug_report",
+        "bug_report:write",
+        "bug_report",
+        "operational",
+        "Persiste um bug. Se severity/score não vierem, calcula-os de impact×frequency.",
+        _schema(
             {
                 "title": dict(_STR, description="Título do bug."),
-                "steps": dict(_STR_ARR, description="Passos para reproduzir (opcional)."),
-                "severity": dict(_STR, description="Severidade (P1–P4; opcional)."),
-            }
+                "impact": dict(_STR, description="Impacto (critical/high/medium/low; default medium)."),
+                "frequency": dict(
+                    _STR, description="Frequência (always/often/sometimes/rarely; default sometimes)."
+                ),
+                "severity": dict(_STR, description="Severidade P1–P4 (opcional; calculada se ausente)."),
+                "score": dict(_NUM, description="Score (opcional; calculado se ausente)."),
+                "steps": dict(_ARR, description="Passos para reproduzir (opcional)."),
+                "description": dict(_STR, description="Descrição do bug (opcional)."),
+                "status": dict(_STR, description="Status (default open)."),
+            },
+            required=["title"],
         ),
-    },
-    "generate_quality_gate": {
-        "description": "Gera quality gate de CI com thresholds e config bloqueante.",
-        "capability": "qa-engineer-mcp.generate_quality_gate",
-        "required_scope": "qa-engineer-mcp:quality_gate:write",
-        "resource_type": "quality_gate",
-        "data_domain": "operational",
-        "schema": _schema(
+    ),
+    "list_bug_reports": _meta(
+        "list_bug_reports",
+        "bug_report:read",
+        "bug_report",
+        "operational",
+        "Lista bugs persistidos, com filtros opcionais.",
+        _schema(
             {
-                "service": dict(_STR, description="Serviço alvo."),
-                "thresholds": dict(_OBJ, description="Thresholds do gate (opcional)."),
+                "severity": dict(_STR, description="Filtrar por severidade (opcional)."),
+                "status": dict(_STR, description="Filtrar por status (opcional)."),
             }
         ),
-    },
-    "generate_uat_checklist": {
-        "description": "Gera checklist de UAT com itens e stakeholders.",
-        "capability": "qa-engineer-mcp.generate_uat_checklist",
-        "required_scope": "qa-engineer-mcp:uat_checklist:write",
-        "resource_type": "uat_checklist",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    ),
+    "get_bug_report": _meta(
+        "get_bug_report",
+        "bug_report:read",
+        "bug_report",
+        "operational",
+        "Retorna um bug por id.",
+        _schema({"id": dict(_INT, description="Id do bug.")}, required=["id"]),
+    ),
+    "update_bug_status": _meta(
+        "update_bug_status",
+        "bug_report:write",
+        "bug_report",
+        "operational",
+        "Atualiza o status de um bug (ex.: open→in_progress→closed).",
+        _schema(
             {
-                "feature": dict(_STR, description="Funcionalidade alvo."),
-                "stakeholders": dict(_STR_ARR, description="Stakeholders (opcional)."),
-            }
+                "id": dict(_INT, description="Id do bug."),
+                "status": dict(_STR, description="Novo status."),
+            },
+            required=["id", "status"],
         ),
-    },
-    "generate_k6_performance_test": {
-        "description": "Gera teste de performance k6 para um endpoint.",
-        "capability": "qa-engineer-mcp.generate_k6_performance_test",
-        "required_scope": "qa-engineer-mcp:performance_test:write",
-        "resource_type": "performance_test",
-        "data_domain": "operational",
-        "schema": _schema(
+    ),
+    "delete_bug_report": _meta(
+        "delete_bug_report",
+        "bug_report:write",
+        "bug_report",
+        "operational",
+        "Soft-delete de um bug por id.",
+        _schema({"id": dict(_INT, description="Id do bug.")}, required=["id"]),
+    ),
+    # ── Quality Gates (upsert por service) ─────────────────────────────────── #
+    "set_quality_gate": _meta(
+        "set_quality_gate",
+        "quality_gate:write",
+        "quality_gate",
+        "operational",
+        "Define (upsert) o quality gate de um serviço com os thresholds fornecidos.",
+        _schema(
             {
-                "endpoint": dict(_STR, description="Endpoint alvo (URL)."),
-                "vus": dict(_INT, description="Usuários virtuais (opcional)."),
-                "duration": dict(_STR, description="Duração do teste (ex. 30s; opcional)."),
-            }
+                "service": dict(_STR, description="Serviço alvo (chave natural única)."),
+                "thresholds": dict(_OBJ, description="Thresholds do gate (mapa)."),
+                "status": dict(_STR, description="Status do gate (opcional)."),
+            },
+            required=["service", "thresholds"],
         ),
-    },
-    "generate_regression_suite": {
-        "description": "Gera suíte de regressão para um serviço.",
-        "capability": "qa-engineer-mcp.generate_regression_suite",
-        "required_scope": "qa-engineer-mcp:regression_suite:write",
-        "resource_type": "regression_suite",
-        "data_domain": "qa-engineer",
-        "schema": _schema(
+    ),
+    "list_quality_gates": _meta(
+        "list_quality_gates",
+        "quality_gate:read",
+        "quality_gate",
+        "operational",
+        "Lista quality gates persistidos, com filtro opcional por status.",
+        _schema({"status": dict(_STR, description="Filtrar por status (opcional).")}),
+    ),
+    "get_quality_gate": _meta(
+        "get_quality_gate",
+        "quality_gate:read",
+        "quality_gate",
+        "operational",
+        "Retorna o quality gate de um serviço.",
+        _schema({"service": dict(_STR, description="Serviço alvo.")}, required=["service"]),
+    ),
+    "delete_quality_gate": _meta(
+        "delete_quality_gate",
+        "quality_gate:write",
+        "quality_gate",
+        "operational",
+        "Soft-delete do quality gate de um serviço.",
+        _schema({"service": dict(_STR, description="Serviço alvo.")}, required=["service"]),
+    ),
+    # ── Artifacts (histórico append-only) ──────────────────────────────────── #
+    "save_artifact": _meta(
+        "save_artifact",
+        "artifact:write",
+        "artifact",
+        "qa-engineer",
+        "Persiste um artefato de teste (código/cenário) gerado pelo agente.",
+        _schema(
             {
-                "service": dict(_STR, description="Serviço alvo."),
-                "test_cases": dict(_STR_ARR, description="Casos base da suíte (opcional)."),
-            }
+                "kind": dict(
+                    _STR,
+                    description=(
+                        "Tipo: e2e|api|unit|gherkin|playwright|cypress|postman|k6|"
+                        "regression|smoke|uat|coverage|analysis|testability."
+                    ),
+                ),
+                "target": dict(_STR, description="Alvo (feature/module/endpoint/service)."),
+                "content": dict(_STR, description="Código/cenário gerado pelo agente."),
+                "framework": dict(_STR, description="Framework (opcional)."),
+                "meta": dict(_OBJ, description="Metadados adicionais (opcional)."),
+            },
+            required=["kind", "target", "content"],
         ),
-    },
-    "generate_smoke_test_suite": {
-        "description": "Gera suíte de smoke test pós-deploy para um serviço.",
-        "capability": "qa-engineer-mcp.generate_smoke_test_suite",
-        "required_scope": "qa-engineer-mcp:smoke_suite:write",
-        "resource_type": "smoke_suite",
-        "data_domain": "operational",
-        "schema": _schema(
+    ),
+    "list_artifacts": _meta(
+        "list_artifacts",
+        "artifact:read",
+        "artifact",
+        "qa-engineer",
+        "Lista artefatos persistidos, com filtros opcionais.",
+        _schema(
             {
-                "service": dict(_STR, description="Serviço alvo."),
-                "endpoints": dict(_STR_ARR, description="Endpoints de smoke (opcional)."),
+                "kind": dict(_STR, description="Filtrar por tipo (opcional)."),
+                "target": dict(_STR, description="Filtrar por alvo (opcional)."),
+                "limit": dict(_INT, description="Máximo de registros (default 50)."),
             }
         ),
-    },
+    ),
+    "get_artifact": _meta(
+        "get_artifact",
+        "artifact:read",
+        "artifact",
+        "qa-engineer",
+        "Retorna um artefato por id.",
+        _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
+    ),
+    "delete_artifact": _meta(
+        "delete_artifact",
+        "artifact:write",
+        "artifact",
+        "qa-engineer",
+        "Soft-delete de um artefato por id.",
+        _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
+    ),
 }
 
-# qa-engineer-mcp não tem tool tokenless; a liveness é o /v1/health (CI-7).
+# qa-engineer-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
+# exigem inner token válido (fail-closed). O liveness fica no /v1/health (sem tool).
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
 _EXCLUDE_TOOLS: frozenset[str] = frozenset()
@@ -359,10 +425,10 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
 
 
-def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
+def _verify_inner_token(twin_token: str, settings: QAEngineerSettings) -> dict[str, Any]:
     """Re-verifica o inner Twin Token na PRÓPRIA audiência (mcp:qa-engineer-mcp).
 
-    O gateway já verificou o front token; o qa-engineer é 'one more verified client'
+    O gateway já verificou o front token; o backend é 'one more verified client'
     (defense in depth). RS256 via JWKS do platform-admin; audiência exata; jti
     obrigatório. Levanta em qualquer falha (fail-closed).
     """
@@ -381,96 +447,166 @@ def _verify_inner_token(twin_token: str, settings: Settings) -> dict[str, Any]:
     )
 
 
-# ── Dispatcher (compute-only: sem client, tenant_id só p/ governança) ─────────
+# ── Dispatcher (stateful: recebe store; tenant_id só p/ governança) ───────────
 
 
-def _dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
-    """Despacha a chamada para a função de tool. tenant_id é injetado pelo PEP nos
-    args (INV-3) mas as tools compute-only não o consomem."""
-    if name == "analyze_quality_requirement":
-        return analyze_quality_requirement(
-            requirement=args.get("requirement", ""), context=args.get("context")
-        )
-    if name == "classify_bug_severity":
-        return classify_bug_severity(
-            description=args.get("description", ""),
-            impact=args.get("impact", "medium"),
-            frequency=args.get("frequency", "sometimes"),
-        )
-    if name == "validate_story_testability":
-        return validate_story_testability(
-            story=args.get("story", ""), acceptance_criteria=args.get("acceptance_criteria")
-        )
-    if name == "review_test_coverage":
-        return review_test_coverage(
-            module=args.get("module", ""), current_coverage=args.get("current_coverage", 0.0)
-        )
-    if name == "generate_test_plan":
-        return generate_test_plan(
-            feature=args.get("feature", ""),
+async def _dispatch(name: str, args: dict[str, Any], store: QAEngineerStore) -> dict[str, Any]:
+    """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
+    o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Test Plans ─────────────────────────────────────────────────────────── #
+    if name == "save_test_plan":
+        return await save_test_plan(
+            store,
+            feature=args["feature"],
+            content=args["content"],
             scope=args.get("scope", "full"),
             team=args.get("team"),
+            status=args.get("status"),
         )
-    if name == "generate_test_cases":
-        return generate_test_cases(
-            feature=args.get("feature", ""),
+    if name == "list_test_plans":
+        return await list_test_plans(store, feature=args.get("feature"), status=args.get("status"))
+    if name == "get_test_plan":
+        return await get_test_plan(store, plan_id=args["id"])
+    if name == "update_test_plan":
+        return await update_test_plan(
+            store,
+            plan_id=args["id"],
+            scope=args.get("scope"),
+            team=args.get("team"),
+            content=args.get("content"),
+            status=args.get("status"),
+        )
+    if name == "delete_test_plan":
+        return await delete_test_plan(store, plan_id=args["id"])
+    # ── Test Cases ─────────────────────────────────────────────────────────── #
+    if name == "save_test_case":
+        return await save_test_case(
+            store,
+            feature=args["feature"],
+            title=args["title"],
+            steps=args["steps"],
             test_type=args.get("test_type", "functional"),
-            count=args.get("count", 5),
+            priority=args.get("priority", "medium"),
+            preconditions=args.get("preconditions"),
+            expected_result=args.get("expected_result"),
+            test_data=args.get("test_data"),
+            status=args.get("status"),
         )
-    if name == "generate_gherkin_scenarios":
-        return generate_gherkin_scenarios(feature=args.get("feature", ""), scenarios=args.get("scenarios"))
-    if name == "generate_e2e_tests":
-        return generate_e2e_tests(
-            feature=args.get("feature", ""),
-            framework=args.get("framework", "playwright"),
-            base_url=args.get("base_url"),
+    if name == "list_test_cases":
+        return await list_test_cases(
+            store,
+            feature=args.get("feature"),
+            test_type=args.get("test_type"),
+            status=args.get("status"),
         )
-    if name == "generate_api_tests":
-        return generate_api_tests(
-            endpoint=args.get("endpoint", ""),
-            method=args.get("method", "GET"),
-            base_url=args.get("base_url"),
-        )
-    if name == "generate_unit_tests":
-        return generate_unit_tests(module=args.get("module", ""), language=args.get("language", "python"))
-    if name == "generate_playwright_tests":
-        return generate_playwright_tests(feature=args.get("feature", ""), base_url=args.get("base_url"))
-    if name == "generate_cypress_tests":
-        return generate_cypress_tests(feature=args.get("feature", ""), base_url=args.get("base_url"))
-    if name == "generate_postman_collection":
-        return generate_postman_collection(
-            api_name=args.get("api_name", ""),
-            base_url=args.get("base_url"),
-            endpoints=args.get("endpoints"),
-        )
-    if name == "generate_bug_report":
-        return generate_bug_report(
-            title=args.get("title", ""),
+    if name == "get_test_case":
+        return await get_test_case(store, case_id=args["id"])
+    if name == "update_test_case":
+        return await update_test_case(
+            store,
+            case_id=args["id"],
+            title=args.get("title"),
+            test_type=args.get("test_type"),
+            priority=args.get("priority"),
+            preconditions=args.get("preconditions"),
             steps=args.get("steps"),
-            severity=args.get("severity", "P2"),
+            expected_result=args.get("expected_result"),
+            test_data=args.get("test_data"),
+            status=args.get("status"),
         )
-    if name == "generate_quality_gate":
-        return generate_quality_gate(service=args.get("service", ""), thresholds=args.get("thresholds"))
-    if name == "generate_uat_checklist":
-        return generate_uat_checklist(feature=args.get("feature", ""), stakeholders=args.get("stakeholders"))
-    if name == "generate_k6_performance_test":
-        return generate_k6_performance_test(
-            endpoint=args.get("endpoint", ""),
-            vus=args.get("vus", 10),
-            duration=args.get("duration", "30s"),
+    if name == "delete_test_case":
+        return await delete_test_case(store, case_id=args["id"])
+    # ── Bug Reports ────────────────────────────────────────────────────────── #
+    if name == "save_bug_report":
+        return await save_bug_report(
+            store,
+            title=args["title"],
+            impact=args.get("impact", "medium"),
+            frequency=args.get("frequency", "sometimes"),
+            severity=args.get("severity"),
+            score=args.get("score"),
+            steps=args.get("steps"),
+            description=args.get("description"),
+            status=args.get("status", "open"),
         )
-    if name == "generate_regression_suite":
-        return generate_regression_suite(service=args.get("service", ""), test_cases=args.get("test_cases"))
-    if name == "generate_smoke_test_suite":
-        return generate_smoke_test_suite(service=args.get("service", ""), endpoints=args.get("endpoints"))
+    if name == "list_bug_reports":
+        return await list_bug_reports(store, severity=args.get("severity"), status=args.get("status"))
+    if name == "get_bug_report":
+        return await get_bug_report(store, bug_id=args["id"])
+    if name == "update_bug_status":
+        return await update_bug_status(store, bug_id=args["id"], status=args["status"])
+    if name == "delete_bug_report":
+        return await delete_bug_report(store, bug_id=args["id"])
+    # ── Quality Gates ──────────────────────────────────────────────────────── #
+    if name == "set_quality_gate":
+        return await set_quality_gate(
+            store, service=args["service"], thresholds=args["thresholds"], status=args.get("status")
+        )
+    if name == "list_quality_gates":
+        return await list_quality_gates(store, status=args.get("status"))
+    if name == "get_quality_gate":
+        return await get_quality_gate(store, service=args["service"])
+    if name == "delete_quality_gate":
+        return await delete_quality_gate(store, service=args["service"])
+    # ── Artifacts ──────────────────────────────────────────────────────────── #
+    if name == "save_artifact":
+        return await save_artifact(
+            store,
+            kind=args["kind"],
+            target=args["target"],
+            content=args["content"],
+            framework=args.get("framework"),
+            meta=args.get("meta"),
+        )
+    if name == "list_artifacts":
+        return await list_artifacts(
+            store, kind=args.get("kind"), target=args.get("target"), limit=args.get("limit", 50)
+        )
+    if name == "get_artifact":
+        return await get_artifact(store, artifact_id=args["id"])
+    if name == "delete_artifact":
+        return await delete_artifact(store, artifact_id=args["id"])
     raise KeyError(name)
+
+
+# ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────
+# Bootstrap de schema roda UMA vez por tenant/processo (idempotente de qualquer forma).
+_SCHEMA_READY: set[str] = set()
+_SCHEMA_LOCK = asyncio.Lock()
+
+
+async def _ensure_tenant_schema(settings: QAEngineerSettings, tenant_id: str) -> None:
+    """Garante as tabelas no banco do tenant (uma vez por processo). O engine é o do
+    dialeto do pool resolvido — é o ponto que faz o mesmo código servir o dual-db."""
+    if tenant_id in _SCHEMA_READY:
+        return
+    async with _SCHEMA_LOCK:
+        if tenant_id in _SCHEMA_READY:
+            return
+        # Mesmo pool cacheado que o for_tenant usará (registry por TenantDBConfig).
+        pool = await get_pool_for_tenant(settings, tenant_id, strict=True)
+        await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+        _SCHEMA_READY.add(tenant_id)
+
+
+async def _run_tool(
+    name: str, arguments: dict[str, Any], settings: QAEngineerSettings, tenant_id: str
+) -> dict[str, Any]:
+    """Abre a sessão tenant-scoped (credencial-zero), garante o schema e despacha."""
+    await _ensure_tenant_schema(settings, tenant_id)
+    async with for_tenant(tenant_id) as session:
+        store = QAEngineerStore(session)
+        return await _dispatch(name, arguments, store)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
-def _build_http_app(settings: Settings) -> FastAPI:
-    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*)."""
+def _build_http_app(settings: QAEngineerSettings) -> FastAPI:
+    """Cria o sidecar HTTP (health + bridge governado /mcp/tools/*).
+
+    Stateless quanto a store: cada chamada abre uma sessão tenant-scoped
+    (credencial-zero) a partir do tenant nos claims do inner token."""
     app = FastAPI(
         title="qa-engineer-mcp API",
         version="0.1.0",
@@ -497,7 +633,7 @@ def _build_http_app(settings: Settings) -> FastAPI:
         return {"result": {"tools": tools}}
 
     @app.post("/mcp/tools/call")
-    def http_call_tool(body: dict) -> Any:
+    async def http_call_tool(body: dict) -> Any:
         params = body.get("params", body)
         name = params.get("name", "")
         arguments = dict(params.get("arguments", {}) or {})
@@ -505,24 +641,22 @@ def _build_http_app(settings: Settings) -> FastAPI:
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
 
-        # Execução (não-exempt) exige inner token válido; tenant vem dos claims.
-        if name not in _EXEMPT_TOOLS:
-            twin_token = (params.get("_meta") or {}).get("twin_token")
-            if not twin_token:
-                return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
-            try:
-                claims = _verify_inner_token(twin_token, settings)
-            except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
-                _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-                return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
-            tenant_id = claims.get("tenant_id")
-            if not tenant_id:
-                return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
-            # SEC-035 / INV-3: tenant SEMPRE dos claims, nunca de argumento do cliente.
-            arguments["tenant_id"] = tenant_id
+        # Toda tool do qa-engineer toca estado do tenant → inner token obrigatório (não há
+        # _EXEMPT_TOOLS). O tenant vem SEMPRE dos claims (SEC-035 / INV-3), nunca do arg.
+        twin_token = (params.get("_meta") or {}).get("twin_token")
+        if not twin_token:
+            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+        try:
+            claims = _verify_inner_token(twin_token, settings)
+        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+            _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+        tenant_id = claims.get("tenant_id")
+        if not tenant_id:
+            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
 
         try:
-            payload = _dispatch(name, arguments)
+            payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
@@ -531,19 +665,29 @@ def _build_http_app(settings: Settings) -> FastAPI:
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
+    @app.on_event("shutdown")
+    async def _close_pools() -> None:
+        # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
+        await close_tenant_pools()
+
     return app
 
 
 # ── Server (stdio + sidecar) ──────────────────────────────────────────────────
 
 
-def build_server() -> tuple[Any, Settings, FastAPI]:
-    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP."""
+def build_server() -> tuple[Any, QAEngineerSettings, FastAPI]:
+    """Inicializa o MCP Server (stdio), settings e o sidecar HTTP.
+
+    A persistência é tenant-scoped e resolvida por-request (credencial-zero).
+    ``orm.configure(settings)`` registra a fonte admin (ADMIN_DB_*) usada para
+    resolver o tenant → credencial do seu banco via PLATFORMS."""
     settings = get_settings()
-    settings.enforce_security_invariants()  # fail-fast no boot (STD-SEC-001/006)
+    settings.enforce_security_invariants()  # fail-fast STD-SEC-001/004/006
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
+    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
     http_app = _build_http_app(settings)
-    _log.info("qa_engineer_mcp_ready tools=%d", len(_TOOL_SCHEMAS))
+    _log.info("qa_engineer_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
 
     server: Server = Server("qa-engineer-mcp-server")
 
@@ -556,14 +700,20 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
 
     @server.call_tool()
     async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
-        args = arguments or {}
-        try:
-            payload = _dispatch(name, args)
-        except KeyError:
-            payload = {"error": "unknown_tool", "tool": name}
-        except Exception as exc:  # noqa: BLE001
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-            _log.exception("tool_internal_error: %s", name)
+        # O transporte stdio não carrega o inner token (logo, sem tenant). qa-engineer-mcp
+        # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
+        # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
+        if name not in _TOOL_SCHEMAS:
+            payload: dict[str, Any] = {"error": "unknown_tool", "tool": name}
+        else:
+            payload = {
+                "error": "tenant_context_required",
+                "tool": name,
+                "detail": (
+                    "qa-engineer-mcp é tenant-scoped e gateway-only; chame via o sidecar HTTP "
+                    "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
+                ),
+            }
         return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
 
     return server, settings, http_app

@@ -4,19 +4,24 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`deploy-mcp` fala com um BACKEND (GitHub REST API + ACR) via o `GitHubClient`
-(src/knowledge/github_client.py) — este é o cliente de backend do serviço (Bearer =
-GitHub PAT). Por isso NÃO há `MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` genéricos:
-o cliente já é específico do GitHub/ACR.
+`deploy-mcp` é COMPUTE + STATEFUL: fala com um BACKEND (GitHub REST API + ACR) via o
+`GitHubClient` (src/knowledge/github_client.py) — cliente de backend do serviço
+(Bearer = GitHub PAT) — E persiste um LEDGER das operações num MySQL/PostgreSQL
+tenant-scoped (ORM canônico, dual-db, credencial-zero, ORM-H-12). Por isso NÃO há
+`MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` genéricos (o cliente já é específico do
+GitHub/ACR), MAS há `DBSettings` (DB_*) + `AdminDBSettings` (ADMIN_DB_*) — o mesmo
+objeto é passado a `orm.configure()` no boot: a credencial real do banco do tenant
+vem de `ADMIN_DATAFORALL.PLATFORMS` (resolvida pela lib a partir do tenant_id).
 
 Prefixo das vars do serviço: DEPLOY_ (ex.: DEPLOY_GITHUB_TOKEN). As vars de
 integração com o gateway (MCP_TWIN_AUDIENCE, URL_ADMIN_TWIN_JWKS, MCP_PORT,
-DOCS_ENABLED, MCP_SERVICE_LOG_LEVEL) usam o nome EXATO via validation_alias
-(o alias tem precedência sobre o env_prefix).
+DOCS_ENABLED, MCP_SERVICE_LOG_LEVEL) e as do banco (DB_*, ADMIN_DB_*) usam o nome
+EXATO via validation_alias (o alias tem precedência sobre o env_prefix).
 
 STD-SEC-004: um único `.env` (discriminador `RUNTIME_ENV`); NENHUM valor com cara
-de credencial fica no código — o GitHub PAT e a senha do ACR vêm de env (ou de
-Vault via `load_secret`, que tem precedência quando `VAULT_ADDR` está setado).
+de credencial fica no código — o GitHub PAT, a senha do ACR e as senhas do banco
+(DB/admin) vêm de env (ou de Vault via `load_secret`, que tem precedência quando
+`VAULT_ADDR` está setado).
 """
 
 from __future__ import annotations
@@ -93,6 +98,35 @@ class DeploySettings(BaseSettings):
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
 
+    # ── Backend do tenant (DBSettings — ORM canônico, dual-db, ledger) ────────
+    # Fallback compartilhado (shared-admin credential model): a credencial real do
+    # tenant vem de ADMIN_DATAFORALL.PLATFORMS; estes DB_* são o fallback quando a
+    # PLATFORMS row não traz o campo. DB_ENGINE decide o dialeto (mysql/postgresql).
+    # validation_alias absoluto (sem o prefixo DEPLOY_) — lê DB_HOST, não DEPLOY_DB_HOST.
+    DB_ENGINE: str = Field(default="mysql", validation_alias="DB_ENGINE")
+    DB_HOST: str = Field(default="", validation_alias="DB_HOST")
+    DB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
+    DB_NAME: str = Field(default="", validation_alias="DB_NAME")
+    DB_USER: str = Field(default="root", validation_alias="DB_USER")
+    DB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
+    DB_POOL_MIN_SIZE: int = Field(default=1, validation_alias="DB_POOL_MIN_SIZE")
+    DB_POOL_MAX_SIZE: int = Field(default=10, validation_alias="DB_POOL_MAX_SIZE")
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
+        default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
+    )
+    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
+    DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
+
+    # ── Conexão admin (AdminDBSettings — lê ADMIN_DATAFORALL.PLATFORMS) ────────
+    # Resolve o tenant -> credencial do seu banco. É a fonte passada a
+    # orm.configure()/get_pool_for_tenant(). O db name é fixo "ADMIN_DATAFORALL".
+    ADMIN_DB_HOST: str = Field(default="", validation_alias="ADMIN_DB_HOST")
+    ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
+    ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
+    ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
+
     # ── GitHub (backend do serviço) ─────────────────────────────────────────── #
     github_token: str = Field(description="GitHub PAT com escopos repo + workflow (obrigatório).")
     github_org: str = Field(
@@ -159,6 +193,9 @@ class DeploySettings(BaseSettings):
         # acr_password é opcional (str | None): mantém o None quando nem env nem
         # Vault trazem valor, preservando o contrato "não configurado".
         self.acr_password = load_secret(f"{NAMESPACE}/acr_password", self.acr_password or "") or None
+        # Senhas do banco (tenant + admin) via Vault-fallback (env se Vault ausente).
+        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", self.DB_PASSWORD)
+        self.ADMIN_DB_PASSWORD = load_secret(f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD)
         return self
 
     def enforce_security_invariants(self) -> None:
@@ -170,15 +207,23 @@ class DeploySettings(BaseSettings):
         - Em cloud, a credencial do backend (GitHub PAT) é obrigatória — deploy-mcp
           opera sobre GitHub/ACR e sem o PAT toda tool falha (STD-SEC-004: o segredo
           vem só do ambiente/Vault, nunca do código; sem default no campo).
+        - Em cloud, a conexão admin (host + senha p/ resolver o tenant via PLATFORMS)
+          DEVE vir de env/Vault (resolução credencial-zero do banco do tenant).
         """
         if self.docs_enabled:
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
         if not self.mcp_twin_audience.startswith("mcp:"):
             raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
-        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
-            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
-        if self.runtime_env == "cloud" and not self.github_token:
-            raise RuntimeError("INVARIANTE STD-SEC-004: DEPLOY_GITHUB_TOKEN é obrigatório em cloud")
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.github_token:
+                raise RuntimeError("INVARIANTE STD-SEC-004: DEPLOY_GITHUB_TOKEN é obrigatório em cloud")
+            if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
+                    "cloud (resolução credencial-zero do tenant via PLATFORMS; sem default no código)"
+                )
 
     def get_repos_root_path(self) -> Path | None:
         """Retorna o Path resolvido do repos_root, ou None se nao configurado."""

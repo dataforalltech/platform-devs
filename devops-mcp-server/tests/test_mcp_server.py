@@ -1,26 +1,52 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown) e
-_verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
-os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (happy
+path / dispatch / unknown) roda contra MySQL real via `_run_tool`/`_dispatch`.
 """
 
 from __future__ import annotations
 
-import json
-
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.settings import Settings
+from src.config.settings import DevopsSettings
 from src.server import mcp_server as M
 
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
-def _settings() -> Settings:
-    return Settings(
+_EXPECTED_TOOLS = {
+    "save_artifact",
+    "list_artifacts",
+    "get_artifact",
+    "delete_artifact",
+    "save_pipeline",
+    "list_pipelines",
+    "get_pipeline",
+    "update_pipeline",
+    "delete_pipeline",
+    "save_deployment",
+    "list_deployments",
+    "get_deployment",
+    "update_deployment_status",
+    "delete_deployment",
+    "set_environment",
+    "list_environments",
+    "get_environment",
+    "delete_environment",
+    "set_service_config",
+    "list_service_configs",
+    "get_service_config",
+    "delete_service_config",
+}
+
+
+def _settings(**over) -> DevopsSettings:
+    return DevopsSettings(
         MCP_TWIN_AUDIENCE="mcp:devops-mcp",
-        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        **over,
     )
 
 
@@ -29,287 +55,183 @@ def client() -> TestClient:
     return TestClient(M._build_http_app(_settings()))
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 22
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "devops-mcp", "tools": 5}
+    assert r.json() == {"status": "ok", "service": "devops-mcp", "tools": 22}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {
-        "status",
-        "generate_kubernetes_manifest",
-        "generate_dockerfile",
-        "generate_github_actions_pipeline",
-        "generate_helm_chart",
-    }
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
-            assert t[field], f"{t['name']} sem {field}"
-        # required_scope no formato dominio:tipo:acao
+            assert t[field]
         assert t["required_scope"].count(":") == 2
-        # capability é o id estável <namespace>.<tool>
         assert t["capability"] == f"devops-mcp.{t['name']}"
-    # geradores usam verbo :write; status é :read
-    by_name = {t["name"]: t for t in tools}
-    assert by_name["generate_dockerfile"]["required_scope"].endswith(":write")
-    assert by_name["generate_kubernetes_manifest"]["required_scope"].endswith(":write")
-    assert by_name["status"]["required_scope"].endswith(":read")
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_status_without_token(client: TestClient):
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert json.loads(text)["status"] == "ok"
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_pipeline", "arguments": {"id": 1}}})
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
+
+
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "generate_dockerfile", "arguments": {"application": "X"}}},
+        json={"params": {"name": "get_pipeline", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_dockerfile",
-                "arguments": {"application": "X"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_pipeline", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_dockerfile",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"application": "X", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_pipeline", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_dockerfile"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido de fato executa a tool (integração) ────────
-def test_call_valid_token_executes_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-9", "jti": "j"})
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_kubernetes_manifest",
-                "arguments": {"application": "billing", "replicas": 7},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_pipeline", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["application"] == "billing"
-    assert payload["replicas"] == 7
-    assert payload["manifests"]["deployment"]["spec"]["replicas"] == 7
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_dockerfile",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
-
-
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
 def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"status"}))
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_pipeline"}))
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_pipeline", "arguments": {"id": 1}}})
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
-
-
-# ── /mcp/tools/call — erro interno da tool vira payload internal_error ─────────
-def test_call_internal_error_is_captured(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(_name, _args):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_dockerfile",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["error"] == "internal_error"
-    assert payload["detail"] == "kaboom"
-
-
-# ── /mcp/tools/call — body sem envelope 'params' (fallback body) ──────────────
-def test_call_body_without_params_envelope(client: TestClient):
-    # params default = body inteiro; status é exempt e não exige token.
-    r = client.post("/mcp/tools/call", json={"name": "status", "arguments": {}})
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert json.loads(text)["status"] == "ok"
-
-
-# ── _dispatch cobre as 5 tools + KeyError ─────────────────────────────────────
-def test_dispatch_routes_all_tools():
-    assert M._dispatch("status", {})["status"] == "ok"
-    km = M._dispatch("generate_kubernetes_manifest", {"application": "S", "replicas": 2})
-    assert "manifests" in km
-    assert km["replicas"] == 2
-    df = M._dispatch("generate_dockerfile", {"application": "S", "runtime": "node:20"})
-    assert df["runtime"] == "node:20"
-    gh = M._dispatch("generate_github_actions_pipeline", {"application": "S"})
-    assert "stages" in gh
-    hc = M._dispatch("generate_helm_chart", {"app_name": "S"})
-    assert hc["app_name"] == "S"
-    with pytest.raises(KeyError):
-        M._dispatch("unknown", {})
-
-
-# ── _dispatch aplica defaults quando args ausentes ────────────────────────────
-def test_dispatch_uses_defaults_when_args_missing():
-    km = M._dispatch("generate_kubernetes_manifest", {})
-    assert km["application"] == "app"
-    assert km["replicas"] == 3
-    df = M._dispatch("generate_dockerfile", {})
-    assert df["application"] == "app"
-    assert df["runtime"] == "python:3.11"
-    gh = M._dispatch("generate_github_actions_pipeline", {})
-    assert gh["application"] == "app"
-    hc = M._dispatch("generate_helm_chart", {})
-    assert hc["app_name"] == "app"
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    s = DevopsSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server) ───────────────────────
-def test_build_server_smoke(monkeypatch):
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
+    with pytest.raises(jwt.InvalidAudienceError):
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
-    settings_mod.get_settings.cache_clear()
+
+# ── stdio call_tool → smoke do build_server (gateway-only) ────────────────────
+def test_build_server_stdio_and_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
     server, settings, http_app = M.build_server()
-    assert server is not None
     assert settings.mcp_twin_audience == "mcp:devops-mcp"
     assert http_app.title.startswith("devops-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "devops-mcp"
 
 
-# ── stdio Server: handler list_tools espelha os 5 schemas ─────────────────────
-def test_stdio_list_tools_handler():
-    import asyncio
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_all_tools(store_a):
+    async def d(name, args):
+        return await M._dispatch(name, args, store_a)
 
-    from mcp.types import ListToolsRequest
+    # Artifacts
+    art = (await d("save_artifact", {"kind": "dockerfile", "target": "api", "content": "FROM x"}))["artifact"]
+    assert (await d("list_artifacts", {}))["total"] == 1
+    assert (await d("get_artifact", {"id": art["id"]}))["kind"] == "dockerfile"
+    assert (await d("delete_artifact", {"id": art["id"]}))["deleted"] is True
 
-    from src.config import settings as settings_mod
+    # Pipelines
+    pipe = (await d("save_pipeline", {"application": "api", "provider": "github_actions"}))["pipeline"]
+    assert (await d("list_pipelines", {}))["total"] == 1
+    assert (await d("get_pipeline", {"id": pipe["id"]}))["application"] == "api"
+    assert (await d("update_pipeline", {"id": pipe["id"], "status": "active"}))["updated"] is True
+    assert (await d("delete_pipeline", {"id": pipe["id"]}))["deleted"] is True
 
-    settings_mod.get_settings.cache_clear()
-    server, _settings, _http = M.build_server()
-    handler = server.request_handlers[ListToolsRequest]
-    result = asyncio.run(handler(ListToolsRequest(method="tools/list")))
-    names = {t.name for t in result.root.tools}
-    assert names == set(M._TOOL_SCHEMAS)
+    # Deployments (strategy recomendada de environment quando ausente)
+    saved = await d("save_deployment", {"application": "api", "environment": "prod", "version": "v1"})
+    dep = saved["deployment"]
+    assert dep["strategy"] == "blue_green" and saved["recommended_strategy"] == "blue_green"
+    assert (await d("list_deployments", {"environment": "prod"}))["total"] == 1
+    assert (await d("get_deployment", {"id": dep["id"]}))["application"] == "api"
+    assert (await d("update_deployment_status", {"id": dep["id"], "status": "succeeded"}))["updated"] is True
+    assert (await d("delete_deployment", {"id": dep["id"]}))["deleted"] is True
+
+    # Environments (upsert por name)
+    assert (await d("set_environment", {"name": "c1", "kind": "kubernetes"}))["saved"] is True
+    assert (await d("list_environments", {}))["total"] == 1
+    assert (await d("get_environment", {"name": "c1"}))["name"] == "c1"
+    assert (await d("delete_environment", {"name": "c1"}))["deleted"] is True
+
+    # Service Configs (upsert por service)
+    assert (await d("set_service_config", {"service": "s", "settings": {"replicas": 2}}))["saved"] is True
+    assert (await d("list_service_configs", {}))["total"] == 1
+    assert (await d("get_service_config", {"service": "s"}))["service"] == "s"
+    assert (await d("delete_service_config", {"service": "s"}))["deleted"] is True
+
+    with pytest.raises(KeyError):
+        await d("does_not_exist", {})
 
 
-# ── stdio Server: handler call_tool despacha, unknown e erro interno ──────────
-def test_stdio_call_tool_handler_success_and_errors(monkeypatch):
-    import asyncio
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_validation_paths(store_a):
+    # kind inválido de artefato → erro sem persistir
+    bad = await M._dispatch("save_artifact", {"kind": "nope", "target": "x", "content": "c"}, store_a)
+    assert bad["error"] == "invalid_kind"
+    # provider inválido de pipeline → erro sem persistir
+    bad_pipe = await M._dispatch("save_pipeline", {"application": "a", "provider": "nope"}, store_a)
+    assert bad_pipe["error"] == "invalid_provider"
+    # get de id inexistente → not_found
+    missing = await M._dispatch("get_pipeline", {"id": 999999}, store_a)
+    assert missing["error"] == "not_found"
 
-    from mcp.types import CallToolRequest, CallToolRequestParams
 
-    from src.config import settings as settings_mod
-
-    settings_mod.get_settings.cache_clear()
-    server, _settings, _http = M.build_server()
-    handler = server.request_handlers[CallToolRequest]
-
-    def _call(name, arguments):
-        req = CallToolRequest(
-            method="tools/call",
-            params=CallToolRequestParams(name=name, arguments=arguments),
-        )
-        result = asyncio.run(handler(req))
-        return json.loads(result.root.content[0].text)
-
-    # success path
-    assert _call("status", {})["status"] == "ok"
-    # KeyError → unknown_tool (o handler stdio devolve payload, não HTTP 404)
-    assert _call("nope", {}) == {"error": "unknown_tool", "tool": "nope"}
-    # exceção genérica → internal_error
-    monkeypatch.setattr(M, "_dispatch", lambda *_a: (_ for _ in ()).throw(RuntimeError("boom")))
-    err = _call("generate_dockerfile", {})
-    assert err["error"] == "internal_error"
-    assert err["detail"] == "boom"
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> DevopsStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    saved = await M._run_tool(
+        "save_deployment", {"application": "e2e", "environment": "hml", "version": "v1"}, settings, TENANT_A
+    )
+    assert saved["saved"] is True and saved["deployment"]["strategy"] == "rolling"
+    listed = await M._run_tool("list_deployments", {}, settings, TENANT_A)
+    assert listed["total"] == 1
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

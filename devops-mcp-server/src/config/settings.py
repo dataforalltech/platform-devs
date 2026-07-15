@@ -4,26 +4,69 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`devops-mcp` é uma persona **compute-only** (gera artefatos de devops a partir dos
-inputs — não há Trinity backend/REST a chamar), então NÃO há
-`ServiceApiClient`/`MCP_SERVICE_BASE_URL`/`MCP_SERVICE_TOKEN` aqui (deviação
-justificada do esqueleto do template, que assume um backend HTTP).
+`devops-mcp` é uma persona **stateful**: o agente gera o conteúdo (artefatos IaC,
+pipelines, deployments, environments, service configs) e as tools o **persistem**. A
+persistência roda 100% sobre o ORM canônico (`platform_database.orm`), **tenant-scoped
+e dual-db**: credencial-zero (ORM-H-12) — o serviço só conhece o `tenant_id`; a
+credencial do banco do tenant vem de `ADMIN_DATAFORALL.PLATFORMS` (resolvida pela lib).
+Estas Settings expõem os protocolos `DBSettings` (`DB_*`, fallback compartilhado) e
+`AdminDBSettings` (`ADMIN_DB_*`, conexão admin que lê PLATFORMS) — o mesmo objeto é
+passado a `orm.configure()` no boot.
+
+STD-SEC-004: um único `.env` (discriminador `RUNTIME_ENV`); NENHUM valor com cara de
+credencial fica no código — host/senha do DB/admin vêm de env (ou Vault via
+`load_secret`).
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from functools import lru_cache
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# namespace canônico = name_microservice ('platform-devs-mcp') menos o prefixo
+_log = logging.getLogger(__name__)
+
+# namespace canônico = name_microservice ('platform-devops-mcp') menos o prefixo
 # 'platform-'. A audiência do inner token DEVE ser exatamente mcp:<namespace>.
 NAMESPACE = "devops-mcp"
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", case_sensitive=False)
+def load_secret(key: str, fallback: str = "") -> str:
+    """Resolve um segredo via Vault (STD-SEC-004), degradando p/ env com graça.
+
+    Só tenta o ``platform_crypto.VaultSecretsClient`` quando ``VAULT_ADDR`` está
+    setado; o import é LAZY (dentro do try) para não acoplar o boot ao Vault. Em
+    QUALQUER falha (Vault indisponível, import ausente, segredo vazio) degrada
+    para o valor de env (``fallback``) — o boot NUNCA quebra por causa do Vault.
+    Loga apenas a FONTE do segredo, nunca o valor (STD-OBS-001).
+    """
+    vault_addr = os.getenv("VAULT_ADDR", "").strip()
+    if not vault_addr:
+        _log.debug("secret_source key=%s source=env", key)
+        return fallback
+    try:
+        from platform_crypto import VaultSecretsClient  # lazy: só quando há Vault
+
+        value = VaultSecretsClient(vault_addr).get_secret(key)
+        if value:
+            _log.info("secret_source key=%s source=vault", key)
+            return value
+        _log.warning("secret_empty_from_vault key=%s source=env", key)
+        return fallback
+    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
+        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
+        return fallback
+
+
+class DevopsSettings(BaseSettings):
+    """Settings do devops-mcp: gateway (Model C) + backend MySQL (ORM canônico, dual-db)."""
+
+    model_config = SettingsConfigDict(
+        env_file=".env", extra="ignore", case_sensitive=False, populate_by_name=True
+    )
 
     # ── Ambiente (STD-SEC-004: um único .env, discriminador RUNTIME_ENV) ───────
     # Não existem .env.dev/.hml/.prod nem ENV_PROFILE; o comportamento por ambiente
@@ -42,6 +85,35 @@ class Settings(BaseSettings):
     docs_enabled: bool = Field(default=False, validation_alias="DOCS_ENABLED")
     log_level: str = Field(default="INFO", validation_alias="MCP_SERVICE_LOG_LEVEL")
 
+    # ── Backend do tenant (DBSettings — ORM canônico, dual-db) ────────────────
+    # Fallback compartilhado (shared-admin credential model): a credencial real do
+    # tenant vem de ADMIN_DATAFORALL.PLATFORMS; estes DB_* são o fallback quando a
+    # PLATFORMS row não traz o campo. DB_ENGINE decide o dialeto (mysql/postgresql).
+    # STD-SEC-004: nenhum valor com cara de credencial fica no código (env/Vault).
+    DB_ENGINE: str = Field(default="mysql", validation_alias="DB_ENGINE")
+    DB_HOST: str = Field(default="", validation_alias="DB_HOST")
+    DB_PORT: int = Field(default=3306, validation_alias="DB_PORT")
+    DB_NAME: str = Field(default="", validation_alias="DB_NAME")
+    DB_USER: str = Field(default="root", validation_alias="DB_USER")
+    DB_PASSWORD: str = Field(default="", validation_alias="DB_PASSWORD")
+    DB_POOL_MIN_SIZE: int = Field(default=1, validation_alias="DB_POOL_MIN_SIZE")
+    DB_POOL_MAX_SIZE: int = Field(default=10, validation_alias="DB_POOL_MAX_SIZE")
+    DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
+        default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
+    )
+    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
+    DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
+
+    # ── Conexão admin (AdminDBSettings — lê ADMIN_DATAFORALL.PLATFORMS) ────────
+    # Resolve o tenant -> credencial do seu banco. É a fonte passada a
+    # orm.configure()/get_pool_for_tenant(). O db name é fixo "ADMIN_DATAFORALL".
+    ADMIN_DB_HOST: str = Field(default="", validation_alias="ADMIN_DB_HOST")
+    ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
+    ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
+    ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
+
     @field_validator("runtime_env")
     @classmethod
     def _validate_runtime_env(cls, v: str) -> str:
@@ -50,21 +122,41 @@ class Settings(BaseSettings):
             raise ValueError("RUNTIME_ENV deve ser 'local' ou 'cloud'")
         return v
 
-    def enforce_security_invariants(self) -> None:
-        """Fail-fast no boot (STD-SEC-001 / STD-SEC-006). Chamado em build_server().
+    @model_validator(mode="after")
+    def _resolve_secrets(self) -> DevopsSettings:
+        """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
+        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", self.DB_PASSWORD)
+        self.ADMIN_DB_PASSWORD = load_secret(f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD)
+        return self
 
+    def enforce_security_invariants(self) -> None:
+        """Fail-fast no boot (STD-SEC-001 / STD-SEC-004 / STD-SEC-006).
+
+        Chamado em build_server():
         - Swagger/OpenAPI NUNCA exposto (DOCS_ENABLED=false em todo ambiente).
         - Audiência do inner token deve ser exatamente ``mcp:<namespace>``.
-        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica).
+        - Em cloud, o JWKS do admin é obrigatório (sem ele o PEP não re-verifica) e a
+          conexão admin (host + senha p/ resolver o tenant via PLATFORMS) DEVE vir de
+          env/Vault (nunca de default no código).
         """
         if self.docs_enabled:
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
         if not self.mcp_twin_audience.startswith("mcp:"):
             raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
-        if self.runtime_env == "cloud" and not self.url_admin_twin_jwks:
-            raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+        if self.runtime_env == "cloud":
+            if not self.url_admin_twin_jwks:
+                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+            if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
+                    "cloud (resolução credencial-zero do tenant via PLATFORMS; sem default no código)"
+                )
+
+
+# Alias de compatibilidade com o padrão do template (Settings).
+Settings = DevopsSettings
 
 
 @lru_cache(maxsize=1)
-def get_settings() -> Settings:
-    return Settings()
+def get_settings() -> DevopsSettings:
+    return DevopsSettings()

@@ -1,26 +1,53 @@
-"""Testes do sidecar mcp_http + PEP inner-token (STD-MCP-001 / STD-SEC-006).
+"""Sidecar mcp_http + PEP inner-token (RS256 REAL) — §16 / Test Doubles Policy.
 
-Cobre: /v1/health, /mcp/tools/list (campos de policy), /mcp/tools/call
-(missing/invalid token, exempt, tenant das claims, exclude, unknown) e
-_verify_inner_token não configurado. O PyJWKClient/JWKS é sempre mockado —
-os testes nunca fazem I/O de rede (FID-01 / Test Doubles Policy).
+RS256 é real: chave gerada, token assinado, verificador real (o PyJWKClient serve a
+chave pública local — sem bypass, sem HS*). O caminho de execução com estado (happy
+path / dispatch / unknown) roda contra MySQL real via `_run_tool`/`_dispatch`.
 """
 
 from __future__ import annotations
 
-import json
-
+import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from src.config.settings import Settings
+from src.config.settings import ProductManagerSettings
 from src.server import mcp_server as M
 
+from .conftest import TENANT_A, _test_settings, mint_token, patch_jwks, requires_mysql
 
-def _settings() -> Settings:
-    return Settings(
+_EXPECTED_TOOLS = {
+    "save_feature_spec",
+    "list_feature_specs",
+    "get_feature_spec",
+    "update_feature_spec",
+    "delete_feature_spec",
+    "save_gtm_brief",
+    "list_gtm_briefs",
+    "get_gtm_brief",
+    "update_gtm_brief",
+    "delete_gtm_brief",
+    "save_release_plan",
+    "list_release_plans",
+    "get_release_plan",
+    "update_release_plan",
+    "delete_release_plan",
+    "set_product_vision",
+    "list_product_visions",
+    "get_product_vision",
+    "delete_product_vision",
+    "save_artifact",
+    "list_artifacts",
+    "get_artifact",
+    "delete_artifact",
+}
+
+
+def _settings(**over) -> ProductManagerSettings:
+    return ProductManagerSettings(
         MCP_TWIN_AUDIENCE="mcp:product-manager-mcp",
-        URL_ADMIN_TWIN_JWKS="http://admin.local/.well-known/jwks.json",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        **over,
     )
 
 
@@ -29,260 +56,179 @@ def client() -> TestClient:
     return TestClient(M._build_http_app(_settings()))
 
 
-# ── /v1/health ────────────────────────────────────────────────────────────────
+# ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
+def test_tool_count():
+    assert len(M._TOOL_SCHEMAS) == 23
+    assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
+
+
+def test_required_fields_are_subset_of_properties():
+    for name, meta in M._TOOL_SCHEMAS.items():
+        props = set(meta["schema"].get("properties", {}).keys())
+        required = set(meta["schema"].get("required", []))
+        assert required <= props, f"{name}: required fora de properties"
+
+
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    body = r.json()
-    assert body == {"status": "ok", "service": "product-manager-mcp", "tools": 5}
+    assert r.json() == {"status": "ok", "service": "product-manager-mcp", "tools": 23}
 
 
-# ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
 def test_tools_list_has_policy_fields(client: TestClient):
-    r = client.get("/mcp/tools/list")
-    assert r.status_code == 200
-    tools = r.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == {
-        "generate_feature_spec",
-        "generate_go_to_market_brief",
-        "define_product_vision",
-        "generate_release_plan",
-        "status",
-    }
+    tools = client.get("/mcp/tools/list").json()["result"]["tools"]
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
-            assert t[field], f"{t['name']} sem {field}"
-        # required_scope no formato dominio:tipo:acao
+            assert t[field]
         assert t["required_scope"].count(":") == 2
-        # capability é o id estável <namespace>.<tool>
         assert t["capability"] == f"product-manager-mcp.{t['name']}"
-    # geradores usam verbo :write; status é :read
-    by_name = {t["name"]: t for t in tools}
-    assert by_name["generate_feature_spec"]["required_scope"].endswith(":write")
-    assert by_name["generate_go_to_market_brief"]["required_scope"].endswith(":write")
-    assert by_name["define_product_vision"]["required_scope"].endswith(":write")
-    assert by_name["generate_release_plan"]["required_scope"].endswith(":write")
-    assert by_name["status"]["required_scope"].endswith(":read")
 
 
-# ── /mcp/tools/call — tool exempt (sem token) ─────────────────────────────────
-def test_call_exempt_status_without_token(client: TestClient):
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 200
-    text = r.json()["result"]["content"][0]["text"]
-    assert json.loads(text)["status"] == "ok"
-
-
-# ── /mcp/tools/call — sem inner token → 401 ───────────────────────────────────
+# ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}}})
+    assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
+
+
+def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "generate_feature_spec", "arguments": {"feature": "X"}}},
+        json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — inner token inválido → 401 (fail-closed) ─────────────────
-def test_call_invalid_twin_token(client: TestClient, monkeypatch):
-    def _boom(_tok, _settings):
-        raise ValueError("bad signature")
-
-    monkeypatch.setattr(M, "_verify_inner_token", _boom)
+def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, include_jti=False)  # sem jti → require falha
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_feature_spec",
-                "arguments": {"feature": "X"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 401
-    assert r.json()["error"] == "invalid_twin_token"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido injeta tenant das claims (INV-3) ────────────
-def test_call_valid_token_injects_tenant_from_claims(client: TestClient, monkeypatch):
-    captured: dict = {}
-
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-42", "jti": "j"})
-
-    def _spy(name, args):
-        captured["name"] = name
-        captured["args"] = dict(args)
-        return {"ok": True}
-
-    monkeypatch.setattr(M, "_dispatch", _spy)
+def test_call_token_expired_rejected(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, exp_delta=-10)  # já expirado → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_feature_spec",
-                # tenant do cliente deve ser IGNORADO/sobrescrito pelas claims
-                "arguments": {"feature": "X", "tenant_id": "ATTACKER"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    assert captured["name"] == "generate_feature_spec"
-    assert captured["args"]["tenant_id"] == "T-42"  # das claims, não "ATTACKER"
+    assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
 
 
-# ── /mcp/tools/call — token válido, dispatch real (happy path completo) ────────
-def test_call_valid_token_real_dispatch(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T-9", "jti": "j"})
+def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    tok = mint_token(rsa_key, tenant_id=None)  # verifica OK mas sem tenant nas claims
     r = client.post(
         "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_feature_spec",
-                "arguments": {"feature": "Dark Mode", "objective": "Reduce eye strain"},
-                "_meta": {"twin_token": "tok"},
-            }
-        },
+        json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}, "_meta": {"twin_token": tok}}},
     )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["feature"] == "Dark Mode"
-    assert payload["objective"] == "Reduce eye strain"
+    assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
 
 
-# ── /mcp/tools/call — token sem tenant nas claims → 401 ───────────────────────
-def test_call_valid_token_without_tenant(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"jti": "j"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_feature_spec",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 401
-    assert r.json()["error"] == "missing_tenant_scope"
-
-
-# ── /mcp/tools/call — denylist (exclude) → 403 ────────────────────────────────
 def test_call_excluded_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"status"}))
-    r = client.post("/mcp/tools/call", json={"params": {"name": "status", "arguments": {}}})
-    assert r.status_code == 403
-    assert r.json()["error"] == "tool_excluded"
+    monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_feature_spec"}))
+    r = client.post("/mcp/tools/call", json={"params": {"name": "get_feature_spec", "arguments": {"id": 1}}})
+    assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
-# ── /mcp/tools/call — tool desconhecida → 404 ─────────────────────────────────
-def test_call_unknown_tool(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-    r = client.post(
-        "/mcp/tools/call",
-        json={"params": {"name": "nope", "arguments": {}, "_meta": {"twin_token": "t"}}},
-    )
-    assert r.status_code == 404
-    assert r.json()["error"] == "unknown_tool"
-
-
-# ── /mcp/tools/call — erro interno da tool → payload com error (não 500) ──────
-def test_call_tool_internal_error_is_captured(client: TestClient, monkeypatch):
-    monkeypatch.setattr(M, "_verify_inner_token", lambda _t, _s: {"tenant_id": "T"})
-
-    def _boom(_name, _args):
-        raise RuntimeError("kaboom")
-
-    monkeypatch.setattr(M, "_dispatch", _boom)
-    r = client.post(
-        "/mcp/tools/call",
-        json={
-            "params": {
-                "name": "generate_feature_spec",
-                "arguments": {},
-                "_meta": {"twin_token": "t"},
-            }
-        },
-    )
-    assert r.status_code == 200
-    payload = json.loads(r.json()["result"]["content"][0]["text"])
-    assert payload["error"] == "internal_error"
-    assert payload["tool"] == "generate_feature_spec"
-
-
-# ── _dispatch cobre as 5 tools + KeyError ─────────────────────────────────────
-def test_dispatch_routes_all_tools():
-    assert M._dispatch("status", {})["status"] == "ok"
-    assert M._dispatch("generate_feature_spec", {"feature": "S"})["title"] == "Feature Spec: S"
-    assert "target_segment" in M._dispatch("generate_go_to_market_brief", {})
-    assert "vision" in M._dispatch("define_product_vision", {})
-    assert "phases" in M._dispatch("generate_release_plan", {})
-    with pytest.raises(KeyError):
-        M._dispatch("unknown", {})
-
-
-# ── _verify_inner_token não configurado → PermissionError (fail-closed) ────────
+# ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = Settings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
+    s = ProductManagerSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
 
-# ── build_server smoke (cobre a fábrica + stdio Server) ───────────────────────
-def test_build_server_smoke(monkeypatch):
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
+def test_verify_inner_token_real_rs256(monkeypatch, rsa_key):
+    patch_jwks(monkeypatch, rsa_key)
+    claims = M._verify_inner_token(mint_token(rsa_key, tenant_id="T-9"), _settings())
+    assert claims["tenant_id"] == "T-9"
+    with pytest.raises(jwt.InvalidAudienceError):
+        M._verify_inner_token(mint_token(rsa_key, aud="mcp:x"), _settings())
 
-    settings_mod.get_settings.cache_clear()
+
+# ── stdio call_tool → smoke do build_server (gateway-only) ────────────────────
+def test_build_server_stdio_and_smoke(monkeypatch):
+    monkeypatch.setattr(M, "get_settings", lambda: _settings())
     server, settings, http_app = M.build_server()
-    assert server is not None
     assert settings.mcp_twin_audience == "mcp:product-manager-mcp"
     assert http_app.title.startswith("product-manager-mcp")
+    assert TestClient(http_app).get("/v1/health").json()["service"] == "product-manager-mcp"
 
 
-# ── stdio Server handlers (list_tools/call_tool) — cobre o caminho MCP nativo ──
-def test_stdio_server_handlers(monkeypatch):
-    import asyncio
+# ── Execução com estado (MySQL real) ──────────────────────────────────────────
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_routes_all_tools(store_a):
+    async def d(name, args):
+        return await M._dispatch(name, args, store_a)
 
-    monkeypatch.delenv("MCP_TWIN_AUDIENCE", raising=False)
-    from src.config import settings as settings_mod
+    # Feature Specs
+    spec = (await d("save_feature_spec", {"feature": "f", "content": {"o": 1}}))["feature_spec"]
+    assert (await d("list_feature_specs", {}))["total"] == 1
+    assert (await d("get_feature_spec", {"id": spec["id"]}))["feature"] == "f"
+    assert (await d("update_feature_spec", {"id": spec["id"], "status": "ok"}))["updated"] is True
+    assert (await d("delete_feature_spec", {"id": spec["id"]}))["deleted"] is True
 
-    settings_mod.get_settings.cache_clear()
-    server, _settings, _http = M.build_server()
+    # GTM Briefs
+    brief = (await d("save_gtm_brief", {"product": "p", "content": {"c": ["site"]}}))["gtm_brief"]
+    assert (await d("list_gtm_briefs", {}))["total"] == 1
+    assert (await d("get_gtm_brief", {"id": brief["id"]}))["product"] == "p"
+    assert (await d("update_gtm_brief", {"id": brief["id"], "status": "ready"}))["updated"] is True
+    assert (await d("delete_gtm_brief", {"id": brief["id"]}))["deleted"] is True
 
-    # os handlers ficam registrados no request_handlers do Server MCP
-    from mcp.types import CallToolRequest, ListToolsRequest
+    # Release Plans
+    plan = (await d("save_release_plan", {"product": "p", "content": {"phases": ["ga"]}}))["release_plan"]
+    assert (await d("list_release_plans", {}))["total"] == 1
+    assert (await d("get_release_plan", {"id": plan["id"]}))["product"] == "p"
+    assert (await d("update_release_plan", {"id": plan["id"], "status": "done"}))["updated"] is True
+    assert (await d("delete_release_plan", {"id": plan["id"]}))["deleted"] is True
 
-    async def _drive():
-        list_handler = server.request_handlers[ListToolsRequest]
-        tools_result = await list_handler(ListToolsRequest(method="tools/list"))
-        names = {t.name for t in tools_result.root.tools}
+    # Product Visions (upsert por product)
+    assert (await d("set_product_vision", {"product": "acme", "vision": "v"}))["saved"] is True
+    assert (await d("list_product_visions", {}))["total"] == 1
+    assert (await d("get_product_vision", {"product": "acme"}))["product"] == "acme"
+    assert (await d("delete_product_vision", {"product": "acme"}))["deleted"] is True
 
-        call_handler = server.request_handlers[CallToolRequest]
-        ok = await call_handler(
-            CallToolRequest(
-                method="tools/call",
-                params={"name": "status", "arguments": {}},
-            )
-        )
-        bad = await call_handler(
-            CallToolRequest(
-                method="tools/call",
-                params={"name": "does_not_exist", "arguments": {}},
-            )
-        )
-        return names, ok, bad
+    # Artifacts
+    art = (await d("save_artifact", {"kind": "roadmap", "target": "acme", "content": "body"}))["artifact"]
+    assert (await d("list_artifacts", {}))["total"] == 1
+    assert (await d("get_artifact", {"id": art["id"]}))["kind"] == "roadmap"
+    assert (await d("delete_artifact", {"id": art["id"]}))["deleted"] is True
 
-    names, ok, bad = asyncio.run(_drive())
-    assert names == {
-        "generate_feature_spec",
-        "generate_go_to_market_brief",
-        "define_product_vision",
-        "generate_release_plan",
-        "status",
-    }
-    ok_text = ok.root.content[0].text
-    assert json.loads(ok_text)["status"] == "ok"
-    bad_text = bad.root.content[0].text
-    assert json.loads(bad_text)["error"] == "unknown_tool"
+    with pytest.raises(KeyError):
+        await d("does_not_exist", {})
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_dispatch_validation_paths(store_a):
+    # kind inválido de artefato → erro sem persistir
+    bad = await M._dispatch("save_artifact", {"kind": "nope", "target": "x", "content": "c"}, store_a)
+    assert bad["error"] == "invalid_kind"
+    # get de id inexistente → not_found
+    missing = await M._dispatch("get_feature_spec", {"id": 999999}, store_a)
+    assert missing["error"] == "not_found"
+
+
+@pytest.mark.integration
+@requires_mysql
+async def test_run_tool_credential_zero_end_to_end(seed_platforms):
+    """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
+    PLATFORMS) -> ProductManagerStore -> _dispatch, tudo em MySQL real."""
+    M._SCHEMA_READY.discard(TENANT_A)
+    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    saved = await M._run_tool(
+        "save_feature_spec", {"feature": "e2e", "content": {"stories": 3}}, settings, TENANT_A
+    )
+    assert saved["saved"] is True and saved["feature_spec"]["feature"] == "e2e"
+    listed = await M._run_tool("list_feature_specs", {}, settings, TENANT_A)
+    assert listed["total"] == 1
+    with pytest.raises(KeyError):
+        await M._run_tool("nope", {}, settings, TENANT_A)

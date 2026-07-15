@@ -1,8 +1,12 @@
 # devops-mcp-server
 
 Sidecar **MCP** (`kind=mcp_http`, **Model C** / inner Twin Token) da persona **DevOps** do
-DevTeam, agregado pelo MCP Gateway central (`platform-mcp`). Persona **compute-only**:
-gera artefatos de DevOps/infra a partir dos inputs — não há backend REST/Trinity a chamar.
+DevTeam, agregado pelo MCP Gateway central (`platform-mcp`). Persona **stateful** ("o agente
+gera o conteúdo, a tool persiste"): o agente chamador fornece o artefato de infra-as-code
+(Dockerfile, pipeline, chart, manifesto, registro de deploy) e as tools o **persistem** num
+MySQL do tenant via ORM canônico (`platform_database.orm`) — **tenant-scoped, dual-db e
+credencial-zero** (o serviço só conhece o `tenant_id`; a credencial do banco vem de
+`ADMIN_DATAFORALL.PLATFORMS`).
 
 Implementa o contrato de integração:
 - `STD-MCP-001` — MCP Gateway Integration Contract (CI-1..CI-11)
@@ -28,13 +32,19 @@ claims do token verificado — nunca de argumento do cliente (SEC-035 / INV-3).
 
 ## Tools
 
-| Tool | Scope | Descrição |
-|------|-------|-----------|
-| `status` | `devops-mcp:status:read` | liveness stub (exempt / tokenless) |
-| `generate_kubernetes_manifest` | `devops-mcp:k8s_manifest:write` | Deployment, Service, ConfigMap |
-| `generate_dockerfile` | `devops-mcp:dockerfile:write` | Dockerfile otimizado |
-| `generate_github_actions_pipeline` | `devops-mcp:pipeline:write` | pipeline CI/CD GitHub Actions |
-| `generate_helm_chart` | `devops-mcp:helm_chart:write` | Helm Chart |
+Persistência CRUD para 5 entidades (22 tools). Todas exigem inner Twin Token (não há tool
+tokenless — o liveness fica no `/v1/health`).
+
+| Entidade | Tools | Chave |
+|----------|-------|-------|
+| **Artifact** (IaC gerado: dockerfile/github_actions/helm_chart/k8s_manifest/...) | `save_artifact`, `list_artifacts`, `get_artifact`, `delete_artifact` | histórico (`id`) |
+| **Pipeline** (CI/CD) | `save_pipeline`, `list_pipelines`, `get_pipeline`, `update_pipeline`, `delete_pipeline` | histórico (`id`) |
+| **Deployment** (evento de deploy) | `save_deployment`, `list_deployments`, `get_deployment`, `update_deployment_status`, `delete_deployment` | histórico (`id`) |
+| **Environment** (cluster/ambiente) | `set_environment`, `list_environments`, `get_environment`, `delete_environment` | natural `name` (upsert) |
+| **ServiceConfig** (defaults por serviço) | `set_service_config`, `list_service_configs`, `get_service_config`, `delete_service_config` | natural `service` (upsert) |
+
+`save_deployment` dobra a função pura determinística `recommend_strategy(environment)`
+(prod→`blue_green`, hml/staging→`rolling`, dev→`recreate`) quando `strategy` não é fornecida.
 
 ## Configuração
 
@@ -45,6 +55,9 @@ Copie `.env.example` para `.env` (gitignored) e ajuste. Variáveis principais:
 - `URL_ADMIN_TWIN_JWKS` — JWKS do emissor do twin token
 - `MCP_PORT` — porta do sidecar HTTP (default `7100`)
 - `DOCS_ENABLED` — `false` em todo ambiente (invariante STD-SEC-001)
+- `DB_*` — backend do tenant (fallback compartilhado; `DB_ENGINE` decide o dialeto mysql/postgresql)
+- `ADMIN_DB_*` — conexão admin que lê `ADMIN_DATAFORALL.PLATFORMS` (obrigatória em `cloud`)
+- `VAULT_ADDR` — opt-in; resolve `DB_PASSWORD`/`ADMIN_DB_PASSWORD` via Vault com fallback p/ env
 
 ## Desenvolvimento
 
