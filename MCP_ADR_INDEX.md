@@ -58,7 +58,7 @@ Clients
    ▼  Platform Catalog: capability/operation discovery → ADR-009
    │  PEP                               → ADR-005
    ▼  PDP: scope/purpose/mandate/risk   → ADR-005 + ADR-007
-   │  Runtime: planner → approval → executor (platform-dev-agent)
+   │  Runtime: planner → approval → executor (platform-devs-agent · repo standalone)
    ▼  Providers (MCP servers)
 ```
 
@@ -138,7 +138,7 @@ catálogo, descoberta, runtime, eventos e ativos. Bloco **escrito** (Status: Pro
 | ADR-010 | **Platform Catalog — meta-modelo de *kinds*** | o *kind system* do catálogo (estilo Backstage: Component/API/Resource/System). ⚠️ a ADR-009 já define o núcleo Capability/Operation/Tool/Provider/Resource → ADR-010 é o **meta-modelo geral**, não a redefinição desses. |
 | ADR-011 | **Discovery** — versionamento, health, metadata, compat, search | tira o discovery do north-star (ADR-008) e o torna concreto/consumível. |
 | ADR-012 | **Event Model** — eventos canônicos | `PlanCreated`, `PlanApproved`, `ExecutionStarted/Completed`, `PolicyDenied`, `CapabilityInvoked`, `RunbookCompleted`. Fecha auditoria/analytics/observabilidade; `dataforall-kafka` já existe. |
-| ADR-013 | **Runtime** — Planner/Executor/Scheduler/Memory/Budget/Approval/Recovery/Retry | formaliza o que **já existe** no `platform-dev-agent` como arquitetura descrita. |
+| ADR-013 | **Runtime** — Planner/Executor/Scheduler/Memory/Budget/Approval/Recovery/Retry | formaliza o que **já existe** no `platform-dev-agent` (hoje repo standalone `platform-devs-agent`, pacote `app/devs_agent`) como arquitetura descrita. |
 | ADR-014 | **Asset Model** — ADRs/Prompts/Policies/Runbooks/Personas/Templates/Knowledge versionados | as **instâncias** de asset no catálogo. ⚠️ resolver sobreposição com ADR-010 (kinds) na escrita: 010 = tipos, 014 = instâncias. |
 
 Horizonte: **Layer 6 · Control Plane** (ADR-010..014) — deixa de ser segurança e passa a ser arquitetura de

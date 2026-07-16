@@ -6,7 +6,7 @@ MCP (Model Context Protocol) servers do **DevTeam** da plataforma dataforalltech
 
 ## Purpose
 
-O `platform-devs` hospeda os MCP servers do **DevTeam**: as personas (architecture, backend, frontend, devops, product-owner, product-manager, qa-engineer, security) e os servers de papel/infra (session, test, config, services, deploy, dev-twin, docs, pipeline, qa, infra, ai-governance, audit), além de `mcp-gateway/`, `platform-catalog/`, `knowledge-base-mcp/` e o runtime `platform-dev-agent/`. **Não** é mais o dono da infra/deploy (ver [`platform-infra`](https://github.com/dataforalltech/platform-infra)) nem dos sidecars de serviço (ver `platform-<x>/mcp`).
+O `platform-devs` hospeda os MCP servers do **DevTeam**: as personas (architecture, backend, frontend, devops, product-owner, product-manager, qa-engineer, security) e os servers de papel/infra (session, test, config, services, deploy, dev-twin, docs, pipeline, qa, infra, ai-governance, audit), além de `mcp-gateway/`, `platform-catalog/` e `knowledge-base-mcp/`. O **runtime autônomo** (Modo B — planner→approval→executor) foi extraído para o repo standalone [`platform-devs-agent`](https://github.com/dataforalltech/platform-devs-agent) (pacote `app/devs_agent`) e **não** vive mais aqui como subdiretório. Este repo também **não** é mais o dono da infra/deploy (ver [`platform-infra`](https://github.com/dataforalltech/platform-infra)) nem dos sidecars de serviço (ver `platform-<x>/mcp`).
 
 ## Architecture
 

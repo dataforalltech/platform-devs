@@ -22,7 +22,7 @@ Hoje o `platform-dev` expõe **298 tools organizadas por MCP server** (`services
 Já existe **fundação latente**: o `mcp-registry.py` (`:8000`) e o grafo de ecossistema do
 `ai-governance-mcp` (`query_ecosystem_graph`, `get_service_metadata`, `find_dependencies_of`, …). Falta
 **promovê-lo a fonte da verdade governada**. Isto **não é rewrite do runtime**
-(`platform-dev-agent`: planner→approval→executor, DAGs, personas permanece) — é uma **camada de
+(`platform-dev-agent` — hoje repo standalone `platform-devs-agent`, pacote `app/devs_agent`: planner→approval→executor, DAGs, personas permanece) — é uma **camada de
 catálogo/domínio** acima de providers que já funcionam.
 
 ## Decision
