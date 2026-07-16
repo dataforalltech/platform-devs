@@ -15,7 +15,7 @@ Platform Catalog (Control Plane)
 
 Esses sete tipos **já existem, mas espalhados e sem governança**:
 
-- **Runbooks** vivem em `platform-dev-agent/app/dev_agent/runbook/catalog.py` como `RunbookSpec` frozen
+- **Runbooks** vivem em `platform-devs-agent/app/devs_agent/runbook/catalog.py` (repo standalone) como `RunbookSpec` frozen
   dataclasses versionadas (`version` SemVer), DAGs de tasks que apontam para tools reais do gateway
   (`services-mcp.check_health`, `deploy-mcp.deploy`, …) — mas o catálogo é constante de import-time, sem
   lifecycle, sem dono registrado, sem proveniência.
@@ -349,7 +349,7 @@ D14.3/D14.8); **não** define o schema de evento nem o transporte (cross-ref bid
 - ADR-012 (Event Model) — dono do envelope dos eventos de lifecycle nomeados em D14.11
 - ADR-005 (PEP/PDP) — consumidor primário de Policy · ADR-007 (capability model) — base de authz/risk
 - ADR-011 (Discovery) — versão/health/search dos assets no catálogo
-- Aterramento real: `platform-dev-agent/app/dev_agent/runbook/catalog.py` (`RunbookSpec` versionado, DAG),
+- Aterramento real: `platform-devs-agent/app/devs_agent/runbook/catalog.py` (repo standalone; `RunbookSpec` versionado, DAG),
   `knowledge/profiles/<id>.md` + `ProfileBase` (persona = front-matter + prompt), `platform_governance.policy_store`
 - Prior-art: Backstage (software/asset catalog, `kind`+`spec`+`relations`), OPA/Cedar (policy-as-attributes),
   SemVer (versionamento), GitOps (proveniência declarativa)

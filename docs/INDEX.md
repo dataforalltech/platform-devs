@@ -24,7 +24,7 @@ Snapshots históricos em **[archive/](archive/README.md)**. Última organizaçã
 
 ## 🤖 DevTeam & Agentes
 
-- [AGENTS](../AGENTS.md) · [PLATFORM_DEV_AGENT_SPEC](../PLATFORM_DEV_AGENT_SPEC.md) · [ORCHESTRATION](../ORCHESTRATION.md)
+- [AGENTS](../AGENTS.md) · [PLATFORM_DEV_AGENT_SPEC](../PLATFORM_DEV_AGENT_SPEC.md) (spec-base histórica — o runtime migrou p/ o repo standalone [`platform-devs-agent`](https://github.com/dataforalltech/platform-devs-agent)) · [ORCHESTRATION](../ORCHESTRATION.md)
 - [DEVTEAM_ECOSYSTEM_SUMMARY](../DEVTEAM_ECOSYSTEM_SUMMARY.md) · [DEVTEAM_ECOSYSTEM_IMPLEMENTATION_ROADMAP](../DEVTEAM_ECOSYSTEM_IMPLEMENTATION_ROADMAP.md)
 
 ## 🗄️ Histórico arquivado

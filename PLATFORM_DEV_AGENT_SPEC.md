@@ -4,6 +4,8 @@
 > **Data:** 2026-07-05
 > **Escopo:** especificação única e consolidada da fundação (P0/P1) + motor de execução Modo B (P2) do novo repositório `platform-dev-agent`. Este documento já incorpora os fixes da revisão adversarial sênior — onde a especificação de design divergia da crítica, o fix da crítica prevaleceu e está embutido aqui **como o design**, não como TODO.
 
+> **⚠️ Migração (2026-07-15) — o runtime saiu deste monorepo.** O runtime especificado aqui foi extraído (via `git subtree split`, história preservada) para o repo standalone **[`platform-devs-agent`](https://github.com/dataforalltech/platform-devs-agent)** (privado). No repo standalone o pacote foi **renomeado** `app/dev_agent` → `app/devs_agent` e o nome MCP `platform-dev-agent` → `platform-devs-agent`. Este documento permanece **como spec-base/histórico** — nada foi apagado. Ao lê-lo, leia os paths `platform-dev-agent/app/dev_agent/...` citados abaixo como `platform-devs-agent/app/devs_agent/...` no repo standalone; use-o como referência de design, **não** como mapa do código deste repo.
+
 ## Relação com documentos existentes
 
 - **`MCP_PARITY_PLATFORM_MARKETING.md`**: este spec é a materialização do lado "devs" da paridade de arquitetura MCP. O `platform-dev-agent` copia a *forma* do `platform-marketing-agent` (padrão Plan-Approve-Execute, schemas Pydantic, loop ReAct por persona, fonte única perfil→tools) mas corrige os gotchas mapeados naquele documento e adota o padrão de governança como referência. As divergências são resolvidas aqui de forma travada (ver §0).

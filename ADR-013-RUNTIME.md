@@ -5,7 +5,7 @@
 
 ## Context
 
-O `platform-dev-agent` já executa o Modo B autônomo: **plan → approve → execute** derivado de um
+O `platform-dev-agent` (hoje repo standalone `platform-devs-agent`, pacote `app/devs_agent`) já executa o Modo B autônomo: **plan → approve → execute** derivado de um
 runbook versionado (DAG), com aprovação humana N1/N2, orçamento por run, enforcement de capability e
 resume-safety guardado. Isso **não é especulação** — está codificado e testado (`AutonomousPipeline`,
 `PlanBuilder`, `ApprovalGate`, `PlanExecutor`, `PlanRepository`, `RunBudget`, `CapabilityResolver/Enforcer`,
@@ -22,7 +22,7 @@ Esta ADR **descreve o runtime**; ela **não** redefine:
 
 Fundação real relevante (aterramento, não invenção):
 
-| Componente | Estado | Onde vive (`platform-dev-agent`) |
+| Componente | Estado | Onde vive (`platform-devs-agent`, pacote `app/devs_agent`) |
 |---|---|---|
 | **Planner** | EXISTE | `plan/builder.py` (`PlanBuilder`) + `runbook/dag.py` (topo-sort Kahn) |
 | **Approver** | EXISTE | `plan/approval.py` (`ApprovalGate` N1/N2) |
@@ -223,7 +223,7 @@ elimina o TOCTOU de dupla execução (G2) sem locks distribuídos.
   (D13.7); nota de aterramento sobre o gateway sem dedupe de writes (D9.8).
 - ADR-007 (Capability Model) — risk tiers que dirigem N1/N2 e TTL; ADR-005 (PEP/PDP + HILT) — política de
   aprovação e output/redaction que o runtime aplica; ADR-004 (capability token) — correlação por run/session.
-- `platform-dev-agent`: `pipeline.py` (`AutonomousPipeline`), `plan/builder.py`, `runbook/dag.py`,
+- `platform-devs-agent` (repo standalone, pacote `app/devs_agent`): `pipeline.py` (`AutonomousPipeline`), `plan/builder.py`, `runbook/dag.py`,
   `plan/approval.py`, `plan/executor.py`, `plan/repository.py` + `plan/repository_pg.py`, `budget.py`,
   `capability.py`, `runbook_selector.py`, `core/config.py` (`resume_writes_safe`, tetos por run).
 - `PLATFORM_DEV_AGENT_SPEC.md` (§4 resume/idempotência, §6 persistência) · `docs/REAL_GATEWAY_E2E.md`.

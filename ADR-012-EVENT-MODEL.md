@@ -5,7 +5,7 @@
 
 ## Context
 
-O runtime do `platform-dev-agent` já executa o pipeline autônomo `plan → approve → execute`
+O runtime do `platform-dev-agent` (hoje repo standalone `platform-devs-agent`, pacote `app/devs_agent`) já executa o pipeline autônomo `plan → approve → execute`
 (PlanBuilder, ApprovalGate N1/N2, PlanExecutor com transições guardadas e resume-safe, RunBudget,
 CapabilityResolver/Enforcer, RunbookSelector, redaction). Cada uma dessas transições é hoje um **estado
 interno** — visível no log, no PlanRepository (Postgres) e no gateway, mas **não publicado** num barramento
@@ -42,7 +42,7 @@ que já ocorreu** (past tense, fato) — não são comandos.
 specversion: "1.0"
 id: 01J8Z9K7Q2R3S4T5V6W7X8Y9Z0        # ULID — único por evento, ordenável no tempo
 type: com.dataforall.execution.completed  # da taxonomia canônica (D12.3), reverse-DNS
-source: /platform-dev-agent/executor      # componente emissor (URI-reference)
+source: /platform-devs-agent/executor     # componente emissor (URI-reference)
 subject: run/01J8Z...                      # a entidade a que o evento se refere (run/plan/task id)
 time: "2026-07-05T14:32:10.512Z"           # RFC 3339 UTC — quando o fato ocorreu
 datacontenttype: application/json
