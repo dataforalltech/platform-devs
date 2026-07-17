@@ -40,6 +40,18 @@ _EXPECTED_TOOLS = {
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    # Geradores determinísticos (COMPUTE PURO)
+    "generate_gherkin_scenarios",
+    "generate_unit_tests",
+    "generate_e2e_tests",
+    "generate_api_tests",
+    "generate_playwright_tests",
+    "generate_cypress_tests",
+    "generate_k6_performance_test",
+    "generate_regression_suite",
+    "generate_smoke_test_suite",
+    "generate_uat_checklist",
+    "generate_quality_gate",
 }
 
 
@@ -58,7 +70,7 @@ def client() -> TestClient:
 
 # ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
 def test_tool_count():
-    assert len(M._TOOL_SCHEMAS) == 23
+    assert len(M._TOOL_SCHEMAS) == 34
     assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
 
 
@@ -72,7 +84,7 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "qa-engineer-mcp", "tools": 23}
+    assert r.json() == {"status": "ok", "service": "qa-engineer-mcp", "tools": 34}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):

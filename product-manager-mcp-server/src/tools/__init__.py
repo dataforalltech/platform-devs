@@ -8,6 +8,14 @@ from .feature_spec_tool import (
     save_feature_spec,
     update_feature_spec,
 )
+from .generator_tool import (
+    calculate_rice_score,
+    generate_acceptance_criteria,
+    generate_handoff_to_architecture,
+    generate_handoff_to_design,
+    generate_handoff_to_engineering,
+    generate_release_plan,
+)
 from .gtm_brief_tool import (
     delete_gtm_brief,
     get_gtm_brief,
@@ -58,4 +66,11 @@ __all__ = [
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    # Geradores determinísticos (COMPUTE PURO — sem DB/LLM)
+    "generate_release_plan",
+    "generate_acceptance_criteria",
+    "calculate_rice_score",
+    "generate_handoff_to_architecture",
+    "generate_handoff_to_design",
+    "generate_handoff_to_engineering",
 ]

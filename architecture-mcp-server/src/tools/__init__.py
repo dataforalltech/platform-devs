@@ -16,6 +16,7 @@ from .c4_diagram_tool import (
     list_c4_diagrams,
     set_c4_diagram,
 )
+from .generator_tool import generate_adr, generate_c4_diagram, generate_sequence_diagram
 from .solution_blueprint_tool import (
     build_solution_blueprint,
     delete_solution_blueprint,
@@ -51,4 +52,8 @@ __all__ = [
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    # Geradores determinísticos (COMPUTE PURO)
+    "generate_c4_diagram",
+    "generate_sequence_diagram",
+    "generate_adr",
 ]

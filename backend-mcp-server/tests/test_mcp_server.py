@@ -38,6 +38,15 @@ _EXPECTED_TOOLS = {
     "list_code_reviews",
     "get_code_review",
     "delete_code_review",
+    # Geradores determinísticos (COMPUTE PURO — não persistem)
+    "generate_fastapi_router",
+    "generate_service_layer",
+    "generate_repository_layer",
+    "generate_database_schema",
+    "generate_migration",
+    "generate_api_contract",
+    "generate_auth_policy",
+    "generate_event_contracts",
 }
 
 
@@ -56,7 +65,7 @@ def client() -> TestClient:
 
 # ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
 def test_tool_count():
-    assert len(M._TOOL_SCHEMAS) == 21
+    assert len(M._TOOL_SCHEMAS) == 29
     assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
 
 
@@ -70,7 +79,7 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "backend-mcp", "tools": 21}
+    assert r.json() == {"status": "ok", "service": "backend-mcp", "tools": 29}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):

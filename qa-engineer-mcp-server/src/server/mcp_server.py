@@ -54,6 +54,17 @@ from ..tools import (
     delete_quality_gate,
     delete_test_case,
     delete_test_plan,
+    generate_api_tests,
+    generate_cypress_tests,
+    generate_e2e_tests,
+    generate_gherkin_scenarios,
+    generate_k6_performance_test,
+    generate_playwright_tests,
+    generate_quality_gate,
+    generate_regression_suite,
+    generate_smoke_test_suite,
+    generate_uat_checklist,
+    generate_unit_tests,
     get_artifact,
     get_bug_report,
     get_quality_gate,
@@ -410,6 +421,183 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete de um artefato por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com
+    # :read p/ consultas e :write p/ mutações do estado do tenant. Geradores não
+    # LEEM nem GRAVAM estado — só computam artefatos de teste — então nenhum dos
+    # dois cabe. Escolha: nova ação `:generate` sobre resource_type=`artifact` (o
+    # mesmo domínio dos artefatos de teste produzidos): least-privilege real (um
+    # token só de geração não abre leitura/escrita de artefatos persistidos).
+    # data_domain=qa-engineer.
+    "generate_gherkin_scenarios": _meta(
+        "generate_gherkin_scenarios",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um arquivo .feature (Gherkin) determinístico a partir dos cenários da spec.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Nome da funcionalidade."),
+                "scenarios": dict(
+                    _ARR, description="Cenários [{name,given?,when?,then?}] (given/when/then str ou lista)."
+                ),
+                "description": dict(_STR, description="Descrição da feature (opcional)."),
+            },
+            required=["feature", "scenarios"],
+        ),
+    ),
+    "generate_unit_tests": _meta(
+        "generate_unit_tests",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um esqueleto de testes unitários determinístico (pytest|jest) para o alvo.",
+        _schema(
+            {
+                "framework": dict(_STR, description="Framework: pytest|jest."),
+                "target": dict(_STR, description="Alvo/módulo sob teste."),
+                "cases": dict(_ARR, description="Casos [{name,description?}] (opcional; usa placeholder)."),
+            },
+            required=["framework", "target"],
+        ),
+    ),
+    "generate_e2e_tests": _meta(
+        "generate_e2e_tests",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um esqueleto de testes e2e determinístico (playwright|cypress) a partir dos fluxos.",
+        _schema(
+            {
+                "framework": dict(_STR, description="Framework: playwright|cypress."),
+                "flows": dict(
+                    _ARR, description="Fluxos [{name,steps?}] (steps str ou {type,selector,value})."
+                ),
+                "suite": dict(_STR, description="Nome da suite (default 'e2e')."),
+            },
+            required=["framework", "flows"],
+        ),
+    ),
+    "generate_api_tests": _meta(
+        "generate_api_tests",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera testes de API determinísticos (pytest + requests) a partir dos endpoints.",
+        _schema(
+            {
+                "base": dict(_STR, description="Base URL da API."),
+                "endpoints": dict(_ARR, description="Endpoints [{method?,path?,expected_status?,name?}]."),
+            },
+            required=["base", "endpoints"],
+        ),
+    ),
+    "generate_playwright_tests": _meta(
+        "generate_playwright_tests",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera uma spec Playwright (TS) determinística a partir de páginas e ações.",
+        _schema(
+            {
+                "pages": dict(_ARR, description="Páginas [{name?,url?}] ou strings (opcional)."),
+                "actions": dict(
+                    _ARR, description="Ações [{type,selector?,value?}] aplicadas por página (opcional)."
+                ),
+                "suite": dict(_STR, description="Nome da suite (opcional)."),
+            }
+        ),
+    ),
+    "generate_cypress_tests": _meta(
+        "generate_cypress_tests",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera uma spec Cypress (JS) determinística a partir de páginas e ações.",
+        _schema(
+            {
+                "pages": dict(_ARR, description="Páginas [{name?,url?}] ou strings (opcional)."),
+                "actions": dict(
+                    _ARR, description="Ações [{type,selector?,value?}] aplicadas por página (opcional)."
+                ),
+                "suite": dict(_STR, description="Nome da suite (opcional)."),
+            }
+        ),
+    ),
+    "generate_k6_performance_test": _meta(
+        "generate_k6_performance_test",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um script de performance k6 (JS) determinístico com VUs/duração/thresholds.",
+        _schema(
+            {
+                "target": dict(_STR, description="URL alvo do teste de carga."),
+                "vus": dict(_INT, description="Virtual users (default 10)."),
+                "duration": dict(_STR, description="Duração (default '30s')."),
+                "thresholds": dict(_OBJ, description="Thresholds {metric: condição|[condições]} (opcional)."),
+            },
+            required=["target"],
+        ),
+    ),
+    "generate_regression_suite": _meta(
+        "generate_regression_suite",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um manifesto YAML de suite de regressão determinístico a partir dos módulos.",
+        _schema(
+            {
+                "modules": dict(_ARR, description="Módulos [{name,priority?,cases?}] ou strings."),
+                "name": dict(_STR, description="Nome da suite (default 'regression')."),
+            },
+            required=["modules"],
+        ),
+    ),
+    "generate_smoke_test_suite": _meta(
+        "generate_smoke_test_suite",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um manifesto YAML de smoke suite determinístico a partir de endpoints e/ou páginas.",
+        _schema(
+            {
+                "endpoints": dict(
+                    _ARR, description="Endpoints [{method?,path?,expected_status?}] ou strings."
+                ),
+                "pages": dict(_ARR, description="Páginas [{url?,name?}] ou strings."),
+            }
+        ),
+    ),
+    "generate_uat_checklist": _meta(
+        "generate_uat_checklist",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera um checklist UAT em markdown determinístico a partir dos critérios de aceite.",
+        _schema(
+            {
+                "acceptance_criteria": dict(_ARR, description="Critérios [{id?,description?}] ou strings."),
+                "feature": dict(_STR, description="Funcionalidade alvo (opcional)."),
+            },
+            required=["acceptance_criteria"],
+        ),
+    ),
+    "generate_quality_gate": _meta(
+        "generate_quality_gate",
+        "artifact:generate",
+        "artifact",
+        "qa-engineer",
+        "Gera uma config JSON de quality gate determinística a partir das métricas/thresholds.",
+        _schema(
+            {
+                "metrics": dict(_OBJ, description="Métricas {coverage,lint,tests,...} → thresholds."),
+                "service": dict(_STR, description="Serviço alvo (opcional)."),
+                "on_failure": dict(_STR, description="Ação em falha (default 'block')."),
+            },
+            required=["metrics"],
+        ),
+    ),
 }
 
 # qa-engineer-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -453,6 +641,29 @@ def _verify_inner_token(twin_token: str, settings: QAEngineerSettings) -> dict[s
 async def _dispatch(name: str, args: dict[str, Any], store: QAEngineerStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_gherkin_scenarios":
+        return generate_gherkin_scenarios(args)
+    if name == "generate_unit_tests":
+        return generate_unit_tests(args)
+    if name == "generate_e2e_tests":
+        return generate_e2e_tests(args)
+    if name == "generate_api_tests":
+        return generate_api_tests(args)
+    if name == "generate_playwright_tests":
+        return generate_playwright_tests(args)
+    if name == "generate_cypress_tests":
+        return generate_cypress_tests(args)
+    if name == "generate_k6_performance_test":
+        return generate_k6_performance_test(args)
+    if name == "generate_regression_suite":
+        return generate_regression_suite(args)
+    if name == "generate_smoke_test_suite":
+        return generate_smoke_test_suite(args)
+    if name == "generate_uat_checklist":
+        return generate_uat_checklist(args)
+    if name == "generate_quality_gate":
+        return generate_quality_gate(args)
     # ── Test Plans ─────────────────────────────────────────────────────────── #
     if name == "save_test_plan":
         return await save_test_plan(

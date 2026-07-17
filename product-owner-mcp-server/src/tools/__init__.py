@@ -8,6 +8,14 @@ from .backlog_item_tool import (
     save_backlog_item,
     update_backlog_item,
 )
+from .generator_tool import (
+    generate_epic,
+    generate_feature_breakdown,
+    generate_homologation_checklist,
+    generate_jira_tasks,
+    generate_release_notes,
+    generate_user_stories,
+)
 from .mvp_scope_tool import (
     delete_mvp_scope,
     get_mvp_scope,
@@ -76,4 +84,11 @@ __all__ = [
     "list_po_artifacts",
     "get_po_artifact",
     "delete_po_artifact",
+    # Geradores determinísticos (COMPUTE PURO — não persistem)
+    "generate_epic",
+    "generate_feature_breakdown",
+    "generate_jira_tasks",
+    "generate_release_notes",
+    "generate_user_stories",
+    "generate_homologation_checklist",
 ]

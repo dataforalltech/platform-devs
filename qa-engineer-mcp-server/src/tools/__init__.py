@@ -9,6 +9,19 @@ from .bug_report_tool import (
     save_bug_report,
     update_bug_status,
 )
+from .generator_tool import (
+    generate_api_tests,
+    generate_cypress_tests,
+    generate_e2e_tests,
+    generate_gherkin_scenarios,
+    generate_k6_performance_test,
+    generate_playwright_tests,
+    generate_quality_gate,
+    generate_regression_suite,
+    generate_smoke_test_suite,
+    generate_uat_checklist,
+    generate_unit_tests,
+)
 from .quality_gate_tool import (
     delete_quality_gate,
     get_quality_gate,
@@ -60,4 +73,16 @@ __all__ = [
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    # Geradores determinísticos (COMPUTE PURO — sem DB/LLM)
+    "generate_gherkin_scenarios",
+    "generate_unit_tests",
+    "generate_e2e_tests",
+    "generate_api_tests",
+    "generate_playwright_tests",
+    "generate_cypress_tests",
+    "generate_k6_performance_test",
+    "generate_regression_suite",
+    "generate_smoke_test_suite",
+    "generate_uat_checklist",
+    "generate_quality_gate",
 ]

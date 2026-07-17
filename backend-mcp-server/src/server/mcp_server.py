@@ -54,6 +54,14 @@ from ..tools import (
     delete_auth_policy,
     delete_code_review,
     delete_database_schema,
+    generate_api_contract,
+    generate_auth_policy,
+    generate_database_schema,
+    generate_event_contracts,
+    generate_fastapi_router,
+    generate_migration,
+    generate_repository_layer,
+    generate_service_layer,
     get_api_contract,
     get_artifact,
     get_auth_policy,
@@ -395,6 +403,152 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete de uma revisão de código por id.",
         _schema({"id": dict(_INT, description="Id da revisão.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes stateful seguem `<resource_type>:<acao>` com :read
+    # p/ consultas e :write p/ mutações do estado do tenant. Geradores não LEEM nem
+    # GRAVAM estado — só computam scaffold de backend — então nenhum dos dois cabe.
+    # Escolha: nova ação `:generate` sobre o resource_type coerente com o artefato
+    # que cada gerador produz (o mesmo domínio da sua contraparte persistida):
+    # least-privilege real (um token só de geração não abre leitura/escrita do
+    # estado). data_domain acompanha a contraparte (backend / security).
+    "generate_fastapi_router": _meta(
+        "generate_fastapi_router",
+        "artifact:generate",
+        "artifact",
+        "backend",
+        "Gera o scaffold de um APIRouter FastAPI determinístico a partir de resource+routes.",
+        _schema(
+            {
+                "resource": dict(_STR, description="Recurso/entidade do router (usado no prefix/tag)."),
+                "routes": dict(
+                    _ARR,
+                    description="Rotas [{method,path,handler}]; path params viram args do handler.",
+                ),
+                "prefix": dict(_STR, description="Prefixo do router (default '/<resource>')."),
+            },
+            required=["resource", "routes"],
+        ),
+    ),
+    "generate_service_layer": _meta(
+        "generate_service_layer",
+        "artifact:generate",
+        "artifact",
+        "backend",
+        "Gera o scaffold de uma classe de service determinística a partir de entity+methods.",
+        _schema(
+            {
+                "entity": dict(_STR, description="Entidade alvo (nome da classe de service)."),
+                "methods": dict(
+                    _ARR,
+                    description="Métodos (str ou {name}); default CRUD (create/get/list/update/delete).",
+                ),
+            },
+            required=["entity"],
+        ),
+    ),
+    "generate_repository_layer": _meta(
+        "generate_repository_layer",
+        "artifact:generate",
+        "artifact",
+        "backend",
+        "Gera o scaffold de um repositório ORM async determinístico a partir de entity+fields.",
+        _schema(
+            {
+                "entity": dict(_STR, description="Entidade alvo (nome da classe/tabela)."),
+                "fields": dict(_ARR, description="Campos [{name,type}] (documentados nas colunas)."),
+            },
+            required=["entity"],
+        ),
+    ),
+    "generate_database_schema": _meta(
+        "generate_database_schema",
+        "database_schema:generate",
+        "database_schema",
+        "backend",
+        "Gera DDL SQL (CREATE TABLE) determinístico a partir de tables[{name,columns[{name,type,pk,fk}]}].",
+        _schema(
+            {
+                "tables": dict(
+                    _ARR,
+                    description="Tabelas [{name, columns:[{name,type,pk?,fk?}]}].",
+                ),
+            },
+            required=["tables"],
+        ),
+    ),
+    "generate_migration": _meta(
+        "generate_migration",
+        "database_schema:generate",
+        "database_schema",
+        "backend",
+        "Gera um esqueleto de migration alembic (upgrade/downgrade) determinístico a partir de revision+ops.",
+        _schema(
+            {
+                "revision": dict(_STR, description="Id da revisão."),
+                "ops": dict(
+                    _ARR,
+                    description="Operações (str SQL ou {op,table,column?,type?}); downgrade é o inverso.",
+                ),
+                "down_revision": dict(_STR, description="Revisão anterior (opcional)."),
+                "message": dict(_STR, description="Mensagem/descrição da migration (opcional)."),
+            },
+            required=["revision", "ops"],
+        ),
+    ),
+    "generate_api_contract": _meta(
+        "generate_api_contract",
+        "api_contract:generate",
+        "api_contract",
+        "backend",
+        "Gera um fragmento OpenAPI 3.1 (YAML) determinístico a partir de title+paths.",
+        _schema(
+            {
+                "title": dict(_STR, description="Título da API."),
+                "paths": dict(
+                    _ARR,
+                    description="Paths [{path,method,summary?,operationId?,status?}].",
+                ),
+                "version": dict(_STR, description="Versão da API (default '1.0.0')."),
+            },
+            required=["title", "paths"],
+        ),
+    ),
+    "generate_auth_policy": _meta(
+        "generate_auth_policy",
+        "auth_policy:generate",
+        "auth_policy",
+        "security",
+        "Gera um documento de política RBAC (Markdown) determinístico a partir de roles/resources/rules.",
+        _schema(
+            {
+                "roles": dict(_STR_ARR, description="Papéis do RBAC."),
+                "resources": dict(_STR_ARR, description="Recursos protegidos."),
+                "rules": dict(
+                    _ARR,
+                    description="Regras [{role,resource,actions,effect}] (opcional).",
+                ),
+                "title": dict(_STR, description="Título do doc (default 'RBAC Policy')."),
+            },
+            required=["roles", "resources"],
+        ),
+    ),
+    "generate_event_contracts": _meta(
+        "generate_event_contracts",
+        "artifact:generate",
+        "artifact",
+        "backend",
+        "Gera um schema de eventos (YAML, JSON-Schema-like) determinístico a partir de events[{name,fields}]",
+        _schema(
+            {
+                "events": dict(
+                    _ARR,
+                    description="Eventos [{name, fields}] (fields: dict {name:type} ou lista).",
+                ),
+                "version": dict(_STR, description="Versão do contrato (default '1.0')."),
+            },
+            required=["events"],
+        ),
+    ),
 }
 
 # backend-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -438,6 +592,23 @@ def _verify_inner_token(twin_token: str, settings: BackendSettings) -> dict[str,
 async def _dispatch(name: str, args: dict[str, Any], store: BackendStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_fastapi_router":
+        return generate_fastapi_router(args)
+    if name == "generate_service_layer":
+        return generate_service_layer(args)
+    if name == "generate_repository_layer":
+        return generate_repository_layer(args)
+    if name == "generate_database_schema":
+        return generate_database_schema(args)
+    if name == "generate_migration":
+        return generate_migration(args)
+    if name == "generate_api_contract":
+        return generate_api_contract(args)
+    if name == "generate_auth_policy":
+        return generate_auth_policy(args)
+    if name == "generate_event_contracts":
+        return generate_event_contracts(args)
     # ── API Contracts ──────────────────────────────────────────────────────── #
     if name == "save_api_contract":
         return await save_api_contract(

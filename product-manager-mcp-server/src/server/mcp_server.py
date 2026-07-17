@@ -49,11 +49,17 @@ from ..config.settings import ProductManagerSettings, get_settings
 from ..db.schema import ensure_schema
 from ..db.store import ProductManagerStore
 from ..tools import (
+    calculate_rice_score,
     delete_artifact,
     delete_feature_spec,
     delete_gtm_brief,
     delete_product_vision,
     delete_release_plan,
+    generate_acceptance_criteria,
+    generate_handoff_to_architecture,
+    generate_handoff_to_design,
+    generate_handoff_to_engineering,
+    generate_release_plan,
     get_artifact,
     get_feature_spec,
     get_gtm_brief,
@@ -395,6 +401,103 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete de um artefato por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com
+    # :read p/ consultas e :write p/ mutações do estado do tenant. Geradores não
+    # LEEM nem GRAVAM estado — só computam conteúdo de produto — então nenhum dos
+    # dois cabe. Escolha: nova ação `:generate` sobre resource_type=`artifact` (o
+    # mesmo domínio dos artefatos de produto produzidos): least-privilege real (um
+    # token só de geração não abre leitura/escrita de artefatos persistidos).
+    "generate_release_plan": _meta(
+        "generate_release_plan",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Gera um plano de release em Markdown determinístico a partir de versão/escopo/milestones.",
+        _schema(
+            {
+                "version": dict(_STR, description="Versão do release (ex.: '2.1.0')."),
+                "scope": dict(_ARR, description="Itens de escopo do release (opcional)."),
+                "milestones": dict(_ARR, description="Marcos [{name,date?,items?}] ou strings (opcional)."),
+            },
+            required=["version"],
+        ),
+    ),
+    "generate_acceptance_criteria": _meta(
+        "generate_acceptance_criteria",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Gera critérios de aceite em Gherkin determinísticos a partir da user story e regras.",
+        _schema(
+            {
+                "story": dict(_OBJ, description="História {role,goal,benefit?}."),
+                "rules": dict(
+                    _ARR,
+                    description="Regras [{scenario?,given,when,then}] ou strings (opcional).",
+                ),
+            },
+            required=["story"],
+        ),
+    ),
+    "calculate_rice_score": _meta(
+        "calculate_rice_score",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Calcula o score RICE = (reach × impact × confidence) / effort de forma determinística.",
+        _schema(
+            {
+                "reach": dict(_NUM, description="Alcance (nº de pessoas/eventos por período)."),
+                "impact": dict(_NUM, description="Impacto (peso por pessoa)."),
+                "confidence": dict(_NUM, description="Confiança (ex.: 0-100 ou 0-1)."),
+                "effort": dict(_NUM, description="Esforço (person-months; deve ser > 0)."),
+            },
+            required=["reach", "impact", "confidence", "effort"],
+        ),
+    ),
+    "generate_handoff_to_architecture": _meta(
+        "generate_handoff_to_architecture",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Gera um documento de handoff para Arquitetura determinístico a partir da feature/requisitos.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Feature alvo do handoff."),
+                "requirements": dict(_ARR, description="Requisitos a repassar (opcional)."),
+            },
+            required=["feature"],
+        ),
+    ),
+    "generate_handoff_to_design": _meta(
+        "generate_handoff_to_design",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Gera um documento de handoff para Design determinístico a partir da feature/fluxos.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Feature alvo do handoff."),
+                "flows": dict(_ARR, description="Fluxos/jornadas a repassar (opcional)."),
+            },
+            required=["feature"],
+        ),
+    ),
+    "generate_handoff_to_engineering": _meta(
+        "generate_handoff_to_engineering",
+        "artifact:generate",
+        "artifact",
+        "product-manager",
+        "Gera um documento de handoff para Engenharia determinístico a partir da feature/specs.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Feature alvo do handoff."),
+                "specs": dict(_ARR, description="Especificações técnicas a repassar (opcional)."),
+            },
+            required=["feature"],
+        ),
+    ),
 }
 
 # product-manager-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -438,6 +541,19 @@ def _verify_inner_token(twin_token: str, settings: ProductManagerSettings) -> di
 async def _dispatch(name: str, args: dict[str, Any], store: ProductManagerStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_release_plan":
+        return generate_release_plan(args)
+    if name == "generate_acceptance_criteria":
+        return generate_acceptance_criteria(args)
+    if name == "calculate_rice_score":
+        return calculate_rice_score(args)
+    if name == "generate_handoff_to_architecture":
+        return generate_handoff_to_architecture(args)
+    if name == "generate_handoff_to_design":
+        return generate_handoff_to_design(args)
+    if name == "generate_handoff_to_engineering":
+        return generate_handoff_to_engineering(args)
     # ── Feature Specs ──────────────────────────────────────────────────────── #
     if name == "save_feature_spec":
         return await save_feature_spec(

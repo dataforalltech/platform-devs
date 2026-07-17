@@ -27,6 +27,16 @@ from .database_schema_tool import (
     save_database_schema,
     update_database_schema,
 )
+from .generator_tool import (
+    generate_api_contract,
+    generate_auth_policy,
+    generate_database_schema,
+    generate_event_contracts,
+    generate_fastapi_router,
+    generate_migration,
+    generate_repository_layer,
+    generate_service_layer,
+)
 
 __all__ = [
     # API Contracts
@@ -56,4 +66,13 @@ __all__ = [
     "list_code_reviews",
     "get_code_review",
     "delete_code_review",
+    # Geradores determinísticos (COMPUTE PURO — não persistem)
+    "generate_fastapi_router",
+    "generate_service_layer",
+    "generate_repository_layer",
+    "generate_database_schema",
+    "generate_migration",
+    "generate_api_contract",
+    "generate_auth_policy",
+    "generate_event_contracts",
 ]

@@ -53,6 +53,10 @@ from ..tools import (
     delete_security_artifact,
     delete_security_control,
     delete_threat_model,
+    generate_api_security_spec,
+    generate_compliance_report,
+    generate_security_controls,
+    generate_security_handbook,
     get_cvss_assessment,
     get_security_artifact,
     get_security_control,
@@ -335,6 +339,82 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete de um artefato de segurança por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com
+    # :read p/ consultas e :write p/ mutações do estado do tenant. Geradores não
+    # LEEM nem GRAVAM estado — só computam conteúdo de segurança — então nenhum dos
+    # dois cabe. Escolha: nova ação `:generate` sobre resource_type=`artifact` (o
+    # mesmo domínio dos artefatos de segurança produzidos): least-privilege real (um
+    # token só de geração não abre leitura/escrita de artefatos persistidos).
+    "generate_security_controls": _meta(
+        "generate_security_controls",
+        "artifact:generate",
+        "artifact",
+        "security",
+        "Gera uma matriz de controles de segurança (controles × assets) determinística a partir da spec.",
+        _schema(
+            {
+                "framework": dict(_STR, description="Framework de referência (nist_csf/iso_27001/cis/...)."),
+                "assets": dict(_ARR, description="Assets [str | {name}] que compõem as colunas (opcional)."),
+                "controls": dict(
+                    _ARR,
+                    description="Controles [{key|control_key,name?,category?,framework_ref?,applies_to?}].",
+                ),
+            },
+            required=["framework", "controls"],
+        ),
+    ),
+    "generate_api_security_spec": _meta(
+        "generate_api_security_spec",
+        "artifact:generate",
+        "artifact",
+        "security",
+        "Gera um spec de segurança de API (YAML) determinístico a partir de endpoints/auth/ameaças.",
+        _schema(
+            {
+                "endpoints": dict(
+                    _ARR,
+                    description="Endpoints [{path,method?,auth_required?,scopes?}].",
+                ),
+                "auth": dict(_OBJ, description="Esquema de auth (string ou objeto; default bearer_jwt)."),
+                "threats": dict(_ARR, description="Ameaças [str | {id?,description,...}] (opcional)."),
+                "title": dict(_STR, description="Título do spec (opcional)."),
+            },
+            required=["endpoints"],
+        ),
+    ),
+    "generate_compliance_report": _meta(
+        "generate_compliance_report",
+        "artifact:generate",
+        "artifact",
+        "security",
+        "Gera um relatório de compliance (markdown) determinístico com sumário e índice de conformidade.",
+        _schema(
+            {
+                "standard": dict(_STR, description="Padrão avaliado (SOC2/ISO27001/LGPD/...)."),
+                "findings": dict(
+                    _ARR,
+                    description="Achados [{control,status,note?}]; status ex.: pass|partial|fail|na.",
+                ),
+                "title": dict(_STR, description="Título do relatório (opcional)."),
+            },
+            required=["standard", "findings"],
+        ),
+    ),
+    "generate_security_handbook": _meta(
+        "generate_security_handbook",
+        "artifact:generate",
+        "artifact",
+        "security",
+        "Gera um handbook de segurança (markdown com índice) determinístico a partir das seções.",
+        _schema(
+            {
+                "sections": dict(_ARR, description="Seções [{title,content?,items?}]."),
+                "title": dict(_STR, description="Título do handbook (default 'Security Handbook')."),
+            },
+            required=["sections"],
+        ),
+    ),
 }
 
 # security-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -378,6 +458,15 @@ def _verify_inner_token(twin_token: str, settings: SecuritySettings) -> dict[str
 async def _dispatch(name: str, args: dict[str, Any], store: SecurityStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_security_controls":
+        return generate_security_controls(args)
+    if name == "generate_api_security_spec":
+        return generate_api_security_spec(args)
+    if name == "generate_compliance_report":
+        return generate_compliance_report(args)
+    if name == "generate_security_handbook":
+        return generate_security_handbook(args)
     # ── Threat Models ──────────────────────────────────────────────────────── #
     if name == "save_threat_model":
         return await save_threat_model(
