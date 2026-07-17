@@ -1,9 +1,13 @@
 # ADR 0005 — Distribuição via imagem Docker (stdio-via-docker-run)
 
 **Data**: 2026-05-06
-**Status**: Aceito
+**Status**: Superseded em 2026-07-15
 **Decisor**: @caiog
 **Implementação**: commit `<próximo>`
+
+> GitHub Actions foi aposentado. Este ADR preserva o desenho histórico; o
+> procedimento vigente está em `../../OPERATIONS.md`, na seção de release manual
+> controlada.
 
 ## Contexto
 

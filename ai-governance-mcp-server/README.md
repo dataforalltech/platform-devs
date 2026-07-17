@@ -398,9 +398,11 @@ Dependências transitivas (BFS limitada):
    - Reiniciar o servidor; o `EcosystemGraph` valida no boot e reporta nós órfãos / kinds desconhecidos / arestas quebradas.
    - Os testes em `tests/test_graph.py` consultam o YAML real — se você modela algo novo crítico do ecossistema (ex.: serviço novo, novo contrato), adicione um caso lá.
 
-## PR validation (`.github/workflows/pr-validate.yml` + `scripts/pr_validate.py`)
+## Validação de PR (`scripts/pr_validate.py`)
 
-GitHub Action que invoca `validate_agent_decision` no diff do PR e posta o resultado como comentário. Por default `continue-on-error: true` — informativo, não bloqueia merge enquanto o validator está em fase de calibração.
+GitHub Actions está aposentado. O operador ou futuro executor aprovado invoca
+`validate_agent_decision` no diff e retém o resultado como evidência. A postagem
+no PR é opcional e exige `--pr-number` explícito.
 
 ```bash
 # Local: dry-run contra branch
@@ -409,8 +411,8 @@ python scripts/pr_validate.py --base main --head HEAD --dry-run
 # Local: salvar comentário em arquivo (sem postar)
 python scripts/pr_validate.py --base origin/main --output-comment /tmp/comment.md
 
-# CI (GitHub Actions): variáveis GITHUB_BASE_REF/GITHUB_HEAD_REF/PR_NUMBER já automaticas
-python scripts/pr_validate.py --post-comment
+# Execução controlada com comentário explícito
+python scripts/pr_validate.py --base origin/main --head HEAD --post-comment --pr-number 123
 ```
 
 Comentário renderiza com emoji indicador (🛑 BLOCKED, ⚠️ HIGH RISK / Medium, ✅ OK), violations, required actions, recommendations e notes. Truncamento, fail-safe e exit codes idênticos ao hook de pre-commit.
