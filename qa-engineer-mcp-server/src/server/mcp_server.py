@@ -149,7 +149,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "test_plan:read",
         "test_plan",
         "qa-engineer",
-        "Retorna um plano de teste por id.",
+        "Retorna um plano de teste persistido (objetivos, níveis e ambientes) por id.",
         _schema({"id": dict(_INT, description="Id do plano.")}, required=["id"]),
     ),
     "update_test_plan": _meta(
@@ -218,7 +218,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "test_case:read",
         "test_case",
         "qa-engineer",
-        "Retorna um caso de teste por id.",
+        "Retorna um caso de teste persistido (passos, dados e resultado esperado) por id.",
         _schema({"id": dict(_INT, description="Id do caso.")}, required=["id"]),
     ),
     "update_test_case": _meta(
@@ -247,7 +247,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "test_case:write",
         "test_case",
         "qa-engineer",
-        "Soft-delete de um caso de teste por id.",
+        "Remove (soft-delete) um caso de teste persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do caso.")}, required=["id"]),
     ),
     # ── Bug Reports ────────────────────────────────────────────────────────── #
@@ -291,7 +291,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "bug_report:read",
         "bug_report",
         "operational",
-        "Retorna um bug por id.",
+        "Retorna um relatório de bug persistido (severidade, score e passos) por id.",
         _schema({"id": dict(_INT, description="Id do bug.")}, required=["id"]),
     ),
     "update_bug_status": _meta(
@@ -313,7 +313,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "bug_report:write",
         "bug_report",
         "operational",
-        "Soft-delete de um bug por id.",
+        "Remove (soft-delete) um relatório de bug persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do bug.")}, required=["id"]),
     ),
     # ── Quality Gates (upsert por service) ─────────────────────────────────── #
@@ -345,7 +345,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "quality_gate:read",
         "quality_gate",
         "operational",
-        "Retorna o quality gate de um serviço.",
+        "Retorna o quality gate persistido de um serviço (thresholds e status) pela chave natural do serviço.",
         _schema({"service": dict(_STR, description="Serviço alvo.")}, required=["service"]),
     ),
     "delete_quality_gate": _meta(
@@ -399,7 +399,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "qa-engineer",
-        "Retorna um artefato por id.",
+        "Retorna um artefato de QA persistido (código de teste, cenário ou evidência) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -407,7 +407,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:write",
         "artifact",
         "qa-engineer",
-        "Soft-delete de um artefato por id.",
+        "Remove (soft-delete) um artefato de QA persistido (código de teste, cenário ou evidência) por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
 }

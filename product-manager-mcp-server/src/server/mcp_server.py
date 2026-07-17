@@ -147,7 +147,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "feature_spec:read",
         "feature_spec",
         "product-manager",
-        "Retorna uma feature spec por id.",
+        "Retorna uma feature spec persistida (user stories/critérios de aceite/conteúdo) pelo id informado.",
         _schema({"id": dict(_INT, description="Id da spec.")}, required=["id"]),
     ),
     "update_feature_spec": _meta(
@@ -172,7 +172,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "feature_spec:write",
         "feature_spec",
         "product-manager",
-        "Soft-delete de uma feature spec por id.",
+        "Remove (soft-delete) uma feature spec por id; marca como inativa preservando o histórico e é idempotente.",
         _schema({"id": dict(_INT, description="Id da spec.")}, required=["id"]),
     ),
     # ── GTM Briefs ─────────────────────────────────────────────────────────── #
@@ -212,7 +212,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "gtm_brief:read",
         "gtm_brief",
         "product-manager",
-        "Retorna um GTM brief por id.",
+        "Retorna um go-to-market brief persistido (segmento/mensagens/canais/conteúdo) pelo id informado.",
         _schema({"id": dict(_INT, description="Id do brief.")}, required=["id"]),
     ),
     "update_gtm_brief": _meta(
@@ -236,7 +236,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "gtm_brief:write",
         "gtm_brief",
         "product-manager",
-        "Soft-delete de um GTM brief por id.",
+        "Remove (soft-delete) um go-to-market brief por id; marca como inativo preservando o registro e é idempotente.",
         _schema({"id": dict(_INT, description="Id do brief.")}, required=["id"]),
     ),
     # ── Release Plans ──────────────────────────────────────────────────────── #
@@ -273,7 +273,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "release_plan:read",
         "release_plan",
         "product-manager",
-        "Retorna um plano de release por id.",
+        "Retorna um plano de release persistido (fases/timeline/features por fase) pelo id informado.",
         _schema({"id": dict(_INT, description="Id do plano.")}, required=["id"]),
     ),
     "update_release_plan": _meta(
@@ -330,7 +330,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "product_vision:read",
         "product_vision",
         "product-manager",
-        "Retorna a visão de um produto.",
+        "Retorna a visão de um produto persistida (vision/mission/goals) pela chave natural do produto.",
         _schema({"product": dict(_STR, description="Produto alvo.")}, required=["product"]),
     ),
     "delete_product_vision": _meta(
@@ -338,7 +338,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "product_vision:write",
         "product_vision",
         "product-manager",
-        "Soft-delete da visão de um produto.",
+        "Remove (soft-delete) a visão de um produto pela chave natural do produto; preserva o registro e é idempotente.",
         _schema({"product": dict(_STR, description="Produto alvo.")}, required=["product"]),
     ),
     # ── Artifacts (histórico append-only) ──────────────────────────────────── #
@@ -384,7 +384,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "product-manager",
-        "Retorna um artefato por id.",
+        "Retorna um artefato de produto persistido (documento/texto gerado pelo agente) pelo id informado.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -392,7 +392,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:write",
         "artifact",
         "product-manager",
-        "Soft-delete de um artefato por id.",
+        "Remove (soft-delete) um artefato de produto por id; marca como inativo preservando o histórico e é idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
 }

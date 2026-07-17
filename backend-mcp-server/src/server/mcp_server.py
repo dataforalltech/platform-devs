@@ -211,7 +211,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "database_schema:read",
         "database_schema",
         "backend",
-        "Retorna um schema de banco por id.",
+        "Retorna um schema de banco persistido (atributos/relacionamentos/índices) por id.",
         _schema({"id": dict(_INT, description="Id do schema.")}, required=["id"]),
     ),
     "update_database_schema": _meta(
@@ -333,7 +333,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "backend",
-        "Retorna um artefato de código por id.",
+        "Retorna um artefato de código backend persistido (router/migration/service/...) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -384,7 +384,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "code_review:read",
         "code_review",
         "backend",
-        "Retorna uma revisão de código por id.",
+        "Retorna uma revisão de código backend persistida (achados/scores) por id.",
         _schema({"id": dict(_INT, description="Id da revisão.")}, required=["id"]),
     ),
     "delete_code_review": _meta(

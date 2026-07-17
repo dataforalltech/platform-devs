@@ -154,7 +154,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "devops",
-        "Retorna um artefato IaC por id.",
+        "Retorna um artefato de infra-as-code persistido (Dockerfile/pipeline/chart/manifesto) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -162,7 +162,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:write",
         "artifact",
         "devops",
-        "Soft-delete de um artefato IaC por id.",
+        "Remove (soft-delete) um artefato de infra-as-code persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     # ── Pipelines ──────────────────────────────────────────────────────────── #
@@ -201,7 +201,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "pipeline:read",
         "pipeline",
         "devops",
-        "Retorna uma pipeline por id.",
+        "Retorna uma pipeline de CI/CD persistida (stages/triggers/jobs) por id.",
         _schema({"id": dict(_INT, description="Id da pipeline.")}, required=["id"]),
     ),
     "update_pipeline": _meta(
@@ -225,7 +225,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "pipeline:write",
         "pipeline",
         "devops",
-        "Soft-delete de uma pipeline por id.",
+        "Remove (soft-delete) uma pipeline de CI/CD persistida por id; idempotente.",
         _schema({"id": dict(_INT, description="Id da pipeline.")}, required=["id"]),
     ),
     # ── Deployments ────────────────────────────────────────────────────────── #
@@ -269,7 +269,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "deployment:read",
         "deployment",
         "operational",
-        "Retorna um deployment por id.",
+        "Retorna um deployment persistido (aplicação/ambiente/versão/estratégia/status) por id.",
         _schema({"id": dict(_INT, description="Id do deployment.")}, required=["id"]),
     ),
     "update_deployment_status": _meta(
@@ -291,7 +291,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "deployment:write",
         "deployment",
         "operational",
-        "Soft-delete de um deployment por id.",
+        "Remove (soft-delete) um deployment persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do deployment.")}, required=["id"]),
     ),
     # ── Environments (upsert por name) ─────────────────────────────────────── #
@@ -330,7 +330,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "environment:read",
         "environment",
         "devops",
-        "Retorna um ambiente por nome.",
+        "Retorna um ambiente/cluster de deploy registrado (tipo/região/config) pela chave natural name.",
         _schema({"name": dict(_STR, description="Nome do ambiente.")}, required=["name"]),
     ),
     "delete_environment": _meta(
@@ -338,7 +338,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "environment:write",
         "environment",
         "devops",
-        "Soft-delete de um ambiente por nome.",
+        "Remove (soft-delete) um ambiente/cluster de deploy registrado pela chave natural name; idempotente.",
         _schema({"name": dict(_STR, description="Nome do ambiente.")}, required=["name"]),
     ),
     # ── Service Configs (upsert por service) ───────────────────────────────── #

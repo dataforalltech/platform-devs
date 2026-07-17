@@ -204,7 +204,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "delete_credential": {
-        "description": "Remove uma credencial do store central.",
+        "description": (
+            "Remove (soft-delete) uma credencial do store central por namespace e chave; "
+            "retorna se havia uma linha viva (idempotente)."
+        ),
         "capability": "config-mcp.delete_credential",
         "required_scope": "config-mcp:credential:write",
         "resource_type": "credential",

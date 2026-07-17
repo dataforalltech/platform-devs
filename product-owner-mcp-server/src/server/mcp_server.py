@@ -155,7 +155,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "user_story:read",
         "user_story",
         "product-owner",
-        "Retorna uma user story por id.",
+        "Retorna uma user story persistida (papel, objetivo, benefício, critérios de aceite) por id.",
         _schema({"id": dict(_INT, description="Id da história.")}, required=["id"]),
     ),
     "update_user_story": _meta(
@@ -183,7 +183,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "user_story:write",
         "user_story",
         "product-owner",
-        "Soft-delete de uma user story por id.",
+        "Remove (soft-delete) uma user story persistida por id; informa deleted e deleted_count.",
         _schema({"id": dict(_INT, description="Id da história.")}, required=["id"]),
     ),
     # ── MVP Scopes (upsert por product) ────────────────────────────────────── #
@@ -216,7 +216,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "mvp_scope:read",
         "mvp_scope",
         "product-owner",
-        "Retorna o escopo de MVP de um produto.",
+        "Retorna o escopo de MVP persistido (core/should/could/out_of_scope) de um produto pela chave product.",
         _schema({"product": dict(_STR, description="Produto alvo.")}, required=["product"]),
     ),
     "delete_mvp_scope": _meta(
@@ -260,7 +260,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "product_vision:read",
         "product_vision",
         "product-owner",
-        "Retorna a visão de um produto.",
+        "Retorna a visão de produto persistida (missão, metas, público-alvo) pela chave natural product.",
         _schema({"product": dict(_STR, description="Produto alvo.")}, required=["product"]),
     ),
     "delete_product_vision": _meta(
@@ -268,7 +268,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "product_vision:write",
         "product_vision",
         "product-owner",
-        "Soft-delete da visão de um produto.",
+        "Remove (soft-delete) a visão de um produto pela chave natural product; informa deleted e deleted_count.",
         _schema({"product": dict(_STR, description="Produto alvo.")}, required=["product"]),
     ),
     # ── User Personas ──────────────────────────────────────────────────────── #
@@ -308,7 +308,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "user_persona:read",
         "user_persona",
         "product-owner",
-        "Retorna uma persona por id.",
+        "Retorna uma persona de usuário persistida (segmento, objetivos, dores, comportamentos) por id.",
         _schema({"id": dict(_INT, description="Id da persona.")}, required=["id"]),
     ),
     "update_user_persona": _meta(
@@ -334,7 +334,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "user_persona:write",
         "user_persona",
         "product-owner",
-        "Soft-delete de uma persona por id.",
+        "Remove (soft-delete) uma persona de usuário persistida por id; informa deleted e deleted_count.",
         _schema({"id": dict(_INT, description="Id da persona.")}, required=["id"]),
     ),
     # ── Backlog Items (score RICE determinístico dobrado no save) ──────────── #
@@ -376,7 +376,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "backlog_item:read",
         "backlog_item",
         "product-owner",
-        "Retorna um item de backlog por id.",
+        "Retorna um item de backlog persistido (framework, componentes RICE, score, status) por id.",
         _schema({"id": dict(_INT, description="Id do item.")}, required=["id"]),
     ),
     "update_backlog_item": _meta(
@@ -449,7 +449,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "product-owner",
-        "Retorna um artefato de PO por id.",
+        "Retorna um artefato de PO persistido (journey/handoff/discovery/release etc.) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_po_artifact": _meta(

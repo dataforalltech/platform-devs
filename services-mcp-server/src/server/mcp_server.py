@@ -337,7 +337,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "unregister_service": {
-        "description": "Remove um servico do registry.",
+        "description": (
+            "Remove (soft-delete) um servico do registry pelo nome; some das leituras ativas "
+            "e um novo registro reativa a linha."
+        ),
         "schema": {
             "type": "object",
             "properties": {
