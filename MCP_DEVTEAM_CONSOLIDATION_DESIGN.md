@@ -54,10 +54,19 @@ por-capability (não por-server).
 6. Cortar: remover as ~20 mappings antigas; aposentar os 20 containers. Reverter = re-add as linhas.
 
 ## Fases
-1. **Esqueleto + piloto** (ESTA fase): scaffold do pacote + agregador + migrar **architecture** (18 tools)
-   como referência → py_compile/ruff/mypy/pytest verdes + tools registrando com prefixo.
-2. **Fan-out**: migrar os 19 domínios restantes p/ `src/domains/<domain>/` (paralelo, 1 agente por domínio,
-   copiando tools/store/models + `plugin.py`).
-3. **Assemble + deps + Dockerfile + pyproject** (união) + testes de integração do agregador.
-4. **Build + deploy strangler + prova no gateway** + atualizar tool_matrix do agente.
-5. Aposentar os 20; atualizar `TOOLS_LIVE_INVENTORY.csv` + docs.
+1. ✅ **Esqueleto + piloto** (`architecture`, 21 tools) — agregador + auto-discovery + Contract B; ruff/black/pytest.
+2. ✅ **Fan-out** dos 19 domínios (workflow build→verify) — `src/domains/<domain>/` com tools/db/models byte-a-byte.
+3. ✅ **Assemble** — 20 domínios/**456 tools** carregam juntos (contrato 0 violações; dispatch cobre todas as ops;
+   get_settings() por domínio OK no env consolidado); pyproject com a **união de deps** (httpx/playwright/pillow/
+   networkx/pynacl/bcrypt/pyyaml + aiomysql/PyGithub/psutil + 3 libs de plataforma); Dockerfile fiel (git-only build,
+   igual aos fontes — CLIs terraform/checkov/git são runtime, erram graciosamente se ausentes). Testes do agregador
+   generalizados p/ N domínios.
+4. ⏳ **Build + deploy strangler + prova no gateway** + atualizar tool_matrix do agente. (shared-infra → autorização)
+5. ⏳ Aposentar os 20; atualizar `TOOLS_LIVE_INVENTORY.csv` + docs.
+
+### Desvios aceitos no fan-out (fidelidade > DRY; follow-up pós-prova ao vivo)
+- 8 domínios mantiveram `config/settings.py` (referenciado pelos tools; passivo — sem `configure()` no import;
+  campos DB_* inertes pois os stores usam a sessão do agregador). Follow-up: DRY p/ a `DevteamSettings` compartilhada.
+- `ai-governance`: multi-store + roteamento extraído do `call_tool` (fonte sem `_dispatch`); `_POLICY` preservado.
+- `qa`: `dispatch(name,args,settings,store)` com `_QASettings` inline (knobs de compute). `infra`: `AllocatorStore`
+  + `models/` pacote + provisioner/ssh_key. `infra/tools/infracost_tool.py`: ternário normalizado pelo black (idêntico).
