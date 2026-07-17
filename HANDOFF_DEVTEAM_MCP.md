@@ -7,8 +7,9 @@
 ## TL;DR
 Unir os ~20 MCP servers DevTeam/system num único **`devteam-mcp-server/`** (1 image, 1 deploy, 1 audiência
 `mcp:devteam-mcp`). O gateway `platform-mcp` continua o ponto único do cliente; muda só o backend.
-**Fases 1–3 (código) COMPLETAS e verificadas localmente. Falta a Fase 4 (build→ACR→HML→gateway) — shared-infra,
-aguardando autorização.**
+**Fases 1–3 (código) COMPLETAS e verificadas localmente. Image local BUILDADA e PROVADA** (clean venv, deps
+privadas via secret; boot `healthy` + `/v1/health` = 456 tools). **Falta a Fase 4 (build→ACR→HML→gateway) —
+shared-infra, aguardando autorização.**
 
 - **Branch:** `feat/devteam-mcp-consolidation` (no repo `platform-devs`)
 - **20 domínios / 456 tools** carregam juntos; contrato 0 violações; ruff/black/pytest verdes.
@@ -20,8 +21,8 @@ aguardando autorização.**
 | 1. Esqueleto + piloto (`architecture`, 21 tools) | ✅ | `00a2022`→`a030367` |
 | 2. Fan-out dos 19 domínios (workflow build→verify) | ✅ | `203d4a1` |
 | 3. Assemble (união de deps + gates integrados + testes generalizados) | ✅ | `f9ccc10` |
-| Prova local do build da image (deps privadas + venv limpo) | 🔄 em curso | — |
-| 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → prova no gateway → `tool_matrix` | ⏳ | — |
+| Prova local da image (build + boot `healthy` + `/v1/health` 456 tools + contrato 20/456 dentro da image) | ✅ | 2026-07-17 |
+| 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → prova no gateway → `tool_matrix` | ⏳ (aguarda autorização) | — |
 | 5. Aposentar os 20 containers + atualizar `TOOLS_LIVE_INVENTORY.csv`/docs | ⏳ | — |
 
 ## Arquitetura (resumo — detalhes no design doc)
@@ -55,6 +56,38 @@ cd platform-devs/devteam-mcp-server
 ruff check src && python -m black --check --line-length 110 src && python -m pytest tests -q -o addopts=""
 python -c "from src.domains import DOMAINS; print(len(DOMAINS), sum(len(d['schemas']) for d in DOMAINS))"  # 20 456
 ```
+
+## Prova local da image (2026-07-17) — REPRODUZÍVEL sem infra compartilhada
+A image `platform-devteam-mcp` builda, sobe e serve localmente (clean venv; deps privadas via secret; non-root
+UID 1000; python:3.12-slim; 634 MB). Tudo reversível (só uma image local). Comandos exatos:
+
+```bash
+# 1) Build — contexto = raiz do repo; secret = PAT do gh (a substituição $(...) tira o \n do token).
+cd platform-devs
+gh auth token > "$TMPDIR/ghtok"
+DOCKER_BUILDKIT=1 docker build -f devteam-mcp-server/Dockerfile \
+  --secret id=github_token,src="$TMPDIR/ghtok" -t devteam-mcp:local . && rm -f "$TMPDIR/ghtok"
+
+# 2) Contrato DENTRO da image (sem pytest/DB — equivalente pytest-free do tests/test_aggregator.py):
+docker run --rm --entrypoint python devteam-mcp:local -c \
+  "from src.server import mcp_server as M; s=M._TOOL_SCHEMAS; d=M.DOMAINS; \
+   assert len(s)==sum(len(x['schemas']) for x in d); \
+   bad=[n for n,m in s.items() if m['capability']!=f'devteam-mcp.{n}' or m['required_scope'].count(':')!=2]; \
+   print(len(d), len(s), len(bad))"   # -> 20 456 0
+
+# 3) Boot + health — RUNTIME_ENV=local dispensa DB/JWKS no enforce_security_invariants; configure() é LAZY
+#    (não conecta no boot). MCP_HTTP_ONLY=1 sobe só o uvicorn (sem stdio).
+docker run -d --name devteam_boot -e MCP_HTTP_ONLY=1 -e RUNTIME_ENV=local devteam-mcp:local
+docker exec devteam_boot python -c \
+  "import urllib.request; print(urllib.request.urlopen('http://127.0.0.1:7100/v1/health',timeout=4).read().decode())"
+# -> {"status":"ok","service":"devteam-mcp","tools":456} ; container fica `healthy`;
+#    log de boot: devteam_mcp_ready tools=456 domains=20 engine=mysql
+docker rm -f devteam_boot
+```
+
+⚠️ **Gotcha BuildKit (Docker Desktop):** se o build falhar com `NotFound: forwarding Ping: no such job ...` (e
+`docker buildx ls` mostrar os nodes em `error`), o builder embutido travou. Recupere com
+`docker buildx inspect --bootstrap desktop-linux` e refaça o build — **não** precisa reiniciar o Docker Desktop.
 
 ## Fase 4 — build + deploy strangler (SHARED-INFRA — pausar p/ autorização)
 Padrão idêntico ao dos 20 servers (ver `scratchpad/build_backend.sh` e a memória `devteam-orm-mysql-pilot`).
@@ -112,4 +145,6 @@ Após a prova verde: remover as ~20 mappings antigas do `GATEWAY_MAPPING` + para
 ## Ponteiros
 - Design: `MCP_DEVTEAM_CONSOLIDATION_DESIGN.md` · Código: `devteam-mcp-server/`
 - Memórias: `devteam-mcp-consolidation`, `devteam-orm-mysql-pilot`, `platform-devs-agent-build`, `no-static-tenant-fallback`
-- Scripts de build/deploy reusáveis: `scratchpad/build_backend.sh`, `scratchpad/build_devteam_local.sh`, `scratchpad/ssm_run.sh`
+- Build local da image: comandos inline na seção "Prova local da image" acima (os scripts `scratchpad/*.sh` de
+  ciclos anteriores eram efêmeros — não sobrevivem à sessão). Os passos de ACR/SSM da Fase 4 reusam o padrão das
+  memórias `devteam-orm-mysql-pilot` e `platform-devs-agent-build`.
