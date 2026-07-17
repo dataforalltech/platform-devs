@@ -15,6 +15,18 @@ from .form_tool import (
     save_form,
     update_form,
 )
+from .generator_tool import (
+    create_design_tokens,
+    generate_api_service,
+    generate_component_variants,
+    generate_custom_hook,
+    generate_form_with_validation,
+    generate_nextjs_page,
+    generate_react_component,
+    generate_storybook_story,
+    generate_typescript_types,
+    generate_wireframe,
+)
 from .page_tool import (
     delete_page,
     get_page,
@@ -58,4 +70,15 @@ __all__ = [
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    # Geradores determinísticos (COMPUTE PURO — não persistem)
+    "generate_react_component",
+    "generate_nextjs_page",
+    "generate_custom_hook",
+    "generate_form_with_validation",
+    "generate_typescript_types",
+    "generate_storybook_story",
+    "generate_api_service",
+    "generate_component_variants",
+    "generate_wireframe",
+    "create_design_tokens",
 ]

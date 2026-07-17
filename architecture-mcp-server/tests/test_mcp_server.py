@@ -35,6 +35,9 @@ _EXPECTED_TOOLS = {
     "list_artifacts",
     "get_artifact",
     "delete_artifact",
+    "generate_c4_diagram",
+    "generate_sequence_diagram",
+    "generate_adr",
 }
 
 
@@ -53,7 +56,7 @@ def client() -> TestClient:
 
 # ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
 def test_tool_count():
-    assert len(M._TOOL_SCHEMAS) == 18
+    assert len(M._TOOL_SCHEMAS) == 21
     assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
 
 
@@ -67,7 +70,7 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "architecture-mcp", "tools": 18}
+    assert r.json() == {"status": "ok", "service": "architecture-mcp", "tools": 21}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):
@@ -222,6 +225,12 @@ async def test_dispatch_routes_all_tools(store_a):
     assert (await d("list_artifacts", {}))["total"] == 1
     assert (await d("get_artifact", {"id": art["id"]}))["kind"] == "adr"
     assert (await d("delete_artifact", {"id": art["id"]}))["deleted"] is True
+
+    # Geradores (COMPUTE PURO: roteados no _dispatch, ignoram o store)
+    assert (await d("generate_c4_diagram", {"level": "context", "elements": ["S"]}))["kind"] == "c4_diagram"
+    seq = await d("generate_sequence_diagram", {"messages": [{"from": "A", "to": "B", "text": "hi"}]})
+    assert seq["kind"] == "sequence_diagram"
+    assert (await d("generate_adr", {"title": "Pick a queue"}))["kind"] == "adr"
 
     with pytest.raises(KeyError):
         await d("does_not_exist", {})

@@ -55,6 +55,12 @@ from ..tools import (
     delete_product_vision,
     delete_user_persona,
     delete_user_story,
+    generate_epic,
+    generate_feature_breakdown,
+    generate_homologation_checklist,
+    generate_jira_tasks,
+    generate_release_notes,
+    generate_user_stories,
     get_backlog_item,
     get_mvp_scope,
     get_po_artifact,
@@ -460,6 +466,102 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete de um artefato de PO por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com :read
+    # p/ consultas e :write p/ mutações do estado do tenant. Geradores não LEEM nem
+    # GRAVAM estado — só FORMATAM a spec em artefatos de PO — então nenhum dos dois
+    # cabe. Escolha: nova ação `:generate` sobre resource_type=`artifact` (o mesmo
+    # domínio dos artefatos de PO produzidos): least-privilege real (um token só de
+    # geração não abre leitura/escrita de artefatos persistidos). data_domain=product-owner.
+    "generate_epic": _meta(
+        "generate_epic",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata um épico em markdown (objetivo + user stories) determinístico a partir da spec.",
+        _schema(
+            {
+                "title": dict(_STR, description="Título do épico."),
+                "goal": dict(_STR, description="Objetivo do épico (opcional)."),
+                "stories": dict(_ARR, description="User stories (strings ou {story/title/name}; opcional)."),
+            },
+            required=["title"],
+        ),
+    ),
+    "generate_feature_breakdown": _meta(
+        "generate_feature_breakdown",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata o breakdown de uma feature em markdown estruturado (partes + itens) determinístico.",
+        _schema(
+            {
+                "feature": dict(_STR, description="Feature alvo."),
+                "parts": dict(_ARR, description="Partes (strings ou {name, items[]}; opcional)."),
+            },
+            required=["feature"],
+        ),
+    ),
+    "generate_jira_tasks": _meta(
+        "generate_jira_tasks",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata uma lista de tasks de Jira estruturada (chaves sequenciais) a partir do breakdown.",
+        _schema(
+            {
+                "breakdown": dict(
+                    _ARR, description="Itens do breakdown (strings ou {summary/name,type?,description?})."
+                ),
+                "project": dict(_STR, description="Prefixo da chave das tasks (default 'TASK')."),
+            },
+            required=["breakdown"],
+        ),
+    ),
+    "generate_release_notes": _meta(
+        "generate_release_notes",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata release notes em markdown (mudanças agrupadas por tipo) determinístico.",
+        _schema(
+            {
+                "version": dict(_STR, description="Versão do release."),
+                "changes": dict(_ARR, description="Mudanças [{type,desc}] (strings ou dicts; opcional)."),
+            },
+            required=["version"],
+        ),
+    ),
+    "generate_user_stories": _meta(
+        "generate_user_stories",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata uma user story markdown 'Como... quero... para...' com critérios de aceite.",
+        _schema(
+            {
+                "role": dict(_STR, description="Papel/persona ('Como ...')."),
+                "goal": dict(_STR, description="Objetivo/ação ('quero ...')."),
+                "benefit": dict(_STR, description="Benefício ('para ...'; opcional)."),
+                "criteria": dict(_ARR, description="Critérios de aceite (strings ou dicts; opcional)."),
+            },
+            required=["role", "goal"],
+        ),
+    ),
+    "generate_homologation_checklist": _meta(
+        "generate_homologation_checklist",
+        "artifact:generate",
+        "artifact",
+        "product-owner",
+        "Formata um checklist de homologação em markdown (caixas de verificação) determinístico.",
+        _schema(
+            {
+                "items": dict(_ARR, description="Itens do checklist (strings ou {label/name/title})."),
+                "title": dict(_STR, description="Título do checklist (default 'Homologação')."),
+            },
+            required=["items"],
+        ),
+    ),
 }
 
 # product-owner-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -503,6 +605,19 @@ def _verify_inner_token(twin_token: str, settings: ProductOwnerSettings) -> dict
 async def _dispatch(name: str, args: dict[str, Any], store: ProductOwnerStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_epic":
+        return generate_epic(args)
+    if name == "generate_feature_breakdown":
+        return generate_feature_breakdown(args)
+    if name == "generate_jira_tasks":
+        return generate_jira_tasks(args)
+    if name == "generate_release_notes":
+        return generate_release_notes(args)
+    if name == "generate_user_stories":
+        return generate_user_stories(args)
+    if name == "generate_homologation_checklist":
+        return generate_homologation_checklist(args)
     # ── User Stories ───────────────────────────────────────────────────────── #
     if name == "save_user_story":
         return await save_user_story(

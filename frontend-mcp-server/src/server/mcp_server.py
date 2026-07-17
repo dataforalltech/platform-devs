@@ -49,11 +49,21 @@ from ..config.settings import FrontendSettings, get_settings
 from ..db.schema import ensure_schema
 from ..db.store import FrontendStore
 from ..tools import (
+    create_design_tokens,
     delete_artifact,
     delete_component,
     delete_form,
     delete_page,
     delete_story,
+    generate_api_service,
+    generate_component_variants,
+    generate_custom_hook,
+    generate_form_with_validation,
+    generate_nextjs_page,
+    generate_react_component,
+    generate_storybook_story,
+    generate_typescript_types,
+    generate_wireframe,
     get_artifact,
     get_component,
     get_form,
@@ -415,6 +425,161 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Remove (soft-delete) um artefato de UI persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes stateful seguem `<resource_type>:<acao>` com :read
+    # p/ consultas e :write p/ mutações do estado do tenant. Geradores não LEEM nem
+    # GRAVAM estado — só computam scaffold de UI — então nem :read nem :write cabem.
+    # Escolha: nova ação `:generate` sobre o resource_type do domínio scaffoldado
+    # (component/page/form/story ou o catch-all `artifact` p/ hook/types/api/etc.):
+    # least-privilege real (um token só de geração não abre leitura/escrita do estado
+    # persistido daquele recurso). data_domain=frontend.
+    "generate_react_component": _meta(
+        "generate_react_component",
+        "component:generate",
+        "component",
+        "frontend",
+        "Gera um componente React (TSX) determinístico a partir de name/props/hooks.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome do componente."),
+                "props": dict(_ARR, description="Props: nomes ou [{name,type?,optional?}] (opcional)."),
+                "hooks": dict(_ARR, description="Hooks a incluir (ex.: useState, useEffect; opcional)."),
+            },
+            required=["name"],
+        ),
+    ),
+    "generate_nextjs_page": _meta(
+        "generate_nextjs_page",
+        "page:generate",
+        "page",
+        "frontend",
+        "Gera uma página Next.js (app router) determinística a partir de route/title/sections.",
+        _schema(
+            {
+                "route": dict(_STR, description="Rota da página (ex.: /dashboard)."),
+                "title": dict(_STR, description="Título/metadata (derivado da rota se ausente)."),
+                "sections": dict(_ARR, description="Seções a esboçar na página (opcional)."),
+            },
+            required=["route"],
+        ),
+    ),
+    "generate_custom_hook": _meta(
+        "generate_custom_hook",
+        "artifact:generate",
+        "artifact",
+        "frontend",
+        "Gera um custom hook React (TS) determinístico a partir de name/params/returns.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome do hook (deve começar com 'use')."),
+                "params": dict(_ARR, description="Parâmetros: nomes ou [{name,type?}] (opcional)."),
+                "returns": dict(_STR, description="Tipo de retorno TS (default 'void')."),
+            },
+            required=["name"],
+        ),
+    ),
+    "generate_form_with_validation": _meta(
+        "generate_form_with_validation",
+        "form:generate",
+        "form",
+        "frontend",
+        "Gera um formulário react-hook-form + zod determinístico a partir dos campos e regras.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome do formulário."),
+                "fields": dict(
+                    _ARR,
+                    description="Campos [{name,type?,rules?}] (rules: required|email|url|min:N|max:N).",
+                ),
+            },
+            required=["name", "fields"],
+        ),
+    ),
+    "generate_typescript_types": _meta(
+        "generate_typescript_types",
+        "artifact:generate",
+        "artifact",
+        "frontend",
+        "Gera uma interface TypeScript determinística a partir de name/fields.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome da interface."),
+                "fields": dict(_ARR, description="Campos [{name,type?,optional?}]."),
+            },
+            required=["name", "fields"],
+        ),
+    ),
+    "generate_storybook_story": _meta(
+        "generate_storybook_story",
+        "story:generate",
+        "story",
+        "frontend",
+        "Gera uma story do Storybook (CSF3) determinística a partir do componente e variantes.",
+        _schema(
+            {
+                "component": dict(_STR, description="Componente-alvo da story."),
+                "variants": dict(_ARR, description="Variantes: nomes ou [{name,args?}] (opcional)."),
+            },
+            required=["component"],
+        ),
+    ),
+    "generate_api_service": _meta(
+        "generate_api_service",
+        "artifact:generate",
+        "artifact",
+        "frontend",
+        "Gera um cliente de API (fetch TS) determinístico a partir de base/endpoints.",
+        _schema(
+            {
+                "base": dict(_STR, description="Base URL do serviço."),
+                "endpoints": dict(_ARR, description="Endpoints [{name,method?,path?}]."),
+            },
+            required=["base", "endpoints"],
+        ),
+    ),
+    "generate_component_variants": _meta(
+        "generate_component_variants",
+        "component:generate",
+        "component",
+        "frontend",
+        "Gera um mapa de variantes (class-variance-authority) determinístico a partir de base/variants.",
+        _schema(
+            {
+                "base": dict(_STR, description="Nome/classe base do componente."),
+                "variants": dict(_ARR, description="Variantes: nomes ou [{name,classes?}]."),
+            },
+            required=["base", "variants"],
+        ),
+    ),
+    "generate_wireframe": _meta(
+        "generate_wireframe",
+        "artifact:generate",
+        "artifact",
+        "frontend",
+        "Gera um wireframe ASCII determinístico a partir de title/blocks.",
+        _schema(
+            {
+                "title": dict(_STR, description="Título do wireframe."),
+                "blocks": dict(_ARR, description="Blocos: nomes ou [{name,height?}]."),
+                "width": dict(_INT, description="Largura do quadro (default 44)."),
+            },
+            required=["title", "blocks"],
+        ),
+    ),
+    "create_design_tokens": _meta(
+        "create_design_tokens",
+        "artifact:generate",
+        "artifact",
+        "frontend",
+        "Gera design tokens (CSS custom properties + JSON) determinísticos a partir de palette/spacing.",
+        _schema(
+            {
+                "palette": dict(_OBJ, description="Paleta {nome: cor} (ex.: {primary: '#0055ff'})."),
+                "spacing": dict(_OBJ, description="Escala de espaçamento {nome: valor} (default sm/md/lg)."),
+            },
+            required=["palette"],
+        ),
+    ),
 }
 
 # frontend-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -458,6 +623,27 @@ def _verify_inner_token(twin_token: str, settings: FrontendSettings) -> dict[str
 async def _dispatch(name: str, args: dict[str, Any], store: FrontendStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_react_component":
+        return generate_react_component(args)
+    if name == "generate_nextjs_page":
+        return generate_nextjs_page(args)
+    if name == "generate_custom_hook":
+        return generate_custom_hook(args)
+    if name == "generate_form_with_validation":
+        return generate_form_with_validation(args)
+    if name == "generate_typescript_types":
+        return generate_typescript_types(args)
+    if name == "generate_storybook_story":
+        return generate_storybook_story(args)
+    if name == "generate_api_service":
+        return generate_api_service(args)
+    if name == "generate_component_variants":
+        return generate_component_variants(args)
+    if name == "generate_wireframe":
+        return generate_wireframe(args)
+    if name == "create_design_tokens":
+        return create_design_tokens(args)
     # ── Components ─────────────────────────────────────────────────────────── #
     if name == "save_component":
         return await save_component(

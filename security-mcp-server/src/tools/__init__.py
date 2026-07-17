@@ -7,6 +7,12 @@ from .cvss_tool import (
     list_cvss_assessments,
     save_cvss_assessment,
 )
+from .generator_tool import (
+    generate_api_security_spec,
+    generate_compliance_report,
+    generate_security_controls,
+    generate_security_handbook,
+)
 from .security_artifact_tool import (
     check_password_policy,
     delete_security_artifact,
@@ -52,4 +58,9 @@ __all__ = [
     "get_security_artifact",
     "delete_security_artifact",
     "check_password_policy",
+    # Geradores determinísticos (COMPUTE PURO — não persistem)
+    "generate_security_controls",
+    "generate_api_security_spec",
+    "generate_compliance_report",
+    "generate_security_handbook",
 ]

@@ -54,6 +54,9 @@ from ..tools import (
     delete_artifact,
     delete_c4_diagram,
     delete_solution_blueprint,
+    generate_adr,
+    generate_c4_diagram,
+    generate_sequence_diagram,
     get_architecture_blueprint,
     get_artifact,
     get_c4_diagram,
@@ -331,6 +334,71 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Remove (soft-delete) um artefato de arquitetura por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com
+    # :read p/ consultas e :write p/ mutações do estado do tenant. Geradores não
+    # LEEM nem GRAVAM estado — só formatam a spec em artefato de arquitetura —
+    # então nenhum dos dois cabe. Escolha: nova ação `:generate` sobre
+    # resource_type=`artifact` (o mesmo domínio dos artefatos persistidos):
+    # least-privilege real (um token só de geração não abre leitura/escrita de
+    # artefatos). data_domain=architecture.
+    "generate_c4_diagram": _meta(
+        "generate_c4_diagram",
+        "artifact:generate",
+        "artifact",
+        "architecture",
+        "Gera um diagrama C4 em Mermaid (context|container|component) determinístico a partir da spec.",
+        _schema(
+            {
+                "level": dict(_STR, description="Nível: context|container|component."),
+                "elements": dict(
+                    _ARR,
+                    description="Elementos [{name,type?,technology?,description?,id?}] ou nomes (str).",
+                ),
+                "relations": dict(
+                    _ARR, description="Relações [{from,to,text?,technology?}] ou 'A -> B' (opcional)."
+                ),
+                "title": dict(_STR, description="Título do diagrama (opcional)."),
+            },
+            required=["level", "elements"],
+        ),
+    ),
+    "generate_sequence_diagram": _meta(
+        "generate_sequence_diagram",
+        "artifact:generate",
+        "artifact",
+        "architecture",
+        "Gera um diagrama de sequência em Mermaid determinístico a partir de participantes e mensagens.",
+        _schema(
+            {
+                "participants": dict(
+                    _ARR, description="Participantes [{name,alias?}] ou nomes (str) (opcional)."
+                ),
+                "messages": dict(_ARR, description="Mensagens [{from,to,text?,type?}]."),
+                "title": dict(_STR, description="Título do diagrama (opcional)."),
+            },
+            required=["messages"],
+        ),
+    ),
+    "generate_adr": _meta(
+        "generate_adr",
+        "artifact:generate",
+        "artifact",
+        "architecture",
+        "Gera um ADR (Architecture Decision Record) em Markdown determinístico a partir da spec.",
+        _schema(
+            {
+                "title": dict(_STR, description="Título da decisão."),
+                "context": dict(_STR, description="Contexto/forças (str ou lista de bullets; opcional)."),
+                "decision": dict(_STR, description="Decisão tomada (str ou lista; opcional)."),
+                "consequences": dict(_STR, description="Consequências (str ou lista de bullets; opcional)."),
+                "status": dict(_STR, description="Status (default Proposed)."),
+                "number": dict(_INT, description="Número sequencial do ADR (opcional)."),
+                "alternatives": dict(_ARR, description="Alternativas consideradas (opcional)."),
+            },
+            required=["title"],
+        ),
+    ),
 }
 
 # architecture-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e
@@ -374,6 +442,13 @@ def _verify_inner_token(twin_token: str, settings: ArchitectureSettings) -> dict
 async def _dispatch(name: str, args: dict[str, Any], store: ArchitectureStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_c4_diagram":
+        return generate_c4_diagram(args)
+    if name == "generate_sequence_diagram":
+        return generate_sequence_diagram(args)
+    if name == "generate_adr":
+        return generate_adr(args)
     # ── Architecture Blueprints ────────────────────────────────────────────── #
     if name == "save_architecture_blueprint":
         return await save_architecture_blueprint(

@@ -34,6 +34,10 @@ _EXPECTED_TOOLS = {
     "list_security_artifacts",
     "get_security_artifact",
     "delete_security_artifact",
+    "generate_security_controls",
+    "generate_api_security_spec",
+    "generate_compliance_report",
+    "generate_security_handbook",
 }
 
 
@@ -52,7 +56,7 @@ def client() -> TestClient:
 
 # ── Schemas / catálogo (sem DB) ───────────────────────────────────────────────
 def test_tool_count():
-    assert len(M._TOOL_SCHEMAS) == 17
+    assert len(M._TOOL_SCHEMAS) == 21
     assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
 
 
@@ -66,7 +70,7 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "security-mcp", "tools": 17}
+    assert r.json() == {"status": "ok", "service": "security-mcp", "tools": 21}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):
