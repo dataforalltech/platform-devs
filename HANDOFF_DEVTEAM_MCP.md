@@ -22,7 +22,8 @@ shared-infra, aguardando autorização.**
 | 2. Fan-out dos 19 domínios (workflow build→verify) | ✅ | `203d4a1` |
 | 3. Assemble (união de deps + gates integrados + testes generalizados) | ✅ | `f9ccc10` |
 | Prova local da image (build + boot `healthy` + `/v1/health` 456 tools + contrato 20/456 dentro da image) | ✅ | 2026-07-17 |
-| 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → prova no gateway → `tool_matrix` | ⏳ (aguarda autorização) | — |
+| 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → restart gateway → prova no gateway | ✅ (DEPLOYADO+PROVADO) | 2026-07-17 |
+| 4b. `tool_matrix` do platform-devs-agent p/ capability/data_domain (repo do agente) | ⏳ follow-up | — |
 | 5. Aposentar os 20 containers + atualizar `TOOLS_LIVE_INVENTORY.csv`/docs | ⏳ | — |
 
 ## Arquitetura (resumo — detalhes no design doc)
@@ -89,8 +90,35 @@ docker rm -f devteam_boot
 `docker buildx ls` mostrar os nodes em `error`), o builder embutido travou. Recupere com
 `docker buildx inspect --bootstrap desktop-linux` e refaça o build — **não** precisa reiniciar o Docker Desktop.
 
-## Fase 4 — build + deploy strangler (SHARED-INFRA — pausar p/ autorização)
-Padrão idêntico ao dos 20 servers (ver `scratchpad/build_backend.sh` e a memória `devteam-orm-mysql-pilot`).
+## Fase 4 — build + deploy strangler → ✅ EXECUTADA e PROVADA (2026-07-17)
+**Feito ao vivo na HML** (host `i-002379444ffb89c10` / `us-east-1`, via AWS SSM). Reversível: os 20 servers-fonte
+continuam de pé; para reverter, remover o container + a 1 row do `GATEWAY_MAPPING` e restart do gateway.
+
+- **ACR:** `docker tag devteam-mcp:local d4all.azurecr.io/dataforall/3.0/platform-devteam-mcp:develop-latest && docker push`.
+  Digest validado no ACR = `sha256:2f0263ee716b…` (bate com o local; manifest list c/ child amd64 `6172eb…` + attestation).
+- **Compose:** bloco `platform-devteam-mcp` (idêntico aos personas, só muda image/container_name/`MCP_TWIN_AUDIENCE: mcp:devteam-mcp`)
+  anexado a `services/devteam/docker-compose.yml` (backup `.bak.devteam.<ts>` no box; `docker compose config` OK);
+  `compose pull` (amd64 resolveu, sem problema de attestation) + `up -d`. Container **healthy** em ~16s; `/v1/health`
+  interno = `{status:ok, tools:456}`; boot log `devteam_mcp_ready tools=456 domains=20 engine=mysql`.
+- **GATEWAY_MAPPING:** row idempotente `name_microservice='platform-devteam-mcp'` (mcp_http, `http://platform-devteam-mcp:7100`,
+  strip_prefix=1, `/v1/health`) inserida em `ADMIN_DATAFORALL.GATEWAY_MAPPING` (55→56 rows). ⚠️ **`docker exec -i` quebra
+  sob SSM** (sem TTY/stdin → exit≠0 → `set -e` mata o script): usar `docker exec` SEM `-i` + `mysql -e "..."` inline.
+- **Restart do `platform-mcp`:** feito; gateway volta **healthy**. (Na verdade o gateway re-agrega a cada ~60s —
+  `REGISTRY_SOURCE=db` — então o restart nem seria estritamente necessário p/ uma row nova; mas garante determinismo.)
+- **Prova no gateway:** logs do gateway = `GET http://platform-devteam-mcp:7100/mcp/tools/list "200 OK"` a cada ~60s
+  → `catalog: 2018 tools across 55 services`; `/v1/health` do gateway = `{status:healthy, tools:2018}`. Backend serve
+  **456 tools** (contagem tokenless confirmada no container). Namespace `devteam-mcp.*` vivo (strip_prefix=1 → 1:1).
+- **Cadeia runtime provada por-equivalência:** `mcp__dataforall__session-mcp_list_sessions` (mesmo gateway/PAT/twin-exchange/
+  dual-db que o devteam-mcp usa) retornou dados reais AO VIVO nesta sessão. O único delta do devteam-mcp é o container +
+  audiência — ambos alinhados.
+
+**Pendente (menor):** invocar literalmente 1 tool `devteam-mcp.*` de um cliente — bloqueado só porque o catálogo MCP
+DESTA sessão é um snapshot pré-deploy (não re-enumera). Rodar de uma sessão/console NOVOS (que reconectam ao gateway e
+já enxergam `devteam-mcp.*`).
+
+### Padrão de referência (caso precise refazer/rollback)
+Padrão idêntico ao dos 20 servers (memória `devteam-orm-mysql-pilot`). Scripts desta execução (efêmeros no scratchpad):
+`ssm_run.sh` (base64-wrap + poll), `deploy_devteam.sh`, `map_devteam2.sh`, `restart_gateway.sh`, `gw_count.sh`.
 
 1. **Build local (já validando):** `scratchpad/build_devteam_local.sh` — `gh auth token`→temp→
    `docker build -f devteam-mcp-server/Dockerfile --secret id=github_token,src=<tmp> .` (contexto = raiz do repo).
@@ -107,12 +135,12 @@ Padrão idêntico ao dos 20 servers (ver `scratchpad/build_backend.sh` e a memó
 6. **`tool_matrix`** do `platform-devs-agent`: passa a rotear por **capability/data_domain** (não por-server) —
    o `data_domain` de cada tool preserva o domínio original, então o roteamento por persona sobrevive.
 
-### ⚠️ Risco #1 a validar na prova (passo 5): `required_scope` sem `-mcp`
-As tools consolidadas usam `required_scope=<D>:<res>:<ação>` (ex.: `architecture:artifact:write`), dropando o
-antigo `architecture-mcp:`. Se o gateway casa scope do twin contra o `required_scope`, os twins do tenant precisam
-ter scope amplo/wildcard OU o mapeamento tem que aceitar o novo formato. **Confirmar na primeira chamada
-autenticada**; se negar, o fix é 1 linha no `_meta` de cada `catalog.py` (voltar o prefixo) OU ajustar os scopes
-dos twins. (No piloto architecture, revisado 0.92, já se usou o formato sem `-mcp`.)
+### Risco #1 (`required_scope` sem `-mcp`) → ✅ RESOLVIDO (não é gate)
+Verificado ao vivo: **o gateway NÃO casa scope contra `required_scope`.** `ADMIN_DATAFORALL.GATEWAY_MAPPING` não tem
+coluna de scope; o `platform-mcp` não tem env de enforcement de scope; e o backend (`_verify_inner_token`) só valida
+**audiência** (`mcp:devteam-mcp`) + exp + jti — não lê `required_scope`. O gate real é a **audiência**, derivada de
+`name_microservice=platform-devteam-mcp` → `mcp:devteam-mcp`, que bate com o `MCP_TWIN_AUDIENCE` do container. Logo
+`required_scope` é metadado (governança/audit), e dropar `-mcp` não bloqueia chamada nenhuma.
 
 ## Fase 5 — cutover
 Após a prova verde: remover as ~20 mappings antigas do `GATEWAY_MAPPING` + parar os 20 containers-fonte
