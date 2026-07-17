@@ -1,5 +1,7 @@
 # DevTeam Multi-Server Orchestration
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 ## Overview
 
 This document explains how to start, manage, and monitor all 10 DevTeam MCPs simultaneously.

@@ -269,6 +269,6 @@ Response:
 ## Related Documents
 
 - [MCP Consolidation Complete](./mcp-consolidation-complete.md)
-- [Test Workflow](../.github/workflows/test-all-mcps.yml)
+- Política vigente de validação/entrega: `platform-infra/docs/architecture/delivery-without-github-actions.md`
 - [AGENTS.md § 54 — MCP Standards](../../platform-service-template/AGENTS.md#54-mcp-standards)
 - [Phase 5 Tool Specifications](../../platform-service-template/docs/phase-5-mcp-tool-specifications.md)

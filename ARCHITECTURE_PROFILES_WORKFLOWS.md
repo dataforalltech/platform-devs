@@ -1,5 +1,7 @@
 # Architecture Analysis: Profiles, Workflows, Tools
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 **Date**: May 10, 2026  
 **Status**: Consolidation Phase  
 **MCP Landscape**: 45+ tools across 30 MCPs organized in 4 tiers

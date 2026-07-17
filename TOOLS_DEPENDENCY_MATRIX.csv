@@ -195,12 +195,6 @@ create_branch,deploy-mcp,2-infrastructure,1,session-mcp|all-agents,all,high,no,g
 create_pr,deploy-mcp,2-infrastructure,1,session-mcp|all-agents|pipeline-mcp,all|qa,high,no,git|github,low,
 merge_pr,deploy-mcp,2-infrastructure,1,pipeline-mcp,qa|ops,high,no,git|github,low,
 commit_files,deploy-mcp,2-infrastructure,1,session-mcp|all-agents,all,high,no,git|github,low,
-trigger_workflow,deploy-mcp,2-infrastructure,1,pipeline-mcp|all-agents,all|ops,high,no,github-actions|automation,low,
-deploy,deploy-mcp,2-infrastructure,1,pipeline-mcp|devops,ops|qa,high,no,github-actions|deployment,low,
-get_deploy_status,deploy-mcp,2-infrastructure,1,pipeline-mcp|session-mcp,ops|qa,high,no,github-actions|queries,low,
-list_workflow_runs,deploy-mcp,2-infrastructure,1,pipeline-mcp|session-mcp,ops|qa,medium,no,github-actions|queries,low,
-get_workflow_run,deploy-mcp,2-infrastructure,1,pipeline-mcp|session-mcp,ops|qa,medium,no,github-actions|queries,low,
-cancel_workflow_run,deploy-mcp,2-infrastructure,1,pipeline-mcp|session-mcp,ops|qa,medium,no,github-actions|control,low,
 list_branches,deploy-mcp,2-infrastructure,1,session-mcp,all,medium,no,git|queries,low,
 list_prs,deploy-mcp,2-infrastructure,1,session-mcp|pipeline-mcp,all|qa,high,no,git|queries,low,
 list_repos,deploy-mcp,2-infrastructure,1,session-mcp,all,low,no,git|queries,low,Rarely used

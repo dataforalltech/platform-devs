@@ -178,12 +178,11 @@ Test coverage:
 - ✓ Workflow orchestration and agent coordination
 - ✓ Integration workflows (design → frontend)
 
-## CI/CD
+## Validação e entrega
 
-### GitHub Actions
-- **test-typescript**: Lint, type-check, test, build
-- **test** (Python servers): Unit tests, linting, coverage
-- **security**: Bandit scan for Python code
+GitHub Actions está aposentado. Execute `lint`, type-check, testes, build e scans
+no host controlado, retenha os resultados e vincule-os ao commit. Não existe
+executor automático comprovado; `pipeline-mcp` é somente plano de controle.
 
 ### Port Configuration
 - Port: **7097** (reserved for this server)

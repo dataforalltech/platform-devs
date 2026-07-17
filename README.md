@@ -23,10 +23,10 @@ Located in repository root, accessible via central `.mcp.json`:
 2. **test-mcp-server** — Test planning, scenario generation, and result recording
 3. **config-mcp-server** — Centralized configuration, environment variables, credentials
 4. **services-mcp-server** — Service registry, health checks, service monitoring
-5. **deploy-mcp-server** — GitHub operations (commits, PRs, workflows, ACR, deployments)
+5. **deploy-mcp-server** — Git/PR, ACR direto, workspace e ledger histórico; sem GitHub Actions
 6. **dev-twin-mcp-server** — User/tenant context management and authentication
 7. **docs-mcp-server** — Documentation validation, audit, and generation
-8. **pipeline-mcp-server** — CI/CD pipeline orchestration and promotion gates
+8. **pipeline-mcp-server** — plano de controle de gates/promoções; não executa CI/CD
 9. **qa-mcp-server** — Testing, linting, type checking, security, accessibility
 10. **infra-mcp-server** — Infrastructure: Terraform, cost estimation, VM provisioning
 11. **ai-governance-mcp-server** — Governance policies, decision validation, ecosystem rules
@@ -56,12 +56,8 @@ pip install -e ".[dev]"
 
 ### Running Tests
 
-All 18 servers (via GitHub Actions):
-```bash
-# Trigger: .github/workflows/test-all-mcps.yml
-# Tests 12 infra MCPs and 6 service MCPs in parallel
-# Enforces 80% code coverage minimum
-```
+GitHub Actions foi aposentado. Até existir executor central aprovado, execute e
+retenha os resultados em host controlado, vinculados ao commit.
 
 Individual server:
 ```bash
@@ -69,23 +65,16 @@ cd <server-name>
 pytest tests/ -v --cov=src --cov-report=term-missing
 ```
 
-### CI/CD
+### Entrega
 
-The `.github/workflows/` directory contains:
-- `ci.yml` — Lint and test infrastructure servers on every PR
-- `test-all-mcps.yml` — Complete testing matrix for all 18 MCPs (parallel)
-  - Infrastructure MCPs: 12 parallel jobs
-  - Service MCPs: 6 parallel jobs
-  - Coverage validation: >= 80% per MCP
-  - Artifact collection: coverage.json per MCP
-- `ai-governance-mcp-ci.yml` — Governance-specific CI pipeline
-- `ai-governance-mcp-release.yml` — Automated release management
+Não existe CI/CD automático comprovado neste repo. `pipeline-mcp` registra gates,
+aprovações e promoções; os comandos são executados pelo processo manual controlado
+definido em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
 
 ## Documentation
 
 - [docs/mcp-consolidation-complete.md](./docs/mcp-consolidation-complete.md) — Phase 5 milestone and consolidation summary
 - [docs/mcp-discovery.md](./docs/mcp-discovery.md) — How to discover and use MCPs
-- [.github/workflows/test-all-mcps.yml](./.github/workflows/test-all-mcps.yml) — Unified testing workflow
 
 ## Related Resources
 

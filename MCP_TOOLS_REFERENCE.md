@@ -1,5 +1,7 @@
 # MCP Tools Reference — Complete List
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 **Data**: 2026-05-11  
 **Repositório**: platform-devs  
 **Total de MCPs**: 32 (17 Python + 8 DevTeam + 6 Service MCPs + 1 Test)

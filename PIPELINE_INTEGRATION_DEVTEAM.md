@@ -1,5 +1,7 @@
 # Pipeline Integration Plan — 8 DevTeam
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 **Purpose**: Register all 8 specialist DevTeam in the platform-devs pipeline for automated quality gates, promotions, and release management.
 
 ---

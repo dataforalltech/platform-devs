@@ -1,5 +1,7 @@
 # Frontend-PixelFera MCP Server — Implementation Summary
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 ## Project Completion Status
 
 ### ✅ Phase 1: Setup (COMPLETE)
