@@ -54,6 +54,12 @@ from ..tools import (
     delete_environment,
     delete_pipeline,
     delete_service_config,
+    generate_docker_compose,
+    generate_dockerfile,
+    generate_github_actions_pipeline,
+    generate_helm_chart,
+    generate_kubernetes_manifest,
+    generate_terraform_module,
     get_artifact,
     get_deployment,
     get_environment,
@@ -381,6 +387,118 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "Soft-delete da config de devops de um serviço.",
         _schema({"service": dict(_STR, description="Serviço alvo.")}, required=["service"]),
     ),
+    # ── Geradores determinísticos (COMPUTE PURO — não persistem) ───────────── #
+    # required_scope: os scopes existentes seguem `<resource_type>:<acao>` com
+    # :read p/ consultas e :write p/ mutações do estado do tenant. Geradores não
+    # LEEM nem GRAVAM estado — só computam conteúdo IaC — então nenhum dos dois
+    # cabe. Escolha: nova ação `:generate` sobre resource_type=`artifact` (o mesmo
+    # domínio dos artefatos IaC produzidos): least-privilege real (um token só de
+    # geração não abre leitura/escrita de artefatos persistidos). data_domain=devops.
+    "generate_dockerfile": _meta(
+        "generate_dockerfile",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera um Dockerfile (multi-stage quando faz sentido) determinístico a partir da spec.",
+        _schema(
+            {
+                "language": dict(_STR, description="Linguagem: python|node|go|java."),
+                "framework": dict(_STR, description="Framework (opcional)."),
+                "app_dir": dict(_STR, description="Diretório da aplicação (default '.')."),
+                "port": dict(_INT, description="Porta exposta (opcional)."),
+                "package_manager": dict(_STR, description="Gerenciador de pacotes (opcional)."),
+                "version": dict(_STR, description="Versão do runtime base (opcional)."),
+                "extra_system_deps": dict(_ARR, description="Pacotes de sistema extras (opcional)."),
+            },
+            required=["language"],
+        ),
+    ),
+    "generate_docker_compose": _meta(
+        "generate_docker_compose",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera um docker-compose.yml determinístico a partir da lista de serviços.",
+        _schema(
+            {
+                "services": dict(
+                    _ARR,
+                    description="Serviços [{name,image?,build?,ports?,environment?,depends_on?}].",
+                ),
+                "version": dict(_STR, description="Versão do compose (default '3.9')."),
+                "networks": dict(_ARR, description="Nomes de redes a declarar (opcional)."),
+            },
+            required=["services"],
+        ),
+    ),
+    "generate_kubernetes_manifest": _meta(
+        "generate_kubernetes_manifest",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera um manifesto Kubernetes (Deployment|Service|Ingress|ConfigMap) determinístico.",
+        _schema(
+            {
+                "kind": dict(_STR, description="Deployment|Service|Ingress|ConfigMap."),
+                "name": dict(_STR, description="Nome do recurso."),
+                "image": dict(_STR, description="Imagem do container (opcional)."),
+                "replicas": dict(_INT, description="Réplicas (default 1)."),
+                "port": dict(_INT, description="Porta (opcional)."),
+                "env": dict(_OBJ, description="Variáveis de ambiente (opcional)."),
+                "resources": dict(_OBJ, description="requests/limits de recursos (opcional)."),
+                "namespace": dict(_STR, description="Namespace (opcional)."),
+            },
+            required=["kind", "name"],
+        ),
+    ),
+    "generate_terraform_module": _meta(
+        "generate_terraform_module",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera HCL (main.tf + variables/outputs agregados) determinístico para aws|gcp|azure.",
+        _schema(
+            {
+                "provider": dict(_STR, description="Provider: aws|gcp|azure."),
+                "resources": dict(_ARR, description="Recursos [{type,name,args}]."),
+                "variables": dict(_OBJ, description="Variáveis do módulo (opcional)."),
+                "outputs": dict(_OBJ, description="Outputs do módulo (opcional)."),
+            },
+            required=["provider", "resources"],
+        ),
+    ),
+    "generate_helm_chart": _meta(
+        "generate_helm_chart",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera um Helm chart multi-arquivo (Chart.yaml/values.yaml/templates) determinístico.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome do chart/app."),
+                "image": dict(_STR, description="Repositório da imagem."),
+                "port": dict(_INT, description="Porta do serviço (default 80)."),
+                "values": dict(_OBJ, description="Valores extras (opcional)."),
+                "app_version": dict(_STR, description="appVersion / tag (default 1.0.0)."),
+            },
+            required=["name", "image"],
+        ),
+    ),
+    "generate_github_actions_pipeline": _meta(
+        "generate_github_actions_pipeline",
+        "artifact:generate",
+        "artifact",
+        "devops",
+        "Gera um workflow do GitHub Actions determinístico a partir de jobs/steps.",
+        _schema(
+            {
+                "name": dict(_STR, description="Nome do workflow."),
+                "on": dict(_ARR, description="Gatilhos (default [push, pull_request])."),
+                "jobs": dict(_ARR, description="Jobs [{name,runs_on?,steps:[{name?,uses?,run?,with?}]}]."),
+            },
+            required=["name", "jobs"],
+        ),
+    ),
 }
 
 # devops-mcp não expõe tool tokenless: TODAS as tools tocam estado do tenant e exigem
@@ -424,6 +542,19 @@ def _verify_inner_token(twin_token: str, settings: DevopsSettings) -> dict[str, 
 async def _dispatch(name: str, args: dict[str, Any], store: DevopsStore) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
     o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    # ── Geradores (COMPUTE PURO: síncronos, ignoram o store — não persistem) ── #
+    if name == "generate_dockerfile":
+        return generate_dockerfile(args)
+    if name == "generate_docker_compose":
+        return generate_docker_compose(args)
+    if name == "generate_kubernetes_manifest":
+        return generate_kubernetes_manifest(args)
+    if name == "generate_terraform_module":
+        return generate_terraform_module(args)
+    if name == "generate_helm_chart":
+        return generate_helm_chart(args)
+    if name == "generate_github_actions_pipeline":
+        return generate_github_actions_pipeline(args)
     # ── Artifacts ──────────────────────────────────────────────────────────── #
     if name == "save_artifact":
         return await save_artifact(

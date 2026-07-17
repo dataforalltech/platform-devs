@@ -15,6 +15,14 @@ from .environment_tool import (
     list_environments,
     set_environment,
 )
+from .generator_tool import (
+    generate_docker_compose,
+    generate_dockerfile,
+    generate_github_actions_pipeline,
+    generate_helm_chart,
+    generate_kubernetes_manifest,
+    generate_terraform_module,
+)
 from .pipeline_tool import (
     delete_pipeline,
     get_pipeline,
@@ -58,4 +66,11 @@ __all__ = [
     "list_service_configs",
     "get_service_config",
     "delete_service_config",
+    # Generators (COMPUTE PURO — sem store)
+    "generate_dockerfile",
+    "generate_docker_compose",
+    "generate_kubernetes_manifest",
+    "generate_terraform_module",
+    "generate_helm_chart",
+    "generate_github_actions_pipeline",
 ]
