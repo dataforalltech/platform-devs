@@ -113,8 +113,9 @@ async def _dispatch(name: str, args: dict[str, Any], session: Any) -> dict[str, 
     """Descobre o domínio pelo prefixo ``<domain>_`` e delega ao dispatch do domínio.
 
     O tenant NÃO viaja nos args (INV-3): a ``session`` já está ligada ao pool do tenant
-    (resolvido dos claims do inner token). Cada domínio recebe a SUA Store construída
-    sobre essa sessão compartilhada."""
+    (resolvido dos claims do inner token). O ``dispatch`` do domínio recebe a SESSÃO e
+    constrói sua(s) própria(s) Store(s) sobre ela — contrato uniforme p/ domínios
+    single-store (ex.: architecture) e multi-store (ex.: ai-governance)."""
     # Roteia casando a MAIOR chave <key> tal que name == "<key>_..." (longest-prefix).
     # Robusto a domínios com '-' ou '_' (ex.: product-owner, ai-governance, dev-twin) —
     # um split no 1º '_' quebraria esses silenciosamente.
@@ -122,8 +123,7 @@ async def _dispatch(name: str, args: dict[str, Any], session: Any) -> dict[str, 
     if not matched:
         raise KeyError(name)
     domain = _DOMAINS_BY_KEY[max(matched, key=len)]
-    store = domain["store_cls"](session)
-    return await domain["dispatch"](name, args, store)
+    return await domain["dispatch"](name, args, session)
 
 
 # ── Tenant plumbing (credencial-zero) ─────────────────────────────────────────

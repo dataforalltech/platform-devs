@@ -8,11 +8,10 @@ ai-governance/config/services/docs/infra/pipeline/dev-twin/audit) num **único `
 Cada server-fonte vira um sub-pacote `devteam-mcp-server/src/domains/<domain>/` que EXPÕE um `register()`:
 ```
 register() -> {
+  "name": str,                  # a chave/prefixo do domínio (ex.: "architecture", "ai-governance")
   "schemas": dict[str, meta],   # _TOOL_SCHEMAS do domínio, CHAVES prefixadas: "<domain>_<op>"
-  "dispatch": async fn(name, args, store) -> dict,   # handlers do domínio
-  "store_cls": type,            # a Store ORM do domínio (opera na sessão compartilhada)
+  "dispatch": async fn(name, args, session) -> dict,   # constrói a(s) Store(s) sobre a sessão e roteia
   "ensure_schema": async fn(pool, engine),  # bootstrap das tabelas do domínio
-  "deps": [...],                # deps extras do domínio (ex.: deploy=GitHubClient, infra=terraform)
 }
 ```
 O **agregador** `src/server/mcp_server.py`:
