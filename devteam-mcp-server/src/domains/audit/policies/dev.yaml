@@ -1,0 +1,34 @@
+env: dev
+min_score: 0.50
+
+required_checkers:
+  structure:
+    - has_src_dir
+    - has_tests_dir
+    - has_pyproject_toml
+  security:
+    - no_hardcoded_credentials
+  docs:
+    - has_readme
+
+ideal_checkers:
+  tests:
+    - min_coverage_60
+  structure:
+    - has_dockerfile
+    - has_changelog
+  docs:
+    - has_env_vars_documented
+
+approval_rules:
+  low:
+    auto_approve_if_score: 0.60
+  medium:
+    auto_approve_if_score: 0.70
+  high:
+    required_approvals: 1
+  critical:
+    required_approvals: 2
+    required_roles:
+      - developer
+      - lead

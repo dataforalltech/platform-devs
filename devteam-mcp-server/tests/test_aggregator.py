@@ -47,11 +47,23 @@ _EXPECTED_ARCHITECTURE_TOOLS = {
 }
 
 
+def _domain_of(name: str) -> str | None:
+    """Descobre o domínio de uma tool por longest-prefix (igual ao agregador)."""
+    matched = [k for k in M._DOMAINS_BY_KEY if name.startswith(f"{k}_")]
+    return max(matched, key=len) if matched else None
+
+
 # ── Registro / merge de schemas ───────────────────────────────────────────────
-def test_aggregator_merges_architecture_domain():
-    # O piloto tem só o domínio architecture (18 CRUD + 3 geradores = 21 tools).
+def test_aggregator_merges_all_domains():
+    # architecture (piloto) continua presente, prefixado.
     assert _EXPECTED_ARCHITECTURE_TOOLS <= set(M._TOOL_SCHEMAS)
-    assert len(M._TOOL_SCHEMAS) == len(_EXPECTED_ARCHITECTURE_TOOLS)
+    # _TOOL_SCHEMAS = união EXATA dos schemas de todos os domínios (sem perda/colisão):
+    # como as chaves já vêm prefixadas <domain>_, a soma dos tamanhos == tamanho do merge.
+    expected_total = sum(len(d["schemas"]) for d in M.DOMAINS)
+    assert len(M._TOOL_SCHEMAS) == expected_total
+    # todo domínio registrado contribuiu ao menos uma tool (nenhum pacote silenciosamente pulado).
+    for d in M.DOMAINS:
+        assert any(_domain_of(name) == d["name"] for name in M._TOOL_SCHEMAS), d["name"]
 
 
 def test_reference_tools_present_with_prefix():
@@ -71,20 +83,24 @@ def test_every_tool_is_domain_prefixed():
 
 
 def test_policy_metadata_shape():
+    # Invariantes de policy VÁLIDAS p/ TODOS os 20 domínios (não só architecture).
     for name, meta in M._TOOL_SCHEMAS.items():
+        dom = _domain_of(name)
+        assert dom, f"{name}: prefixo sem domínio registrado"
         # capability estável = <namespace consolidado>.<tool prefixado>
         assert meta["capability"] == f"devteam-mcp.{name}"
-        # required_scope preserva o least-privilege por-tool, domínio-scoped (não devteam).
-        assert meta["required_scope"].startswith("architecture:")
-        assert meta["required_scope"].count(":") == 2
-        # data_domain mantém o domínio de dado original.
-        assert meta["data_domain"] == "architecture"
-        assert meta["resource_type"]
+        # required_scope preserva o least-privilege por-tool, domínio-scoped (não devteam):
+        # <domain>:<resource_type>:<ação> → começa pelo domínio e tem exatamente 2 ":".
+        assert meta["required_scope"].startswith(f"{dom}:"), (name, meta["required_scope"])
+        assert meta["required_scope"].count(":") == 2, (name, meta["required_scope"])
+        # data_domain/resource_type mantêm os valores originais do domínio (não-vazios).
+        assert meta["data_domain"], name
+        assert meta["resource_type"], name
         # inputSchema MUST ser type=object; required ⊆ properties.
         schema = meta["schema"]
-        assert schema["type"] == "object"
+        assert schema["type"] == "object", name
         props = set(schema.get("properties", {}))
-        assert set(schema.get("required", [])) <= props
+        assert set(schema.get("required", [])) <= props, name
 
 
 def test_specific_capability_and_scope_values():

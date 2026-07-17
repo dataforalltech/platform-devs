@@ -17,6 +17,10 @@ dependencies = [
     # 3 libs de plataforma. Domínios pesados (deploy=GitHub, infra=terraform/checkov)
     # somam as suas deps aqui no fan-out da Fase 2/3.
     "aiomysql>=0.2",
+    # Domínio deploy (GitHub/ACR): PyGithub é o backend do serviço (git/PR/workflow/deploy).
+    "PyGithub>=2.3.0,<3.0",
+    # Domínio config (sysinfo): psutil coleta CPU/RAM/discos/rede em get_physical_info.
+    "psutil>=5.9.0,<7.0",
     "platform-database-lib @ git+https://github.com/dataforalltech/platform-database-lib.git@v1.1.0",
     "platform-tenant-lib @ git+https://github.com/dataforalltech/platform-tenant-lib.git@v0.2.1",
     "platform-core-lib @ git+https://github.com/dataforalltech/platform-core-lib.git@v0.3.0",
@@ -59,6 +63,53 @@ ignore = ["S104"]
 [tool.ruff.lint.per-file-ignores]
 # S101 assert; S105/S106 tokens de teste fake — não são segredos reais.
 "tests/*" = ["S101", "S105", "S106"]
+# Domínio audit (copiado byte-a-byte do audit-mcp-server, que ignora estes globalmente):
+# S603/S607 = subprocess de comando fixo `ruff check` (lint_checker), sem shell; S110 =
+# try/except/pass best-effort nos checkers (docs/security/test) — falha de check não derruba
+# a auditoria. Entradas validadas na camada de tools.
+"src/domains/audit/**" = ["S110", "S603", "S607"]
+# E501 no domínio test: strings de template i18n (checklists/cenários) que o black
+# (autoridade de formatação, line-length 110) não quebra — copiadas byte-a-byte do
+# test-mcp-server, cujo pyproject já ignora E501 pela mesma razão.
+"src/domains/test/**" = ["E501"]
+# Domínio deploy (copiado byte-a-byte do deploy-mcp-server, que ignora estes globalmente):
+# E501 = strings de description longas que o black (line-length 110) não quebra; S603/S607 =
+# subprocess git/docker CLI, a função-núcleo do deploy (clone/build/push), entradas validadas
+# na camada de tools.
+"src/domains/deploy/**" = ["E501", "S603", "S607"]
+# Domínio docs (copiado byte-a-byte do docs-mcp-server, que ignora estes): E501 (global no
+# fonte) = strings de description longas que o black (line-length 110) não quebra; S603/S607 =
+# `git log` p/ mtime (binário confiável, path parcial 'git' intencional/portável) no audit_tool;
+# S324 = md5 é hash de CONTEÚDO (dedupe/índice do doc_index), não uso criptográfico, no scan_tool.
+"src/domains/docs/**" = ["E501", "S603", "S607", "S324"]
+# Domínio qa (copiado byte-a-byte do qa-mcp-server, que ignora estes globalmente):
+# S603/S607 = subprocess de comandos fixos (pytest/ruff/bandit/mypy/radon/npm/...) sem shell —
+# a função-núcleo dos runners de QA; entradas validadas na camada de tools.
+"src/domains/qa/**" = ["S603", "S607"]
+# Domínio ai-governance (copiado byte-a-byte do ai-governance-mcp-server, que ignora E501
+# globalmente): strings PT longas de política/checklist/decisão (correct_alternative,
+# reason, ...) que o black (autoridade de formatação, line-length 110) não quebra.
+"src/domains/ai-governance/**" = ["E501"]
+# Domínio services (copiado byte-a-byte do services-mcp-server, que ignora estes globalmente
+# como desvios justificados de um sidecar stateful que roda docker/psutil/subprocess p/
+# descoberta): S603/S607 = subprocess de comandos fixos (docker ps/restart) sem shell;
+# S608 = SQL que só concatena fragmentos estáticos (valores via %s parametrizado); S110/S112 =
+# try/except/pass|continue best-effort na descoberta/health (falha não derruba o server);
+# S310 = urllib.urlopen em probes de health/reload contra URLs internas do registry.
+"src/domains/services/**" = ["S110", "S112", "S310", "S603", "S607", "S608"]
+# Domínio infra (copiado byte-a-byte do infra-mcp-server, que ignora estes globalmente):
+# S603/S607 = subprocess dos CLIs de infra (terraform/checkov/infracost) sem shell, a
+# função-núcleo do domínio; S110 = try/except/pass best-effort no provisioner (falha de
+# terraform/infracost não derruba o allocator); E501 = strings de description longas que o
+# black (autoridade de formatação, line-length 110) não quebra.
+"src/domains/infra/**" = ["E501", "S110", "S603", "S607"]
+# Domínio dev-twin (copiado byte-a-byte do dev-twin-mcp-server, que ignora estes nos mesmos
+# arquivos): SessionManager coleta contexto via subprocess git (S603/S607, path parcial 'git'
+# intencional/portável) com try/except/pass|continue best-effort (S110/S112 — falha de git não
+# derruba o server); TokenStore usa continue/pass defensivo (S110/S112) na varredura de
+# revogação por token bruto. Mesma granularidade por-arquivo do pyproject do fonte.
+"src/domains/dev-twin/knowledge/session.py" = ["S603", "S607", "S110", "S112"]
+"src/domains/dev-twin/db/store.py" = ["S110", "S112"]
 
 [tool.mypy]
 python_version = "3.12"

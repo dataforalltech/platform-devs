@@ -1,0 +1,76 @@
+name: PR validate via ai-governance MCP
+
+# Roda validate_agent_decision contra o diff do PR e posta resultado como
+# comentário. Não bloqueia o merge por padrão — o resultado é informativo.
+# Se quiser bloquear, mude `continue-on-error: true` para false abaixo OU
+# adicione um required check no settings do repo.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, develop]
+
+permissions:
+  contents: read
+  pull-requests: write  # para postar comentário
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Não bloqueia o merge enquanto o validator estiver em fase de
+    # calibração. Quando confiarmos nos resultados, mudar para `false`.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout PR (full history needed for diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # default 1 não basta — precisamos da base ref
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: ai-governance-mcp-server/pyproject.toml
+
+      - name: Install ai-governance-mcp-server
+        run: |
+          cd ai-governance-mcp-server
+          pip install -e ".[dev]"
+
+      - name: Resolve base ref
+        id: refs
+        run: |
+          # GITHUB_BASE_REF é o nome da branch destino (ex.: 'main').
+          # Pegamos o SHA dela para fazer diff contra HEAD do PR.
+          git fetch origin "${{ github.base_ref }}" --depth=50
+          echo "base_sha=$(git rev-parse origin/${{ github.base_ref }})" >> "$GITHUB_OUTPUT"
+          echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Run validate via MCP (dry-run for log visibility)
+        working-directory: ai-governance-mcp-server
+        env:
+          PYTHONUTF8: "1"
+          PYTHONIOENCODING: "utf-8"
+          PRECOMMIT_REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          python scripts/pr_validate.py \
+            --base "${{ steps.refs.outputs.base_sha }}" \
+            --head "${{ steps.refs.outputs.head_sha }}" \
+            --output-comment "$RUNNER_TEMP/pr-comment.md" \
+            || echo "exit=$?" > "$RUNNER_TEMP/exit-code"
+          cat "$RUNNER_TEMP/pr-comment.md" || true
+
+      - name: Post comment on PR
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -f "$RUNNER_TEMP/pr-comment.md" ]; then
+            gh pr comment "${{ github.event.pull_request.number }}" \
+              --repo "${{ github.repository }}" \
+              --body-file "$RUNNER_TEMP/pr-comment.md"
+          else
+            echo "No comment file produced (validator may have errored)."
+          fi
