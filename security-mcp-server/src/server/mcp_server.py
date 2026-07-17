@@ -143,7 +143,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "threat_model:read",
         "threat_model",
         "security",
-        "Retorna um modelo de ameaças por id.",
+        "Retorna um modelo de ameaças persistido (componentes/ameaças/sumário) por id.",
         _schema({"id": dict(_INT, description="Id do modelo.")}, required=["id"]),
     ),
     "update_threat_model": _meta(
@@ -271,7 +271,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "cvss:read",
         "cvss",
         "security",
-        "Retorna uma avaliação CVSS por id.",
+        "Retorna uma avaliação CVSS persistida (vetor/score/severidade/métricas) por id.",
         _schema({"id": dict(_INT, description="Id da avaliação.")}, required=["id"]),
     ),
     "delete_cvss_assessment": _meta(

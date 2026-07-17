@@ -204,7 +204,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "c4_diagram:read",
         "c4_diagram",
         "architecture",
-        "Retorna o modelo C4 de um sistema.",
+        "Retorna o modelo C4 persistido de um sistema pela chave natural system_name.",
         _schema({"system_name": dict(_STR, description="Nome do sistema.")}, required=["system_name"]),
     ),
     "delete_c4_diagram": _meta(
@@ -212,7 +212,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "c4_diagram:write",
         "c4_diagram",
         "architecture",
-        "Soft-delete do modelo C4 de um sistema.",
+        "Remove (soft-delete) o modelo C4 de um sistema pela chave system_name; idempotente.",
         _schema({"system_name": dict(_STR, description="Nome do sistema.")}, required=["system_name"]),
     ),
     # ── Solution Blueprints ────────────────────────────────────────────────── #
@@ -251,7 +251,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "solution_blueprint:read",
         "solution_blueprint",
         "architecture",
-        "Retorna um blueprint de solução por id.",
+        "Retorna um blueprint de solução persistido (camadas/padrões/NFRs) por id.",
         _schema({"id": dict(_INT, description="Id do blueprint.")}, required=["id"]),
     ),
     "update_solution_blueprint": _meta(
@@ -320,7 +320,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "architecture",
-        "Retorna um artefato por id.",
+        "Retorna um artefato de arquitetura persistido (diagrama/ADR/nota) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -328,7 +328,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:write",
         "artifact",
         "architecture",
-        "Soft-delete de um artefato por id.",
+        "Remove (soft-delete) um artefato de arquitetura por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
 }

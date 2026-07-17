@@ -150,7 +150,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "component:read",
         "component",
         "frontend",
-        "Retorna um componente por id.",
+        "Retorna um componente React persistido (código/props/variante/framework) por id.",
         _schema({"id": dict(_INT, description="Id do componente.")}, required=["id"]),
     ),
     "update_component": _meta(
@@ -177,7 +177,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "component:write",
         "component",
         "frontend",
-        "Soft-delete de um componente por id.",
+        "Remove (soft-delete) um componente React persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do componente.")}, required=["id"]),
     ),
     # ── Pages (upsert por route) ───────────────────────────────────────────── #
@@ -218,7 +218,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "page:read",
         "page",
         "frontend",
-        "Retorna a página de uma rota.",
+        "Retorna a página persistida de uma rota (código/framework/meta) pela chave route.",
         _schema({"route": dict(_STR, description="Rota da página.")}, required=["route"]),
     ),
     "delete_page": _meta(
@@ -226,7 +226,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "page:write",
         "page",
         "frontend",
-        "Soft-delete da página de uma rota.",
+        "Remove (soft-delete) a página persistida de uma rota pela chave route; idempotente.",
         _schema({"route": dict(_STR, description="Rota da página.")}, required=["route"]),
     ),
     # ── Forms ──────────────────────────────────────────────────────────────── #
@@ -266,7 +266,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "form:read",
         "form",
         "frontend",
-        "Retorna um formulário por id.",
+        "Retorna um formulário persistido (campos/validação/biblioteca/código) por id.",
         _schema({"id": dict(_INT, description="Id do formulário.")}, required=["id"]),
     ),
     "update_form": _meta(
@@ -292,7 +292,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "form:write",
         "form",
         "frontend",
-        "Soft-delete de um formulário por id.",
+        "Remove (soft-delete) um formulário persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do formulário.")}, required=["id"]),
     ),
     # ── Stories ────────────────────────────────────────────────────────────── #
@@ -332,7 +332,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "story:read",
         "story",
         "frontend",
-        "Retorna uma story por id.",
+        "Retorna uma story de Storybook persistida (estados/framework/código) por id.",
         _schema({"id": dict(_INT, description="Id da story.")}, required=["id"]),
     ),
     "update_story": _meta(
@@ -340,7 +340,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "story:write",
         "story",
         "frontend",
-        "Atualiza campos mutáveis de uma story.",
+        "Atualiza campos mutáveis de uma story de Storybook por id (título/framework/stories/código/status).",
         _schema(
             {
                 "id": dict(_INT, description="Id da story."),
@@ -358,7 +358,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "story:write",
         "story",
         "frontend",
-        "Soft-delete de uma story por id.",
+        "Remove (soft-delete) uma story de Storybook persistida por id; idempotente.",
         _schema({"id": dict(_INT, description="Id da story.")}, required=["id"]),
     ),
     # ── Artifacts (histórico append-only) ──────────────────────────────────── #
@@ -404,7 +404,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:read",
         "artifact",
         "frontend",
-        "Retorna um artefato por id.",
+        "Retorna um artefato de UI persistido (código/scaffold gerado pelo agente) por id.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
     "delete_artifact": _meta(
@@ -412,7 +412,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "artifact:write",
         "artifact",
         "frontend",
-        "Soft-delete de um artefato por id.",
+        "Remove (soft-delete) um artefato de UI persistido por id; idempotente.",
         _schema({"id": dict(_INT, description="Id do artefato.")}, required=["id"]),
     ),
 }

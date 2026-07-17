@@ -196,7 +196,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     "list_audits": {
-        "description": "Lista auditorias com filtros opcionais",
+        "description": "Lista auditorias de conformidade persistidas, com filtros opcionais por status, ambiente e serviço e limite de resultados.",
         "capability": "audit-mcp.list_audits",
         "required_scope": "audit-mcp:audit:read",
         "resource_type": "audit",
