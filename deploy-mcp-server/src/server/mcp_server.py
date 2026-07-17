@@ -1,20 +1,19 @@
 """Servidor MCP deploy — sidecar kind=mcp_http, GATEWAY-READY (Model C).
 
-deploy-mcp é COMPUTE + STATEFUL: cada tool de ação FAZ a operação real (git, GitHub,
-deploy, ACR, CI) via o `GitHubClient` e, DEPOIS do sucesso, **registra a operação num
-ledger persistido** (dual-db, tenant-scoped, credencial-zero). Padrão: "faz a ação →
-registra no ledger". 30 tools:
+deploy-mcp é COMPUTE + STATEFUL: cada tool ativa de ação faz a operação real
+(Git, PR, ACR direto ou workspace) e, depois do sucesso, registra a operação num
+ledger persistido. GitHub Actions, scaffold de pipeline e deploy por workflow
+foram aposentados em 2026-07-15. 20 tools ativas:
 
   Git (4):            list_repos, create_branch, list_branches, commit_files
   PR (4):             create_pr, get_pr, merge_pr, list_prs
-  Workflow (4):       trigger_workflow, list_workflow_runs, get_workflow_run, cancel_workflow_run
-  Deploy (2):         deploy, get_deploy_status
-  Pipeline (2):       scaffold_pipeline, get_pipeline_templates
-  ACR (3):            setup_repo, acr_build, list_acr_images
-  Healthcheck (1):    ensure_all_repos_healthy
+  ACR (2):            acr_build, list_acr_images
   Local Workspace (4): get_repos_root, set_repos_root, list_local_repos, clone_repo
   Ledger (6, novas — leem o histórico persistido): list_deployments, get_deployment,
      list_deploy_events, list_pr_history, list_workflow_history, list_registered_repos
+
+`list_workflow_history` é somente leitura de registros legados; não consulta nem
+dispara GitHub Actions.
 
 Implementa o contrato de integração com o MCP Gateway central (platform-mcp-gateway):
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md  (CI-1..CI-11)
@@ -66,19 +65,13 @@ from ..db.store import DeployStore
 from ..knowledge.github_client import GitHubClient
 from ..tools import (
     acr_build,
-    cancel_workflow_run,
     clone_repo,
     commit_files,
     create_branch,
     create_pr,
-    deploy,
-    ensure_all_repos_healthy,
-    get_deploy_status,
     get_deployment,
-    get_pipeline_templates,
     get_pr,
     get_repos_root,
-    get_workflow_run,
     list_acr_images,
     list_branches,
     list_deploy_events,
@@ -89,12 +82,8 @@ from ..tools import (
     list_registered_repos,
     list_repos,
     list_workflow_history,
-    list_workflow_runs,
     merge_pr,
-    scaffold_pipeline,
     set_repos_root,
-    setup_repo,
-    trigger_workflow,
 )
 
 _log = logging.getLogger(__name__)
@@ -102,6 +91,21 @@ _log = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────── #
 # Schemas                                                                      #
 # ─────────────────────────────────────────────────────────────────────────── #
+_RETIRED_GITHUB_ACTION_TOOLS: frozenset[str] = frozenset(
+    {
+        "trigger_workflow",
+        "list_workflow_runs",
+        "get_workflow_run",
+        "cancel_workflow_run",
+        "deploy",
+        "get_deploy_status",
+        "scaffold_pipeline",
+        "get_pipeline_templates",
+        "setup_repo",
+        "ensure_all_repos_healthy",
+    }
+)
+
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     # ── Git ───────────────────────────────────────────────────────────────── #
     "list_repos": {
@@ -317,258 +321,6 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     # ── Workflow ──────────────────────────────────────────────────────────── #
-    "trigger_workflow": {
-        "description": (
-            "Dispara um workflow via workflow_dispatch. "
-            "workflow_id pode ser o nome do arquivo (deploy.yml) ou ID numérico. "
-            "A API não retorna o run_id — use list_workflow_runs após para localizar o run."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {"type": "string"},
-                "workflow_id": {
-                    "type": "string",
-                    "description": "Nome do arquivo do workflow (ex: deploy.yml) ou ID.",
-                },
-                "ref": {
-                    "type": "string",
-                    "description": "Branch, tag ou SHA para o dispatch.",
-                },
-                "inputs": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                    "description": "Inputs do workflow_dispatch (chave → valor string).",
-                },
-            },
-            "required": ["repo", "workflow_id", "ref"],
-            "additionalProperties": False,
-        },
-    },
-    "list_workflow_runs": {
-        "description": (
-            "Lista runs recentes de workflows. Use após trigger_workflow para encontrar o run_id do dispatch."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {"type": "string"},
-                "workflow_id": {
-                    "type": "string",
-                    "description": "Filtrar por workflow (arquivo ou ID). Default: todos.",
-                },
-                "branch": {"type": "string", "description": "Filtrar por branch."},
-                "status": {
-                    "type": "string",
-                    "enum": [
-                        "queued",
-                        "in_progress",
-                        "completed",
-                        "success",
-                        "failure",
-                        "cancelled",
-                    ],
-                    "description": "Filtrar por status.",
-                },
-                "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 50,
-                    "description": "Máximo de runs. Default: 10.",
-                    "default": 10,
-                },
-            },
-            "required": ["repo"],
-            "additionalProperties": False,
-        },
-    },
-    "get_workflow_run": {
-        "description": (
-            "Retorna status detalhado de um workflow run: "
-            "status (queued/in_progress/completed), conclusion (success/failure/cancelled), "
-            "branch, SHA, URL e logs_url."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {"type": "string"},
-                "run_id": {"type": "integer", "description": "ID numérico do run."},
-            },
-            "required": ["repo", "run_id"],
-            "additionalProperties": False,
-        },
-    },
-    "cancel_workflow_run": {
-        "description": "Cancela um workflow run em andamento (queued ou in_progress).",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {"type": "string"},
-                "run_id": {"type": "integer"},
-            },
-            "required": ["repo", "run_id"],
-            "additionalProperties": False,
-        },
-    },
-    # ── Deploy ────────────────────────────────────────────────────────────── #
-    "deploy": {
-        "description": (
-            "Dispara o deploy de um serviço para um ambiente. "
-            "Mapeia automaticamente ambiente → workflow:\n"
-            "  dev  → cd-dev.yml   @ develop\n"
-            "  hml  → cd-hml.yml   @ release/<versao>  (ref obrigatório)\n"
-            "  prod → cd-prod.yml  @ v<semver>           (ref obrigatório)\n"
-            "Para prod é necessário aprovação manual configurada no GitHub Environment."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "service": {
-                    "type": "string",
-                    "description": "Nome do serviço (usado como nome do repo se repo não informado).",
-                },
-                "environment": {
-                    "type": "string",
-                    "enum": ["dev", "hml", "prod"],
-                    "description": "Ambiente alvo.",
-                },
-                "ref": {
-                    "type": "string",
-                    "description": (
-                        "Branch/tag para o dispatch. "
-                        "Obrigatório para hml (release/1.0.0) e prod (v1.0.0). "
-                        "Para dev o default é develop."
-                    ),
-                },
-                "repo": {
-                    "type": "string",
-                    "description": "Nome do repo (se diferente do service).",
-                },
-                "inputs": {
-                    "type": "object",
-                    "additionalProperties": {"type": "string"},
-                    "description": "Inputs extras para o workflow_dispatch.",
-                },
-            },
-            "required": ["service", "environment"],
-            "additionalProperties": False,
-        },
-    },
-    "get_deploy_status": {
-        "description": (
-            "Retorna os últimos runs de deploy para um serviço e ambiente. "
-            "Mostra status (in_progress/completed), conclusion (success/failure) "
-            "e URL de cada run."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "service": {"type": "string"},
-                "environment": {
-                    "type": "string",
-                    "enum": ["dev", "hml", "prod"],
-                },
-                "repo": {
-                    "type": "string",
-                    "description": "Nome do repo (se diferente do service).",
-                },
-                "limit": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "maximum": 20,
-                    "description": "Máximo de runs. Default: 5.",
-                    "default": 5,
-                },
-            },
-            "required": ["service", "environment"],
-            "additionalProperties": False,
-        },
-    },
-    # ── Pipeline ──────────────────────────────────────────────────────────── #
-    "scaffold_pipeline": {
-        "description": (
-            "Instala os workflows padrão do platform-service-template em um repositório. "
-            "Cria/atualiza .github/workflows/*.yml via commit. "
-            "Os templates são genéricos — IMAGE_NAME e secrets são configurados no repo via "
-            "Settings → Secrets and variables. "
-            "Use get_pipeline_templates para ver os templates disponíveis."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {"type": "string", "description": "Nome do repo alvo."},
-                "templates": {
-                    "type": "array",
-                    "items": {
-                        "type": "string",
-                        "enum": ["ci", "deploy", "cd-dev", "cd-hml", "cd-prod", "pr-validate"],
-                    },
-                    "description": (
-                        "Templates a instalar. "
-                        "Default: todos (ci, deploy, cd-dev, cd-hml, cd-prod, pr-validate)."
-                    ),
-                },
-                "branch": {
-                    "type": "string",
-                    "description": "Branch onde fazer o commit. Default: develop.",
-                    "default": "develop",
-                },
-                "commit_message": {
-                    "type": "string",
-                    "description": "Mensagem do commit. Default: mensagem padrão.",
-                },
-            },
-            "required": ["repo"],
-            "additionalProperties": False,
-        },
-    },
-    "get_pipeline_templates": {
-        "description": (
-            "Lista os templates de CI/CD disponíveis para scaffold_pipeline. "
-            "Inclui nome, descrição, secrets/variables obrigatórios e trigger de cada template."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {},
-            "additionalProperties": False,
-        },
-    },
-    # ── ACR ───────────────────────────────────────────────────────────────── #
-    "setup_repo": {
-        "description": (
-            "Configura um repositório para deploy automático no ACR. "
-            "Propaga as credenciais ACR do deploy-mcp como GitHub Actions secrets no repo alvo "
-            "— elimina configuração manual por repo.\n\n"
-            "Secrets definidos: ACR_USERNAME, ACR_PASSWORD (+ PORTAINER_WEBHOOK_URL e "
-            "TOKEN_GITHUB se informados).\n"
-            "Variável definida: IMAGE_NAME.\n\n"
-            "Após setup_repo, dispare trigger_workflow(workflow_id='deploy.yml') para buildar "
-            "e enviar a imagem."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "repo": {
-                    "type": "string",
-                    "description": "Nome do repo (owner/name ou só name — usa DEPLOY_GITHUB_ORG).",
-                },
-                "image_name": {
-                    "type": "string",
-                    "description": "Nome da imagem Docker no ACR (ex: platform-analytics).",
-                },
-                "portainer_webhook": {
-                    "type": "string",
-                    "description": "URL do webhook do Portainer para este repo (opcional).",
-                },
-                "github_token": {
-                    "type": "string",
-                    "description": "PAT para builds com dependências privadas (opcional).",
-                },
-            },
-            "required": ["repo", "image_name"],
-            "additionalProperties": False,
-        },
-    },
     "acr_build": {
         "description": (
             "Constrói e empurra uma imagem Docker para o ACR localmente via docker CLI. "
@@ -608,56 +360,6 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         },
     },
     # ── Healthcheck ───────────────────────────────────────────────────────────── #
-    "ensure_all_repos_healthy": {
-        "description": (
-            "Verifica e garante que todos os repositórios elegíveis para automação "
-            "(active=true AND allows_automation=true — ADR-002) tenham CI passando "
-            "e imagem Docker publicada no ACR.\n\n"
-            "Para cada repo classifica: HEALTHY | CI_FAILING | ACR_MISSING | CI_FAILING_AND_ACR_MISSING.\n\n"
-            "Remediação automática (dry_run=false):\n"
-            "  • CI falhando/ausente → scaffold ci+cd-dev se necessário → trigger ci.yml → polling\n"
-            "  • ACR ausente → setup_repo (injeta secrets ACR) → trigger cd-dev.yml\n\n"
-            "Use dry_run=true para apenas inspecionar sem modificar nada."
-        ),
-        "schema": {
-            "type": "object",
-            "properties": {
-                "org": {
-                    "type": "string",
-                    "description": "Organização GitHub. Default: dataforalltech.",
-                    "default": "dataforalltech",
-                },
-                "workflow_id": {
-                    "type": "string",
-                    "description": "Arquivo do workflow CI a verificar/disparar. Default: ci.yml.",
-                    "default": "ci.yml",
-                },
-                "cd_workflow_id": {
-                    "type": "string",
-                    "description": "Arquivo do workflow CD para build ACR. Default: cd-dev.yml.",
-                    "default": "cd-dev.yml",
-                },
-                "ref": {
-                    "type": "string",
-                    "description": "Branch para verificar e disparar workflows. Default: develop.",
-                    "default": "develop",
-                },
-                "wait_minutes": {
-                    "type": "integer",
-                    "description": "Tempo máximo aguardando CI após remediação (minutos). Default: 10.",
-                    "minimum": 1,
-                    "maximum": 60,
-                    "default": 10,
-                },
-                "dry_run": {
-                    "type": "boolean",
-                    "description": "Se true, apenas inspeciona e reporta sem executar nenhuma ação. Default: false.",
-                    "default": False,
-                },
-            },
-            "additionalProperties": False,
-        },
-    },
     "list_acr_images": {
         "description": (
             "Lista as tags disponíveis de uma imagem no ACR, ordenadas por data (mais recente primeiro). "
@@ -823,8 +525,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_deploy_events": {
         "description": (
-            "Lista os eventos genéricos do ledger (clone/commit/acr_build/cancel_run/"
-            "scaffold_pipeline/trigger_workflow), com filtros opcionais por kind/target."
+            "Lista eventos do ledger. O histórico pode conter tipos aposentados antes de "
+            "2026-07-15; a consulta é read-only e não reativa essas capacidades."
         ),
         "schema": {
             "type": "object",
@@ -851,8 +553,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_workflow_history": {
         "description": (
-            "Lista o histórico de workflow runs persistido no ledger (upsert por "
-            "repo+run_id), com filtros opcionais por repo/status. Lê do banco."
+            "Lista registros legados de workflow runs, somente para auditoria. "
+            "Não consulta nem dispara GitHub Actions."
         ),
         "schema": {
             "type": "object",
@@ -865,12 +567,16 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "list_registered_repos": {
         "description": (
-            "Lista os repositórios registrados no ledger (via setup_repo) com sua "
-            "config e status. Lê do banco do tenant."
+            "Lista repositórios históricos do ledger, em modo somente leitura."
         ),
         "schema": {"type": "object", "additionalProperties": False, "properties": {}},
     },
 }
+
+# Compatibilidade do arquivo de catálogo durante a remoção: os schemas antigos
+# podem permanecer no histórico do código, mas não são expostos nem despachados.
+for _retired_name in _RETIRED_GITHUB_ACTION_TOOLS:
+    _TOOL_SCHEMAS.pop(_retired_name, None)
 
 
 # ── Policy metadata (STD-MCP-001 CI-2) ────────────────────────────────────────
@@ -925,54 +631,6 @@ _POLICY: dict[str, dict[str, str]] = {
         "data_domain": "source_control",
     },
     # ── Workflow ─────────────────────────────────────────────────────────────
-    "trigger_workflow": {
-        "required_scope": f"{NAMESPACE}:workflow:write",
-        "resource_type": "workflow",
-        "data_domain": "cicd",
-    },
-    "list_workflow_runs": {
-        "required_scope": f"{NAMESPACE}:workflow:read",
-        "resource_type": "workflow",
-        "data_domain": "cicd",
-    },
-    "get_workflow_run": {
-        "required_scope": f"{NAMESPACE}:workflow:read",
-        "resource_type": "workflow",
-        "data_domain": "cicd",
-    },
-    "cancel_workflow_run": {
-        "required_scope": f"{NAMESPACE}:workflow:write",
-        "resource_type": "workflow",
-        "data_domain": "cicd",
-    },
-    # ── Deploy ───────────────────────────────────────────────────────────────
-    "deploy": {
-        "required_scope": f"{NAMESPACE}:deployment:write",
-        "resource_type": "deployment",
-        "data_domain": "cicd",
-    },
-    "get_deploy_status": {
-        "required_scope": f"{NAMESPACE}:deployment:read",
-        "resource_type": "deployment",
-        "data_domain": "cicd",
-    },
-    # ── Pipeline ─────────────────────────────────────────────────────────────
-    "scaffold_pipeline": {
-        "required_scope": f"{NAMESPACE}:pipeline:write",
-        "resource_type": "pipeline",
-        "data_domain": "cicd",
-    },
-    "get_pipeline_templates": {
-        "required_scope": f"{NAMESPACE}:pipeline:read",
-        "resource_type": "pipeline",
-        "data_domain": "cicd",
-    },
-    # ── ACR ──────────────────────────────────────────────────────────────────
-    "setup_repo": {
-        "required_scope": f"{NAMESPACE}:repo:write",
-        "resource_type": "repo",
-        "data_domain": "cicd",
-    },
     "acr_build": {
         "required_scope": f"{NAMESPACE}:image:write",
         "resource_type": "image",
@@ -984,12 +642,6 @@ _POLICY: dict[str, dict[str, str]] = {
         "data_domain": "artifact",
     },
     # ── Healthcheck ──────────────────────────────────────────────────────────
-    "ensure_all_repos_healthy": {
-        "required_scope": f"{NAMESPACE}:deployment:write",
-        "resource_type": "deployment",
-        "data_domain": "cicd",
-    },
-    # ── Local workspace ──────────────────────────────────────────────────────
     "get_repos_root": {
         "required_scope": f"{NAMESPACE}:workspace:read",
         "resource_type": "workspace",
@@ -1042,6 +694,9 @@ _POLICY: dict[str, dict[str, str]] = {
         "data_domain": "cicd",
     },
 }
+
+for _retired_name in _RETIRED_GITHUB_ACTION_TOOLS:
+    _POLICY.pop(_retired_name, None)
 
 assert set(_POLICY.keys()) == set(_TOOL_SCHEMAS.keys()), "_POLICY cobre todas as tools"  # noqa: S101
 
@@ -1110,18 +765,6 @@ def _is_ok(payload: Any) -> bool:
     return isinstance(payload, dict) and "error" not in payload
 
 
-async def _persist_deploy(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
-    await store.record_deployment(
-        service=result.get("service") or args.get("service") or "",
-        environment=result.get("environment") or args.get("environment") or "",
-        status="dispatched" if result.get("dispatched") else "unknown",
-        ref=result.get("ref"),
-        repo=result.get("repo"),
-        workflow=result.get("workflow"),
-        detail=result,
-    )
-
-
 async def _persist_create_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
     number = result.get("number")
     if number is None:
@@ -1169,43 +812,6 @@ async def _persist_create_branch(store: DeployStore, args: dict[str, Any], resul
     )
 
 
-async def _persist_trigger_workflow(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
-    # O dispatch do GitHub NÃO retorna run_id (a chave natural (repo, run_id) do
-    # WorkflowRunRow exige um); então o disparo entra como evento append-only. O run
-    # real, com id, é gravado por get_workflow_run (upsert refresh). Ver relatório.
-    await store.record_event(
-        kind="trigger_workflow",
-        target=f"{args.get('repo')}/{args.get('workflow_id')}",
-        status="dispatched" if result.get("dispatched") else "unknown",
-        detail=result,
-    )
-
-
-async def _persist_get_workflow_run(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
-    run_id = result.get("id") or args.get("run_id")
-    if run_id is None:
-        return
-    await store.upsert_workflow_run(
-        repo=args.get("repo") or "",
-        run_id=str(run_id),
-        workflow=result.get("name"),
-        status=result.get("status"),
-        conclusion=result.get("conclusion"),
-        detail=result,
-    )
-
-
-async def _persist_cancel_workflow_run(
-    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
-) -> None:
-    await store.record_event(
-        kind="cancel_run",
-        target=f"{args.get('repo')}#{args.get('run_id')}",
-        status="cancelled" if result.get("cancelled") else "cancel_requested",
-        detail=result,
-    )
-
-
 async def _persist_commit_files(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
     await store.record_event(
         kind="commit",
@@ -1224,21 +830,6 @@ async def _persist_acr_build(store: DeployStore, args: dict[str, Any], result: d
     )
 
 
-async def _persist_scaffold_pipeline(
-    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
-) -> None:
-    await store.record_event(
-        kind="scaffold_pipeline",
-        target=result.get("repo") or args.get("repo"),
-        status="committed" if result.get("committed") else "done",
-        detail={
-            "sha": result.get("sha"),
-            "branch": result.get("branch"),
-            "files_installed": result.get("files_installed"),
-        },
-    )
-
-
 async def _persist_clone_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
     await store.record_event(
         kind="clone",
@@ -1252,34 +843,16 @@ async def _persist_clone_repo(store: DeployStore, args: dict[str, Any], result: 
     )
 
 
-async def _persist_setup_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
-    await store.upsert_repo(
-        repo=result.get("repo") or args.get("repo") or "",
-        config={
-            "image_name": result.get("image_name"),
-            "registry": result.get("registry"),
-            "configured": result.get("configured"),
-        },
-        status="configured" if result.get("success") else "partial",
-    )
-
-
 # Só as tools de AÇÃO persistem. As compute/read (templates, workspace, list_* live do
 # GitHub) NÃO estão aqui — rodam e retornam sem abrir pool.
 _LEDGER_PERSISTERS: dict[str, Any] = {
-    "deploy": _persist_deploy,
     "create_pr": _persist_create_pr,
     "get_pr": _persist_get_pr,
     "merge_pr": _persist_merge_pr,
     "create_branch": _persist_create_branch,
-    "trigger_workflow": _persist_trigger_workflow,
-    "get_workflow_run": _persist_get_workflow_run,
-    "cancel_workflow_run": _persist_cancel_workflow_run,
     "commit_files": _persist_commit_files,
     "acr_build": _persist_acr_build,
-    "scaffold_pipeline": _persist_scaffold_pipeline,
     "clone_repo": _persist_clone_repo,
-    "setup_repo": _persist_setup_repo,
 }
 
 
@@ -1571,66 +1144,9 @@ def _dispatch(
             author=args.get("author"),
         )
     # ── Workflow ──────────────────────────────────────────────────────────── #
-    if name == "trigger_workflow":
-        return trigger_workflow(
-            client,
-            repo=_arg(args, "repo"),
-            workflow_id=_arg(args, "workflow_id"),
-            ref=_arg(args, "ref"),
-            inputs=args.get("inputs"),
-        )
-    if name == "list_workflow_runs":
-        return list_workflow_runs(
-            client,
-            repo=_arg(args, "repo"),
-            workflow_id=_arg(args, "workflow_id"),
-            branch=_arg(args, "branch"),
-            status=args.get("status"),
-            limit=args.get("limit", 10),
-        )
-    if name == "get_workflow_run":
-        return get_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
-    if name == "cancel_workflow_run":
-        return cancel_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
     # ── Deploy ────────────────────────────────────────────────────────────── #
-    if name == "deploy":
-        return deploy(
-            client,
-            service=_arg(args, "service"),
-            environment=_arg(args, "environment"),
-            ref=_arg(args, "ref"),
-            repo=_arg(args, "repo"),
-            inputs=args.get("inputs"),
-        )
-    if name == "get_deploy_status":
-        return get_deploy_status(
-            client,
-            service=_arg(args, "service"),
-            environment=_arg(args, "environment"),
-            repo=_arg(args, "repo"),
-            limit=args.get("limit", 5),
-        )
     # ── Pipeline ──────────────────────────────────────────────────────────── #
-    if name == "scaffold_pipeline":
-        return scaffold_pipeline(
-            client,
-            repo=_arg(args, "repo"),
-            templates=args.get("templates"),
-            branch=args.get("branch", "develop"),
-            commit_message=args.get("commit_message"),
-        )
-    if name == "get_pipeline_templates":
-        return get_pipeline_templates()
     # ── ACR ───────────────────────────────────────────────────────────────── #
-    if name == "setup_repo":
-        return setup_repo(
-            client,
-            settings,
-            repo=_arg(args, "repo"),
-            image_name=_arg(args, "image_name"),
-            portainer_webhook=args.get("portainer_webhook"),
-            github_token=args.get("github_token"),
-        )
     if name == "acr_build":
         return acr_build(
             settings,
@@ -1648,17 +1164,6 @@ def _dispatch(
             limit=args.get("limit", 20),
         )
     # ── Healthcheck ───────────────────────────────────────────────────────────── #
-    if name == "ensure_all_repos_healthy":
-        return ensure_all_repos_healthy(
-            client,
-            settings,
-            org=args.get("org", "dataforalltech"),
-            workflow_id=args.get("workflow_id", "ci.yml"),
-            cd_workflow_id=args.get("cd_workflow_id", "cd-dev.yml"),
-            ref=args.get("ref", "develop"),
-            wait_minutes=args.get("wait_minutes", 10),
-            dry_run=args.get("dry_run", False),
-        )
     # ── Local Workspace ──────────────────────────────────────────────────────── #
     if name == "get_repos_root":
         return get_repos_root(settings, explicit=args.get("explicit"))

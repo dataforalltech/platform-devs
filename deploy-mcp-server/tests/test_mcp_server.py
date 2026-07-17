@@ -47,23 +47,9 @@ _ACTION_COMPUTE_TOOLS = {
     "get_pr",
     "merge_pr",
     "list_prs",
-    # workflow
-    "trigger_workflow",
-    "list_workflow_runs",
-    "get_workflow_run",
-    "cancel_workflow_run",
-    # deploy
-    "deploy",
-    "get_deploy_status",
-    # pipeline
-    "scaffold_pipeline",
-    "get_pipeline_templates",
     # acr
-    "setup_repo",
     "acr_build",
     "list_acr_images",
-    # healthcheck
-    "ensure_all_repos_healthy",
     # local workspace
     "get_repos_root",
     "set_repos_root",
@@ -100,7 +86,7 @@ def gh_client() -> MagicMock:
 # Schemas / catálogo (sem DB)
 # ══════════════════════════════════════════════════════════════════════════════
 def test_tool_count():
-    assert len(M._TOOL_SCHEMAS) == 30
+    assert len(M._TOOL_SCHEMAS) == 20
     assert set(M._TOOL_SCHEMAS) == _EXPECTED_TOOLS
 
 
@@ -114,7 +100,7 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "deploy-mcp", "tools": 30}
+    assert r.json() == {"status": "ok", "service": "deploy-mcp", "tools": 20}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):
@@ -131,7 +117,7 @@ def test_tools_list_has_policy_fields(client: TestClient):
     # ledger (consulta) usa verbo :read; mutadores usam :write
     for name in _LEDGER_TOOLS:
         assert by_name[name]["required_scope"].endswith(":read")
-    assert by_name["deploy"]["required_scope"].endswith(":write")
+    assert by_name["acr_build"]["required_scope"].endswith(":write")
     assert by_name["merge_pr"]["required_scope"].endswith(":write")
 
 
@@ -190,19 +176,19 @@ def test_call_excluded_tool(client: TestClient, monkeypatch):
 
 
 def test_call_valid_token_compute_tool_no_db(client: TestClient, monkeypatch, rsa_key):
-    """Happy path SEM DB: tool compute (get_pipeline_templates) roda via _run_tool sem
+    """Happy path SEM DB: tool de leitura roda via _run_tool sem
     abrir pool — exercita o handler async + verificação RS256 real + tenant dos claims."""
     patch_jwks(monkeypatch, rsa_key)
     tok = mint_token(rsa_key, tenant_id="T-42")
     r = client.post(
         "/mcp/tools/call",
-        json={"params": {"name": "get_pipeline_templates", "arguments": {}, "_meta": {"twin_token": tok}}},
+        json={"params": {"name": "list_repos", "arguments": {}, "_meta": {"twin_token": tok}}},
     )
     assert r.status_code == 200
     import json
 
     text = r.json()["result"]["content"][0]["text"]
-    assert "templates" in json.loads(text)
+    assert json.loads(text)["count"] == 1
 
 
 def test_call_unknown_tool_404(client: TestClient, monkeypatch, rsa_key):
@@ -257,13 +243,13 @@ def _handlers(monkeypatch):
     return server.request_handlers[ListToolsRequest], server.request_handlers[CallToolRequest]
 
 
-async def test_list_tools_handler_returns_all_30(monkeypatch):
+async def test_list_tools_handler_returns_all_20(monkeypatch):
     from mcp.types import ListToolsRequest
 
     list_tools, _ = _handlers(monkeypatch)
     res = await list_tools(ListToolsRequest(method="tools/list"))
     tools = res.root.tools
-    assert len(tools) == 30
+    assert len(tools) == 20
     assert {t.name for t in tools} == _EXPECTED_TOOLS
 
 
@@ -303,18 +289,8 @@ _DISPATCH_CASES = {
     "get_pr": ("get_pr", {"repo": "r", "pr_number": 1}),
     "merge_pr": ("merge_pr", {"repo": "r", "pr_number": 1}),
     "list_prs": ("list_prs", {"repo": "r"}),
-    "trigger_workflow": ("trigger_workflow", {"repo": "r", "workflow_id": "w", "ref": "x"}),
-    "list_workflow_runs": ("list_workflow_runs", {"repo": "r"}),
-    "get_workflow_run": ("get_workflow_run", {"repo": "r", "run_id": 1}),
-    "cancel_workflow_run": ("cancel_workflow_run", {"repo": "r", "run_id": 1}),
-    "deploy": ("deploy", {"service": "s", "environment": "dev"}),
-    "get_deploy_status": ("get_deploy_status", {"service": "s", "environment": "dev"}),
-    "scaffold_pipeline": ("scaffold_pipeline", {"repo": "r"}),
-    "get_pipeline_templates": ("get_pipeline_templates", {}),
-    "setup_repo": ("setup_repo", {"repo": "r", "image_name": "i"}),
     "acr_build": ("acr_build", {"repo_path": "/p", "image_name": "i"}),
     "list_acr_images": ("list_acr_images", {"service_name": "s"}),
-    "ensure_all_repos_healthy": ("ensure_all_repos_healthy", {}),
     "get_repos_root": ("get_repos_root", {}),
     "set_repos_root": ("set_repos_root", {"path": "/p"}),
     "list_local_repos": ("list_local_repos", {}),
@@ -365,17 +341,6 @@ async def test_run_tool_persists_and_reads_ledger(seed_platforms, monkeypatch):
     async def run(name, args):
         return await M._run_tool(name, args, s, c, TENANT_A)
 
-    # deploy → DeploymentRow (append-only)
-    dep = await run("deploy", {"service": "svc", "environment": "dev"})
-    assert dep["dispatched"] is True
-    depl = await run("list_deployments", {})
-    assert depl["total"] == 1
-    assert depl["deployments"][0]["service"] == "svc"
-    assert depl["deployments"][0]["environment"] == "dev"
-    assert depl["deployments"][0]["detail"]["workflow"] == "cd-dev.yml"  # JSON round-trip
-    got = await run("get_deployment", {"id": depl["deployments"][0]["id"]})
-    assert got["workflow"] == "cd-dev.yml"
-
     # create_pr → PR upsert; merge_pr → state='merged' (mesma (repo,number), sem dup)
     await run("create_pr", {"repo": "svc", "title": "feat: x", "head": "feature/x"})
     await run("merge_pr", {"repo": "svc", "pr_number": 7})
@@ -388,36 +353,12 @@ async def test_run_tool_persists_and_reads_ledger(seed_platforms, monkeypatch):
     await run("get_pr", {"repo": "svc", "pr_number": 7})
     assert (await run("list_pr_history", {"repo": "svc"}))["total"] == 1
 
-    # trigger_workflow → DeployEvent(kind=trigger_workflow) (dispatch não traz run_id)
-    await run("trigger_workflow", {"repo": "svc", "workflow_id": "ci.yml", "ref": "develop"})
-    assert (await run("list_deploy_events", {"kind": "trigger_workflow"}))["total"] == 1
-
-    # get_workflow_run → WorkflowRun upsert (run_id do GitHub — VARCHAR)
-    await run("get_workflow_run", {"repo": "svc", "run_id": 10000000000})
-    wf = await run("list_workflow_history", {})
-    assert wf["total"] == 1
-    assert wf["workflow_runs"][0]["run_id"] == "10000000000"
-    assert wf["workflow_runs"][0]["conclusion"] == "success"
-
-    # cancel_workflow_run → DeployEvent(kind=cancel_run)
-    await run("cancel_workflow_run", {"repo": "svc", "run_id": 999})
-    assert (await run("list_deploy_events", {"kind": "cancel_run"}))["total"] == 1
-
     # commit_files → DeployEvent(kind=commit)
     await run(
         "commit_files",
         {"repo": "svc", "branch": "develop", "message": "m", "files": [{"path": "a", "content": "c"}]},
     )
     assert (await run("list_deploy_events", {"kind": "commit"}))["total"] == 1
-
-    # scaffold_pipeline → DeployEvent(kind=scaffold_pipeline) (usa client.commit_files)
-    await run("scaffold_pipeline", {"repo": "svc", "templates": ["ci"]})
-    assert (await run("list_deploy_events", {"kind": "scaffold_pipeline"}))["total"] == 1
-
-    # setup_repo → Repo upsert
-    await run("setup_repo", {"repo": "svc", "image_name": "svc"})
-    repos = await run("list_registered_repos", {})
-    assert repos["total"] == 1 and repos["repos"][0]["repo"] == "svc"
 
     # clone_repo / acr_build usam subprocess → stub direto do símbolo p/ persistir evento
     monkeypatch.setattr(

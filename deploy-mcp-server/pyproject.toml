@@ -1,7 +1,7 @@
 [project]
 name = "deploy-mcp"
 version = "0.1.0"
-description = "MCP sidecar (kind=mcp_http, Model C) do deploy: git, PRs, GitHub Actions, ACR e workspace local via GitHub API — gateway-ready."
+description = "MCP sidecar do deploy: Git, PRs, ACR direto, workspace local e ledger histórico — sem GitHub Actions."
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [
