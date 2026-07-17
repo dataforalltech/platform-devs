@@ -14,16 +14,22 @@ Cada ``register()`` retorna ``{name, schemas, dispatch, store_cls, ensure_schema
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 from typing import Any
+
+_log = logging.getLogger(__name__)
 
 DOMAINS: list[dict[str, Any]] = []
 
 for _mod in pkgutil.iter_modules(__path__):
     if not _mod.ispkg:
         continue
-    _plugin = importlib.import_module(f"{__name__}.{_mod.name}.plugin")
-    DOMAINS.append(_plugin.register())
+    try:
+        _plugin = importlib.import_module(f"{__name__}.{_mod.name}.plugin")
+        DOMAINS.append(_plugin.register())
+    except Exception as _exc:  # noqa: BLE001 — domínio incompleto/quebrado é PULADO (loud via log)
+        _log.warning("devteam_mcp: domínio '%s' pulado no registry (%s)", _mod.name, _exc)
 
 # Ordem determinística por nome do domínio (estabilidade de output/listagem).
 DOMAINS.sort(key=lambda d: d["name"])
