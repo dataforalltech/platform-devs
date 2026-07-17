@@ -17,9 +17,19 @@ register() -> {
 ```
 O **agregador** `src/server/mcp_server.py`:
 - Faz `_TOOL_SCHEMAS = {**dominio.schemas ...}` de todos os domínios (chaves já prefixadas → sem colisão).
-- `_dispatch(name, args, session)`: pelo prefixo `<domain>_`, instancia `domain.store_cls(session)` e chama o dispatch do domínio.
+- `_dispatch(name, args, session)`: por **longest-prefix-match** (`name.startswith(f"{key}_")`, maior chave vence),
+  instancia `domain.store_cls(session)` e chama o dispatch do domínio.
 - `_ensure_tenant_schema`: chama o `ensure_schema` de TODOS os domínios (todas as tabelas no schema do tenant).
 - Serve UM `/mcp/tools/list` + `/mcp/tools/call`, **`aud=mcp:devteam-mcp`**, `NAMESPACE=devteam-mcp`.
+
+**Registry por auto-discovery** (`src/domains/__init__.py`): varre os sub-pacotes e pluga cada `plugin.register()`.
+Adicionar domínio = **soltar o pacote** (NÃO editar `__init__.py`) → fan-out de 1 agente/domínio sem conflito de merge.
+Um domínio meio-construído é PULADO com log (não derruba o import); no assemble asserta-se que os 20 carregaram.
+
+**Invariante de roteamento:** a chave do domínio (`DOMAIN`) É o prefixo de tool; o roteamento é longest-prefix, então
+chaves com hífen são OK (`product-owner`, `ai-governance`, `dev-twin`, `qa-engineer`). Colisão de prefixo só ocorreria
+se uma chave fosse prefixo-com-`_` de outra — mantê-las hifenizadas (nunca `<a>_<b>` como chave) garante disjunção
+(`qa` vs `qa-engineer` não colidem: `"qa-engineer_x".startswith("qa_")` é falso).
 
 ## Naming + colisões (resolve a P2 de brinde)
 Num server só os nomes de op têm que ser únicos, e há **32 colisões** (ex.: `save_artifact` em 6 personas).

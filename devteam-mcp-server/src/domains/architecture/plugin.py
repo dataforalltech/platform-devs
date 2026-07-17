@@ -8,7 +8,8 @@ colisão entre domínios) e roteia por prefixo.
 
 ``register()`` devolve:
   * ``name``       — a chave do domínio (``architecture``); o agregador acha o domínio
-                     por ``tool_name.split("_", 1)[0]``.
+                     por longest-prefix-match (``name.startswith(f"{name}_")``), robusto a
+                     chaves com hífen (``product-owner``, ``ai-governance``, ``dev-twin``).
   * ``schemas``    — o ``catalog._TOOL_SCHEMAS`` com as CHAVES prefixadas
                      (``save_artifact`` → ``architecture_save_artifact``). Cada meta já
                      traz capability (``devteam-mcp.architecture_<op>``), required_scope
@@ -32,8 +33,8 @@ from .catalog import DOMAIN
 from .db.schema import ensure_schema
 from .db.store import ArchitectureStore
 
-# Prefixo de tool do domínio (``architecture_``). O agregador descobre o domínio pelo
-# primeiro segmento do nome (``name.split("_", 1)[0]``), então o prefixo é a chave.
+# Prefixo de tool do domínio (``architecture_``). O agregador descobre o domínio por
+# longest-prefix-match (``name.startswith(f"{DOMAIN}_")``) → o prefixo/chave PODE ter hífen.
 _PREFIX = f"{DOMAIN}_"
 
 
