@@ -23,8 +23,9 @@ shared-infra, aguardando autorização.**
 | 3. Assemble (união de deps + gates integrados + testes generalizados) | ✅ | `f9ccc10` |
 | Prova local da image (build + boot `healthy` + `/v1/health` 456 tools + contrato 20/456 dentro da image) | ✅ | 2026-07-17 |
 | 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → restart gateway → prova no gateway | ✅ (DEPLOYADO+PROVADO) | 2026-07-17 |
-| 4b. `tool_matrix` do platform-devs-agent p/ capability/data_domain (repo do agente) | ⏳ follow-up | — |
-| 5. Aposentar os 20 containers + atualizar `TOOLS_LIVE_INVENTORY.csv`/docs | ⏳ | — |
+| 5. Cutover: aposentar as 20 mappings + parar os 20 containers | ✅ (forçado 2026-07-17; gateway 1616/35; backup+rollback prontos) | — |
+| 4b. Rotear agente/clientes por `devteam-mcp.*` (refactor real; capability/policy) — **AGORA CRÍTICO** | ⏳ | — |
+| — Atualizar `TOOLS_LIVE_INVENTORY.csv`/docs (ORCHESTRATION/MCP_TOOLS_REFERENCE) | ⏳ | — |
 
 ## Arquitetura (resumo — detalhes no design doc)
 - **Agregador** `devteam-mcp-server/src/server/mcp_server.py`: boot/serve/segurança Model-C compartilhado
@@ -142,10 +143,34 @@ coluna de scope; o `platform-mcp` não tem env de enforcement de scope; e o back
 `name_microservice=platform-devteam-mcp` → `mcp:devteam-mcp`, que bate com o `MCP_TWIN_AUDIENCE` do container. Logo
 `required_scope` é metadado (governança/audit), e dropar `-mcp` não bloqueia chamada nenhuma.
 
-## Fase 5 — cutover
-Após a prova verde: remover as ~20 mappings antigas do `GATEWAY_MAPPING` + parar os 20 containers-fonte
-(reverter = re-add as linhas). Atualizar `TOOLS_LIVE_INVENTORY.csv` e docs (ORCHESTRATION/MCP_TOOLS_REFERENCE).
-**Não apagar os diretórios `*-mcp-server/` do repo** até o cutover estar estável (são o fallback).
+## Fase 5 — cutover → ✅ EXECUTADO (2026-07-17, forçado por decisão do usuário)
+Removidas as **20 mappings** por-servidor do `GATEWAY_MAPPING` + **parados os 20 containers-fonte** (`docker stop`,
+não `rm`). Gateway reagregado: **`catalog: 1616 tools across 35 services`** (era 2018/55 — caíram ~402 tools dos 20;
+`devteam-mcp` com 456 permanece). Backup das 20 rows em `ADMIN_DATAFORALL.GATEWAY_MAPPING_BKP_devteam_cut`.
+
+> ⚠️ **ESTADO ATUAL = superfície DevTeam por-servidor FORA, e NADA consome `devteam-mcp` ainda** (o refactor do
+> agente/clientes — "Fase 4b" — NÃO foi feito). Ou seja: o `platform-devs-agent` deployado e qualquer cliente que
+> use `architecture-mcp.*`/`session-mcp.*`/etc. está quebrado até a Fase 4b. Os 456 tools do `devteam-mcp.*` estão
+> vivos no gateway, mas ninguém roteia p/ eles. **Caminho para restaurar função: fazer a Fase 4b (rotear por
+> `devteam-mcp.*`) OU rollback.**
+
+### Rollback do cutover (1 comando, reversível)
+Re-inserir as 20 rows do backup + religar os 20 containers + restart do gateway:
+```bash
+# script pronto: scratchpad/rollback_cutover.sh (via ssm_run.sh). Núcleo:
+docker exec dataforall-admin-mysql mysql -uroot -p"$PW" -e \
+  "DELETE FROM ADMIN_DATAFORALL.GATEWAY_MAPPING WHERE name_microservice IN (<20 nomes>); \
+   INSERT INTO ADMIN_DATAFORALL.GATEWAY_MAPPING SELECT * FROM ADMIN_DATAFORALL.GATEWAY_MAPPING_BKP_devteam_cut;"
+docker start platform-architecture-mcp platform-backend-mcp ... (os 20) && docker restart platform-mcp
+```
+**Não apagar os diretórios `*-mcp-server/` do repo** nem remover os containers (`docker rm`) — são o fallback.
+
+### Fase 4b (agora crítico) — rotear o agente/clientes por `devteam-mcp.*`
+O `tool_matrix.py` do `platform-devs-agent` é só CONTRATO (não roteia — "NOTHING in the runtime imports it"). O
+roteamento REAL está no `capability.py`/`catalog/policy.py`, que assumem namespaces `<persona>-mcp` (derivam o dono
+pelo token antes do `-`). Para usar `devteam-mcp` (1 namespace, tools `<domínio>_<op>`), é um refactor real:
+resolução de catálogo + `CapabilityEnforcer` + `PolicyEngine` por `data_domain`/capability em vez de por-servidor.
+Repo clonado em `../platform-devs-agent` (branch `main`).
 
 ## Desvios de fidelidade aceitos (follow-up pós-prova; fidelidade > DRY numa migração strangler)
 - **8 domínios mantiveram `config/settings.py`** (referenciado pelos tools; passivo — sem `configure()` no import,
