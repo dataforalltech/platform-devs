@@ -1,7 +1,7 @@
 """Tests for MCP server implementation."""
 
 import json
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -13,13 +13,13 @@ async def test_list_tools() -> None:
 
     tools = await list_tools()
 
-    assert len(tools) == 8
+    assert len(tools) == 7
     tool_names = [tool.name for tool in tools]
     assert "cache_health_check" in tool_names
     assert "cache_set" in tool_names
     assert "cache_get" in tool_names
     assert "cache_delete" in tool_names
-    assert "cache_clear_all" in tool_names
+    assert "cache_clear_all" not in tool_names
     assert "cache_get_stats" in tool_names
     assert "cache_set_pattern" in tool_names
     assert "cache_increment" in tool_names
@@ -126,18 +126,15 @@ async def test_call_tool_cache_delete(mock_api_client: MagicMock) -> None:
 
 
 @pytest.mark.asyncio
-async def test_call_tool_cache_clear_all(mock_api_client: MagicMock) -> None:
-    """Test calling cache_clear_all tool."""
+async def test_call_tool_cache_clear_all_is_disabled(mock_api_client: MagicMock) -> None:
+    """Global cache deletion is never exposed as an MCP tool."""
     from src.server.mcp_server import call_tool
-
-    mock_api_client.delete.return_value.status_code = 200
-    mock_api_client.delete.return_value.json.return_value = {"cleared": True}
 
     result = await call_tool("cache_clear_all", {})
 
     assert len(result) == 1
     data = json.loads(result[0].text)
-    assert data["cleared"] is True
+    assert data["error"] == "UnknownTool"
 
 
 @pytest.mark.asyncio

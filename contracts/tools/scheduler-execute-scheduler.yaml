@@ -1,0 +1,16 @@
+schema_version: 1
+provider_id: scheduler-mcp
+name: execute_scheduler
+description: Execute one existing schedule after a verified N2 policy decision.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    scheduler_id: {type: string}
+  required: [scheduler_id]
+output_schema: {type: object, properties: {run_id: {type: string}, status: {type: string}}}
+required_scope: scheduler:schedule:execute
+mutating: true
+risk: {level: high, effects: [execute], blast_radius: environment, approval_required: N2}
+secret_reference_only: true

@@ -61,7 +61,7 @@ def test_list_tools_carries_policy_fields() -> None:
     resp = _client().get("/mcp/tools/list")
     assert resp.status_code == 200
     tools = resp.json()["result"]["tools"]
-    assert len(tools) == len(_TOOL_SCHEMAS)
+    assert {entry["name"] for entry in tools} == set(_TOOL_SCHEMAS) - _EXCLUDE_TOOLS
     for entry in tools:
         assert entry["inputSchema"]["type"] == "object"
         for field in _POLICY_FIELDS:
@@ -79,6 +79,7 @@ def test_status_is_exempt_no_token() -> None:
 def test_excluded_tool_is_denied() -> None:
     # get_credential devolve segredo em claro → nunca sai pelo gateway (fail-safe).
     assert "get_credential" in _EXCLUDE_TOOLS
+    assert {"set_credential", "set_credential_secure", "read_env_file"} <= _EXCLUDE_TOOLS
     resp = _client().post(
         "/mcp/tools/call",
         json={"params": {"name": "get_credential", "arguments": {"namespace": "x", "key": "y"}}},

@@ -83,6 +83,9 @@ class DevteamSettings(BaseSettings):
     mcp_twin_audience: str = Field(default=f"mcp:{NAMESPACE}", validation_alias="MCP_TWIN_AUDIENCE")
     # JWKS do platform-admin (emissor do twin/inner token) — mesma de STD-SEC-006.
     url_admin_twin_jwks: str = Field(default="", validation_alias="URL_ADMIN_TWIN_JWKS")
+    mcp_context_signing_key: str = Field(
+        default="", validation_alias="MCP_CONTEXT_SIGNING_KEY"
+    )
 
     # ── HTTP sidecar ──────────────────────────────────────────────────────────
     mcp_port: int = Field(default=7100, validation_alias="MCP_PORT")
@@ -147,6 +150,10 @@ class DevteamSettings(BaseSettings):
             raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
         if not self.mcp_twin_audience.startswith("mcp:"):
             raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+        if not self.mcp_context_signing_key:
+            raise RuntimeError(
+                "INVARIANTE MCP: MCP_CONTEXT_SIGNING_KEY é obrigatório para validar o contexto do gateway"
+            )
         if self.runtime_env == "cloud":
             if not self.url_admin_twin_jwks:
                 raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")

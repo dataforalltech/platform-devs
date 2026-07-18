@@ -1,0 +1,15 @@
+schema_version: 1
+id: observability-mcp
+display_name: Observability MCP
+description: Planned observability control capability; catalog only.
+status: planned
+classification: {type: system, capability_domain: observability}
+ownership: {team: platform-engineering, source_repo: dataforalltech/platform-devs}
+runtime: {mode: none, exposes_tools: false}
+transport: {stdio: false, http: false}
+network: {}
+security: {auth_required: false, tenant_required: false, policy_mode: not_applicable, audit_required: false, secret_redaction_required: false, context_signing_required: false}
+ci: {enabled: false, coverage_threshold: 0, lint: false, type_check: false, docker_build: false, smoke_test: false}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []

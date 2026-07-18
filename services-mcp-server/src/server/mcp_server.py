@@ -1209,7 +1209,7 @@ _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain"
 # não expõe tool pública/tokenless: TODA execução exige inner token válido.
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que nunca devem sair pelo gateway (CI-7).
-_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+_EXCLUDE_TOOLS: frozenset[str] = frozenset({"read_env_file"})
 
 
 # ── Verificação do inner Twin Token (STD-SEC-006 / CI-4/CI-5) ─────────────────
@@ -1285,12 +1285,18 @@ def _build_http_app(settings: ServicesSettings) -> FastAPI:
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "service": "services-mcp", "tools": len(_TOOL_SCHEMAS)}
+        return {
+            "status": "ok",
+            "service": "services-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
 
     @app.get("/mcp/tools/list")
     def http_list_tools() -> dict:
         tools = []
         for name, meta in _TOOL_SCHEMAS.items():
+            if name in _EXCLUDE_TOOLS:
+                continue
             entry: dict[str, Any] = {
                 "name": name,
                 "description": meta["description"],
@@ -1364,6 +1370,7 @@ def build_server() -> tuple[Any, ServicesSettings, FastAPI]:
         return [
             Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
             for name, meta in _TOOL_SCHEMAS.items()
+            if name not in _EXCLUDE_TOOLS
         ]
 
     @server.call_tool()

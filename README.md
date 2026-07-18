@@ -1,118 +1,105 @@
 # platform-devs
 
-MCP (Model Context Protocol) servers do **DevTeam** da plataforma dataforalltech — personas-especialistas + servers de papel (infra/qa/deploy/governança) que dão ferramentas a agentes de IA.
+Control plane dos MCPs do DevTeam da plataforma DataForAll. O repositório mantém o
+provedor consolidado `devteam-mcp`, o gateway de autenticação/autorização, o registry
+somente leitura e o catálogo operacional que gera os artefatos de runtime.
 
-> **Escopo (revisado 2026-07-09):** a camada de **infra/deploy** (terraform, docker-compose HML, seeds, runbooks operacionais) foi migrada para [`platform-infra`](https://github.com/dataforalltech/platform-infra). Os **sidecars MCP de serviço** (analytics/ml/monitor/datalake/dataquality/dai/…) foram removidos — a fonte canônica é o `mcp/` de cada repo `platform-*`. Este repo mantém os MCP servers do DevTeam.
+GitHub Actions foi aposentado neste ecossistema. Validação e entrega são executadas em
+host controlado e registradas por `session-mcp`; `pipeline-mcp` mantém gates e histórico,
+mas não executa CI/CD.
 
-## Purpose
+## Fonte de verdade
 
-O `platform-devs` hospeda os MCP servers do **DevTeam**: as personas (architecture, backend, frontend, devops, product-owner, product-manager, qa-engineer, security) e os servers de papel/infra (session, test, config, services, deploy, dev-twin, docs, pipeline, qa, infra, ai-governance, audit), além de `mcp-gateway/`, `platform-catalog/` e `knowledge-base-mcp/`. O **runtime autônomo** (Modo B — planner→approval→executor) foi extraído para o repo standalone [`platform-devs-agent`](https://github.com/dataforalltech/platform-devs-agent) (pacote `app/devs_agent`) e **não** vive mais aqui como subdiretório. Este repo também **não** é mais o dono da infra/deploy (ver [`platform-infra`](https://github.com/dataforalltech/platform-infra)) nem dos sidecars de serviço (ver `platform-<x>/mcp`).
+Os arquivos editáveis e canônicos são:
 
-## Architecture
+- `manifests/mcps/*.yaml`: provedores existentes e seus estados de ciclo de vida;
+- `manifests/planned/*.yaml`: catálogo de produto sem runtime;
+- `contracts/tools/*.yaml`: contratos e classificação de risco das tools governadas;
+- `src/control_plane/`: loader, validações, inventário e projeções determinísticas.
 
-Each MCP server follows the Trinity Pattern:
-- **MCP Server**: Stdio-based protocol handler for Claude and other AI agents
-- **REST API**: Service interfaces for AI tool execution  
-- **Configuration**: Environment-based settings management
+Não edite manualmente `.mcp.json`, `docker-compose.yml`,
+`generated/mcp-runtime-registry.json`, `docs/generated/mcp-catalog.md` ou os schemas em
+`schemas/`. Gere-os novamente a partir dos manifests:
 
-### Infrastructure Servers (12)
-
-Located in repository root, accessible via central `.mcp.json`:
-
-1. **session-mcp-server** — Session tracking, checkpoints, and task management
-2. **test-mcp-server** — Test planning, scenario generation, and result recording
-3. **config-mcp-server** — Centralized configuration, environment variables, credentials
-4. **services-mcp-server** — Service registry, health checks, service monitoring
-5. **deploy-mcp-server** — Git/PR, ACR direto, workspace e ledger histórico; sem GitHub Actions
-6. **dev-twin-mcp-server** — User/tenant context management and authentication
-7. **docs-mcp-server** — Documentation validation, audit, and generation
-8. **pipeline-mcp-server** — plano de controle de gates/promoções; não executa CI/CD
-9. **qa-mcp-server** — Testing, linting, type checking, security, accessibility
-10. **infra-mcp-server** — Infrastructure: Terraform, cost estimation, VM provisioning
-11. **ai-governance-mcp-server** — Governance policies, decision validation, ecosystem rules
-12. **audit-mcp-server** — Audit logging and compliance tracking
-
-### services/ (sidecars de serviço)
-
-Os sidecars que espelhavam um serviço (`admin`, `analytics`, `auth`, `connectors`, `dai`, `datalake`, `dataquality`, `governance`, `ml`, `monitor`, `pipeline`, `scheduler`) foram **removidos** — eram snapshots stale da Phase 5; a fonte canônica é o `mcp/` de cada repo `platform-<x>`. Permanece apenas **`cache-mcp-server`** (não há repo `platform-cache` correspondente).
-
-## Central Configuration
-
-Os servers do DevTeam são registrados no `.mcp.json` na raiz deste repo:
-- **Entries:** 8 personas (paths relativos a `./`)
-- **Used by:** Claude Code for unified MCP discovery and tool invocation
-
-See [docs/mcp-discovery.md](./docs/mcp-discovery.md) for full discovery reference.
-
-## Development
-
-### Installation
-
-Individual server (from its directory):
-```bash
-cd <server-name>
-pip install -e ".[dev]"
+```powershell
+python scripts/generate_mcp_artifacts.py
+python scripts/generate_mcp_artifacts.py --check
 ```
 
-### Running Tests
+## Estado atual
 
-GitHub Actions foi aposentado. Até existir executor central aprovado, execute e
-retenha os resultados em host controlado, vinculados ao commit.
+- `devteam-mcp`: provedor consolidado experimental; o código está endurecido, mas ficou
+  fora do runtime porque a suíte atual comprova apenas 28% contra o gate de 80%;
+- `mcp-gateway`: PEP ativo, fail-closed, com PDP externo, token exchange, contexto
+  assinado, rate limit e ledger imutável;
+- `mcp-registry`: descoberta ativa e somente leitura;
+- `auth-mcp`, `scheduler-mcp` e `connectors-mcp`: experimentais e fora dos artefatos de
+  runtime até comprovarem o contrato de contexto assinado e tenant derivado;
+- `cache-mcp`: desabilitado até possuir transporte HTTP autenticado;
+- manifests em `manifests/planned/`: somente catálogo, sem tools, compose, registry ou
+  `.mcp.json`.
 
-Individual server:
-```bash
-cd <server-name>
-pytest tests/ -v --cov=src --cov-report=term-missing
+O catálogo completo e gerado está em
+[`docs/generated/mcp-catalog.md`](docs/generated/mcp-catalog.md).
+
+## Fluxo de execução
+
+```mermaid
+flowchart LR
+    C["Cliente / platform-tunnel"] --> G["mcp-gateway"]
+    G --> A["Validação JWT / tenant"]
+    G --> P["PDP e aprovação"]
+    G --> L["Ledger imutável e redigido"]
+    G --> X["Token exchange e contexto HMAC"]
+    X --> D["devteam-mcp"]
+    D --> T["Banco tenant-scoped"]
 ```
 
-### Entrega
+O gateway rejeita contexto, tenant, flags de aprovação e material secreto enviados em
+argumentos. Tools críticas exigem decisão de policy e IDs de aprovação verificados. O
+provedor consolidado já revalida o inner token e a assinatura do contexto, mas só será
+promovido a `active` após atingir o gate de testes sem reduzi-lo.
 
-Não existe CI/CD automático comprovado neste repo. `pipeline-mcp` registra gates,
-aprovações e promoções; os comandos são executados pelo processo manual controlado
-definido em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+## Desenvolvimento local
 
-## Documentation
+Requisitos: Python 3.12, Docker Compose, PostgreSQL, Redis protegido por senha e endpoints
+reais para JWKS, PDP e token exchange. As variáveis obrigatórias e o rollback estão em
+[`docs/architecture/mcp-control-plane.md`](docs/architecture/mcp-control-plane.md).
 
-- [docs/mcp-consolidation-complete.md](./docs/mcp-consolidation-complete.md) — Phase 5 milestone and consolidation summary
-- [docs/mcp-discovery.md](./docs/mcp-discovery.md) — How to discover and use MCPs
+Para testar a ponte local já configurada pelo `platform-tunnel`:
 
-## Related Resources
-
-- **platform-service-template** — Scaffold and guidelines for new Core Services (Trinity Pattern)
-- **AGENTS.md** — Universal governance policies for the dataforalltech platform
-- **docs/architecture/trinity-pattern.md** — Architecture guidelines for MCP servers
-
-## Health and Monitoring
-
-All MCPs can be registered and monitored via `services-mcp`:
-
-```python
-# Register an MCP for monitoring
-mcp__services-mcp__register_service(
-    name="session-mcp",
-    port=7090,
-    url="http://localhost:7090"
-)
-
-# Check health
-mcp__services-mcp__check_health(name="session-mcp")
-
-# Check all
-mcp__services-mcp__check_all_health()
+```powershell
+dftunnel mcp check
 ```
 
-## Phase 5 Completion
+O `.mcp.json` gerado fica vazio enquanto não houver provedor stdio direto seguro. Isso é
+intencional: o acesso local passa pelo `platform-tunnel` e pelo gateway, não por wrappers
+que exponham schemas vazios ou simulem sucesso.
 
-**Date:** 2026-05-09  
-**Status:** COMPLETE
+Validações do control plane:
 
-- All 18 MCPs consolidated in platform-devs
-- Central .mcp.json configuration created
-- CI/CD workflow activated (test-all-mcps.yml)
-- Documentation complete
-- Coverage validation: 80% minimum per MCP
-- Next: Run full test suite, verify all MCPs pass coverage threshold
+```powershell
+python scripts/validate_mcp_manifests.py
+python scripts/audit_mcp_inventory.py
+python scripts/generate_mcp_artifacts.py --check
+python -m pytest tests/control_plane -q
+```
 
-## License
+Validações dos componentes alterados:
 
-Proprietary — dataforalltech
+```powershell
+python -m pytest mcp-gateway/tests -q
+python -m pytest services/cache-mcp-server/tests/test_server.py -q
+python -m pytest devteam-mcp-server/tests/test_aggregator.py -q
+```
+
+## Documentação
+
+- [`docs/architecture/mcp-control-plane.md`](docs/architecture/mcp-control-plane.md):
+  limites, invariantes, configuração, migração e rollback;
+- [`docs/mcp-discovery.md`](docs/mcp-discovery.md): descoberta local e artefatos gerados;
+- [`AGENTS.md`](AGENTS.md): política operacional obrigatória do ecossistema.
+
+## Licença
+
+Proprietary — DataForAll.

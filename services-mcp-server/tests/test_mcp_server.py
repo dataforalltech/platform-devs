@@ -89,12 +89,12 @@ def test_required_fields_are_subset_of_properties():
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "services-mcp", "tools": 32}
+    assert r.json() == {"status": "ok", "service": "services-mcp", "tools": 31}
 
 
 def test_tools_list_has_policy_fields(client: TestClient):
     tools = client.get("/mcp/tools/list").json()["result"]["tools"]
-    assert {t["name"] for t in tools} == _EXPECTED_TOOLS
+    assert {t["name"] for t in tools} == _EXPECTED_TOOLS - M._EXCLUDE_TOOLS
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
@@ -110,7 +110,7 @@ def test_tools_list_has_policy_fields(client: TestClient):
     assert by_name["get_service"]["required_scope"].endswith(":read")
     assert by_name["list_services"]["required_scope"].endswith(":read")
     # data_domain especializado
-    assert by_name["read_env_file"]["data_domain"] == "configuration"
+    assert "read_env_file" not in by_name
     assert by_name["get_service_logs"]["data_domain"] == "observability"
     assert by_name["get_service"]["data_domain"] == "infrastructure"
 

@@ -1,0 +1,23 @@
+schema_version: 1
+id: connectors-mcp
+display_name: Connectors MCP
+description: Domain-owned integration provider; implementation remains in platform-connectors.
+status: experimental
+classification: {type: domain, capability_domain: integrations}
+ownership: {team: integrations, source_repo: dataforalltech/platform-connectors, source_path: mcp}
+runtime: {mode: external, language: python, version: "3.12", base_url_env: CONNECTORS_MCP_URL, exposes_tools: true}
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: false, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []
+tool_contracts:
+  - contracts/tools/connectors-alter-db-user-password.yaml
+  - contracts/tools/connectors-drop-db-table.yaml
+  - contracts/tools/connectors-execute-adhoc-sql.yaml
+  - contracts/tools/connectors-truncate-db-table.yaml

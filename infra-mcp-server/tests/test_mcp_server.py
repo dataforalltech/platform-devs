@@ -38,7 +38,11 @@ def client() -> TestClient:
 def test_health(client: TestClient):
     r = client.get("/v1/health")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "service": "infra-mcp", "tools": len(M._TOOL_SCHEMAS)}
+    assert r.json() == {
+        "status": "ok",
+        "service": "infra-mcp",
+        "tools": len(M._TOOL_SCHEMAS) - len(M._EXCLUDE_TOOLS),
+    }
 
 
 # ── /mcp/tools/list — todos os 4 campos de policy (CI-2) ──────────────────────
@@ -46,8 +50,8 @@ def test_tools_list_has_policy_fields(client: TestClient):
     r = client.get("/mcp/tools/list")
     assert r.status_code == 200
     tools = r.json()["result"]["tools"]
-    assert {t["name"] for t in tools} == set(M._TOOL_SCHEMAS.keys())
-    assert len(tools) == 15
+    assert {t["name"] for t in tools} == set(M._TOOL_SCHEMAS) - M._EXCLUDE_TOOLS
+    assert len(tools) == 14
     for t in tools:
         assert t["inputSchema"]["type"] == "object"
         for field in ("capability", "required_scope", "resource_type", "data_domain"):
@@ -58,7 +62,8 @@ def test_tools_list_has_policy_fields(client: TestClient):
     by_name = {t["name"]: t for t in tools}
     assert by_name["request_vm"]["required_scope"].endswith(":write")
     assert by_name["release_lease"]["required_scope"].endswith(":write")
-    assert by_name["get_lease_ssh_key"]["required_scope"] == "infra-mcp:secret:write"
+    assert "get_lease_ssh_key" not in by_name
+    assert "human_approved" not in by_name["request_vm"]["inputSchema"]["properties"]
     assert by_name["terraform_validate"]["required_scope"].endswith(":read")
     assert by_name["query_capacity"]["required_scope"].endswith(":read")
     assert by_name["cost_estimate_infracost"]["data_domain"] == "finops"
@@ -254,7 +259,7 @@ def test_verify_inner_token_decodes(monkeypatch):
 # ── invariantes de gateway (defaults) ─────────────────────────────────────────
 def test_gateway_invariants_defaults():
     assert M._EXEMPT_TOOLS == frozenset()
-    assert M._EXCLUDE_TOOLS == frozenset()
+    assert M._EXCLUDE_TOOLS == frozenset({"get_lease_ssh_key"})
     assert Settings().mcp_twin_audience == "mcp:infra-mcp"
     assert M._ALLOCATOR_TOOLS <= set(M._TOOL_SCHEMAS)
     assert len(M._ALLOCATOR_TOOLS) == 9

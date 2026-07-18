@@ -227,7 +227,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Solicita capacidade ao allocator. Servidor decide entre lease em "
             "VM existente (compartilhamento), provisão de nova, fila ou denial. "
             "Spec restrita à whitelist (cpu-small/medium/large). gpu-a100 e "
-            "high-mem exigem `human_approved=True` registrado out-of-band. "
+            "high-mem exigem uma aprovação verificada pelo gateway. "
             "Phase 2c: provisão via terraform real (INFRA_TF_MODULES_ROOT). "
             "Lease inicia PENDING e vai ACTIVE quando VM fica READY. "
             "Use get_lease(lease_id) para verificar connection_hint (endpoint SSH)."
@@ -248,7 +248,6 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "exclusive": {"type": "boolean", "default": False},
                 "priority": {"type": "string", "enum": ["low", "medium", "high"], "default": "low"},
                 "purpose": {"type": "string", "description": "Descrição curta para audit."},
-                "human_approved": {"type": "boolean", "default": False},
             },
             "required": ["spec", "duration_min", "owner"],
             "additionalProperties": False,
@@ -417,9 +416,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 # não expõe tool pública/tokenless: TODA execução exige inner token válido.
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
-# get_lease_ssh_key expõe chave privada Ed25519 — se o gateway precisar bloqueá-la,
-# adicione aqui (mantido vazio: a exposição é governada por required_scope :write).
-_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+# Chaves privadas nunca são retornadas por uma tool MCP.
+_EXCLUDE_TOOLS: frozenset[str] = frozenset({"get_lease_ssh_key"})
 
 # Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
 _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
@@ -515,7 +513,7 @@ async def _dispatch_allocator(name: str, a: dict[str, Any], store: AllocatorStor
             exclusive=a.get("exclusive", False),
             priority=a.get("priority", "low"),
             purpose=a.get("purpose"),
-            human_approved=a.get("human_approved", False),
+            human_approved=False,
         )
     if name == "get_lease":
         return await get_lease(store, lease_id=cast(str, a.get("lease_id")))
@@ -604,12 +602,18 @@ def _build_http_app(settings: Settings, provisioner: Provisioner, fernet_key: by
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "service": "infra-mcp", "tools": len(_TOOL_SCHEMAS)}
+        return {
+            "status": "ok",
+            "service": "infra-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
 
     @app.get("/mcp/tools/list")
     def http_list_tools() -> dict:
         tools = []
         for name, meta in _TOOL_SCHEMAS.items():
+            if name in _EXCLUDE_TOOLS:
+                continue
             entry: dict[str, Any] = {
                 "name": name,
                 "description": meta["description"],
@@ -745,6 +749,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
         return [
             Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
             for name, meta in _TOOL_SCHEMAS.items()
+            if name not in _EXCLUDE_TOOLS
         ]
 
     @server.call_tool()

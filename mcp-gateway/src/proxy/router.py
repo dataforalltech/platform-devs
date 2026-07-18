@@ -1,208 +1,359 @@
-"""Proxy router — routes requests to internal MCP servers."""
+"""Manifest-driven, fail-closed proxy routes for MCP providers."""
+
 from __future__ import annotations
 
 import time
-from fastapi import FastAPI, HTTPException, Header, Request
+from typing import Any
+
 import httpx
-import json
+from fastapi import FastAPI, Header, HTTPException, Request
+from jsonschema import Draft202012Validator
+from jsonschema.exceptions import SchemaError, ValidationError
 
-from src.auth.token_validator import authenticate_request
-from src.auth.rbac import is_authorized
+from src.auth.policy import PolicyUnavailable, policy_client
+from src.auth.token_exchange import TokenExchangeUnavailable, exchange_token
+from src.auth.token_validator import UserSession, authenticate_request
+from src.middleware.audit_logger import AuditUnavailable, assert_audit_available, log_tool_call
 from src.middleware.rate_limiter import check_rate_limit
-from src.middleware.audit_logger import log_tool_call
-from src.persistence.tool_interceptor import ToolInterceptor
+from src.registry import Provider, RegistryUnavailable, runtime_registry
+from src.security.context import (
+    ContextConfigurationError,
+    ExecutionContext,
+    build_context,
+    sign_context,
+)
 
-MCP_REGISTRY = {
-    # System MCPs
-    "dev-twin-mcp": "http://dev-twin-mcp:7100",
-    "config-mcp": "http://config-mcp:7100",
-    "session-mcp": "http://session-mcp:7100",
-    "audit-mcp": "http://audit-mcp:7100",
-    "deploy-mcp": "http://deploy-mcp:7100",
-    "docs-mcp": "http://docs-mcp:7100",
-    "infra-mcp": "http://infra-mcp:7100",
-    "pipeline-mcp": "http://pipeline-mcp:7100",
-    "qa-mcp": "http://qa-mcp:7100",
-    "services-mcp": "http://services-mcp:7100",
-    "test-mcp": "http://test-mcp:7100",
-    "ai-governance-mcp": "http://ai-governance-mcp:7100",
-    # DevTeam MCPs
-    "architecture-mcp": "http://architecture-mcp:7100",
-    "backend-mcp": "http://backend-mcp:7100",
-    "frontend-mcp": "http://frontend-mcp:7100",
-    "devops-mcp": "http://devops-mcp:7100",
-    "product-owner-mcp": "http://product-owner-mcp:7100",
-    "product-manager-mcp": "http://product-manager-mcp:7100",
-    "qa-engineer-mcp": "http://qa-engineer-mcp:7100",
-    "security-mcp": "http://security-mcp:7100",
+_FORBIDDEN_ARGUMENTS = {
+    "_meta",
+    "tenant_id",
+    "approved",
+    "human_approved",
+    "approval",
+    "approval_ids",
+    "password",
+    "secret",
+    "private_key",
+    "private_key_pem",
+    "access_token",
+    "refresh_token",
+    "credential",
 }
 
-async def _get_user_or_fail(authorization: str | None):
-    """Extract user from auth header, fail if not authorized."""
+
+def _forbidden_argument_name(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    compact = normalized.replace("_", "")
+    return normalized in _FORBIDDEN_ARGUMENTS or any(
+        marker in compact
+        for marker in (
+            "clientsecret",
+            "apikey",
+            "privatekey",
+            "accesstoken",
+            "refreshtoken",
+        )
+    )
+
+
+async def _get_user_or_fail(authorization: str | None) -> UserSession:
     user = await authenticate_request(authorization)
     if not user:
-        raise HTTPException(403, "Unauthorized")
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    if not user.tenant_id:
+        raise HTTPException(status_code=403, detail="Verified tenant context is required")
     return user
 
-def setup_proxy_routes(app: FastAPI, interceptor: ToolInterceptor | None = None):
-    """Add proxy routes to FastAPI app."""
 
+def _provider_or_fail(name: str) -> Provider:
+    try:
+        provider = runtime_registry.get(name)
+    except RegistryUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if provider is None:
+        raise HTTPException(status_code=404, detail="MCP provider not found")
+    return provider
+
+
+def _argument_keys(value: Any, *, depth: int = 0) -> set[str]:
+    if depth > 8:
+        raise HTTPException(status_code=400, detail="arguments exceed maximum nesting depth")
+    if isinstance(value, dict):
+        keys = {str(key).lower() for key in value}
+        for item in value.values():
+            keys.update(_argument_keys(item, depth=depth + 1))
+        return keys
+    if isinstance(value, list):
+        keys: set[str] = set()
+        for item in value[:1000]:
+            keys.update(_argument_keys(item, depth=depth + 1))
+        return keys
+    return set()
+
+
+def _validate_arguments(tool: str, arguments: Any) -> dict[str, Any]:
+    if not isinstance(arguments, dict):
+        raise HTTPException(status_code=400, detail="arguments must be an object")
+    argument_keys = _argument_keys(arguments)
+    forbidden = {key for key in argument_keys if _forbidden_argument_name(key)}
+    if "value" in argument_keys and (
+        "credential" in tool.lower() or "secret" in tool.lower()
+    ):
+        forbidden.add("value")
+    if forbidden:
+        raise HTTPException(
+            status_code=400,
+            detail=f"untrusted context or secret-bearing arguments are forbidden: {sorted(forbidden)}",
+        )
+    return arguments
+
+
+def _requested_approvals(header: str | None) -> list[str]:
+    if not header:
+        return []
+    return sorted({item.strip() for item in header.split(",") if item.strip()})
+
+
+def _validate_contract_input(
+    arguments: dict[str, Any], local_policy: dict[str, Any] | None
+) -> None:
+    if not local_policy or not isinstance(local_policy.get("input_schema"), dict):
+        return
+    try:
+        Draft202012Validator(local_policy["input_schema"]).validate(arguments)
+    except ValidationError as exc:
+        path = ".".join(str(item) for item in exc.absolute_path) or "arguments"
+        raise HTTPException(
+            status_code=400,
+            detail=f"arguments violate canonical tool contract at {path}",
+        ) from exc
+    except SchemaError as exc:
+        raise HTTPException(
+            status_code=503, detail="canonical tool contract is invalid"
+        ) from exc
+
+
+def _audit_payload(
+    *,
+    context: ExecutionContext,
+    provider: str,
+    tool: str,
+    arguments: dict[str, Any],
+    result: Any,
+    status: str,
+    duration_ms: int,
+    request: Request,
+) -> dict[str, Any]:
+    payload = context.payload()
+    payload.update(
+        {
+            "mcp": provider,
+            "tool": tool,
+            "arguments": arguments,
+            "result": result,
+            "duration_ms": duration_ms,
+            "status": status,
+            "client_ip": request.client.host if request.client else None,
+            "user_agent": request.headers.get("user-agent", ""),
+        }
+    )
+    return payload
+
+
+def _filter_disabled_tools(payload: dict[str, Any], provider: Provider) -> dict[str, Any]:
+    result = payload.get("result")
+    if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
+        return payload
+    disabled = {
+        name for name, policy in provider.tool_policies.items() if policy.get("status") == "disabled"
+    }
+    result["tools"] = [tool for tool in result["tools"] if tool.get("name") not in disabled]
+    return payload
+
+
+def setup_proxy_routes(app: FastAPI) -> None:
     @app.get("/mcp")
-    async def list_mcps():
-        """List all available MCPs."""
+    async def list_mcps(authorization: str | None = Header(None)) -> dict[str, Any]:
+        await _get_user_or_fail(authorization)
+        try:
+            providers = runtime_registry.list()
+        except RegistryUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
         return {
             "mcps": [
-                {
-                    "name": name,
-                    "url": url,
-                    "status": "available",
-                }
-                for name, url in MCP_REGISTRY.items()
+                {"name": provider.name, "status": "configured"} for provider in providers
             ]
         }
 
     @app.get("/mcp/{mcp_name}/tools")
-    async def list_tools(mcp_name: str, authorization: str | None = Header(None)):
-        """List tools available on an MCP."""
-        user = await _get_user_or_fail(authorization)
-
-        if mcp_name not in MCP_REGISTRY:
-            raise HTTPException(404, f"MCP not found: {mcp_name}")
-
-        mcp_url = MCP_REGISTRY[mcp_name]
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(f"{mcp_url}/tools", timeout=10)
-                resp.raise_for_status()
-                return resp.json()
-            except Exception as e:
-                raise HTTPException(503, f"Failed to fetch tools: {str(e)}")
+    async def list_tools(
+        mcp_name: str,
+        authorization: str | None = Header(None),
+    ) -> dict[str, Any]:
+        await _get_user_or_fail(authorization)
+        provider = _provider_or_fail(mcp_name)
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(f"{provider.url}{provider.tools_list_path}")
+                response.raise_for_status()
+                return _filter_disabled_tools(response.json(), provider)
+        except (httpx.HTTPError, ValueError) as exc:
+            raise HTTPException(status_code=503, detail="provider tools unavailable") from exc
 
     @app.post("/mcp/{mcp_name}/tools/call")
     async def call_tool(
         mcp_name: str,
         http_request: Request,
-        request: dict,
+        request: dict[str, Any],
         authorization: str | None = Header(None),
-    ):
-        """Call a tool on an MCP."""
-        start_time = time.time()
+        x_correlation_id: str | None = Header(None),
+        x_causation_id: str | None = Header(None),
+        x_session_id: str | None = Header(None),
+        x_approval_ids: str | None = Header(None),
+    ) -> Any:
+        started = time.monotonic()
         user = await _get_user_or_fail(authorization)
-
-        # Check rate limits
-        await check_rate_limit(user.user_id, user.role)
-
-        if mcp_name not in MCP_REGISTRY:
-            raise HTTPException(404, f"MCP not found: {mcp_name}")
-
+        provider = _provider_or_fail(mcp_name)
         tool_name = request.get("name")
-        if not tool_name:
-            raise HTTPException(400, "Missing 'name' in request")
-
-        if not is_authorized(user, mcp_name, tool_name):
-            await log_tool_call(
-                user_id=user.user_id,
-                role=user.role,
-                tenant_id=user.tenant_id,
-                mcp=mcp_name,
-                tool=tool_name,
-                arguments=request.get("arguments", {}),
-                result={"error": "forbidden"},
-                duration_ms=int((time.time() - start_time) * 1000),
-                status="forbidden",
-                client_ip=http_request.client.host if http_request.client else "unknown",
-                user_agent=http_request.headers.get("user-agent", ""),
-            )
-            raise HTTPException(403, f"Not authorized to call {tool_name} on {mcp_name}")
-
-        mcp_url = MCP_REGISTRY[mcp_name]
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.post(
-                    f"{mcp_url}/tools/call",
-                    json=request,
-                    timeout=30,
-                )
-                resp.raise_for_status()
-                result = resp.json()
-                duration_ms = int((time.time() - start_time) * 1000)
-
-                # Persist result to database (async, non-blocking)
-                if interceptor:
-                    try:
-                        await interceptor.intercept(
-                            tool_name=tool_name,
-                            args=request.get("arguments", {}),
-                            result=result,
-                            mcp=mcp_name,
-                        )
-                    except Exception as e:
-                        print(f"⚠️  Interceptor error: {e}")
-
-                # Log successful call
-                await log_tool_call(
-                    user_id=user.user_id,
-                    role=user.role,
-                    tenant_id=user.tenant_id,
-                    mcp=mcp_name,
-                    tool=tool_name,
-                    arguments=request.get("arguments", {}),
-                    result=result,
-                    duration_ms=duration_ms,
-                    status="success",
-                    client_ip=http_request.client.host if http_request.client else "unknown",
-                    user_agent=http_request.headers.get("user-agent", ""),
-                )
-                return result
-            except httpx.HTTPStatusError as e:
-                await log_tool_call(
-                    user_id=user.user_id,
-                    role=user.role,
-                    tenant_id=user.tenant_id,
-                    mcp=mcp_name,
-                    tool=tool_name,
-                    arguments=request.get("arguments", {}),
-                    result={"error": e.response.text},
-                    duration_ms=int((time.time() - start_time) * 1000),
-                    status="error",
-                    client_ip=http_request.client.host if http_request.client else "unknown",
-                    user_agent=http_request.headers.get("user-agent", ""),
-                )
-                raise HTTPException(e.response.status_code, e.response.text)
-            except Exception as e:
-                await log_tool_call(
-                    user_id=user.user_id,
-                    role=user.role,
-                    tenant_id=user.tenant_id,
-                    mcp=mcp_name,
-                    tool=tool_name,
-                    arguments=request.get("arguments", {}),
-                    result={"error": str(e)},
-                    duration_ms=int((time.time() - start_time) * 1000),
-                    status="error",
-                    client_ip=http_request.client.host if http_request.client else "unknown",
-                    user_agent=http_request.headers.get("user-agent", ""),
-                )
-                raise HTTPException(503, f"Failed to call tool: {str(e)}")
-
-    @app.get("/admin/quotas")
-    async def admin_quotas(authorization: str | None = Header(None)):
-        """Get quota usage (admin only)."""
-        user = await _get_user_or_fail(authorization)
-        if user.role != "admin":
-            raise HTTPException(403, "Admin only")
+        if not isinstance(tool_name, str) or not tool_name:
+            raise HTTPException(status_code=400, detail="Missing tool name")
+        arguments = _validate_arguments(tool_name, request.get("arguments", {}))
+        context = build_context(
+            user,
+            correlation_id=x_correlation_id,
+            causation_id=x_causation_id,
+            session_id=x_session_id,
+        )
+        local_policy = provider.tool_policies.get(tool_name)
+        _validate_contract_input(arguments, local_policy)
 
         try:
-            import redis.asyncio as aioredis
-            redis_client = aioredis.from_url("redis://redis:6379")
-            keys = await redis_client.keys("quota:*")
+            await assert_audit_available()
+        except AuditUnavailable as exc:
+            raise HTTPException(status_code=503, detail="activity ledger unavailable") from exc
 
-            quotas = {}
-            for key in keys:
-                user_quota = await redis_client.get(key)
-                quotas[key.decode() if isinstance(key, bytes) else key] = int(user_quota) if user_quota else 0
+        if local_policy and local_policy.get("status") == "disabled":
+            await log_tool_call(
+                **_audit_payload(
+                    context=context,
+                    provider=mcp_name,
+                    tool=tool_name,
+                    arguments=arguments,
+                    result={"error": "tool_disabled"},
+                    status="disabled",
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    request=http_request,
+                )
+            )
+            raise HTTPException(status_code=403, detail="tool disabled by canonical contract")
 
-            await redis_client.close()
-            return {"quotas": quotas, "timestamp": int(__import__("time").time())}
-        except Exception as e:
-            return {"quotas": {}, "error": str(e), "timestamp": int(__import__("time").time())}
+        try:
+            await check_rate_limit(user.user_id, user.role)
+            decision = await policy_client.authorize(
+                context=context,
+                provider=mcp_name,
+                tool=tool_name,
+                arguments=arguments,
+                requested_approval_ids=_requested_approvals(x_approval_ids),
+                local_policy=local_policy,
+            )
+        except HTTPException:
+            raise
+        except (PolicyUnavailable, ConnectionError) as exc:
+            raise HTTPException(status_code=503, detail="authorization policy unavailable") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="rate limit dependency unavailable") from exc
+
+        governed_context = context.with_policy(decision.decision_id, decision.approval_ids)
+        if not decision.allowed:
+            await log_tool_call(
+                **_audit_payload(
+                    context=governed_context,
+                    provider=mcp_name,
+                    tool=tool_name,
+                    arguments=arguments,
+                    result={"error": "policy_denied", "reason": decision.reason},
+                    status="denied",
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    request=http_request,
+                )
+            )
+            raise HTTPException(status_code=403, detail="policy denied")
+        if local_policy and local_policy.get("risk", {}).get("approval_required") != "none":
+            if not decision.approval_ids:
+                raise HTTPException(status_code=403, detail="verified approval required")
+
+        try:
+            encoded_context, context_signature = sign_context(governed_context)
+            inner_token = await exchange_token(authorization or "", mcp_name)
+        except (ContextConfigurationError, TokenExchangeUnavailable) as exc:
+            raise HTTPException(status_code=503, detail="trusted downstream context unavailable") from exc
+
+        # Authorization and ledger availability are proven before any downstream side effect.
+        await log_tool_call(
+            **_audit_payload(
+                context=governed_context,
+                provider=mcp_name,
+                tool=tool_name,
+                arguments=arguments,
+                result={"decision": "authorized"},
+                status="authorized",
+                duration_ms=int((time.monotonic() - started) * 1000),
+                request=http_request,
+            )
+        )
+        downstream = {
+            "jsonrpc": "2.0",
+            "id": request.get("id", 1),
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments,
+                "_meta": {
+                    "twin_token": inner_token,
+                    "signed_context": encoded_context,
+                    "context_signature": context_signature,
+                    "policy_decision_id": decision.decision_id,
+                    "approval_ids": decision.approval_ids,
+                },
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{provider.url}{provider.tools_call_path}",
+                    json=downstream,
+                    headers={
+                        "X-MCP-Context": encoded_context,
+                        "X-MCP-Context-Signature": context_signature,
+                    },
+                )
+                response.raise_for_status()
+                result = response.json()
+        except (httpx.HTTPError, ValueError) as exc:
+            await log_tool_call(
+                **_audit_payload(
+                    context=governed_context,
+                    provider=mcp_name,
+                    tool=tool_name,
+                    arguments=arguments,
+                    result={"error": "provider_call_failed"},
+                    status="error",
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    request=http_request,
+                )
+            )
+            raise HTTPException(status_code=503, detail="provider call failed") from exc
+
+        await log_tool_call(
+            **_audit_payload(
+                context=governed_context,
+                provider=mcp_name,
+                tool=tool_name,
+                arguments=arguments,
+                result=result,
+                status="success",
+                duration_ms=int((time.monotonic() - started) * 1000),
+                request=http_request,
+            )
+        )
+        return result

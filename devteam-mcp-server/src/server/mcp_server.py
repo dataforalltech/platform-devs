@@ -40,6 +40,9 @@ ligada a ela.
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
+import hmac
 import json
 import logging
 import os
@@ -75,7 +78,16 @@ for _domain in DOMAINS:
 # inner token válido (fail-closed). O liveness fica no /v1/health (sem tool).
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
-_EXCLUDE_TOOLS: frozenset[str] = frozenset()
+_EXCLUDE_TOOLS: frozenset[str] = frozenset(
+    {
+        "infra_get_lease_ssh_key",
+        "config_get_credential",
+        "config_set_credential",
+        "config_set_credential_secure",
+        "config_read_env_file",
+        "services_read_env_file",
+    }
+)
 
 # Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
 _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
@@ -104,6 +116,31 @@ def _verify_inner_token(twin_token: str, settings: DevteamSettings) -> dict[str,
         audience=settings.mcp_twin_audience,  # a falha de integração nº 1
         options={"require": ["exp", "aud", "jti"]},  # sem jti → rejeita (JTI_REQUIRED)
     )
+
+
+def _verify_signed_context(
+    meta: dict[str, Any], settings: DevteamSettings, tenant_id: str
+) -> dict[str, Any]:
+    """Validate the gateway context and return only trusted policy metadata."""
+    encoded = meta.get("signed_context")
+    signature = meta.get("context_signature")
+    if not isinstance(encoded, str) or not isinstance(signature, str):
+        raise PermissionError("missing signed gateway context")
+    expected = hmac.new(
+        settings.mcp_context_signing_key.encode(), encoded.encode(), hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(signature, expected):
+        raise PermissionError("invalid gateway context signature")
+    padding = "=" * (-len(encoded) % 4)
+    payload = json.loads(base64.urlsafe_b64decode(encoded + padding))
+    if payload.get("tenant_id") != tenant_id:
+        raise PermissionError("gateway context tenant mismatch")
+    decision_id = payload.get("policy_decision_id")
+    if not isinstance(decision_id, str) or not decision_id:
+        raise PermissionError("missing verified policy decision")
+    if decision_id != meta.get("policy_decision_id"):
+        raise PermissionError("policy decision mismatch")
+    return payload
 
 
 # ── Dispatcher (roteia por prefixo de domínio; abre a Store do domínio na sessão) ──
@@ -176,13 +213,21 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
     )
 
     @app.get("/v1/health")
+    @app.get("/v1/health/live")
+    @app.get("/v1/health/ready")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "service": "devteam-mcp", "tools": len(_TOOL_SCHEMAS)}
+        return {
+            "status": "ok",
+            "service": "devteam-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
 
     @app.get("/mcp/tools/list")
     def http_list_tools() -> dict:
         tools = []
         for name, meta in _TOOL_SCHEMAS.items():
+            if name in _EXCLUDE_TOOLS:
+                continue
             entry: dict[str, Any] = {
                 "name": name,
                 "description": meta["description"],
@@ -214,14 +259,24 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
         tenant_id = claims.get("tenant_id")
         if not tenant_id:
             return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+        try:
+            trusted_context = _verify_signed_context(
+                params.get("_meta") or {}, settings, str(tenant_id)
+            )
+        except Exception as exc:  # noqa: BLE001 - any verification failure denies execution
+            _log.warning("gateway_context_rejected tool=%s detail=%s", name, exc)
+            return JSONResponse(status_code=401, content={"error": "invalid_gateway_context"})
+        arguments["_verified_approval_ids"] = list(
+            trusted_context.get("approval_ids") or []
+        )
 
         try:
             payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
-        except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
+        except Exception:  # noqa: BLE001 — resposta genérica; detalhe fica apenas no log
             _log.exception("tool_internal_error: %s", name)
-            payload = {"error": "internal_error", "detail": str(exc), "tool": name}
+            payload = {"error": "internal_error", "tool": name}
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
@@ -261,6 +316,7 @@ def build_server() -> tuple[Any, DevteamSettings, FastAPI]:
         return [
             Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
             for name, meta in _TOOL_SCHEMAS.items()
+            if name not in _EXCLUDE_TOOLS
         ]
 
     @server.call_tool()

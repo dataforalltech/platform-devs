@@ -1,0 +1,22 @@
+schema_version: 1
+id: auth-mcp
+display_name: Authentication MCP
+description: Domain-owned authentication provider; implementation remains in platform-auth.
+status: experimental
+classification: {type: domain, capability_domain: identity}
+ownership:
+  team: identity
+  source_repo: dataforalltech/platform-auth
+  source_path: mcp
+  legacy_source_paths: [auth-mcp-server, services/auth-mcp-server]
+runtime: {mode: external, language: python, version: "3.12", base_url_env: AUTH_MCP_URL, exposes_tools: true}
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: false, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []

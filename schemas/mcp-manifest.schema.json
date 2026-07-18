@@ -1,0 +1,481 @@
+{
+  "$defs": {
+    "CI": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_threshold": {
+          "default": 80,
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Coverage Threshold",
+          "type": "integer"
+        },
+        "docker_build": {
+          "default": true,
+          "title": "Docker Build",
+          "type": "boolean"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "lint": {
+          "default": true,
+          "title": "Lint",
+          "type": "boolean"
+        },
+        "smoke_test": {
+          "default": true,
+          "title": "Smoke Test",
+          "type": "boolean"
+        },
+        "type_check": {
+          "default": true,
+          "title": "Type Check",
+          "type": "boolean"
+        }
+      },
+      "title": "CI",
+      "type": "object"
+    },
+    "CanonicalHTTP": {
+      "additionalProperties": false,
+      "properties": {
+        "health_live": {
+          "default": "/v1/health/live",
+          "title": "Health Live",
+          "type": "string"
+        },
+        "health_ready": {
+          "default": "/v1/health/ready",
+          "title": "Health Ready",
+          "type": "string"
+        },
+        "tools_call": {
+          "default": "/mcp/tools/call",
+          "title": "Tools Call",
+          "type": "string"
+        },
+        "tools_list": {
+          "default": "/mcp/tools/list",
+          "title": "Tools List",
+          "type": "string"
+        }
+      },
+      "title": "CanonicalHTTP",
+      "type": "object"
+    },
+    "Classification": {
+      "additionalProperties": false,
+      "properties": {
+        "capability_domain": {
+          "minLength": 1,
+          "title": "Capability Domain",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "system",
+            "persona",
+            "domain",
+            "control-plane"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "capability_domain"
+      ],
+      "title": "Classification",
+      "type": "object"
+    },
+    "Network": {
+      "additionalProperties": false,
+      "properties": {
+        "host_port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Host Port"
+        },
+        "internal_port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Internal Port"
+        }
+      },
+      "title": "Network",
+      "type": "object"
+    },
+    "Ownership": {
+      "additionalProperties": false,
+      "properties": {
+        "legacy_source_paths": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Legacy Source Paths",
+          "type": "array"
+        },
+        "source_path": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Path"
+        },
+        "source_repo": {
+          "minLength": 1,
+          "title": "Source Repo",
+          "type": "string"
+        },
+        "team": {
+          "minLength": 1,
+          "title": "Team",
+          "type": "string"
+        }
+      },
+      "required": [
+        "team",
+        "source_repo"
+      ],
+      "title": "Ownership",
+      "type": "object"
+    },
+    "Runtime": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Args",
+          "type": "array"
+        },
+        "base_url_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Base Url Env"
+        },
+        "build_context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Build Context"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Command"
+        },
+        "cwd": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cwd"
+        },
+        "dockerfile": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dockerfile"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "object"
+        },
+        "exposes_tools": {
+          "default": true,
+          "title": "Exposes Tools",
+          "type": "boolean"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Language"
+        },
+        "mode": {
+          "enum": [
+            "local",
+            "external",
+            "none"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "service_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Service Name"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "Runtime",
+      "type": "object"
+    },
+    "Security": {
+      "additionalProperties": false,
+      "properties": {
+        "audit_required": {
+          "title": "Audit Required",
+          "type": "boolean"
+        },
+        "auth_required": {
+          "title": "Auth Required",
+          "type": "boolean"
+        },
+        "context_signing_required": {
+          "default": true,
+          "title": "Context Signing Required",
+          "type": "boolean"
+        },
+        "policy_mode": {
+          "enum": [
+            "fail_closed",
+            "not_applicable"
+          ],
+          "title": "Policy Mode",
+          "type": "string"
+        },
+        "secret_redaction_required": {
+          "title": "Secret Redaction Required",
+          "type": "boolean"
+        },
+        "tenant_required": {
+          "title": "Tenant Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "auth_required",
+        "tenant_required",
+        "policy_mode",
+        "audit_required",
+        "secret_redaction_required"
+      ],
+      "title": "Security",
+      "type": "object"
+    },
+    "Surface": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        }
+      },
+      "title": "Surface",
+      "type": "object"
+    },
+    "Transport": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_http": {
+          "$ref": "#/$defs/CanonicalHTTP"
+        },
+        "http": {
+          "default": true,
+          "title": "Http",
+          "type": "boolean"
+        },
+        "stdio": {
+          "default": false,
+          "title": "Stdio",
+          "type": "boolean"
+        }
+      },
+      "title": "Transport",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "ci": {
+      "$ref": "#/$defs/CI"
+    },
+    "classification": {
+      "$ref": "#/$defs/Classification"
+    },
+    "dependencies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Dependencies",
+      "type": "array"
+    },
+    "description": {
+      "minLength": 1,
+      "title": "Description",
+      "type": "string"
+    },
+    "display_name": {
+      "minLength": 1,
+      "title": "Display Name",
+      "type": "string"
+    },
+    "gateway": {
+      "$ref": "#/$defs/Surface"
+    },
+    "id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Id",
+      "type": "string"
+    },
+    "network": {
+      "$ref": "#/$defs/Network"
+    },
+    "ownership": {
+      "$ref": "#/$defs/Ownership"
+    },
+    "registry": {
+      "$ref": "#/$defs/Surface"
+    },
+    "runtime": {
+      "$ref": "#/$defs/Runtime"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "security": {
+      "$ref": "#/$defs/Security"
+    },
+    "status": {
+      "enum": [
+        "active",
+        "experimental",
+        "planned",
+        "deprecated",
+        "disabled"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "tool_catalog": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Tool Catalog"
+    },
+    "tool_contracts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Tool Contracts",
+      "type": "array"
+    },
+    "transport": {
+      "$ref": "#/$defs/Transport"
+    }
+  },
+  "required": [
+    "id",
+    "display_name",
+    "description",
+    "status",
+    "classification",
+    "ownership",
+    "runtime",
+    "transport",
+    "security"
+  ],
+  "title": "MCPManifest",
+  "type": "object"
+}
