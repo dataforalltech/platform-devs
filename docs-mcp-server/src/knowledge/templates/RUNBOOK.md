@@ -1,92 +1,72 @@
 # Runbook — {{service_name}}
 
-## Overview
+## Escopo
 
-Procedimentos operacionais para o serviço `{{service_name}}`.
-Este documento descreve como operar, monitorar e fazer troubleshooting do serviço em produção.
+Operação do serviço `{{service_name}}` no Docker Swarm. Kubernetes é experimental
+e GitHub Actions está aposentado. Substitua todos os placeholders e registre as
+evidências reais; este template não comprova o ambiente.
 
-## Prerequisites
+## Pré-requisitos
 
-- Acesso ao cluster Kubernetes / Docker Swarm
-- Credenciais de produção configuradas localmente
-- `kubectl` ou `docker` instalado e configurado
-- Acesso ao canal de on-call: #{{slack_channel}}
+- autorização e change/ticket;
+- acesso de menor privilégio ao manager Swarm;
+- digest aprovado da imagem e digest anterior para rollback;
+- referências de secrets no Vault, sem copiar valores para este documento;
+- dashboards, logs e contato on-call: `{{oncall}}` / `#{{slack_channel}}`.
 
-## Health Check
+## Health e observabilidade
 
 ```bash
-curl http://{{host}}:{{port}}/health
+curl --fail --silent http://{{host}}:{{port}}/health
+docker service ps {{service_name}} --no-trunc
+docker service logs {{service_name}} --since 15m
 ```
 
-Resposta esperada: `{"status": "ok", "version": "1.0.0"}`
+Grafana: `https://grafana.internal/d/{{service_name}}`.
 
-Verificar métricas no Grafana: `https://grafana.internal/d/{{service_name}}`
+## Deploy controlado
 
-## Steps
-
-### Deploy
+GitHub Actions não executa este fluxo. O operador promove o mesmo digest aprovado:
 
 ```bash
-# via workflow GitHub Actions (recomendado)
-gh workflow run cd-prod.yml -f tag=v{{version}}
-
-# verificar status do deploy
-gh run list --workflow=cd-prod.yml --limit=5
+IMAGE={{registry}}/{{image_name}}@sha256:{{digest}}
+docker service update --image "$IMAGE" {{service_name}}
+docker service ps {{service_name}} --no-trunc
 ```
 
-### Restart
+Após convergência, execute health, smoke pelo gateway e verifique erro, latência e
+traces. Registre commit, digest, operador, aprovador, horário e resultado.
+
+## Escala
+
+A escala é estática e exige autorização:
 
 ```bash
-# Docker
-docker restart {{container_name}}
-
-# Kubernetes
-kubectl rollout restart deployment/{{service_name}} -n production
-kubectl rollout status deployment/{{service_name}} -n production
-```
-
-### Ver Logs
-
-```bash
-# Docker
-docker logs -f {{container_name}} --tail 100
-
-# Kubernetes
-kubectl logs -f deployment/{{service_name}} -n production --tail 100
-
-# Filtrar por nível de log
-kubectl logs deployment/{{service_name}} -n production | grep ERROR
-```
-
-### Escalar Réplicas
-
-```bash
-kubectl scale deployment/{{service_name}} --replicas=3 -n production
+docker service scale {{service_name}}={{replicas}}
 ```
 
 ## Rollback
 
 ```bash
-# Reverter para versão anterior via workflow
-gh workflow run cd-prod.yml -f tag=v{{previous_version}}
-
-# Ou rollback direto no Kubernetes
-kubectl rollout undo deployment/{{service_name}} -n production
+docker service rollback {{service_name}}
+# ou repointe explicitamente o digest anterior aprovado
+docker service update --image {{registry}}/{{image_name}}@sha256:{{previous_digest}} {{service_name}}
 ```
+
+Comprove nova convergência, health, smoke e observabilidade e registre o incidente.
 
 ## Troubleshooting
 
-| Sintoma | Causa provável | Ação |
-|---------|---------------|------|
-| 500 errors | Banco indisponível | Verificar conexão DB, checar logs |
-| Timeout nas respostas | Alta carga | Escalar réplicas |
-| 401 errors | Token expirado | Renovar credenciais no Vault |
-| Pod em CrashLoopBackOff | Erro na inicialização | `kubectl describe pod` + logs |
-| Alto uso de memória | Memory leak | Restart + abrir issue |
+| Sintoma | Verificação | Ação segura |
+|---|---|---|
+| Erros 5xx | logs, dependências, pool e traces | interromper promoção; rollback se regressão |
+| Timeout | latência, saturação, DB e downstream | mitigar conforme runbook; escala só com autorização |
+| Erros 401/403 | issuer, audience, JWKS e policy | corrigir configuração; não desabilitar auth |
+| Task reiniciando | `docker service ps --no-trunc` e logs | corrigir causa ou rollback |
 
-## Contatos de Emergência
+## Contatos
 
-- On-call: @{{oncall}}
-- Canal: #{{slack_channel}}
+- Owner: `{{owner}}`
+- On-call: `{{oncall}}`
+- Canal: `#{{slack_channel}}`
 - PagerDuty: `{{pagerduty_service}}`
-- Escalação: @{{owner}}

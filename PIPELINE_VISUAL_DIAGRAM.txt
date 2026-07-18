@@ -1,5 +1,7 @@
 ================================================================================
-                    DEVTEAM CI/CD PIPELINE ARCHITECTURE
+          HISTORICAL SNAPSHOT — SUPERSEDED ON 2026-07-15
+ GitHub Actions was retired. Do not use this diagram as an operational runbook.
+ Current policy: platform-infra/docs/architecture/delivery-without-github-actions.md
 ================================================================================
 
                         COMPLETE 8-DEVTEAM ECOSYSTEM
@@ -38,7 +40,8 @@
               │
               ▼
     ┌─────────────────────┐
-    │   GitHub Actions    │
+    │ Controlled executor│
+    │ (manual for now)   │
     │  - Run Tests        │
     │  - Lint Check       │
     │  - Type Check       │
@@ -55,9 +58,9 @@
     │  └─────────────────┘│
     └─────────────────────┘
               │
-              ▼ (AUTO if gates pass)
+              ▼ (human review required)
     ┌─────────────────────┐
-    │  AUTO MERGE         │
+    │  REVIEWED MERGE     │
     │  to develop branch  │
     └─────────────────────┘
               │

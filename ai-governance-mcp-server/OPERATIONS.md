@@ -183,9 +183,11 @@ Para reportar novos: abrir issue ou usar `submit_suggestion` no próprio MCP com
 - **Linhas CRLF**: `core.autocrlf=true` no git é tolerado; ruff/pytest lidam transparentemente.
 - **Caminho do `.exe`**: `C:\Users\<user>\AppData\Local\Programs\Python\Python312\Scripts\ai-governance-mcp-server.exe`.
 
-### 5.5 "PR validate workflow falha sempre"
+### 5.5 Validação de PR
 
-`continue-on-error: true` por design — informativo, não bloqueia merge enquanto validator está em calibração. Quando confiar: editar `.github/workflows/pr-validate.yml` removendo a flag.
+GitHub Actions está aposentado. Execute `scripts/pr_validate.py` no host
+controlado, registre o exit code e anexe o comentário/resultado à evidência do
+commit. Não marque o gate como automático enquanto não houver executor aprovado.
 
 ### 5.6 "Pre-commit hook lento"
 
@@ -213,69 +215,35 @@ pip install -e ".[dev]"
 A imagem oficial vive em `d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server` — mesmo ACR usado por todos os serviços da plataforma. Tags:
 
 - `:0.1.0` (release patch específico)
-- `:0.1` (último patch da minor 0.1)
-- `:latest` (último release estável)
-- `:0.1.0-rc1` etc. (pré-releases — não viram `:latest`)
+- `:0.1.0-rc1` etc. (pré-releases explícitas)
 
-#### Modelo de release (CI builda, humano empurra)
+#### Modelo transitório de release controlada
 
-O CI (`ai-governance-mcp-release.yml`) **constrói a imagem mas não empurra para o ACR** — salva como GitHub Actions artifact (.tar.gz, retenção 90 dias). O operador puxa o artifact e empurra para o ACR de uma máquina com acesso. Esse fluxo:
+GitHub Actions está aposentado e não há executor central substituto comprovado.
+Em uma máquina controlada, o operador autorizado:
 
-- **Não exige credenciais ACR no GitHub**.
-- Funciona com Network ACL restritivo no ACR.
-- Mantém build reprodutível e auditável em runner determinístico.
-- Centraliza o controle de push no humano (auditável via `docker push` log).
-
-Trigger:
-
-```bash
-# Por tag git (canônico)
-git tag ai-governance-mcp/v0.1.0
-git push origin ai-governance-mcp/v0.1.0
-
-# Ou manualmente sem tag
-gh workflow run ai-governance-mcp-release.yml -f tag=0.1.0
-```
-
-CI roda em ~3-5 min e emite no Step Summary as instruções de pull abaixo (mesmas para qualquer release).
-
-#### Pull do artifact + push para ACR
-
-Em uma máquina com `gh` CLI logado **e** acesso ao ACR:
+1. seleciona o commit e a versão semver;
+2. executa lint, tipos, testes, cobertura, secret scan, SAST e SCA;
+3. constrói a imagem sem tag mutável;
+4. gera SBOM, provenance/attestation quando suportada e scan;
+5. registra logs, commit, digest, aprovador e change/ticket;
+6. envia ao ACR e promove o mesmo digest.
 
 ```bash
-# Variáveis (ajuste a versão)
 VERSION=0.1.0
-SLUG=$(echo "$VERSION" | tr '/+' '__')
-RUN_ID=$(gh run list --workflow=ai-governance-mcp-release.yml --limit 1 \
-    --json databaseId --jq '.[0].databaseId')
+IMAGE=d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:$VERSION
 
-# 1. Baixe o artifact da run mais recente
-gh run download $RUN_ID \
-    --repo dataforalltech/platform-service-template \
-    --name "ai-governance-mcp-server-$SLUG" \
-    --dir /tmp/
-
-# 2. Carregue no Docker local
-gunzip -c /tmp/ai-governance-mcp-server.tar.gz | docker load
-
-# 3. Login no ACR (suas credenciais locais)
+python -m pytest -q
+docker build -t "$IMAGE" .
+docker run --rm "$IMAGE" python -c "import src"
 docker login d4all.azurecr.io
-# OU: az acr login --name d4all  (preferível se você tem az CLI)
-
-# 4. Re-tag e push
-LOCAL=ai-governance-mcp-server:$VERSION
-REMOTE_BASE=d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server
-
-docker tag $LOCAL $REMOTE_BASE:$VERSION
-docker push $REMOTE_BASE:$VERSION
-
-# 5. Tags adicionais para releases estáveis (X.Y.Z, sem -rc, -beta etc.)
-docker tag $LOCAL $REMOTE_BASE:0.1
-docker tag $LOCAL $REMOTE_BASE:latest
-docker push $REMOTE_BASE:0.1
-docker push $REMOTE_BASE:latest
+docker push "$IMAGE"
+docker image inspect "$IMAGE" --format '{{json .RepoDigests}}'
 ```
+
+O exemplo não gera sozinho SBOM, provenance nem scan; esses itens continuam
+bloqueantes e precisam ser executados/retidos pelo operador ou futuro executor.
+Não crie `:latest` nem reconstrua a imagem entre ambientes.
 
 #### Pull manual (uso por consumidores)
 
@@ -326,7 +294,7 @@ Notas:
 #### Atualização
 
 ```bash
-docker pull d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:0.1
+docker pull d4all.azurecr.io/dataforall/3.0/ai-governance-mcp-server:0.1.0
 # Reiniciar TODAS as sessões Claude Code/Desktop ativas (next run usa imagem nova).
 ```
 

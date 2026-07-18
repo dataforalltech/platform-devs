@@ -52,4 +52,5 @@ python scripts/check_mcp_dod.py --json
 **Encoding (Windows):** o console costuma ser cp1252. Rode com
 `PYTHONIOENCODING=utf-8 PYTHONUTF8=1` para evitar `UnicodeEncodeError`.
 
-Roda no CI via [`.github/workflows/mcp-dod.yml`](../.github/workflows/mcp-dod.yml).
+GitHub Actions está aposentado. Rode o checker no host controlado e retenha o
+resultado vinculado ao commit; não há executor automático comprovado.

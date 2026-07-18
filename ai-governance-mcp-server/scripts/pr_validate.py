@@ -3,19 +3,16 @@
 Diferenças:
 - Diff vem do range `base..HEAD` em vez do staged.
 - Output adicional: comentário markdown formatado para `gh pr comment`.
-- Quando rodando em GitHub Actions, lê `GITHUB_BASE_REF` / `GITHUB_HEAD_REF`
-  e usa `gh` CLI para postar o comentário.
-- Exit code: 0 (OK ou WARN), 1 (BLOCK) — o workflow decide se isso falha o
-  check ou só vira comentário não-bloqueante.
+- O operador pode usar `gh` CLI para postar o comentário explicitamente.
+- Exit code: 0 (OK ou WARN), 1 (BLOCK) — o executor controlado decide o gate.
 
 Uso local:
     python scripts/pr_validate.py --base main --head HEAD
     python scripts/pr_validate.py --base origin/main --post-comment
 
-Uso em GitHub Actions:
-    python scripts/pr_validate.py --post-comment
-    # Variáveis GITHUB_BASE_REF, GITHUB_HEAD_REF, GITHUB_REPOSITORY,
-    # PR_NUMBER são lidas automaticamente.
+Uso controlado com comentário no PR:
+    python scripts/pr_validate.py --base origin/main --head HEAD \
+      --post-comment --pr-number 123
 
 A lógica de detecção (flags, layers) é reutilizada de precommit_validate.py.
 """
@@ -150,17 +147,9 @@ def _format_comment(payload: dict, result: dict) -> str:
 
 def _post_comment(comment: str, pr_number: str | None = None) -> bool:
     """Posta comentário no PR via gh CLI. Retorna True se sucesso."""
-    if pr_number is None:
-        pr_number = os.environ.get("PR_NUMBER", "")
-    if not pr_number:
-        # Fallback: usa GITHUB_REF (refs/pull/123/merge) para extrair o número.
-        ref = os.environ.get("GITHUB_REF", "")
-        if "/pull/" in ref:
-            pr_number = ref.split("/pull/", 1)[1].split("/", 1)[0]
-
     if not pr_number:
         print(
-            "[pr-validate] WARN: PR_NUMBER não detectado; pulando post.",
+            "[pr-validate] WARN: informe --pr-number para postar; pulando post.",
             file=sys.stderr,
         )
         return False
@@ -190,13 +179,13 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--base",
-        default=os.environ.get("GITHUB_BASE_REF") or "main",
-        help="Ref base do PR (default: GITHUB_BASE_REF env ou 'main').",
+        default="main",
+        help="Ref base do PR (default: main).",
     )
     parser.add_argument(
         "--head",
-        default=os.environ.get("GITHUB_HEAD_REF") or "HEAD",
-        help="Ref head do PR (default: GITHUB_HEAD_REF env ou 'HEAD').",
+        default="HEAD",
+        help="Ref head do PR (default: HEAD).",
     )
     parser.add_argument(
         "--post-comment",
@@ -206,7 +195,7 @@ def main() -> int:
     parser.add_argument(
         "--pr-number",
         default=None,
-        help="PR number para post (default: env PR_NUMBER ou parsed de GITHUB_REF).",
+        help="Número do PR; obrigatório com --post-comment.",
     )
     parser.add_argument(
         "--block-on-high",
@@ -285,7 +274,7 @@ def main() -> int:
         args.output_comment.write_text(comment, encoding="utf-8")
         print(f"[pr-validate] comment saved to {args.output_comment}", file=sys.stderr)
     else:
-        # Sempre imprime o comentário em stdout para visibilidade no log do CI.
+        # Sempre imprime o comentário em stdout para retenção pelo executor.
         print(comment)
 
     if args.post_comment:

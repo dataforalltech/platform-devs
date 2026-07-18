@@ -159,7 +159,7 @@ class DeploySettings(BaseSettings):
     # ── Pipeline templates ──────────────────────────────────────────────────── #
     platform_template_repo: str = Field(
         default="platform-devs",
-        description="Nome do repo de template canônico (scaffold_pipeline usa como referência).",
+        description="Nome histórico do template; scaffold de pipeline foi aposentado.",
     )
 
     # ── Local workspace ─────────────────────────────────────────────────────── #

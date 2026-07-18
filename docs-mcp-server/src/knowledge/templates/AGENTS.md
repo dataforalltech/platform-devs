@@ -1,62 +1,34 @@
-# AGENTS.md — Política para Agentes de IA
+# AGENTS.md — política operacional do serviço
 
-> Diretrizes para agentes de IA que atuam neste repositório.
-> Leia este arquivo ANTES de qualquer ação.
+## Regras obrigatórias
 
-## Regras Gerais
+1. Confirme comportamento no código, Compose e runbooks antes de afirmar.
+2. Não registre valores de segredo; use apenas nomes e referências ao Vault.
+3. GitHub Actions é proibido. Não crie `.github/workflows/`, não dispare runs e
+   não armazene credenciais em secrets/variables de Actions.
+4. Docker Swarm é o runtime oficial; Kubernetes é experimental.
+5. Mudança funcional exige testes e evidência vinculada ao commit.
+6. Build/push, deploy, escala, rollback, seed e migration exigem autorização.
+7. `pipeline-mcp` registra estado e aprovações, mas não prova que gates rodaram.
 
-1. **Leia antes de agir** — leia os arquivos relevantes antes de modificar qualquer coisa
-2. **Prefira edições cirúrgicas** — não reescreva arquivos inteiros sem necessidade
-3. **Respeite os padrões** — siga os padrões estabelecidos no código existente
-4. **Não altere dependências** sem aprovação explícita do owner
-5. **Testes obrigatórios** — toda mudança funcional deve vir com testes
-6. **Commits atômicos** — cada commit deve ter uma única responsabilidade clara
+## Arquivos críticos
 
-## Arquitetura
+- `src/config/settings.py` — contrato de configuração;
+- `pyproject.toml` — dependências e toolchain;
+- `Dockerfile` e Compose/stack — build e runtime;
+- `alembic/` ou diretório equivalente — migrations;
+- `docs/platform/` — perfil, conformidade e histórico append-only.
 
-Descreva a arquitetura do serviço aqui. Inclua:
-- Componentes principais e suas responsabilidades
-- Fluxo de dados entre componentes
-- Dependências externas (bancos, APIs, serviços)
-- Decisões arquiteturais relevantes (ver `docs/decisions/`)
+## Fluxo de trabalho
 
-## Padrões de Código
+1. Crie branch a partir da base definida pelo repositório.
+2. Implemente testes unitários, integração e contrato aplicáveis.
+3. Execute localmente lint, tipos, testes, cobertura, secret scan, SAST e SCA.
+4. Registre comandos, versões, resultados e commit no histórico de conformidade.
+5. Abra PR e obtenha revisão do owner.
+6. Para release, siga o runbook manual controlado até existir executor aprovado.
 
-- **Linguagem:** Python 3.12+
-- **Formatter:** ruff (configurado em `pyproject.toml`)
-- **Type checker:** mypy
-- **Testes:** pytest com cobertura mínima de 80%
-- **Estilo:** PEP 8, type hints obrigatórios em funções públicas
-- **Docstrings:** Google style para funções e classes públicas
+## Convenções
 
-## Arquivos Críticos (não modificar sem aprovação)
-
-- `src/config/settings.py` — configurações de ambiente
-- `pyproject.toml` — dependências e configurações do projeto
-- `.github/workflows/` — pipelines de CI/CD
-- `alembic/` — migrações de banco de dados (se existir)
-
-## Fluxo de Trabalho
-
-1. Crie branch a partir de `develop`: `git checkout -b feat/minha-feature develop`
-2. Implemente com testes unitários e de integração
-3. Execute `ruff check .` e corrija todos os problemas
-4. Execute `pytest` e garanta cobertura >= 80%
-5. Abra PR para `develop` com descrição clara das mudanças
-6. Aguarde review do owner antes de fazer merge
-
-## Convenções de Commit
-
-Seguimos [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` nova funcionalidade
-- `fix:` correção de bug
-- `docs:` documentação
-- `refactor:` refatoração sem mudança de comportamento
-- `test:` adição ou correção de testes
-- `chore:` tarefas de manutenção
-
-## Contato
-
-Owner: @{{owner}}
-Canal de suporte: #{{slack_channel}}
+Use Conventional Commits e preserve a língua/estilo já adotados pelo projeto.
+Owner: `{{owner}}`. Canal: `#{{slack_channel}}`.

@@ -230,53 +230,6 @@ class FakeGitHubClient:
             }
         ]
 
-    def trigger_workflow(self, repo, workflow_id, ref, inputs=None):
-        return {
-            "dispatched": True,
-            "workflow": workflow_id,
-            "ref": ref,
-            "repo": repo,
-            "hint": "Use list_workflow_runs para acompanhar o status.",
-        }
-
-    def list_workflow_runs(self, repo, workflow_id=None, branch=None, status=None, limit=10):
-        return [
-            {
-                "id": 999,
-                "name": "CD DEV",
-                "status": "completed",
-                "conclusion": "success",
-                "head_branch": "develop",
-                "head_sha": "abc",
-                "created_at": None,
-                "updated_at": None,
-                "url": "u",
-            }
-        ]
-
-    def get_workflow_run(self, repo, run_id):
-        return {
-            "id": run_id,
-            "name": "CD DEV",
-            "status": "completed",
-            "conclusion": "success",
-            "head_branch": "develop",
-            "head_sha": "abc",
-            "created_at": None,
-            "updated_at": None,
-            "url": "u",
-            "logs_url": "lu",
-        }
-
-    def cancel_workflow_run(self, repo, run_id):
-        return {"cancelled": True, "run_id": run_id, "repo": repo}
-
-    def set_repo_secret(self, repo, secret_name, secret_value):
-        return {"repo": repo, "secret": secret_name, "status": "ok"}
-
-    def set_repo_variable(self, repo, var_name, var_value):
-        return {"repo": repo, "variable": var_name, "value": var_value, "status": "created"}
-
     def list_acr_tags(self, registry, namespace, service_name, username, password, limit=20):
         return [{"name": "v1", "digest": "d", "created_at": "", "last_update": ""}]
 

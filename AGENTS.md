@@ -15,6 +15,13 @@
 >
 > **Última revisão**: 2026-07-08.
 
+> **Decisão transversal — 2026-07-15:** GitHub Actions foi aposentado em todo o
+> ecossistema. É proibido criar `.github/workflows/`, disparar/consultar runs ou
+> usar secrets/variables de Actions. Exemplos de Actions ainda preservados nas
+> seções históricas deste documento estão superseded e não devem ser executados.
+> `pipeline-mcp` registra gates e promoções, mas não executa CI/CD. Consulte
+> `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 ---
 
 ## Sumário
@@ -545,7 +552,7 @@ o MCP** em vez de alternativas manuais. Referência completa de tools e namespac
 |-----|---------|-------|
 | `dev-twin-mcp` | Autenticação, perfil, contexto git/OS — **chame `authenticate` PRIMEIRO** | 7098 |
 | `config-mcp` | Credenciais, env vars por perfil/tenant, hardware | 7099 |
-| `deploy-mcp` | Git, commits, PRs, GitHub Actions, ACR | — |
+| `deploy-mcp` | Git, commits, PRs, ACR direto e ledger histórico | — |
 | `docs-mcp` | Geração, validação e auditoria de documentação | — |
 | `qa-mcp` | Testes, lint, type-check, security scan | — |
 | `infra-mcp` / `ai-governance-mcp` | Governança, ADRs, políticas | — |

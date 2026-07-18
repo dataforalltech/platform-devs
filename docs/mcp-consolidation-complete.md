@@ -1,5 +1,7 @@
 # MCP Consolidation Complete — 18 Unified Servers
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 **Status:** COMPLETE  
 **Date:** 2026-05-09  
 **Version:** 1.0

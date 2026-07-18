@@ -320,8 +320,9 @@ Piloto **Security + auth-mcp** implementado e verificado (E2E `tests/e2e/test_oa
    (rede privada, sem porta pública), o `auth-mcp`, o gateway e o `postgres` (persistência de
    OAuth clients/codes/refresh + audit do gateway); Caddy roteia `/<devteam>/*` para todos. Só o Caddy
    é público. RESOURCE/PRM derivam de `MCP_PUBLIC_BASE_URL`.
-12. ✅ **Gate de CI do "DoD":** `scripts/check_mcp_dod.py` (checker estático do §11) + workflow
-   `.github/workflows/mcp-dod.yml` (checker + E2E do piloto + testes do gateway). O gate distingue
+12. ⚠️ **Gate de DoD:** `scripts/check_mcp_dod.py` é o checker estático do §11.
+   GitHub Actions foi aposentado; até existir executor aprovado, checker, E2E do
+   piloto e testes do gateway são executados manualmente com evidência. O gate distingue
    MCP **migrado** (deve passar todo o §11) de **legado** (listado como pendente, não derruba o CI):
    **9/9 migrados passam**; 12 legados aguardam migração.
 13. ⏭️ **Pendente — só o que é seu (credenciais/infra):** importar o realm no Keycloak de

@@ -1,5 +1,7 @@
 # DevTeam Workflows & Knowledge Base
 
+> **DOCUMENTO HISTÓRICO — SUPERSEDED em 2026-07-15:** GitHub Actions foi aposentado. Não execute os workflows, comandos ou exemplos deste documento. A política vigente está em `platform-infra/docs/architecture/delivery-without-github-actions.md`.
+
 ## Mapa de Orquestração
 
 ```

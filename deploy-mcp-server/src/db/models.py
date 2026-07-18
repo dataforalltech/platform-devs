@@ -20,7 +20,7 @@ Convenções (playbook §5):
   * As colunas **naturais/curtas** carregam um ``max_length`` explícito para virarem
     ``VARCHAR(n)`` (indexável) em vez de ``TEXT`` — MySQL não indexa ``TEXT`` sem
     prefixo. As chaves naturais (upsert) são justamente VARCHAR/INT.
-  * ``run_id`` é ``str`` (não ``int``): o run_id do GitHub Actions já ultrapassa o
+  * ``run_id`` é ``str`` (não ``int``): preserva IDs de execuções legadas, que já ultrapassaram o
     range de ``INT`` (MySQL mapeia ``int`` → ``INT`` 32-bit) — guardar como
     ``VARCHAR`` evita overflow e mantém a chave natural (repo, run_id) estável.
   * Dados estruturados (``detail``/``config``) são **JSON serializado em ``TEXT``**
@@ -105,8 +105,8 @@ class RepoRow(BaseModel):
 class DeployEventRow(BaseModel):
     """Evento genérico do ledger (histórico append-only, chave surrogate ``id``).
 
-    ``kind`` ∈ {clone, commit, acr_build, cancel_run, scaffold_pipeline,
-    trigger_workflow, ...}. ``target`` é o alvo do evento (repo, imagem, run) e
+    ``kind`` inclui eventos atuais e valores legados anteriores a 2026-07-15.
+    ``target`` é o alvo do evento (repo, imagem, run) e
     ``detail`` é o resultado bruto da ação (JSON serializado em TEXT).
     """
 
