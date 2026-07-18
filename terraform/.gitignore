@@ -1,0 +1,11 @@
+# Terraform
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+crash.log
+# valores reais (segredos/ids) — nunca commitar; use o .example
+terraform.tfvars
+*.auto.tfvars
+override.tf
+override.tf.json
