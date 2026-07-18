@@ -24,7 +24,7 @@ shared-infra, aguardando autorização.**
 | Prova local da image (build + boot `healthy` + `/v1/health` 456 tools + contrato 20/456 dentro da image) | ✅ | 2026-07-17 |
 | 4. Build+push ACR → deploy strangler HML → `GATEWAY_MAPPING` → restart gateway → prova no gateway | ✅ (DEPLOYADO+PROVADO) | 2026-07-17 |
 | 5. Cutover: aposentar as 20 mappings + parar os 20 containers | ✅ (forçado 2026-07-17; gateway 1616/35; backup+rollback prontos) | — |
-| 4b. Rotear agente/clientes por `devteam-mcp.*` (refactor real; capability/policy) — **AGORA CRÍTICO** | ⏳ | — |
+| 4b. Rotear agente por `devteam-mcp.*` (shim strangler no gateway/client.py) + PAT fix | ✅ E2E PROVADO (`check_health` DONE via devteam-mcp; branch `feat/devteam-mcp-consolidated-routing`, PR a abrir) | — |
 | — Atualizar `TOOLS_LIVE_INVENTORY.csv`/docs (ORCHESTRATION/MCP_TOOLS_REFERENCE) | ⏳ | — |
 
 ## Arquitetura (resumo — detalhes no design doc)
