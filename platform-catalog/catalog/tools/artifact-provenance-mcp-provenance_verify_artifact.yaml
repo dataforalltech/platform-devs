@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: artifact-provenance-mcp/provenance_verify_artifact
+  uid: artifact-provenance-mcp:provenance_verify_artifact
+  domain: provenance
+  title: provenance_verify_artifact @ artifact-provenance-mcp
+  description: Verify a repository artifact against an expected SHA-256 digest.
+  owner: security
+  tags: [artifact-provenance-mcp, provenance]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: provenance.provenance_verify_artifact
+  provider_id: artifact-provenance-mcp
+  provider_version: 1.0.0
+  tool: provenance_verify_artifact
+  endpoint: streamable-http
+  selection: {}
+relations:
+  - {verb: implements, target: provenance.provenance_verify_artifact}
+  - {verb: provided-by, target: artifact-provenance-mcp}

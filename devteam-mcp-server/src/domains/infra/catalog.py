@@ -208,7 +208,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "Solicita capacidade ao allocator. Servidor decide entre lease em "
             "VM existente (compartilhamento), provisão de nova, fila ou denial. "
             "Spec restrita à whitelist (cpu-small/medium/large). gpu-a100 e "
-            "high-mem exigem `human_approved=True` registrado out-of-band. "
+            "high-mem exigem uma aprovação verificada pelo gateway. "
             "Phase 2c: provisão via terraform real (INFRA_TF_MODULES_ROOT). "
             "Lease inicia PENDING e vai ACTIVE quando VM fica READY. "
             "Use get_lease(lease_id) para verificar connection_hint (endpoint SSH)."
@@ -229,7 +229,6 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "exclusive": {"type": "boolean", "default": False},
                 "priority": {"type": "string", "enum": ["low", "medium", "high"], "default": "low"},
                 "purpose": {"type": "string", "description": "Descrição curta para audit."},
-                "human_approved": {"type": "boolean", "default": False},
             },
             "required": ["spec", "duration_min", "owner"],
             "additionalProperties": False,
@@ -469,7 +468,7 @@ async def _dispatch_allocator(name: str, a: dict[str, Any], store: AllocatorStor
             exclusive=a.get("exclusive", False),
             priority=a.get("priority", "low"),
             purpose=a.get("purpose"),
-            human_approved=a.get("human_approved", False),
+            human_approved=bool(a.get("_verified_approval_ids")),
         )
     if name == "get_lease":
         return await get_lease(store, lease_id=cast(str, a.get("lease_id")))

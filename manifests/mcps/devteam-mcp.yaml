@@ -1,0 +1,99 @@
+schema_version: 1
+id: devteam-mcp
+display_name: DevTeam MCP
+description: Consolidated provider for the twenty DevTeam persona and system domains.
+status: experimental
+classification:
+  type: system
+  capability_domain: platform-engineering
+ownership:
+  team: platform-engineering
+  source_repo: dataforalltech/platform-devs
+  source_path: devteam-mcp-server
+  legacy_source_paths:
+    - architecture-mcp-server
+    - backend-mcp-server
+    - frontend-mcp-server
+    - frontend-pixelfera-mcp-server
+    - devops-mcp-server
+    - product-owner-mcp-server
+    - product-manager-mcp-server
+    - qa-engineer-mcp-server
+    - security-mcp-server
+    - qa-mcp-server
+    - test-mcp-server
+    - deploy-mcp-server
+    - session-mcp-server
+    - ai-governance-mcp-server
+    - config-mcp-server
+    - services-mcp-server
+    - docs-mcp-server
+    - infra-mcp-server
+    - pipeline-mcp-server
+    - dev-twin-mcp-server
+    - audit-mcp-server
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, src.server.mcp_server]
+  cwd: devteam-mcp-server
+  service_name: devteam-mcp
+  build_context: .
+  dockerfile: devteam-mcp-server/Dockerfile
+  environment:
+    MCP_NAMESPACE: devteam-mcp
+    MCP_TWIN_AUDIENCE: mcp:devteam-mcp
+    MCP_CONTEXT_SIGNING_KEY: ${GATEWAY_CONTEXT_SIGNING_KEY:?required}
+    URL_ADMIN_TWIN_JWKS: ${GATEWAY_AS_JWKS_URL:?required}
+    MCP_HTTP_ONLY: "1"
+    RUNTIME_ENV: ${RUNTIME_ENV:-local}
+    DB_ENGINE: ${DB_ENGINE:?required}
+    DB_HOST: ${DB_HOST:?required}
+    DB_PORT: ${DB_PORT:?required}
+    DB_NAME: ${DB_NAME:?required}
+    DB_USER: ${DB_USER:?required}
+    DB_PASSWORD: ${DB_PASSWORD:?required}
+    ADMIN_DB_HOST: ${ADMIN_DB_HOST:?required}
+    ADMIN_DB_PORT: ${ADMIN_DB_PORT:?required}
+    ADMIN_DB_USER: ${ADMIN_DB_USER:?required}
+    ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:?required}
+  exposes_tools: true
+transport:
+  stdio: false
+  http: true
+  canonical_http:
+    health_live: /v1/health/live
+    health_ready: /v1/health/ready
+    tools_list: /mcp/tools/list
+    tools_call: /mcp/tools/call
+network:
+  internal_port: 7100
+  host_port: 27130
+security: &tool_security
+  auth_required: true
+  tenant_required: true
+  policy_mode: fail_closed
+  audit_required: true
+  secret_redaction_required: true
+  context_signing_required: true
+ci:
+  enabled: true
+  coverage_threshold: 80
+  lint: true
+  type_check: true
+  docker_build: true
+  smoke_test: true
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []
+tool_catalog: platform-catalog/catalog/tools
+tool_contracts:
+  - contracts/tools/devteam-config-get-credential.yaml
+  - contracts/tools/devteam-config-read-env-file.yaml
+  - contracts/tools/devteam-config-set-credential.yaml
+  - contracts/tools/devteam-config-set-credential-secure.yaml
+  - contracts/tools/devteam-infra-request-vm.yaml
+  - contracts/tools/devteam-infra-get-lease-ssh-key.yaml
+  - contracts/tools/devteam-services-read-env-file.yaml

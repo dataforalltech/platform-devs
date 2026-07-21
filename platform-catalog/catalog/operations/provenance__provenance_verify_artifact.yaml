@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: provenance/provenance_verify_artifact
+  uid: provenance.provenance_verify_artifact
+  domain: provenance
+  title: verify repository artifact
+  description: Verify a repository artifact against an expected SHA-256 digest.
+  owner: security
+  tags: [provenance, verify, read]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: provenance
+  capability: artifact-provenance
+  resource: {type: artifact, parent: null, namespace: null}
+  operation: verify
+  authz: read
+  risk: {effects: [read], requires: [], blast_radius: workspace, default_level: low, approval_required: none}
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
+relations: [{verb: acts-on, target: 'resource:artifact'}]

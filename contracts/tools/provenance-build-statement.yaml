@@ -1,0 +1,38 @@
+schema_version: 1
+provider_id: artifact-provenance-mcp
+name: provenance_build_statement
+description: Build an in-memory provenance statement from observed artifact hashes and Git state.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    paths: {type: array, minItems: 1, maxItems: 100, uniqueItems: true, items: {type: string, minLength: 1, maxLength: 4096}}
+  required: [paths]
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    schema_version: {const: 1}
+    subject:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          path: {type: string}
+          sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+          size_bytes: {type: integer, minimum: 0}
+          git_tracked: {type: boolean}
+          git_status: {type: string}
+          repository_head: {anyOf: [{type: string, pattern: '^[a-f0-9]{40,64}$'}, {type: 'null'}]}
+        required: [path, sha256, size_bytes, git_tracked, git_status, repository_head]
+    repository: {type: string}
+    repository_head: {anyOf: [{type: string, pattern: '^[a-f0-9]{40,64}$'}, {type: 'null'}]}
+    environment: {type: string}
+    correlation_id: {type: string}
+  required: [schema_version, subject, repository, repository_head, environment, correlation_id]
+required_scope: provenance:read
+mutating: false
+risk: {level: low, effects: [read, hash], blast_radius: workspace, approval_required: none}
+secret_reference_only: true

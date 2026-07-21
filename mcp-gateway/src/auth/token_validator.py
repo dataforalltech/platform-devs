@@ -69,7 +69,7 @@ from __future__ import annotations
 import json
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import bcrypt
@@ -85,6 +85,7 @@ class UserSession:
     role: str
     scopes: list[str]
     tenant_id: str
+    actor_type: str = "human"
 
 
 # ============================================================================
@@ -99,6 +100,7 @@ class _StaticTokenRecord:
     role: str
     scopes: list[str]
     tenant_id: str
+    actor_type: str = "human"
     expires_at: int | None = None
     revoked: bool = False
 
@@ -119,11 +121,14 @@ class _StaticTokenStore:
                 continue
             try:
                 if bcrypt.checkpw(raw, rec.token_hash):
+                    if not (rec.user_id and rec.tenant_id):
+                        return None
                     return UserSession(
                         user_id=rec.user_id,
                         role=rec.role,
                         scopes=list(rec.scopes),
                         tenant_id=rec.tenant_id,
+                        actor_type=rec.actor_type,
                     )
             except (ValueError, TypeError):
                 # hash malformado no registro — ignora e continua
@@ -163,7 +168,8 @@ def _parse_static_records(payload: str | None) -> list[_StaticTokenRecord]:
                     user_id=item.get("user_id", ""),
                     role=item.get("role", "developer"),
                     scopes=list(item.get("scopes", [])),
-                    tenant_id=item.get("tenant_id", "default"),
+                    tenant_id=item.get("tenant_id", ""),
+                    actor_type=item.get("actor_type", "human"),
                     expires_at=item.get("expires_at"),
                     revoked=bool(item.get("revoked", False)),
                 )
@@ -179,7 +185,8 @@ def _parse_static_records(payload: str | None) -> list[_StaticTokenRecord]:
                     user_id=item.get("user_id", ""),
                     role=item.get("role", "developer"),
                     scopes=list(item.get("scopes", [])),
-                    tenant_id=item.get("tenant_id", "default"),
+                    tenant_id=item.get("tenant_id", ""),
+                    actor_type=item.get("actor_type", "human"),
                     expires_at=item.get("expires_at"),
                     revoked=bool(item.get("revoked", False)),
                 )
@@ -254,11 +261,16 @@ class _JwtValidator:
         else:
             scopes = list(scope_raw)
 
+        user_id = claims.get("sub", "")
+        tenant_id = claims.get("tenant_id", "")
+        if not (user_id and tenant_id):
+            return None
         return UserSession(
-            user_id=claims.get("sub", ""),
+            user_id=user_id,
             role=claims.get("role", "user"),
             scopes=scopes,
-            tenant_id=claims.get("tenant_id", "default"),
+            tenant_id=tenant_id,
+            actor_type=claims.get("actor_type", "human"),
         )
 
 

@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/product_list
+  uid: project-product-mcp:product_list
+  domain: portfolio
+  title: product_list @ project-product-mcp
+  description: List active tenant products with bounded cursor pagination.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.product_list
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: product_list
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.product_list
+- verb: provided-by
+  target: project-product-mcp

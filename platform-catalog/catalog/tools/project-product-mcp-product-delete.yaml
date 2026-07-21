@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/product_delete
+  uid: project-product-mcp:product_delete
+  domain: portfolio
+  title: product_delete @ project-product-mcp
+  description: Soft-delete an empty product after an approved, version-checked request.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.product_delete
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: product_delete
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.product_delete
+- verb: provided-by
+  target: project-product-mcp

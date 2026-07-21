@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: contracts-mcp/contracts_validate_catalog
+  uid: contracts-mcp:contracts_validate_catalog
+  domain: contracts
+  title: contracts_validate_catalog @ contracts-mcp
+  description: Validate canonical MCP manifests and tool-contract references.
+  owner: platform-engineering
+  tags: [contracts-mcp, contracts]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: contracts.contracts_validate_catalog
+  provider_id: contracts-mcp
+  provider_version: 1.0.0
+  tool: contracts_validate_catalog
+  endpoint: streamable-http
+  selection: {}
+relations:
+  - {verb: implements, target: contracts.contracts_validate_catalog}
+  - {verb: provided-by, target: contracts-mcp}

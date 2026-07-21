@@ -1,109 +1,143 @@
-"""Audit logging middleware using PostgreSQL."""
+"""Append-only, hash-chained and redacted activity ledger."""
+
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import json
 import os
-import time
-from datetime import datetime
+from typing import Any
+
 import psycopg2
-from psycopg2.extras import execute_values
 
-_conn = None
+_SENSITIVE = {
+    "authorization",
+    "password",
+    "secret",
+    "token",
+    "access_token",
+    "refresh_token",
+    "private_key",
+    "private_key_pem",
+    "credential",
+    "value",
+}
+_MAX_STRING = 2048
+class AuditUnavailable(RuntimeError):
+    pass
 
-def get_connection():
-    """Get or create PostgreSQL connection."""
-    global _conn
-    if _conn is None or _conn.closed:
-        _conn = psycopg2.connect(
-            host=os.getenv("PG_HOST", "postgres"),
-            port=int(os.getenv("PG_PORT", "5432")),
-            database=os.getenv("PG_DB", "platform_staging"),
-            user=os.getenv("PG_USER", "platform"),
-            password=os.getenv("PG_PASSWORD", "staging_password_123"),
+
+def _sensitive_key(key: str) -> bool:
+    normalized = key.lower().replace("-", "_")
+    compact = normalized.replace("_", "")
+    return normalized in _SENSITIVE or any(
+        marker in compact
+        for marker in (
+            "authorization",
+            "password",
+            "clientsecret",
+            "apikey",
+            "privatekey",
+            "accesstoken",
+            "refreshtoken",
+            "credential",
+        )
+    )
+
+
+def redact(value: Any, *, key: str | None = None, depth: int = 0) -> Any:
+    if key and _sensitive_key(key):
+        return "<redacted>"
+    if depth >= 8:
+        return "<max-depth>"
+    if isinstance(value, dict):
+        return {str(k): redact(v, key=str(k), depth=depth + 1) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact(item, depth=depth + 1) for item in value[:100]]
+    if isinstance(value, str) and len(value) > _MAX_STRING:
+        return f"{value[:_MAX_STRING]}<truncated>"
+    return value
+
+
+def _connection():
+    required = ("PG_HOST", "PG_PORT", "PG_DB", "PG_USER", "PG_PASSWORD")
+    missing = [name for name in required if not os.environ.get(name)]
+    if missing:
+        raise AuditUnavailable(f"audit database configuration missing: {', '.join(missing)}")
+    try:
+        return psycopg2.connect(
+            host=os.environ["PG_HOST"],
+            port=int(os.environ["PG_PORT"]),
+            database=os.environ["PG_DB"],
+            user=os.environ["PG_USER"],
+            password=os.environ["PG_PASSWORD"],
             connect_timeout=5,
         )
-    return _conn
+    except psycopg2.Error as exc:
+        raise AuditUnavailable("activity ledger unavailable") from exc
 
-def init_audit_table():
-    """Create audit log table if it doesn't exist."""
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS mcp_audit_log (
-                    id BIGSERIAL PRIMARY KEY,
-                    ts TIMESTAMPTZ DEFAULT NOW(),
-                    user_id TEXT NOT NULL,
-                    role TEXT NOT NULL,
-                    tenant_id TEXT,
-                    mcp TEXT NOT NULL,
-                    tool TEXT NOT NULL,
-                    arguments JSONB,
-                    result JSONB,
-                    duration_ms INTEGER,
-                    status TEXT,
-                    client_ip TEXT,
-                    user_agent TEXT
-                );
 
-                CREATE INDEX IF NOT EXISTS idx_audit_user_ts ON mcp_audit_log (user_id, ts);
-                CREATE INDEX IF NOT EXISTS idx_audit_mcp_tool_ts ON mcp_audit_log (mcp, tool, ts);
-            """)
-            conn.commit()
-            print("Audit table initialized successfully")
-        except Exception as e:
-            print(f"Error creating audit table: {e}")
-            conn.rollback()
-        finally:
-            cur.close()
-    except Exception as e:
-        print(f"Warning: Could not initialize audit table: {e}")
-        print("Audit logging will be disabled")
+def _assert_sync() -> None:
+    with _connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM mcp_activity_ledger LIMIT 1")
 
-async def log_tool_call(
-    user_id: str,
-    role: str,
-    tenant_id: str,
-    mcp: str,
-    tool: str,
-    arguments: dict,
-    result: dict | str,
-    duration_ms: int,
-    status: str,
-    client_ip: str,
-    user_agent: str,
-):
-    """Log a tool call to PostgreSQL audit table."""
-    try:
-        conn = get_connection()
-        cur = conn.cursor()
 
-        cur.execute("""
-            INSERT INTO mcp_audit_log
-            (user_id, role, tenant_id, mcp, tool, arguments, result, duration_ms, status, client_ip, user_agent)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        """, (
-            user_id,
-            role,
-            tenant_id,
-            mcp,
-            tool,
-            json.dumps(arguments),
-            json.dumps(result) if isinstance(result, dict) else result,
-            duration_ms,
-            status,
-            client_ip,
-            user_agent,
-        ))
+async def assert_audit_available() -> None:
+    await asyncio.to_thread(_assert_sync)
 
-        conn.commit()
-        cur.close()
-    except Exception as e:
-        print(f"Error logging to audit table: {e}")
 
-def close_connection():
-    """Close PostgreSQL connection."""
-    global _conn
-    if _conn and not _conn.closed:
-        _conn.close()
+def _canonical(value: Any) -> str:
+    return json.dumps(redact(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _append_sync(event: dict[str, Any]) -> str:
+    sanitized = redact(event)
+    with _connection() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT pg_advisory_xact_lock(hashtext('mcp_activity_ledger'))")
+            cursor.execute("SELECT event_hash FROM mcp_activity_ledger ORDER BY id DESC LIMIT 1")
+            row = cursor.fetchone()
+            previous_hash = row[0] if row else "0" * 64
+            material = f"{previous_hash}:{_canonical(sanitized)}"
+            event_hash = hashlib.sha256(material.encode()).hexdigest()
+            cursor.execute(
+                """
+                INSERT INTO mcp_activity_ledger
+                (actor_id, actor_type, tenant_id, roles, scopes, environment,
+                 correlation_id, causation_id, session_id, policy_decision_id,
+                 approval_ids, mcp, tool, arguments, result, duration_ms, status,
+                 client_ip, user_agent, previous_hash, event_hash)
+                VALUES (%s, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s,
+                        %s::jsonb, %s, %s, %s::jsonb, %s::jsonb, %s, %s, %s, %s, %s, %s)
+                """,
+                (
+                    sanitized["actor_id"],
+                    sanitized["actor_type"],
+                    sanitized["tenant_id"],
+                    _canonical(sanitized.get("roles", [])),
+                    _canonical(sanitized.get("scopes", [])),
+                    sanitized["environment"],
+                    sanitized["correlation_id"],
+                    sanitized["causation_id"],
+                    sanitized.get("session_id"),
+                    sanitized.get("policy_decision_id"),
+                    _canonical(sanitized.get("approval_ids", [])),
+                    sanitized["mcp"],
+                    sanitized["tool"],
+                    _canonical(sanitized.get("arguments", {})),
+                    _canonical(sanitized.get("result")),
+                    sanitized.get("duration_ms"),
+                    sanitized["status"],
+                    sanitized.get("client_ip"),
+                    sanitized.get("user_agent"),
+                    previous_hash,
+                    event_hash,
+                ),
+            )
+    return event_hash
+
+
+async def log_tool_call(**event: Any) -> str:
+    """Append a sanitized event; failure is propagated so callers fail closed."""
+    return await asyncio.to_thread(_append_sync, event)

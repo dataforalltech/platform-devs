@@ -1,0 +1,80 @@
+[project]
+name = "platform-project-product"
+version = "1.0.0"
+description = "Canonical tenant-scoped project/product API, public library and MCP sidecar."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic==1.16.5",
+  "fastapi==0.116.1",
+  "httpx==0.28.1",
+  "PyJWT[crypto]==2.10.1",
+  "pydantic==2.11.7",
+  "pydantic-settings==2.10.1",
+  "prometheus-fastapi-instrumentator==7.0.2",
+  "redis==6.4.0",
+  "slowapi==0.1.9",
+  "uvicorn[standard]==0.35.0",
+  "platform-auth @ git+ssh://git@github.com/dataforalltech/platform-auth.git@b74b7d1be57b48b68e9d630d7b5dd8cdcd7da774",
+  "platform-core-lib @ git+ssh://git@github.com/dataforalltech/platform-core-lib.git@aca986bd088b23def739a5047c0b73040b52236a",
+  "platform-crypto-lib[aws] @ git+ssh://git@github.com/dataforalltech/platform-crypto-lib.git@750b0c9aab4cf37b88192e3b1e7c19571d042b8b",
+  "platform-database-lib @ git+ssh://git@github.com/dataforalltech/platform-database-lib.git@4ab95a1d9275d5062473d86225c82164d3357f5e",
+  "platform-observability-lib @ git+ssh://git@github.com/dataforalltech/platform-observability-lib.git@71011afb1440afdcd381608e2ccb1350416058a5",
+  "platform-tenant-lib @ git+ssh://git@github.com/dataforalltech/platform-tenant-lib.git@e60f81207fa69f57a48b94bf3987f5aa42e430e1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "jsonschema==4.25.1",
+  "mypy==1.13.0",
+  "pytest==8.4.2",
+  "pytest-asyncio==1.1.0",
+  "pytest-cov==6.2.1",
+  "ruff==0.12.10",
+]
+
+[project.scripts]
+platform-project-product-api = "app.main:main"
+project-product-mcp = "project_product_mcp.server.mcp_server:main"
+platform-project-product-migrate = "scripts.migrate:main"
+
+[build-system]
+requires = ["setuptools==80.9.0", "wheel==0.45.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src", "mcp"]
+include = ["platform_project_product*", "project_product_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "--cov=app --cov=mcp/project_product_mcp --cov=src/platform_project_product --cov-branch --cov-fail-under=85"
+
+[tool.coverage.run]
+branch = true
+source = ["app", "mcp/project_product_mcp", "src/platform_project_product"]
+omit = ["*/tests/*", "alembic/*"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = ["src", "mcp", "."]
+follow_imports = "skip"
+ignore_missing_imports = true
+explicit_package_bases = true
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+no_error_summary = true
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "S"]
+ignore = ["B008", "S104"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S105", "S106", "S107"]
+"alembic/*" = ["S608"]
+
+

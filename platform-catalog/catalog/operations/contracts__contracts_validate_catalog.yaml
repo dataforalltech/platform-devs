@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: contracts/contracts_validate_catalog
+  uid: contracts.contracts_validate_catalog
+  domain: contracts
+  title: validate MCP contract catalog
+  description: Validate canonical MCP manifests and tool-contract references.
+  owner: platform-engineering
+  tags: [contracts, validate, read]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: contracts
+  capability: contract-governance
+  resource: {type: catalog, parent: null, namespace: null}
+  operation: validate
+  authz: read
+  risk: {effects: [read], requires: [], blast_radius: none, default_level: low, approval_required: none}
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
+relations: [{verb: acts-on, target: 'resource:catalog'}]

@@ -1,5 +1,4 @@
-import { spawn } from 'child_process';
-import { EventEmitter } from 'events';
+import fetch, { type RequestInit, type Response } from 'node-fetch';
 
 export interface MCPToolCall {
   service: string;
@@ -13,10 +12,36 @@ export interface MCPResult {
   error?: string;
 }
 
+export interface MCPClientOptions {
+  gatewayUrl?: string;
+  accessToken?: string;
+  timeoutMs?: number;
+  fetchImpl?: (url: string, init?: RequestInit) => Promise<Response>;
+}
+
+interface JsonRpcResponse {
+  jsonrpc?: string;
+  result?: unknown;
+  error?: { code?: number; message?: string };
+}
+
+/**
+ * Canonical gateway client. It never executes tools locally and never converts
+ * transport failures into successful MCP results.
+ */
 export class MCPClient {
-  private processes: Map<string, NodeJS.Process> = new Map();
-  private emitters: Map<string, EventEmitter> = new Map();
+  private readonly gatewayUrl: string;
+  private readonly accessToken: string;
+  private readonly timeoutMs: number;
+  private readonly fetchImpl: (url: string, init?: RequestInit) => Promise<Response>;
   private requestId = 0;
+
+  constructor(options: MCPClientOptions = {}) {
+    this.gatewayUrl = (options.gatewayUrl ?? process.env.MCP_GATEWAY_URL ?? '').replace(/\/$/, '');
+    this.accessToken = options.accessToken ?? process.env.MCP_GATEWAY_TOKEN ?? '';
+    this.timeoutMs = options.timeoutMs ?? 30_000;
+    this.fetchImpl = options.fetchImpl ?? fetch;
+  }
 
   async callQATool(tool: string, args: Record<string, unknown>): Promise<MCPResult> {
     return this.callTool('qa-mcp', tool, args);
@@ -46,175 +71,94 @@ export class MCPClient {
     return this.callTool('ai-governance-mcp', tool, args);
   }
 
-  private async callTool(
-    service: string,
-    tool: string,
-    args: Record<string, unknown>,
-  ): Promise<MCPResult> {
+  async callTool(service: string, tool: string, args: Record<string, unknown>): Promise<MCPResult> {
+    if (!this.gatewayUrl) {
+      return { success: false, error: 'MCP_GATEWAY_URL is required' };
+    }
+    if (!this.accessToken) {
+      return { success: false, error: 'MCP_GATEWAY_TOKEN is required' };
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(service)) {
+      return { success: false, error: 'Invalid MCP service id' };
+    }
+    if (!/^[a-z][a-z0-9_-]*$/.test(tool)) {
+      return { success: false, error: 'Invalid MCP tool name' };
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
-      const toolResult = this.executeToolLocally(service, tool, args);
-      return {
-        success: true,
-        data: toolResult,
-      };
+      const response = await this.fetchImpl(
+        `${this.gatewayUrl}/mcp/${encodeURIComponent(service)}/tools/call`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ id: ++this.requestId, name: tool, arguments: args }),
+          signal: controller.signal,
+        },
+      );
+      if (!response.ok) {
+        return { success: false, error: `MCP gateway returned HTTP ${response.status}` };
+      }
+      let payload: JsonRpcResponse;
+      try {
+        payload = (await response.json()) as JsonRpcResponse;
+      } catch {
+        return { success: false, error: 'MCP gateway returned invalid JSON' };
+      }
+      if (payload.error) {
+        return { success: false, error: payload.error.message ?? 'MCP tool returned an error' };
+      }
+      if (!Object.prototype.hasOwnProperty.call(payload, 'result')) {
+        return { success: false, error: 'MCP gateway response has no result' };
+      }
+      return { success: true, data: payload.result };
     } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+      const message = error instanceof Error && error.name === 'AbortError'
+        ? 'MCP gateway request timed out'
+        : 'MCP gateway request failed';
+      return { success: false, error: message };
+    } finally {
+      clearTimeout(timer);
     }
-  }
-
-  private executeToolLocally(
-    service: string,
-    tool: string,
-    _args: Record<string, unknown>,
-  ): unknown {
-    // Local execution map para cada MCP
-    // Isso seria expandido conforme cada MCP adiciona suporte
-    const toolMap: Record<string, Record<string, () => unknown>> = {
-      'qa-mcp': {
-        run_linter: () => ({
-          status: 'success',
-          message: `qa-mcp.run_linter called`,
-        }),
-        run_unit_tests: () => ({
-          status: 'success',
-          message: `qa-mcp.run_unit_tests called`,
-        }),
-        run_security_scan: () => ({
-          status: 'success',
-          message: `qa-mcp.run_security_scan called`,
-        }),
-      },
-      'test-mcp': {
-        create_test_plan: () => ({
-          plan_id: `plan_${Date.now()}`,
-          status: 'created',
-          message: 'test-mcp.create_test_plan called',
-        }),
-        generate_scenarios: () => ({
-          scenarios: [],
-          message: 'test-mcp.generate_scenarios called',
-        }),
-        create_checklist: () => ({
-          checklist_id: `checklist_${Date.now()}`,
-          message: 'test-mcp.create_checklist called',
-        }),
-      },
-      'docs-mcp': {
-        generate_doc: () => ({
-          doc_path: 'docs/generated.md',
-          message: 'docs-mcp.generate_doc called',
-        }),
-        validate_doc: () => ({
-          valid: true,
-          message: 'docs-mcp.validate_doc called',
-        }),
-        scan_docs: () => ({
-          files: [],
-          message: 'docs-mcp.scan_docs called',
-        }),
-      },
-      'deploy-mcp': {
-        commit_files: () => ({
-          commit_sha: `abc${Math.random().toString(36).slice(2, 9)}`,
-          message: 'deploy-mcp.commit_files called',
-        }),
-      },
-      'session-mcp': {
-        add_artifact: () => ({
-          artifact_id: `art_${Date.now()}`,
-          message: 'session-mcp.add_artifact called',
-        }),
-        save_checkpoint: () => ({
-          checkpoint_id: `cp_${Date.now()}`,
-          message: 'session-mcp.save_checkpoint called',
-        }),
-      },
-      'infra-mcp': {
-        terraform_validate: () => ({
-          status: 'valid',
-          message: 'infra-mcp.terraform_validate called',
-        }),
-        terraform_plan: () => ({
-          plan_path: 'terraform.plan',
-          message: 'infra-mcp.terraform_plan called',
-        }),
-        policy_scan_checkov: () => ({
-          findings: [],
-          message: 'infra-mcp.policy_scan_checkov called',
-        }),
-      },
-      'ai-governance-mcp': {
-        create_adr: () => ({
-          adr_path: 'docs/decisions/adr-0001.md',
-          message: 'ai-governance-mcp.create_adr called',
-        }),
-        validate_agent_decision: () => ({
-          approved: true,
-          message: 'ai-governance-mcp.validate_agent_decision called',
-        }),
-        get_service_ownership: () => ({
-          service: 'architecture',
-          responsibilities: [],
-          message: 'ai-governance-mcp.get_service_ownership called',
-        }),
-      },
-    };
-
-    const handler = toolMap[service]?.[tool];
-    if (!handler) {
-      throw new Error(`Tool ${service}.${tool} not found in local map`);
-    }
-
-    return handler();
   }
 
   async validateWithQA(docPath: string): Promise<boolean> {
-    const result = await this.callQATool('run_linter', {
-      repo_path: docPath,
-    });
-    return result.success;
+    return (await this.callQATool('run_linter', { repo_path: docPath })).success;
   }
 
-  async createTestPlan(feature: string): Promise<string> {
-    const result = await this.callTestTool('create_test_plan', {
+  async createTestPlan(feature: string): Promise<unknown> {
+    return (await this.callTestTool('create_test_plan', {
       title: `Test Plan: ${feature}`,
       scope: `Testing ${feature}`,
-    });
-    return result.data as string;
+    })).data;
   }
 
-  async generateDocumentation(title: string, vars: Record<string, string>): Promise<string> {
-    const result = await this.callDocsTool('generate_doc', {
-      template_name: 'README',
-      variables: vars,
-    });
-    return result.data as string;
+  async generateDocumentation(title: string, vars: Record<string, string>): Promise<unknown> {
+    return (await this.callDocsTool('generate_doc', { template_name: title, variables: vars })).data;
   }
 
-  async commitBacklog(files: Array<{ path: string; content: string }>): Promise<string> {
-    const result = await this.callDeployTool('commit_files', {
-      repo: 'platform-devs',
-      branch: 'main',
-      message: 'docs: backlog and tasks created',
-      files,
-    });
-    return result.data as string;
+  async commitBacklog(files: Array<{ path: string; content: string }>): Promise<unknown> {
+    return (await this.callDeployTool('commit_files', {
+      repo: 'platform-devs', branch: 'main', message: 'docs: backlog and tasks created', files,
+    })).data;
   }
 
-  async recordArtifact(
-    sessionId: string,
-    type: string,
-    content: string,
-  ): Promise<unknown> {
+  async recordArtifact(sessionId: string, type: string, content: string): Promise<MCPResult> {
     return this.callSessionTool('add_artifact', {
-      session_id: sessionId,
-      artifact_type: type,
-      content,
+      session_id: sessionId, artifact_type: type, content,
     });
   }
 }
 
+let defaultClient: MCPClient | undefined;
+
+export function getMCPClient(): MCPClient {
+  defaultClient ??= new MCPClient();
+  return defaultClient;
+}
+
+/** Backwards-compatible singleton; configuration is validated on first call. */
 export const mcpClient = new MCPClient();

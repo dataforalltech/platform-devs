@@ -1,0 +1,19 @@
+schema_version: 1
+provider_id: connectors-mcp
+name: drop_db_table
+description: Drop one tenant-scoped database table after a verified N2 policy decision.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    connector_id: {type: integer}
+    schema_name: {type: string}
+    table_name: {type: string}
+    cascade: {type: boolean}
+  required: [connector_id, schema_name, table_name]
+output_schema: {type: object, properties: {status: {type: string}}}
+required_scope: connectors:database:admin
+mutating: true
+risk: {level: critical, effects: [delete, schema_change], blast_radius: tenant, approval_required: N2}
+secret_reference_only: true

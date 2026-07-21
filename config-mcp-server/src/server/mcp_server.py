@@ -569,7 +569,9 @@ _EXEMPT_TOOLS: frozenset[str] = frozenset({"status"})
 # Denylist fail-safe (CI-7): tools que NUNCA devem sair pelo gateway.
 #   get_credential        — devolve o SEGREDO em claro (risco de exfiltração p/ o agente).
 #   set_credential_secure — depende de getpass no TTY do processo; travaria o worker HTTP.
-_EXCLUDE_TOOLS: frozenset[str] = frozenset({"get_credential", "set_credential_secure"})
+_EXCLUDE_TOOLS: frozenset[str] = frozenset(
+    {"get_credential", "set_credential", "set_credential_secure", "read_env_file"}
+)
 
 # Campos de policy repassados no /mcp/tools/list (o gateway lê estes campos).
 _POLICY_FIELDS = ("capability", "required_scope", "resource_type", "data_domain")
@@ -610,7 +612,11 @@ _STORELESS_TOOLS: frozenset[str] = frozenset({"status", "get_physical_info"})
 async def _dispatch_storeless(name: str) -> dict[str, Any]:
     """Despacha as tools que não tocam o store (status/sysinfo). Async por uniformidade."""
     if name == "status":
-        return {"status": "ok", "service": "config-mcp", "tools": len(_TOOL_SCHEMAS)}
+        return {
+            "status": "ok",
+            "service": "config-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
     if name == "get_physical_info":
         return await get_physical_info()
     raise KeyError(name)
@@ -791,12 +797,18 @@ def _build_http_app(settings: Settings, encryptor: Encryptor) -> FastAPI:
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
-        return {"status": "ok", "service": "config-mcp", "tools": len(_TOOL_SCHEMAS)}
+        return {
+            "status": "ok",
+            "service": "config-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
 
     @app.get("/mcp/tools/list")
     def http_list_tools() -> dict:
         tools = []
         for name, meta in _TOOL_SCHEMAS.items():
+            if name in _EXCLUDE_TOOLS:
+                continue
             entry: dict[str, Any] = {
                 "name": name,
                 "description": meta["description"],
@@ -876,6 +888,7 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
         return [
             Tool(name=name, description=meta["description"], inputSchema=meta["schema"])
             for name, meta in _TOOL_SCHEMAS.items()
+            if name not in _EXCLUDE_TOOLS
         ]
 
     @server.call_tool()

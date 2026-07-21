@@ -1,0 +1,23 @@
+schema_version: 1
+provider_id: devteam-mcp
+name: infra_request_vm
+description: Request a tenant-scoped VM lease after a policy-bound approval decision.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    spec: {type: string, enum: [cpu-small, cpu-medium, cpu-large, gpu-a100, high-mem]}
+    duration_min: {type: integer, minimum: 15, maximum: 1440}
+    owner: {type: string}
+    purpose: {type: string}
+  required: [spec, duration_min, owner]
+output_schema:
+  type: object
+  properties:
+    lease_id: {type: string}
+    status: {type: string}
+required_scope: infra:lease:write
+mutating: true
+risk: {level: high, effects: [provision, financial], blast_radius: tenant, approval_required: N2}
+secret_reference_only: true

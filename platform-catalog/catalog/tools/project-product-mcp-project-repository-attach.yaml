@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_repository_attach
+  uid: project-product-mcp:project_repository_attach
+  domain: portfolio
+  title: project_repository_attach @ project-product-mcp
+  description: Attach a provider-neutral repository reference resolved by platform-connectors.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - repository-binding
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_repository_attach
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_repository_attach
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_repository_attach
+- verb: provided-by
+  target: project-product-mcp

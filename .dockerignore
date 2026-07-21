@@ -5,6 +5,16 @@
 **/__pycache__
 **/*.pyc
 .git
+.codex
+**/.env
+**/.env.*
+!**/.env.example
+**/.npmrc
+**/.pypirc
+**/*.key
+**/*.pem
+**/*.p12
+**/*.pfx
 **/.pytest_cache
 **/.vite
 **/.mypy_cache

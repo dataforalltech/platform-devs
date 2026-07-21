@@ -1,0 +1,16 @@
+schema_version: 1
+provider_id: devteam-mcp
+name: services_read_env_file
+description: Disabled because raw service environment files may contain secret material.
+status: disabled
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    service_id: {type: string}
+  required: [service_id]
+output_schema: {type: object, properties: {artifact_ref: {type: string}}}
+required_scope: services:environment:read
+mutating: false
+risk: {level: critical, effects: [secret_access], blast_radius: service, approval_required: N2}
+secret_reference_only: true

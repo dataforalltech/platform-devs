@@ -1,0 +1,82 @@
+apiVersion: dataforall.io/v1alpha1
+kind: ServiceProfile
+metadata:
+  name: platform-project-product
+  type: backend
+  domain: portfolio
+  owner: platform-engineering
+  repository: dataforalltech/platform-devs
+  criticality: high
+runtime:
+  official: docker-swarm
+  process: python -m app.main
+  image:
+    repository: registry.dataforall.tech/platform-project-product
+    referencePolicy: digest
+  deploymentArtifact: deploy/stack.yaml
+  replicas: 2
+  resources:
+    limits: {cpus: "1.0", memory: 1G}
+    reservations: {cpus: "0.25", memory: 256M}
+  ports: {business: 8000, management: 9090, mcp: 7121}
+  health: {liveness: /health/live, readiness: /health/ready}
+  placement: {spreadBy: node.labels.az}
+  kubernetesProfile: absent
+exposure:
+  public: true
+  gatewayPrefix: /project-product
+  internalRoutesPublished: false
+  trustedCallers: [platform-api-gateway]
+internalApi:
+  enabled: true
+  trustedCallers: [platform-project-product-mcp]
+  routes: [/api/internal/mcp/products, /api/internal/mcp/projects, /api/internal/mcp/repositories]
+identity:
+  algorithm: RS256
+  issuer: runtime-supplied-platform-admin
+  audience: platform-project-product
+  jwksUrl: runtime-supplied-platform-admin-jwks
+persistence:
+  stateful: true
+  adminRegistry: ADMIN_DATAFORALL.PLATFORMS
+  tenantEngine: registry-resolved
+  supportedTenantEngines: [postgresql, mysql]
+  isolation:
+    postgresql: schema-per-tenant
+    mysql: database-per-tenant
+  resolution: platforms-runtime
+  migrations:
+    command: python -m scripts.migrate
+    owner: platform-engineering
+    strategy: release-job
+    lock: engine-native-advisory-lock
+    compatibility: expand-contract-forward-only
+
+dependencies:
+  libraries:
+    - {name: platform-core-lib, approvedTag: 0.3.0, commitSha: aca986bd088b23def739a5047c0b73040b52236a, extras: [], evidenceRef: pyproject.toml}
+    - {name: platform-crypto-lib, approvedTag: 0.2.0, commitSha: 750b0c9aab4cf37b88192e3b1e7c19571d042b8b, extras: [aws], evidenceRef: pyproject.toml}
+    - {name: platform-database-lib, approvedTag: 1.1.0, commitSha: 4ab95a1d9275d5062473d86225c82164d3357f5e, extras: [], evidenceRef: pyproject.toml}
+    - {name: platform-tenant-lib, approvedTag: 0.3.0, commitSha: e60f81207fa69f57a48b94bf3987f5aa42e430e1, extras: [], evidenceRef: pyproject.toml}
+    - {name: platform-observability-lib, approvedTag: 0.3.1, commitSha: 71011afb1440afdcd381608e2ccb1350416058a5, extras: [], evidenceRef: pyproject.toml}
+    - {name: platform-auth, approvedTag: 1.0.0, commitSha: b74b7d1be57b48b68e9d630d7b5dd8cdcd7da774, extras: [], evidenceRef: pyproject.toml}
+  sync: [platform-admin, platform-governance]
+  async: []
+  dataStores: [tenant-postgresql-or-mysql, admin-registry-mysql, redis-rate-limit]
+secrets:
+  provider: vault-kv
+  auth: aws
+  requiredNames: [admin_db_password, internal_api_token, governance_internal_token, metrics_scrape_token, rate_limit_storage_uri]
+observability:
+  otlpEndpoint: runtime-supplied
+  metricsPath: /metrics
+  metricsPort: 9090
+  metricsExposure: private-scraper-only
+  logs: structured
+  slo: docs/slo.md
+  alertsOwner: platform-engineering
+operations:
+  runbook: docs/runbook.md
+  rollback: docs/rollback.md
+  dashboard: runtime-supplied
+  onCall: platform-engineering

@@ -1,0 +1,49 @@
+schema_version: 1
+provider_id: project-product-mcp
+name: project_repository_detach
+description: Soft-detach a repository binding after approval and version validation.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    idempotency_key:
+      type: string
+      minLength: 8
+      maxLength: 128
+      pattern: ^[A-Za-z0-9._:-]+$
+    binding_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    expected_version:
+      type: integer
+      minimum: 1
+  required:
+  - idempotency_key
+  - binding_id
+  - expected_version
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    binding_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    detached:
+      const: true
+  required:
+  - binding_id
+  - detached
+required_scope: portfolio:repository:delete
+mutating: true
+risk:
+  level: high
+  effects:
+  - delete
+  blast_radius: tenant
+  approval_required: N2
+secret_reference_only: true

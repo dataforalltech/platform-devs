@@ -1,0 +1,34 @@
+schema_version: 1
+id: cache-mcp
+display_name: Cache MCP
+description: Cache operations provider retained for inventory but disabled until it has gateway-authenticated HTTP transport.
+status: disabled
+classification: {type: system, capability_domain: cache}
+ownership:
+  team: platform-engineering
+  source_repo: dataforalltech/platform-devs
+  source_path: services/cache-mcp-server
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, src.server.mcp_server]
+  cwd: services/cache-mcp-server
+  service_name: cache-mcp
+  build_context: ./services/cache-mcp-server
+  dockerfile: Dockerfile
+  environment: {}
+  exposes_tools: true
+transport:
+  stdio: true
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {internal_port: 7100, host_port: 27116}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: true, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: [auth-mcp]
+tool_contracts:
+  - contracts/tools/cache-clear-all.yaml

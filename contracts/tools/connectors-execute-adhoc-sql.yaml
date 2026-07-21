@@ -1,0 +1,17 @@
+schema_version: 1
+provider_id: connectors-mcp
+name: execute_adhoc_sql
+description: Execute tenant-scoped ad-hoc SQL only after provider migration to a typed statement contract.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    connector_id: {type: integer}
+    statement: {type: string}
+  required: [connector_id, statement]
+output_schema: {type: object, properties: {row_count: {type: integer}}}
+required_scope: connectors:database:execute
+mutating: true
+risk: {level: critical, effects: [arbitrary_sql], blast_radius: tenant, approval_required: N2}
+secret_reference_only: true

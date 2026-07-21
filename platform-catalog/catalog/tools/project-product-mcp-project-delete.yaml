@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_delete
+  uid: project-product-mcp:project_delete
+  domain: portfolio
+  title: project_delete @ project-product-mcp
+  description: Soft-delete a project with no active repository bindings after approval.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - project
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_delete
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_delete
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_delete
+- verb: provided-by
+  target: project-product-mcp

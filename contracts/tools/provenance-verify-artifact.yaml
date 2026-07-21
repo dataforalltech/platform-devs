@@ -1,0 +1,25 @@
+schema_version: 1
+provider_id: artifact-provenance-mcp
+name: provenance_verify_artifact
+description: Verify an artifact against an expected SHA-256 digest.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    path: {type: string, minLength: 1, maxLength: 4096}
+    expected_sha256: {type: string, pattern: '^[A-Fa-f0-9]{64}$'}
+  required: [path, expected_sha256]
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    path: {type: string}
+    expected_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    actual_sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    matches: {type: boolean}
+  required: [path, expected_sha256, actual_sha256, matches]
+required_scope: provenance:verify
+mutating: false
+risk: {level: low, effects: [read, verify], blast_radius: workspace, approval_required: none}
+secret_reference_only: true

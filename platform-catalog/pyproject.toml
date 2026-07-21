@@ -7,7 +7,7 @@ name = "platform-catalog"
 version = "0.1.0"
 description = "Capability Registry — source of truth do domínio (ADR-009/010/011)."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2",
     "pyyaml>=6",

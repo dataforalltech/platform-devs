@@ -1,0 +1,116 @@
+schema_version: 1
+id: project-product-mcp
+display_name: Project & Product MCP
+description: HTTP-only MCP sidecar for the canonical tenant-scoped project/product service.
+status: active
+classification:
+  type: domain
+  capability_domain: portfolio
+ownership:
+  team: platform-engineering
+  source_repo: dataforalltech/platform-devs
+  source_path: project-product-mcp-server
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, project_product_mcp.server.mcp_server]
+  cwd: project-product-mcp-server/mcp
+  service_name: project-product-mcp
+  base_url_env: PROJECT_PRODUCT_MCP_URL
+  build_context: .
+  dockerfile: project-product-mcp-server/Dockerfile
+  build_secrets: [github_token]
+  depends_on: [platform-project-product-api, redis]
+  environment:
+    RUNTIME_ENV: local
+    SERVICE_BASE_URL: http://platform-project-product-api:8000
+    SERVICE_READINESS_URL: http://platform-project-product-api:9090/health/ready
+    SERVICE_ALLOWED_HOSTS: '["platform-project-product-api","localhost","127.0.0.1"]'
+    PRIVATE_NETWORK_ENCRYPTED: "false"
+    INTERNAL_API_TOKEN: ${PROJECT_PRODUCT_INTERNAL_API_TOKEN:?required}
+    GOVERNANCE_BASE_URL: ${GOVERNANCE_BASE_URL:?required}
+    GOVERNANCE_ALLOWED_HOSTS: '["platform-governance","host.docker.internal","localhost"]'
+    GOVERNANCE_INTERNAL_TOKEN: ${GOVERNANCE_INTERNAL_TOKEN:?required}
+    MCP_TWIN_AUDIENCE: mcp:portfolio
+    MCP_TWIN_ISSUER: ${MCP_TWIN_ISSUER:?required}
+    URL_ADMIN_TWIN_JWKS: ${URL_ADMIN_TWIN_JWKS:?required}
+    IDENTITY_ALLOWED_HOSTS: '["platform-admin","host.docker.internal","localhost"]'
+    RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?required}@redis:6379/6
+    MCP_RATE_LIMIT_REQUESTS: "120"
+    MCP_RATE_LIMIT_WINDOW_SECONDS: "60"
+    MCP_RATE_LIMIT_KEY_PREFIX: mcp:project_product
+    MCP_RATE_LIMIT_CONNECT_TIMEOUT_SECONDS: "2.0"
+    MCP_PORT: "7121"
+  exposes_tools: true
+companions:
+  - service_name: platform-project-product-api
+    command: [python, -m, app.main]
+    ports: ["28001:8000", "29091:9090"]
+    depends_on: [redis]
+    environment:
+      RUNTIME_ENV: local
+      ENVIRONMENT: development
+      API_PORT: "8000"
+      HEALTH_PORT: "9090"
+      ADMIN_DB_HOST: ${ADMIN_DB_HOST:?required}
+      ADMIN_DB_PORT: ${ADMIN_DB_PORT:-3306}
+      ADMIN_DB_NAME: ${ADMIN_DB_NAME:-ADMIN_DATAFORALL}
+      ADMIN_DB_USER: ${ADMIN_DB_USER:?required}
+      ADMIN_DB_PASSWORD: ${ADMIN_DB_PASSWORD:?required}
+      READINESS_TENANT_ID: ${READINESS_TENANT_ID:?required}
+      JWT_ISSUER: ${JWT_ISSUER:?required}
+      JWT_AUDIENCE: ${JWT_AUDIENCE:?required}
+      JWT_JWKS_URL: ${JWT_JWKS_URL:?required}
+      INTERNAL_API_TOKEN: ${PROJECT_PRODUCT_INTERNAL_API_TOKEN:?required}
+      METRICS_ENABLED: "true"
+      METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:?required}
+      RATE_LIMIT_STORAGE_URI: redis://:${REDIS_PASSWORD:?required}@redis:6379/6
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+transport:
+  stdio: false
+  http: true
+  canonical_http:
+    health_live: /v1/health
+    health_ready: /v1/ready
+    tools_list: /mcp/tools/list
+    tools_call: /mcp/tools/call
+network:
+  internal_port: 7121
+  host_port: 27121
+security:
+  auth_required: true
+  tenant_required: true
+  policy_mode: fail_closed
+  audit_required: true
+  secret_redaction_required: true
+  context_signing_required: true
+ci:
+  enabled: true
+  coverage_threshold: 85
+  lint: true
+  type_check: true
+  docker_build: true
+  smoke_test: true
+gateway: {enabled: true}
+registry: {enabled: true}
+dependencies: []
+tool_catalog: platform-catalog/catalog/tools
+tool_contracts:
+  - contracts/tools/project-product-mcp-product-create.yaml
+  - contracts/tools/project-product-mcp-product-get.yaml
+  - contracts/tools/project-product-mcp-product-list.yaml
+  - contracts/tools/project-product-mcp-product-update.yaml
+  - contracts/tools/project-product-mcp-product-delete.yaml
+  - contracts/tools/project-product-mcp-project-create.yaml
+  - contracts/tools/project-product-mcp-project-get.yaml
+  - contracts/tools/project-product-mcp-project-list.yaml
+  - contracts/tools/project-product-mcp-project-update.yaml
+  - contracts/tools/project-product-mcp-project-delete.yaml
+  - contracts/tools/project-product-mcp-project-repository-attach.yaml
+  - contracts/tools/project-product-mcp-project-repository-list.yaml
+  - contracts/tools/project-product-mcp-project-repository-detach.yaml
+
+

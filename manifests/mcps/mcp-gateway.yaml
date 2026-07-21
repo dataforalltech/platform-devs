@@ -1,0 +1,47 @@
+schema_version: 1
+id: mcp-gateway
+display_name: MCP Gateway
+description: Authentication, authorization, context propagation, policy enforcement and audit PEP.
+status: active
+classification: {type: control-plane, capability_domain: gateway}
+ownership: {team: platform-engineering, source_repo: dataforalltech/platform-devs, source_path: mcp-gateway}
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, src.main]
+  cwd: mcp-gateway
+  service_name: mcp-gateway
+  build_context: ./mcp-gateway
+  dockerfile: Dockerfile
+  environment:
+    MCP_REGISTRY_FILE: /app/mcp-runtime-registry.json
+    GATEWAY_POLICY_MODE: fail_closed
+    GATEWAY_PDP_URL: ${GATEWAY_PDP_URL:?required}
+    GATEWAY_TOKEN_EXCHANGE_URL: ${GATEWAY_TOKEN_EXCHANGE_URL:?required}
+    GATEWAY_CONTEXT_SIGNING_KEY: ${GATEWAY_CONTEXT_SIGNING_KEY:?required}
+    GATEWAY_AS_ISSUER: ${GATEWAY_AS_ISSUER:?required}
+    GATEWAY_AS_JWKS_URL: ${GATEWAY_AS_JWKS_URL:?required}
+    GATEWAY_RESOURCE: ${GATEWAY_RESOURCE:?required}
+    GATEWAY_ENVIRONMENT: ${GATEWAY_ENVIRONMENT:-local}
+    GATEWAY_RATE_LIMITS_JSON: '${GATEWAY_RATE_LIMITS_JSON:?required}'
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    REDIS_PASSWORD: ${REDIS_PASSWORD:?required}
+    PG_HOST: postgres
+    PG_PORT: "5432"
+    PG_DB: ${POSTGRES_DB:-platform_dev}
+    PG_USER: ${POSTGRES_USER:?required}
+    PG_PASSWORD: ${POSTGRES_PASSWORD:?required}
+  exposes_tools: false
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {internal_port: 8080, host_port: 28080}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: true, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []

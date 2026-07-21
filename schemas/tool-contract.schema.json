@@ -1,0 +1,121 @@
+{
+  "$defs": {
+    "ToolRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_required": {
+          "default": "none",
+          "enum": [
+            "none",
+            "N1",
+            "N2"
+          ],
+          "title": "Approval Required",
+          "type": "string"
+        },
+        "blast_radius": {
+          "enum": [
+            "none",
+            "workspace",
+            "service",
+            "environment",
+            "tenant",
+            "global"
+          ],
+          "title": "Blast Radius",
+          "type": "string"
+        },
+        "effects": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Effects",
+          "type": "array"
+        },
+        "level": {
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "critical"
+          ],
+          "title": "Level",
+          "type": "string"
+        }
+      },
+      "required": [
+        "level",
+        "blast_radius"
+      ],
+      "title": "ToolRisk",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "description": {
+      "title": "Description",
+      "type": "string"
+    },
+    "input_schema": {
+      "title": "Input Schema",
+      "type": "object"
+    },
+    "mutating": {
+      "title": "Mutating",
+      "type": "boolean"
+    },
+    "name": {
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "title": "Name",
+      "type": "string"
+    },
+    "output_schema": {
+      "title": "Output Schema",
+      "type": "object"
+    },
+    "provider_id": {
+      "title": "Provider Id",
+      "type": "string"
+    },
+    "required_scope": {
+      "title": "Required Scope",
+      "type": "string"
+    },
+    "risk": {
+      "$ref": "#/$defs/ToolRisk"
+    },
+    "schema_version": {
+      "const": 1,
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "secret_reference_only": {
+      "default": true,
+      "title": "Secret Reference Only",
+      "type": "boolean"
+    },
+    "status": {
+      "default": "active",
+      "enum": [
+        "active",
+        "disabled"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "provider_id",
+    "name",
+    "description",
+    "input_schema",
+    "output_schema",
+    "required_scope",
+    "mutating",
+    "risk"
+  ],
+  "title": "ToolContract",
+  "type": "object"
+}

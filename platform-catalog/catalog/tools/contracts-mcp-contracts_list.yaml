@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: contracts-mcp/contracts_list
+  uid: contracts-mcp:contracts_list
+  domain: contracts
+  title: contracts_list @ contracts-mcp
+  description: List canonical governed tool contracts with optional filters.
+  owner: platform-engineering
+  tags: [contracts-mcp, contracts]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: contracts.contracts_list
+  provider_id: contracts-mcp
+  provider_version: 1.0.0
+  tool: contracts_list
+  endpoint: streamable-http
+  selection: {}
+relations:
+  - {verb: implements, target: contracts.contracts_list}
+  - {verb: provided-by, target: contracts-mcp}

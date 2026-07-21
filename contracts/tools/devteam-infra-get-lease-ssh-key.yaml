@@ -1,0 +1,19 @@
+schema_version: 1
+provider_id: devteam-mcp
+name: infra_get_lease_ssh_key
+description: Disabled legacy operation that returned private key material to the caller.
+status: disabled
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    lease_id: {type: string}
+  required: [lease_id]
+output_schema:
+  type: object
+  properties:
+    key_lease_ref: {type: string}
+required_scope: infra:secret:read
+mutating: false
+risk: {level: critical, effects: [secret_access], blast_radius: tenant, approval_required: N2}
+secret_reference_only: true

@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_repository_detach
+  uid: project-product-mcp:project_repository_detach
+  domain: portfolio
+  title: project_repository_detach @ project-product-mcp
+  description: Soft-detach a repository binding after approval and version validation.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - repository-binding
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_repository_detach
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_repository_detach
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_repository_detach
+- verb: provided-by
+  target: project-product-mcp

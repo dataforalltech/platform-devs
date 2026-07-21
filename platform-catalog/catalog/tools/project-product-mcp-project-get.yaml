@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_get
+  uid: project-product-mcp:project_get
+  domain: portfolio
+  title: project_get @ project-product-mcp
+  description: Get one active tenant project by canonical identifier.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - project
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_get
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_get
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_get
+- verb: provided-by
+  target: project-product-mcp

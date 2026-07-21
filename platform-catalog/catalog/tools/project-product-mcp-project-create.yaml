@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_create
+  uid: project-product-mcp:project_create
+  domain: portfolio
+  title: project_create @ project-product-mcp
+  description: Create a project under a product while retaining only opaque external
+    service references.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - project
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_create
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_create
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_create
+- verb: provided-by
+  target: project-product-mcp

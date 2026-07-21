@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "platform-cache-mcp"
 version = "1.0.0"
 description = "Model Context Protocol server for caching operations with Redis/Memcached backend"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team", email = "platform@dataforall.tech" }]
 dependencies = [

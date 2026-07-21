@@ -1,0 +1,38 @@
+schema_version: 1
+provider_id: contracts-mcp
+name: contracts_list
+description: List canonical governed tool contracts with optional filters.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    provider_id: {type: string, minLength: 1}
+    status: {type: string, enum: [active, disabled]}
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    count: {type: integer, minimum: 0}
+    contracts:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          provider_id: {type: string}
+          name: {type: string}
+          description: {type: string}
+          status: {type: string, enum: [active, disabled]}
+          required_scope: {type: string}
+          mutating: {type: boolean}
+          risk: {type: object}
+          secret_reference_only: {type: boolean}
+          input_schema: {type: object}
+          output_schema: {type: object}
+        required: [provider_id, name, description, status, required_scope, mutating, risk, secret_reference_only, input_schema, output_schema]
+  required: [count, contracts]
+required_scope: contracts:read
+mutating: false
+risk: {level: low, effects: [read], blast_radius: none, approval_required: none}
+secret_reference_only: true

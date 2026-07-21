@@ -1,0 +1,11 @@
+﻿# Executed before the Swarm rollout with the exact same image digest.
+# docker service create --name platform-project-product-migrate --restart-condition none \
+#   --network platform-identity \
+#   --env RUNTIME_ENV=cloud --env VAULT_ADDR --env VAULT_AUTH_METHOD=aws \
+#   --env ADMIN_DB_HOST --env ADMIN_DB_PORT --env ADMIN_DB_NAME --env ADMIN_DB_USER \
+#   registry.dataforall.tech/platform-project-product@${PROJECT_PRODUCT_IMAGE_DIGEST} \
+#   python -m scripts.migrate
+command: [python, -m, scripts.migrate]
+strategy: release-job
+failurePolicy: block-promotion
+lock: engine-native-advisory-lock

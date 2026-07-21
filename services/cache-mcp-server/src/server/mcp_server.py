@@ -85,15 +85,6 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
-            name="cache_clear_all",
-            description="Clear all cache entries",
-            inputSchema={
-                "type": "object",
-                "properties": {},
-                "required": [],
-            },
-        ),
-        Tool(
             name="cache_get_stats",
             description="Get cache hit/miss statistics",
             inputSchema={
@@ -161,8 +152,6 @@ async def call_tool(name: str, arguments: Any) -> Any:
             return await cache_tools.cache_get(key=arguments.get("key"))
         elif name == "cache_delete":
             return await cache_tools.cache_delete(key=arguments.get("key"))
-        elif name == "cache_clear_all":
-            return await cache_tools.cache_clear_all()
         elif name == "cache_get_stats":
             return await cache_tools.cache_get_stats()
         elif name == "cache_set_pattern":

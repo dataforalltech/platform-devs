@@ -1,0 +1,28 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_update
+  uid: project-product-mcp:project_update
+  domain: portfolio
+  title: project_update @ project-product-mcp
+  description: Update project metadata and external service references with optimistic
+    concurrency.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - project
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_update
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_update
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_update
+- verb: provided-by
+  target: project-product-mcp

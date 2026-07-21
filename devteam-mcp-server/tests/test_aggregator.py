@@ -15,6 +15,11 @@ sessão/Store falsa (``MagicMock``) e só exercita caminhos que não persistem.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -141,3 +146,46 @@ async def test_dispatch_unknown_op_in_known_domain_raises_keyerror():
 async def test_dispatch_unknown_domain_raises_keyerror():
     with pytest.raises(KeyError):
         await M._dispatch("bogus_tool", {}, MagicMock())
+
+
+def test_secret_returning_tools_are_fail_safe_excluded():
+    assert "infra_get_lease_ssh_key" in M._EXCLUDE_TOOLS
+    assert "config_get_credential" in M._EXCLUDE_TOOLS
+
+
+def test_vm_request_schema_does_not_accept_caller_approval_boolean():
+    properties = M._TOOL_SCHEMAS["infra_request_vm"]["schema"]["properties"]
+    assert "human_approved" not in properties
+
+
+def test_signed_context_is_tenant_and_decision_bound():
+    key = "unit-test-signing-key"
+    context = {
+        "tenant_id": "tenant-a",
+        "policy_decision_id": "decision-1",
+        "approval_ids": ["approval-1"],
+    }
+    encoded = base64.urlsafe_b64encode(
+        json.dumps(context, sort_keys=True, separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    signature = hmac.new(key.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+    meta = {
+        "signed_context": encoded,
+        "context_signature": signature,
+        "policy_decision_id": "decision-1",
+    }
+    settings = SimpleNamespace(mcp_context_signing_key=key)
+    assert M._verify_signed_context(meta, settings, "tenant-a") == context
+    with pytest.raises(PermissionError, match="tenant mismatch"):
+        M._verify_signed_context(meta, settings, "tenant-b")
+
+
+def test_signed_context_rejects_tampering():
+    settings = SimpleNamespace(mcp_context_signing_key="expected-key")
+    meta = {
+        "signed_context": "e30",
+        "context_signature": "not-a-valid-signature",
+        "policy_decision_id": "decision-1",
+    }
+    with pytest.raises(PermissionError, match="signature"):
+        M._verify_signed_context(meta, settings, "tenant-a")

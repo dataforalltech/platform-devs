@@ -1,0 +1,11 @@
+schema_version: 1
+provider_id: cache-mcp
+name: cache_clear_all
+description: Disabled global cache deletion; use tenant- and namespace-scoped invalidation instead.
+status: disabled
+input_schema: {type: object, additionalProperties: false, properties: {}}
+output_schema: {type: object, properties: {status: {type: string}}}
+required_scope: cache:global:delete
+mutating: true
+risk: {level: critical, effects: [delete], blast_radius: global, approval_required: N2}
+secret_reference_only: true

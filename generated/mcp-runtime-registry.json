@@ -1,0 +1,2841 @@
+{
+  "generated": true,
+  "schema_version": 1,
+  "services": {
+    "artifact-provenance-mcp": {
+      "classification": {
+        "capability_domain": "provenance",
+        "type": "system"
+      },
+      "gateway_enabled": true,
+      "owner": {
+        "legacy_source_paths": [],
+        "source_path": "artifact-provenance-mcp-server",
+        "source_repo": "dataforalltech/platform-devs",
+        "team": "security"
+      },
+      "registry_enabled": true,
+      "security": {
+        "audit_required": true,
+        "auth_required": true,
+        "context_signing_required": true,
+        "policy_mode": "fail_closed",
+        "secret_redaction_required": true,
+        "tenant_required": true
+      },
+      "status": "active",
+      "tool_policies": {
+        "provenance_build_statement": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "paths": {
+                "items": {
+                  "maxLength": 4096,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "minItems": 1,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "paths"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "correlation_id": {
+                "type": "string"
+              },
+              "environment": {
+                "type": "string"
+              },
+              "repository": {
+                "type": "string"
+              },
+              "repository_head": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-f0-9]{40,64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "schema_version": {
+                "const": 1
+              },
+              "subject": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "git_status": {
+                      "type": "string"
+                    },
+                    "git_tracked": {
+                      "type": "boolean"
+                    },
+                    "path": {
+                      "type": "string"
+                    },
+                    "repository_head": {
+                      "anyOf": [
+                        {
+                          "pattern": "^[a-f0-9]{40,64}$",
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "sha256": {
+                      "pattern": "^[a-f0-9]{64}$",
+                      "type": "string"
+                    },
+                    "size_bytes": {
+                      "minimum": 0,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "sha256",
+                    "size_bytes",
+                    "git_tracked",
+                    "git_status",
+                    "repository_head"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "schema_version",
+              "subject",
+              "repository",
+              "repository_head",
+              "environment",
+              "correlation_id"
+            ],
+            "type": "object"
+          },
+          "required_scope": "provenance:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "workspace",
+            "effects": [
+              "read",
+              "hash"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "provenance_hash_artifact": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "git_status": {
+                "type": "string"
+              },
+              "git_tracked": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              },
+              "repository_head": {
+                "anyOf": [
+                  {
+                    "pattern": "^[a-f0-9]{40,64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "size_bytes": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path",
+              "sha256",
+              "size_bytes",
+              "git_tracked",
+              "git_status",
+              "repository_head"
+            ],
+            "type": "object"
+          },
+          "required_scope": "provenance:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "workspace",
+            "effects": [
+              "read",
+              "hash"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "provenance_verify_artifact": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_sha256": {
+                "pattern": "^[A-Fa-f0-9]{64}$",
+                "type": "string"
+              },
+              "path": {
+                "maxLength": 4096,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "expected_sha256"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "actual_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "expected_sha256": {
+                "pattern": "^[a-f0-9]{64}$",
+                "type": "string"
+              },
+              "matches": {
+                "type": "boolean"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "path",
+              "expected_sha256",
+              "actual_sha256",
+              "matches"
+            ],
+            "type": "object"
+          },
+          "required_scope": "provenance:verify",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "workspace",
+            "effects": [
+              "read",
+              "verify"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        }
+      },
+      "transport": {
+        "canonical_http": {
+          "health_live": "/v1/health/live",
+          "health_ready": "/v1/health/ready",
+          "tools_call": "/mcp/tools/call",
+          "tools_list": "/mcp/tools/list"
+        },
+        "http": true,
+        "stdio": false
+      },
+      "url": "http://artifact-provenance-mcp:7120"
+    },
+    "contracts-mcp": {
+      "classification": {
+        "capability_domain": "contracts",
+        "type": "system"
+      },
+      "gateway_enabled": true,
+      "owner": {
+        "legacy_source_paths": [],
+        "source_path": "contracts-mcp-server",
+        "source_repo": "dataforalltech/platform-devs",
+        "team": "platform-engineering"
+      },
+      "registry_enabled": true,
+      "security": {
+        "audit_required": true,
+        "auth_required": true,
+        "context_signing_required": true,
+        "policy_mode": "fail_closed",
+        "secret_redaction_required": true,
+        "tenant_required": true
+      },
+      "status": "active",
+      "tool_policies": {
+        "contracts_get": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "provider_id": {
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "provider_id",
+              "name"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "contract": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "description": {
+                        "type": "string"
+                      },
+                      "input_schema": {
+                        "type": "object"
+                      },
+                      "mutating": {
+                        "type": "boolean"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "output_schema": {
+                        "type": "object"
+                      },
+                      "provider_id": {
+                        "type": "string"
+                      },
+                      "required_scope": {
+                        "type": "string"
+                      },
+                      "risk": {
+                        "type": "object"
+                      },
+                      "secret_reference_only": {
+                        "type": "boolean"
+                      },
+                      "status": {
+                        "enum": [
+                          "active",
+                          "disabled"
+                        ],
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "provider_id",
+                      "name",
+                      "description",
+                      "status",
+                      "required_scope",
+                      "mutating",
+                      "risk",
+                      "secret_reference_only",
+                      "input_schema",
+                      "output_schema"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "found": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "found",
+              "contract"
+            ],
+            "type": "object"
+          },
+          "required_scope": "contracts:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "contracts_list": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "provider_id": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "active",
+                  "disabled"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "contracts": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "type": "string"
+                    },
+                    "input_schema": {
+                      "type": "object"
+                    },
+                    "mutating": {
+                      "type": "boolean"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "output_schema": {
+                      "type": "object"
+                    },
+                    "provider_id": {
+                      "type": "string"
+                    },
+                    "required_scope": {
+                      "type": "string"
+                    },
+                    "risk": {
+                      "type": "object"
+                    },
+                    "secret_reference_only": {
+                      "type": "boolean"
+                    },
+                    "status": {
+                      "enum": [
+                        "active",
+                        "disabled"
+                      ],
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "provider_id",
+                    "name",
+                    "description",
+                    "status",
+                    "required_scope",
+                    "mutating",
+                    "risk",
+                    "secret_reference_only",
+                    "input_schema",
+                    "output_schema"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "count": {
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "count",
+              "contracts"
+            ],
+            "type": "object"
+          },
+          "required_scope": "contracts:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "contracts_validate_catalog": {
+          "input_schema": {
+            "additionalProperties": false,
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "contract_count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "errors": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "executable_provider_count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "manifest_count": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "providers_with_contracts": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "valid": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "valid",
+              "errors",
+              "manifest_count",
+              "executable_provider_count",
+              "contract_count",
+              "providers_with_contracts"
+            ],
+            "type": "object"
+          },
+          "required_scope": "contracts:validate",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read",
+              "validate"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        }
+      },
+      "transport": {
+        "canonical_http": {
+          "health_live": "/v1/health/live",
+          "health_ready": "/v1/health/ready",
+          "tools_call": "/mcp/tools/call",
+          "tools_list": "/mcp/tools/list"
+        },
+        "http": true,
+        "stdio": false
+      },
+      "url": "http://contracts-mcp:7119"
+    },
+    "project-product-mcp": {
+      "classification": {
+        "capability_domain": "portfolio",
+        "type": "domain"
+      },
+      "gateway_enabled": true,
+      "owner": {
+        "legacy_source_paths": [],
+        "source_path": "project-product-mcp-server",
+        "source_repo": "dataforalltech/platform-devs",
+        "team": "platform-engineering"
+      },
+      "registry_enabled": true,
+      "security": {
+        "audit_required": true,
+        "auth_required": true,
+        "context_signing_required": true,
+        "policy_mode": "fail_closed",
+        "secret_redaction_required": true,
+        "tenant_required": true
+      },
+      "status": "active",
+      "tool_policies": {
+        "product_create": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "default": "active",
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "retired"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "slug",
+              "name"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:product:write",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "tenant",
+            "effects": [
+              "write"
+            ],
+            "level": "medium"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "product_delete": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "product_id",
+              "expected_version"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "deleted": {
+                "const": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "product_id",
+              "deleted"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:product:delete",
+          "risk": {
+            "approval_required": "N2",
+            "blast_radius": "tenant",
+            "effects": [
+              "delete"
+            ],
+            "level": "high"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "product_get": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "product_id"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:product:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "product_list": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "after_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "limit": {
+                "default": 50,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "retired"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "created_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "maxLength": 4000,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "owner_user_refs": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 100,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "product_id": {
+                      "format": "uuid",
+                      "maxLength": 36,
+                      "minLength": 36,
+                      "type": "string"
+                    },
+                    "slug": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "planned",
+                        "active",
+                        "paused",
+                        "retired"
+                      ],
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "updated_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "product_id",
+                    "slug",
+                    "name",
+                    "description",
+                    "status",
+                    "owner_user_refs",
+                    "version",
+                    "created_at",
+                    "updated_at",
+                    "created_by_ref",
+                    "updated_by_ref"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_after_id": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "maxLength": 36,
+                    "minLength": 36,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "next_after_id"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:product:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "product_update": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "description": {
+                    "anyOf": [
+                      {
+                        "maxLength": 4000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "owner_user_refs": {
+                    "items": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "slug": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "planned",
+                      "active",
+                      "paused",
+                      "retired"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "expected_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "product_id",
+              "expected_version",
+              "changes"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:product:write",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "tenant",
+            "effects": [
+              "write"
+            ],
+            "level": "medium"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_create": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "service_refs": {
+                "additionalProperties": false,
+                "properties": {
+                  "communication_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "governance_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notification_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "schedule_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "default": "active",
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "product_id",
+              "slug",
+              "name"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "service_refs": {
+                "additionalProperties": false,
+                "properties": {
+                  "communication_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "governance_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notification_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "schedule_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "project_id",
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "service_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:project:write",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "tenant",
+            "effects": [
+              "write"
+            ],
+            "level": "medium"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_delete": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "expected_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "project_id",
+              "expected_version"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "deleted": {
+                "const": true
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id",
+              "deleted"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:project:delete",
+          "risk": {
+            "approval_required": "N2",
+            "blast_radius": "tenant",
+            "effects": [
+              "delete"
+            ],
+            "level": "high"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_get": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "service_refs": {
+                "additionalProperties": false,
+                "properties": {
+                  "communication_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "governance_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notification_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "schedule_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "project_id",
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "service_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:project:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_list": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "after_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "limit": {
+                "default": 50,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "created_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "description": {
+                      "anyOf": [
+                        {
+                          "maxLength": 4000,
+                          "type": "string"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "name": {
+                      "maxLength": 200,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "owner_user_refs": {
+                      "items": {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "maxItems": 100,
+                      "type": "array",
+                      "uniqueItems": true
+                    },
+                    "product_id": {
+                      "format": "uuid",
+                      "maxLength": 36,
+                      "minLength": 36,
+                      "type": "string"
+                    },
+                    "project_id": {
+                      "format": "uuid",
+                      "maxLength": 36,
+                      "minLength": 36,
+                      "type": "string"
+                    },
+                    "service_refs": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "communication_ref": {
+                          "anyOf": [
+                            {
+                              "maxLength": 512,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "governance_ref": {
+                          "anyOf": [
+                            {
+                              "maxLength": 512,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "notification_ref": {
+                          "anyOf": [
+                            {
+                              "maxLength": 512,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "schedule_ref": {
+                          "anyOf": [
+                            {
+                              "maxLength": 512,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "slug": {
+                      "maxLength": 80,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                      "type": "string"
+                    },
+                    "status": {
+                      "enum": [
+                        "planned",
+                        "active",
+                        "paused",
+                        "completed",
+                        "archived"
+                      ],
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "updated_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "project_id",
+                    "product_id",
+                    "slug",
+                    "name",
+                    "description",
+                    "status",
+                    "owner_user_refs",
+                    "service_refs",
+                    "version",
+                    "created_at",
+                    "updated_at",
+                    "created_by_ref",
+                    "updated_by_ref"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_after_id": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "maxLength": 36,
+                    "minLength": 36,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "next_after_id"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:project:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_repository_attach": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "connector_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "metadata": {
+                "additionalProperties": false,
+                "properties": {
+                  "default_branch": {
+                    "anyOf": [
+                      {
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "display_name": {
+                    "anyOf": [
+                      {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "web_url": {
+                    "anyOf": [
+                      {
+                        "format": "uri",
+                        "maxLength": 2048,
+                        "pattern": "^https?://(?![^/?#]*@)(?!.*[\\\\#\\s])[^/?#]+(?:[/?][^#\\\\\\s]*)?$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "provider": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                "type": "string"
+              },
+              "repository_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "default": "source",
+                "enum": [
+                  "source",
+                  "documentation",
+                  "infrastructure",
+                  "deployment",
+                  "other"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "project_id",
+              "provider",
+              "connector_ref",
+              "repository_ref"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "binding_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "connector_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "metadata": {
+                "additionalProperties": false,
+                "properties": {
+                  "default_branch": {
+                    "anyOf": [
+                      {
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "display_name": {
+                    "anyOf": [
+                      {
+                        "maxLength": 200,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "web_url": {
+                    "anyOf": [
+                      {
+                        "format": "uri",
+                        "maxLength": 2048,
+                        "pattern": "^https?://(?![^/?#]*@)(?!.*[\\\\#\\s])[^/?#]+(?:[/?][^#\\\\\\s]*)?$",
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "provider": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                "type": "string"
+              },
+              "repository_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "source",
+                  "documentation",
+                  "infrastructure",
+                  "deployment",
+                  "other"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "binding_id",
+              "project_id",
+              "provider",
+              "connector_ref",
+              "repository_ref",
+              "role",
+              "metadata",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:repository:write",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "tenant",
+            "effects": [
+              "write"
+            ],
+            "level": "medium"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_repository_detach": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "binding_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "expected_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "binding_id",
+              "expected_version"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "binding_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "detached": {
+                "const": true
+              }
+            },
+            "required": [
+              "binding_id",
+              "detached"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:repository:delete",
+          "risk": {
+            "approval_required": "N2",
+            "blast_radius": "tenant",
+            "effects": [
+              "delete"
+            ],
+            "level": "high"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_repository_list": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "after_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "limit": {
+                "default": 50,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "provider": {
+                "maxLength": 64,
+                "minLength": 1,
+                "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                "type": "string"
+              },
+              "role": {
+                "enum": [
+                  "source",
+                  "documentation",
+                  "infrastructure",
+                  "deployment",
+                  "other"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "project_id"
+            ],
+            "type": "object"
+          },
+          "mutating": false,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "items": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "binding_id": {
+                      "format": "uuid",
+                      "maxLength": 36,
+                      "minLength": 36,
+                      "type": "string"
+                    },
+                    "connector_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "created_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "metadata": {
+                      "additionalProperties": false,
+                      "properties": {
+                        "default_branch": {
+                          "anyOf": [
+                            {
+                              "maxLength": 255,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "display_name": {
+                          "anyOf": [
+                            {
+                              "maxLength": 200,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "web_url": {
+                          "anyOf": [
+                            {
+                              "format": "uri",
+                              "maxLength": 2048,
+                              "pattern": "^https?://(?![^/?#]*@)(?!.*[\\\\#\\s])[^/?#]+(?:[/?][^#\\\\\\s]*)?$",
+                              "type": "string"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        }
+                      },
+                      "type": "object"
+                    },
+                    "project_id": {
+                      "format": "uuid",
+                      "maxLength": 36,
+                      "minLength": 36,
+                      "type": "string"
+                    },
+                    "provider": {
+                      "maxLength": 64,
+                      "minLength": 1,
+                      "pattern": "^[a-z0-9][a-z0-9._-]*$",
+                      "type": "string"
+                    },
+                    "repository_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "role": {
+                      "enum": [
+                        "source",
+                        "documentation",
+                        "infrastructure",
+                        "deployment",
+                        "other"
+                      ],
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "updated_by_ref": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "version": {
+                      "minimum": 1,
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "binding_id",
+                    "project_id",
+                    "provider",
+                    "connector_ref",
+                    "repository_ref",
+                    "role",
+                    "metadata",
+                    "version",
+                    "created_at",
+                    "updated_at",
+                    "created_by_ref",
+                    "updated_by_ref"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "next_after_id": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "maxLength": 36,
+                    "minLength": 36,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "items",
+              "next_after_id"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:repository:read",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "none",
+            "effects": [
+              "read"
+            ],
+            "level": "low"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        },
+        "project_update": {
+          "input_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "changes": {
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "description": {
+                    "anyOf": [
+                      {
+                        "maxLength": 4000,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "name": {
+                    "maxLength": 200,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "owner_user_refs": {
+                    "items": {
+                      "maxLength": 512,
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "maxItems": 100,
+                    "type": "array",
+                    "uniqueItems": true
+                  },
+                  "service_refs": {
+                    "additionalProperties": false,
+                    "properties": {
+                      "communication_ref": {
+                        "anyOf": [
+                          {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "governance_ref": {
+                        "anyOf": [
+                          {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "notification_ref": {
+                        "anyOf": [
+                          {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "schedule_ref": {
+                        "anyOf": [
+                          {
+                            "maxLength": 512,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "slug": {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                    "type": "string"
+                  },
+                  "status": {
+                    "enum": [
+                      "planned",
+                      "active",
+                      "paused",
+                      "completed",
+                      "archived"
+                    ],
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              "expected_version": {
+                "minimum": 1,
+                "type": "integer"
+              },
+              "idempotency_key": {
+                "maxLength": 128,
+                "minLength": 8,
+                "pattern": "^[A-Za-z0-9._:-]+$",
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              }
+            },
+            "required": [
+              "idempotency_key",
+              "project_id",
+              "expected_version",
+              "changes"
+            ],
+            "type": "object"
+          },
+          "mutating": true,
+          "output_schema": {
+            "additionalProperties": false,
+            "properties": {
+              "created_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "created_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "maxLength": 4000,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "name": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "owner_user_refs": {
+                "items": {
+                  "maxLength": 512,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "product_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "project_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "service_refs": {
+                "additionalProperties": false,
+                "properties": {
+                  "communication_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "governance_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "notification_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "schedule_ref": {
+                    "anyOf": [
+                      {
+                        "maxLength": 512,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "type": "object"
+              },
+              "slug": {
+                "maxLength": 80,
+                "minLength": 1,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+                "type": "string"
+              },
+              "status": {
+                "enum": [
+                  "planned",
+                  "active",
+                  "paused",
+                  "completed",
+                  "archived"
+                ],
+                "type": "string"
+              },
+              "updated_at": {
+                "format": "date-time",
+                "type": "string"
+              },
+              "updated_by_ref": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "version": {
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "project_id",
+              "product_id",
+              "slug",
+              "name",
+              "description",
+              "status",
+              "owner_user_refs",
+              "service_refs",
+              "version",
+              "created_at",
+              "updated_at",
+              "created_by_ref",
+              "updated_by_ref"
+            ],
+            "type": "object"
+          },
+          "required_scope": "portfolio:project:write",
+          "risk": {
+            "approval_required": "none",
+            "blast_radius": "tenant",
+            "effects": [
+              "write"
+            ],
+            "level": "medium"
+          },
+          "secret_reference_only": true,
+          "status": "active"
+        }
+      },
+      "transport": {
+        "canonical_http": {
+          "health_live": "/v1/health",
+          "health_ready": "/v1/ready",
+          "tools_call": "/mcp/tools/call",
+          "tools_list": "/mcp/tools/list"
+        },
+        "http": true,
+        "stdio": false
+      },
+      "url": "http://project-product-mcp:7121",
+      "url_env": "PROJECT_PRODUCT_MCP_URL"
+    }
+  }
+}

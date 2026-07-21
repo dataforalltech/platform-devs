@@ -2,7 +2,7 @@
 name = "mcp-gateway"
 version = "1.0.0"
 description = "MCP Gateway — Central proxy for multi-tenant, multi-protocol MCP access"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
@@ -13,6 +13,7 @@ dependencies = [
     "bcrypt>=4.0.0",
     "pyjwt>=2.8.0",
     "cryptography>=42.0.0",
+    "jsonschema>=4.21.0,<5.0",
 ]
 
 [project.scripts]

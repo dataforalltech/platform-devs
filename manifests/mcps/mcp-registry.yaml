@@ -1,0 +1,30 @@
+schema_version: 1
+id: mcp-registry
+display_name: MCP Registry
+description: Read-only discovery projection generated from canonical manifests.
+status: active
+classification: {type: control-plane, capability_domain: discovery}
+ownership: {team: platform-engineering, source_repo: dataforalltech/platform-devs, source_path: mcp-registry.py}
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [mcp-registry.py]
+  cwd: .
+  service_name: mcp-registry
+  build_context: .
+  dockerfile: Dockerfile.registry
+  environment:
+    MCP_REGISTRY_FILE: /app/mcp-runtime-registry.json
+  exposes_tools: false
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {internal_port: 8000, host_port: 28000}
+security: {auth_required: false, tenant_required: false, policy_mode: not_applicable, audit_required: false, secret_redaction_required: true, context_signing_required: false}
+ci: {enabled: true, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: false}
+registry: {enabled: false}
+dependencies: []
