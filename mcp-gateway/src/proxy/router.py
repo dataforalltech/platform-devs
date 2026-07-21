@@ -126,10 +126,24 @@ def _validate_contract_input(
             status_code=400,
             detail=f"arguments violate canonical tool contract at {path}",
         ) from exc
+
+
+def _validate_contract_output(payload: Any, local_policy: dict[str, Any]) -> None:
+    if not isinstance(payload, dict) or payload.get("jsonrpc") != "2.0":
+        raise HTTPException(status_code=503, detail="provider returned an invalid JSON-RPC response")
+    if isinstance(payload.get("error"), dict):
+        return
+    if "result" not in payload:
+        raise HTTPException(status_code=503, detail="provider response has no result")
+    schema = local_policy.get("output_schema")
+    if not isinstance(schema, dict):
+        raise HTTPException(status_code=503, detail="canonical output contract is unavailable")
+    try:
+        Draft202012Validator(schema).validate(payload["result"])
+    except ValidationError as exc:
+        raise HTTPException(status_code=503, detail="provider result violates canonical contract") from exc
     except SchemaError as exc:
-        raise HTTPException(
-            status_code=503, detail="canonical tool contract is invalid"
-        ) from exc
+        raise HTTPException(status_code=503, detail="canonical output contract is invalid") from exc
 
 
 def _audit_payload(
@@ -163,10 +177,10 @@ def _filter_disabled_tools(payload: dict[str, Any], provider: Provider) -> dict[
     result = payload.get("result")
     if not isinstance(result, dict) or not isinstance(result.get("tools"), list):
         return payload
-    disabled = {
-        name for name, policy in provider.tool_policies.items() if policy.get("status") == "disabled"
+    published = {
+        name for name, policy in provider.tool_policies.items() if policy.get("status") == "active"
     }
-    result["tools"] = [tool for tool in result["tools"] if tool.get("name") not in disabled]
+    result["tools"] = [tool for tool in result["tools"] if tool.get("name") in published]
     return payload
 
 
@@ -189,13 +203,30 @@ def setup_proxy_routes(app: FastAPI) -> None:
         mcp_name: str,
         authorization: str | None = Header(None),
     ) -> dict[str, Any]:
-        await _get_user_or_fail(authorization)
+        user = await _get_user_or_fail(authorization)
         provider = _provider_or_fail(mcp_name)
         try:
+            context = build_context(
+                user,
+                correlation_id=None,
+                causation_id=None,
+                session_id=None,
+            )
+            encoded_context, context_signature = sign_context(context)
+            inner_token = await exchange_token(authorization or "", mcp_name)
             async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{provider.url}{provider.tools_list_path}")
+                response = await client.get(
+                    f"{provider.url}{provider.tools_list_path}",
+                    headers={
+                        "X-MCP-Context": encoded_context,
+                        "X-MCP-Context-Signature": context_signature,
+                        "X-MCP-Inner-Token": inner_token,
+                    },
+                )
                 response.raise_for_status()
                 return _filter_disabled_tools(response.json(), provider)
+        except (ContextConfigurationError, TokenExchangeUnavailable) as exc:
+            raise HTTPException(status_code=503, detail="trusted downstream context unavailable") from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise HTTPException(status_code=503, detail="provider tools unavailable") from exc
 
@@ -224,6 +255,8 @@ def setup_proxy_routes(app: FastAPI) -> None:
             session_id=x_session_id,
         )
         local_policy = provider.tool_policies.get(tool_name)
+        if local_policy is None:
+            raise HTTPException(status_code=403, detail="tool is absent from the canonical contract catalog")
         _validate_contract_input(arguments, local_policy)
 
         try:
@@ -325,6 +358,7 @@ def setup_proxy_routes(app: FastAPI) -> None:
                     headers={
                         "X-MCP-Context": encoded_context,
                         "X-MCP-Context-Signature": context_signature,
+                        "X-MCP-Inner-Token": inner_token,
                     },
                 )
                 response.raise_for_status()
@@ -344,6 +378,24 @@ def setup_proxy_routes(app: FastAPI) -> None:
             )
             raise HTTPException(status_code=503, detail="provider call failed") from exc
 
+        try:
+            _validate_contract_output(result, local_policy)
+        except HTTPException:
+            await log_tool_call(
+                **_audit_payload(
+                    context=governed_context,
+                    provider=mcp_name,
+                    tool=tool_name,
+                    arguments=arguments,
+                    result={"error": "provider_contract_violation"},
+                    status="error",
+                    duration_ms=int((time.monotonic() - started) * 1000),
+                    request=http_request,
+                )
+            )
+            raise
+
+        execution_status = "error" if isinstance(result.get("error"), dict) else "success"
         await log_tool_call(
             **_audit_payload(
                 context=governed_context,
@@ -351,7 +403,7 @@ def setup_proxy_routes(app: FastAPI) -> None:
                 tool=tool_name,
                 arguments=arguments,
                 result=result,
-                status="success",
+                status=execution_status,
                 duration_ms=int((time.monotonic() - started) * 1000),
                 request=http_request,
             )

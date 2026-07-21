@@ -32,7 +32,9 @@ def _static_token(raw: str, *, tenant_id: str) -> str:
 
 @pytest.mark.asyncio
 async def test_static_token_requires_verified_tenant(monkeypatch) -> None:
-    monkeypatch.setenv("GATEWAY_STATIC_TOKENS_JSON", _static_token("token", tenant_id=""))
+    monkeypatch.setenv(
+        "GATEWAY_STATIC_TOKENS_JSON", _static_token("token", tenant_id="")
+    )
     assert await authenticate_request("Bearer token") is None
 
 
@@ -84,6 +86,30 @@ def test_runtime_registry_fails_when_an_active_provider_has_no_url(tmp_path) -> 
         RuntimeRegistry(registry_file).list()
 
 
+def test_remote_url_overrides_local_registry_url(tmp_path, monkeypatch) -> None:
+    registry_file = tmp_path / "registry.json"
+    registry_file.write_text(
+        json.dumps(
+            {
+                "services": {
+                    "hybrid-mcp": {
+                        "gateway_enabled": True,
+                        "url": "http://hybrid-mcp:7000",
+                        "url_env": "HYBRID_MCP_URL",
+                        "transport": {"canonical_http": {}},
+                        "security": {},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = RuntimeRegistry(registry_file)
+    assert registry.get("hybrid-mcp").url == "http://hybrid-mcp:7000"
+    monkeypatch.setenv("HYBRID_MCP_URL", "https://remote.example.test/mcp/")
+    assert registry.get("hybrid-mcp").url == "https://remote.example.test/mcp"
+
+
 def test_gateway_configuration_is_fail_closed(monkeypatch) -> None:
     monkeypatch.delenv("GATEWAY_PDP_URL", raising=False)
     with pytest.raises(RuntimeError, match="GATEWAY_PDP_URL"):
@@ -105,6 +131,7 @@ def _provider(*, disabled: bool = False) -> Provider:
             "infra_get_lease_ssh_key": {
                 "status": "disabled" if disabled else "active",
                 "risk": {"approval_required": "N2"},
+                "output_schema": {"type": "object"},
             }
         },
     )
@@ -169,8 +196,89 @@ def test_unavailable_policy_denies_execution(monkeypatch) -> None:
     monkeypatch.setattr(router.policy_client, "authorize", unavailable)
     response = TestClient(app).post(
         "/mcp/devteam-mcp/tools/call",
-        json={"name": "infra_request_vm", "arguments": {"spec": "cpu-small"}},
+        json={"name": "infra_get_lease_ssh_key", "arguments": {"lease_id": "lease-1"}},
         headers={"Authorization": "Bearer test"},
     )
     assert response.status_code == 503
     assert response.json()["detail"] == "authorization policy unavailable"
+
+
+def test_tools_list_uses_signed_context_and_inner_token(monkeypatch) -> None:
+    _patch_request_dependencies(monkeypatch, provider=_provider())
+    monkeypatch.setenv("GATEWAY_CONTEXT_SIGNING_KEY", "test-signing-key")
+    observed = {}
+
+    async def token_exchange(_authorization, _audience):
+        return "exchanged-token"
+
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"jsonrpc": "2.0", "result": {"tools": []}}
+
+    class Client:
+        def __init__(self, **_kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers):
+            observed.update({"url": url, "headers": headers})
+            return Response()
+
+    monkeypatch.setattr(router, "exchange_token", token_exchange)
+    monkeypatch.setattr(router.httpx, "AsyncClient", Client)
+    response = TestClient(app).get(
+        "/mcp/devteam-mcp/tools", headers={"Authorization": "Bearer test"}
+    )
+    assert response.status_code == 200
+    assert observed["headers"]["X-MCP-Inner-Token"] == "exchanged-token"
+    assert observed["headers"]["X-MCP-Context"]
+    assert observed["headers"]["X-MCP-Context-Signature"]
+
+
+def test_uncontracted_tool_is_rejected_before_policy_or_provider(monkeypatch) -> None:
+    _patch_request_dependencies(monkeypatch, provider=_provider())
+    response = TestClient(app).post(
+        "/mcp/devteam-mcp/tools/call",
+        json={"name": "uncontracted_tool", "arguments": {}},
+        headers={"Authorization": "Bearer test"},
+    )
+    assert response.status_code == 403
+    assert (
+        response.json()["detail"]
+        == "tool is absent from the canonical contract catalog"
+    )
+
+
+def test_provider_output_must_match_canonical_contract() -> None:
+    policy = {
+        "output_schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["observed"],
+            "properties": {"observed": {"type": "boolean"}},
+        }
+    }
+    router._validate_contract_output(
+        {"jsonrpc": "2.0", "id": 1, "result": {"observed": True}}, policy
+    )
+    with pytest.raises(Exception, match="provider result violates canonical contract"):
+        router._validate_contract_output(
+            {"jsonrpc": "2.0", "id": 1, "result": {"observed": "yes"}}, policy
+        )
+
+
+def test_tool_discovery_hides_tools_without_active_contract() -> None:
+    payload = {
+        "jsonrpc": "2.0",
+        "result": {"tools": [{"name": "infra_get_lease_ssh_key"}, {"name": "unknown"}]},
+    }
+    filtered = router._filter_disabled_tools(payload, _provider())
+    assert filtered["result"]["tools"] == [{"name": "infra_get_lease_ssh_key"}]

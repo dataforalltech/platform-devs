@@ -1,0 +1,23 @@
+[project]
+name = "contracts-mcp-server"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "jsonschema>=4.23,<5",
+  "pydantic>=2.10,<3",
+  "PyJWT[crypto]>=2.9,<3",
+  "PyYAML>=6.0,<7",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = ["httpx>=0.28,<1", "pytest>=8.3,<9", "pytest-cov>=6,<7", "ruff>=0.9,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=contracts_mcp --cov-fail-under=80"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100

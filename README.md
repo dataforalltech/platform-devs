@@ -33,6 +33,10 @@ python scripts/generate_mcp_artifacts.py --check
 - `mcp-gateway`: PEP ativo, fail-closed, com PDP externo, token exchange, contexto
   assinado, rate limit e ledger imutável;
 - `mcp-registry`: descoberta ativa e somente leitura;
+- `contracts-mcp`: ativo, somente leitura, com inspeção e validação dos manifests e
+  contratos canônicos;
+- `artifact-provenance-mcp`: ativo, somente leitura, com hash, verificação e statements
+  de proveniência confinados ao worktree;
 - `auth-mcp`, `scheduler-mcp` e `connectors-mcp`: experimentais e fora dos artefatos de
   runtime até comprovarem o contrato de contexto assinado e tenant derivado;
 - `cache-mcp`: desabilitado até possuir transporte HTTP autenticado;
@@ -51,7 +55,9 @@ flowchart LR
     G --> P["PDP e aprovação"]
     G --> L["Ledger imutável e redigido"]
     G --> X["Token exchange e contexto HMAC"]
-    X --> D["devteam-mcp"]
+    X --> P1["contracts-mcp"]
+    X --> P2["artifact-provenance-mcp"]
+    X -. experimental .-> D["devteam-mcp"]
     D --> T["Banco tenant-scoped"]
 ```
 
@@ -81,6 +87,8 @@ Validações do control plane:
 ```powershell
 python scripts/validate_mcp_manifests.py
 python scripts/audit_mcp_inventory.py
+python scripts/audit_mcp_tools.py --fail-on-runtime-gaps
+python scripts/check_mcp_runtime_quality.py
 python scripts/generate_mcp_artifacts.py --check
 python -m pytest tests/control_plane -q
 ```
@@ -89,6 +97,10 @@ Validações dos componentes alterados:
 
 ```powershell
 python -m pytest mcp-gateway/tests -q
+python -m pytest contracts-mcp-server/tests -q
+python -m pytest artifact-provenance-mcp-server/tests -q
+python -m pytest shared/tests/test_mcp_client.py -q
+npm --prefix shared test
 python -m pytest services/cache-mcp-server/tests/test_server.py -q
 python -m pytest devteam-mcp-server/tests/test_aggregator.py -q
 ```
@@ -97,6 +109,10 @@ python -m pytest devteam-mcp-server/tests/test_aggregator.py -q
 
 - [`docs/architecture/mcp-control-plane.md`](docs/architecture/mcp-control-plane.md):
   limites, invariantes, configuração, migração e rollback;
+- [`docs/architecture/mcp-runtime-tools.md`](docs/architecture/mcp-runtime-tools.md):
+  runtime seguro, tools publicadas e gate de qualidade;
+- [`docs/architecture/project-product-domain.md`](docs/architecture/project-product-domain.md):
+  CRUD tenant-scoped de produtos/projetos, repositórios canônicos e ownership entre serviços;
 - [`docs/mcp-discovery.md`](docs/mcp-discovery.md): descoberta local e artefatos gerados;
 - [`AGENTS.md`](AGENTS.md): política operacional obrigatória do ecossistema.
 

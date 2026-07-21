@@ -1,0 +1,24 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: project-product-mcp
+  uid: project-product-mcp
+  domain: portfolio
+  title: Project & Product MCP
+  description: Tenant-scoped canonical products, projects and repository bindings.
+  owner: platform-engineering
+  tags:
+  - portfolio
+  - products
+  - projects
+  - repositories
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: project-product-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations:
+- verb: depends-on
+  target: connectors-mcp

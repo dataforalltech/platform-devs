@@ -6,11 +6,11 @@ Only `active` entries are projected into runtime artifacts. `planned` entries ar
 
 | MCP | Status | Type | Runtime | Source repository | Gateway |
 |---|---|---|---|---|---|
-| `artifact-provenance-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |
+| `artifact-provenance-mcp` | active | system | local | `dataforalltech/platform-devs` | yes |
 | `auth-mcp` | experimental | domain | external | `dataforalltech/platform-auth` | no |
 | `cache-mcp` | disabled | system | local | `dataforalltech/platform-devs` | no |
 | `connectors-mcp` | experimental | domain | external | `dataforalltech/platform-connectors` | no |
-| `contracts-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |
+| `contracts-mcp` | active | system | local | `dataforalltech/platform-devs` | yes |
 | `database-ops-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |
 | `developer-environment-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |
 | `devteam-mcp` | experimental | system | local | `dataforalltech/platform-devs` | no |
@@ -21,5 +21,6 @@ Only `active` entries are projected into runtime artifacts. `planned` entries ar
 | `mcp-gateway` | active | control-plane | local | `dataforalltech/platform-devs` | no |
 | `mcp-registry` | active | control-plane | local | `dataforalltech/platform-devs` | no |
 | `observability-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |
+| `project-product-mcp` | active | domain | local | `dataforalltech/platform-devs` | yes |
 | `scheduler-mcp` | experimental | domain | external | `dataforalltech/platform-scheduler` | no |
 | `workflow-orchestrator-mcp` | planned | system | none | `dataforalltech/platform-devs` | no |

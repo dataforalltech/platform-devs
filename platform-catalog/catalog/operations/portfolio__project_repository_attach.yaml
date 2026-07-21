@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: portfolio/project_repository_attach
+  uid: portfolio.project_repository_attach
+  domain: portfolio
+  title: project repository attach
+  description: Attach a provider-neutral repository reference resolved by platform-connectors.
+  owner: platform-engineering
+  tags:
+  - portfolio
+  - repository-binding
+  - write
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: portfolio
+  capability: project-product-registry
+  resource:
+    type: repository-binding
+    parent: null
+    namespace: null
+  operation: attach
+  authz: write
+  risk:
+    effects:
+    - write
+    requires: []
+    blast_radius: tenant
+    default_level: medium
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions:
+    - trusted tenant context
+    postconditions:
+    - tenant-scoped audit record
+    execution:
+      idempotent: true
+      side_effects: true
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: idempotency-key
+relations:
+- verb: acts-on
+  target: resource:repository-binding

@@ -24,9 +24,9 @@ def test_derive_write_high_risk_deploy():
     assert "deploy" in spec.risk.effects
     assert spec.risk.blast_radius.value == "environment"
     assert spec.risk.default_level.value == "high"
-    assert spec.risk.approval_required.value == "N2"          # HIGH → N2 (ADR-005)
-    assert spec.contract.execution.idempotent is False          # write não é idempotente
-    assert "github" in spec.risk.requires                       # dependência do deploy-mcp
+    assert spec.risk.approval_required.value == "N2"  # HIGH → N2 (ADR-005)
+    assert spec.contract.execution.idempotent is False  # write não é idempotente
+    assert "github" in spec.risk.requires  # dependência do deploy-mcp
 
 
 def test_derive_read_is_low_and_idempotent():
@@ -36,7 +36,7 @@ def test_derive_read_is_low_and_idempotent():
     assert spec.risk.effects == ["read"]
     assert spec.risk.default_level.value == "low"
     assert spec.risk.approval_required.value == "none"
-    assert spec.contract.execution.idempotent is True           # read é idempotente
+    assert spec.contract.execution.idempotent is True  # read é idempotente
 
 
 def test_provider_id_strips_server_suffix():
@@ -60,10 +60,12 @@ def store():
 
 def test_store_loads(store):
     st = store.stats()
-    assert st["owned_operations"] == 288 and st["external_operations"] == 3   # +admin/auth federados
-    assert len(store.operations) == 291
-    assert len(store.tools) == 301          # 298 owned + 3 external
-    assert len(store.providers) == 22       # 20 owned + admin + auth
+    assert (
+        st["owned_operations"] == 307 and st["external_operations"] == 3
+    )  # +admin/auth federados
+    assert len(store.operations) == 310
+    assert len(store.tools) == 320  # 317 owned + 3 external
+    assert len(store.providers) == 25  # 23 owned + admin + auth
 
 
 def test_get_and_queries(store):
@@ -78,11 +80,14 @@ def test_get_and_queries(store):
 
 def test_resolve_and_portability(store):
     tools = store.list_tools_for("product.generate_feature_spec")
-    assert len(tools) == 2                                       # PO + PM → 2 providers
+    assert len(tools) == 2  # PO + PM → 2 providers
     providers = {t["spec"]["provider_id"] for t in tools}
     assert providers == {"product-owner-mcp", "product-manager-mcp"}
     chosen = store.resolve_tool("product.generate_feature_spec")
-    assert chosen is not None and chosen["spec"]["operation_id"] == "product.generate_feature_spec"
+    assert (
+        chosen is not None
+        and chosen["spec"]["operation_id"] == "product.generate_feature_spec"
+    )
 
 
 # --- Discovery API HTTP -----------------------------------------------------
@@ -118,7 +123,7 @@ def test_api_tools_and_resolve(client):
 
 def test_api_stats(client):
     s = client.get("/v1/stats").json()
-    assert s["owned_operations"] == 288 and s["external_operations"] == 3
-    assert s["operations"] == 291
+    assert s["owned_operations"] == 307 and s["external_operations"] == 3
+    assert s["operations"] == 310
     assert "delivery" in s["operations_by_domain"]
     assert s["write_operations"] > 0

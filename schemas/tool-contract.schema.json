@@ -58,7 +58,6 @@
       "type": "string"
     },
     "input_schema": {
-      "additionalProperties": true,
       "title": "Input Schema",
       "type": "object"
     },
@@ -72,7 +71,6 @@
       "type": "string"
     },
     "output_schema": {
-      "additionalProperties": true,
       "title": "Output Schema",
       "type": "object"
     },

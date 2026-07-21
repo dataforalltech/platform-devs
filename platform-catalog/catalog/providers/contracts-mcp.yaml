@@ -1,0 +1,18 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: contracts-mcp
+  uid: contracts-mcp
+  domain: contracts
+  title: Contracts MCP
+  description: Governed MCP contract inspection and validation provider.
+  owner: platform-engineering
+  tags: [contracts]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: contracts-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

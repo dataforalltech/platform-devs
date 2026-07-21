@@ -1,0 +1,40 @@
+schema_version: 1
+id: artifact-provenance-mcp
+display_name: Artifact Provenance MCP
+description: Read-only hashing, verification and Git-backed provenance statements for repository artifacts.
+status: active
+classification: {type: system, capability_domain: provenance}
+ownership: {team: security, source_repo: dataforalltech/platform-devs, source_path: artifact-provenance-mcp-server}
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, artifact_provenance_mcp.server]
+  cwd: artifact-provenance-mcp-server
+  service_name: artifact-provenance-mcp
+  build_context: .
+  dockerfile: artifact-provenance-mcp-server/Dockerfile
+  environment:
+    MCP_CONTEXT_SIGNING_KEY: ${GATEWAY_CONTEXT_SIGNING_KEY:?required}
+    MCP_INNER_TOKEN_ISSUER: ${GATEWAY_AS_ISSUER:?required}
+    MCP_INNER_TOKEN_JWKS_URL: ${GATEWAY_AS_JWKS_URL:?required}
+    PLATFORM_REPO_ROOT: /workspace
+    PROVENANCE_MAX_FILE_BYTES: ${PROVENANCE_MAX_FILE_BYTES:-104857600}
+  volumes: ["./:/workspace:ro"]
+  exposes_tools: true
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {internal_port: 7120, host_port: 27120}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: true, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: true}
+registry: {enabled: true}
+dependencies: []
+tool_catalog: platform-catalog/catalog/tools
+tool_contracts:
+  - contracts/tools/provenance-hash-artifact.yaml
+  - contracts/tools/provenance-verify-artifact.yaml
+  - contracts/tools/provenance-build-statement.yaml

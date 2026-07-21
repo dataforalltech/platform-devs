@@ -1,0 +1,25 @@
+schema_version: 1
+provider_id: artifact-provenance-mcp
+name: provenance_hash_artifact
+description: Compute SHA-256 and Git provenance for one non-sensitive repository artifact.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties: {path: {type: string, minLength: 1, maxLength: 4096}}
+  required: [path]
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    path: {type: string}
+    sha256: {type: string, pattern: '^[a-f0-9]{64}$'}
+    size_bytes: {type: integer, minimum: 0}
+    git_tracked: {type: boolean}
+    git_status: {type: string}
+    repository_head: {anyOf: [{type: string, pattern: '^[a-f0-9]{40,64}$'}, {type: 'null'}]}
+  required: [path, sha256, size_bytes, git_tracked, git_status, repository_head]
+required_scope: provenance:read
+mutating: false
+risk: {level: low, effects: [read, hash], blast_radius: workspace, approval_required: none}
+secret_reference_only: true

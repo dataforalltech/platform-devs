@@ -1,0 +1,21 @@
+schema_version: 1
+provider_id: contracts-mcp
+name: contracts_validate_catalog
+description: Validate canonical MCP manifests and tool-contract references.
+status: active
+input_schema: {type: object, additionalProperties: false}
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    valid: {type: boolean}
+    errors: {type: array, items: {type: string}}
+    manifest_count: {type: integer, minimum: 0}
+    executable_provider_count: {type: integer, minimum: 0}
+    contract_count: {type: integer, minimum: 0}
+    providers_with_contracts: {type: integer, minimum: 0}
+  required: [valid, errors, manifest_count, executable_provider_count, contract_count, providers_with_contracts]
+required_scope: contracts:validate
+mutating: false
+risk: {level: low, effects: [read, validate], blast_radius: none, approval_required: none}
+secret_reference_only: true

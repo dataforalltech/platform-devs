@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/product_update
+  uid: project-product-mcp:product_update
+  domain: portfolio
+  title: product_update @ project-product-mcp
+  description: Update a product with idempotency and optimistic concurrency.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - product
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.product_update
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: product_update
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.product_update
+- verb: provided-by
+  target: project-product-mcp

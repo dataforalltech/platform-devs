@@ -1,0 +1,39 @@
+schema_version: 1
+id: contracts-mcp
+display_name: Contracts MCP
+description: Governed inspection and validation of canonical MCP manifests and tool contracts.
+status: active
+classification: {type: system, capability_domain: contracts}
+ownership: {team: platform-engineering, source_repo: dataforalltech/platform-devs, source_path: contracts-mcp-server}
+runtime:
+  mode: local
+  language: python
+  version: "3.12"
+  command: python
+  args: [-m, contracts_mcp.server]
+  cwd: contracts-mcp-server
+  service_name: contracts-mcp
+  build_context: .
+  dockerfile: contracts-mcp-server/Dockerfile
+  environment:
+    MCP_CONTEXT_SIGNING_KEY: ${GATEWAY_CONTEXT_SIGNING_KEY:?required}
+    MCP_INNER_TOKEN_ISSUER: ${GATEWAY_AS_ISSUER:?required}
+    MCP_INNER_TOKEN_JWKS_URL: ${GATEWAY_AS_JWKS_URL:?required}
+    PLATFORM_REPO_ROOT: /workspace
+  volumes: ["./:/workspace:ro"]
+  exposes_tools: true
+transport:
+  stdio: false
+  http: true
+  canonical_http: {health_live: /v1/health/live, health_ready: /v1/health/ready, tools_list: /mcp/tools/list, tools_call: /mcp/tools/call}
+network: {internal_port: 7119, host_port: 27119}
+security: {auth_required: true, tenant_required: true, policy_mode: fail_closed, audit_required: true, secret_redaction_required: true, context_signing_required: true}
+ci: {enabled: true, coverage_threshold: 80, lint: true, type_check: true, docker_build: true, smoke_test: true}
+gateway: {enabled: true}
+registry: {enabled: true}
+dependencies: []
+tool_catalog: platform-catalog/catalog/tools
+tool_contracts:
+  - contracts/tools/contracts-list.yaml
+  - contracts/tools/contracts-get.yaml
+  - contracts/tools/contracts-validate-catalog.yaml

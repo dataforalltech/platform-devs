@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: portfolio/project_repository_list
+  uid: portfolio.project_repository_list
+  domain: portfolio
+  title: project repository list
+  description: List canonical repository bindings for one tenant project.
+  owner: platform-engineering
+  tags:
+  - portfolio
+  - repository-binding
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: portfolio
+  capability: project-product-registry
+  resource:
+    type: repository-binding
+    parent: null
+    namespace: null
+  operation: list
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions:
+    - trusted tenant context
+    postconditions:
+    - tenant-scoped audit record
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:repository-binding

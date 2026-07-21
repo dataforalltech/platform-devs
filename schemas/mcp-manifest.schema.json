@@ -92,6 +92,51 @@
       "title": "Classification",
       "type": "object"
     },
+    "CompanionRuntime": {
+      "additionalProperties": false,
+      "properties": {
+        "command": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Command",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
+        },
+        "environment": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Environment",
+          "type": "object"
+        },
+        "ports": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Ports",
+          "type": "array"
+        },
+        "service_name": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Service Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service_name",
+        "command"
+      ],
+      "title": "CompanionRuntime",
+      "type": "object"
+    },
     "Network": {
       "additionalProperties": false,
       "properties": {
@@ -201,6 +246,19 @@
           "default": null,
           "title": "Build Context"
         },
+        "build_secrets": {
+          "description": "BuildKit secret ids supplied through Compose build.secrets.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Build Secrets",
+          "type": "array"
+        },
+        "build_ssh": {
+          "default": false,
+          "title": "Build Ssh",
+          "type": "boolean"
+        },
         "command": {
           "anyOf": [
             {
@@ -224,6 +282,13 @@
           ],
           "default": null,
           "title": "Cwd"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Depends On",
+          "type": "array"
         },
         "dockerfile": {
           "anyOf": [
@@ -293,6 +358,13 @@
           ],
           "default": null,
           "title": "Version"
+        },
+        "volumes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Volumes",
+          "type": "array"
         }
       },
       "required": [
@@ -384,6 +456,13 @@
     },
     "classification": {
       "$ref": "#/$defs/Classification"
+    },
+    "companions": {
+      "items": {
+        "$ref": "#/$defs/CompanionRuntime"
+      },
+      "title": "Companions",
+      "type": "array"
     },
     "dependencies": {
       "items": {

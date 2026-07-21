@@ -1,0 +1,134 @@
+schema_version: 1
+provider_id: project-product-mcp
+name: project_repository_list
+description: List canonical repository bindings for one tenant project.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    project_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    provider:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: ^[a-z0-9][a-z0-9._-]*$
+    role:
+      type: string
+      enum:
+      - source
+      - documentation
+      - infrastructure
+      - deployment
+      - other
+  required:
+  - project_id
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    items:
+      type: array
+      items:
+        type: object
+        additionalProperties: false
+        properties:
+          binding_id:
+            type: string
+            format: uuid
+            minLength: 36
+            maxLength: 36
+          project_id:
+            type: string
+            format: uuid
+            minLength: 36
+            maxLength: 36
+          provider:
+            type: string
+            minLength: 1
+            maxLength: 64
+            pattern: ^[a-z0-9][a-z0-9._-]*$
+          connector_ref:
+            type: string
+            minLength: 1
+            maxLength: 512
+          repository_ref:
+            type: string
+            minLength: 1
+            maxLength: 512
+          role:
+            type: string
+            enum:
+            - source
+            - documentation
+            - infrastructure
+            - deployment
+            - other
+          metadata:
+            type: object
+            additionalProperties: false
+            properties:
+              display_name:
+                anyOf:
+                - type: string
+                  minLength: 1
+                  maxLength: 200
+                - type: 'null'
+              default_branch:
+                anyOf:
+                - type: string
+                  minLength: 1
+                  maxLength: 255
+                - type: 'null'
+              web_url:
+                anyOf:
+                - type: string
+                  format: uri
+                  pattern: ^https?://(?![^/?#]*@)(?!.*[\\#\s])[^/?#]+(?:[/?][^#\\\s]*)?$
+                  maxLength: 2048
+                - type: 'null'
+          version:
+            type: integer
+            minimum: 1
+          created_at:
+            type: string
+            format: date-time
+          updated_at:
+            type: string
+            format: date-time
+          created_by_ref:
+            type: string
+            minLength: 1
+            maxLength: 512
+          updated_by_ref:
+            type: string
+            minLength: 1
+            maxLength: 512
+        required:
+        - binding_id
+        - project_id
+        - provider
+        - connector_ref
+        - repository_ref
+        - role
+        - metadata
+        - version
+        - created_at
+        - updated_at
+        - created_by_ref
+        - updated_by_ref
+  required:
+  - items
+required_scope: portfolio:repository:read
+mutating: false
+risk:
+  level: low
+  effects:
+  - read
+  blast_radius: none
+  approval_required: none
+secret_reference_only: true

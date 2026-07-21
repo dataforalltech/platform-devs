@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_repository_list
+  uid: project-product-mcp:project_repository_list
+  domain: portfolio
+  title: project_repository_list @ project-product-mcp
+  description: List canonical repository bindings for one tenant project.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - repository-binding
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_repository_list
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_repository_list
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_repository_list
+- verb: provided-by
+  target: project-product-mcp

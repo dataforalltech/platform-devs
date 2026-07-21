@@ -5,9 +5,10 @@
 
 ## Objetivo e limites
 
-O `platform-devs` controla o código do `devteam-mcp` e as superfícies comuns de gateway
-e descoberta. O provedor consolidado permanece `experimental`: a suíte atual executa
-13 testes funcionais, porém comprova 28% de cobertura contra o gate de 80%. MCPs
+O `platform-devs` controla o código do `devteam-mcp`, `contracts-mcp`,
+`artifact-provenance-mcp` e as superfícies comuns de gateway e descoberta. O provedor
+consolidado permanece `experimental`; os dois providers novos estão ativos porque suas
+tools publicadas possuem contratos, schemas de entrada/saída e testes de comportamento. MCPs
 pertencentes a outros domínios permanecem em seus repositórios de origem. Todos só são
 promovidos para `active` depois de comprovar os mesmos invariantes de segurança e teste.
 
@@ -31,6 +32,13 @@ flowchart TD
 As projeções são determinísticas. `scripts/generate_mcp_artifacts.py --check` falha se
 um arquivo gerado divergir da fonte canônica.
 
+Para runtimes locais, o Compose gerado preserva `command` + `args`, usa o
+`health_ready` declarado no manifest e materializa dependências e companions. Builds
+privados declaram IDs em `runtime.build_secrets`; o gerador cria `build.secrets` e o
+secret de topo apontando para `${<ID>_FILE:?required}`. `build_ssh` e `build_secrets`
+são mutuamente exclusivos, para impedir que um manifest misture duas fontes de
+credencial de build.
+
 ## Invariantes de segurança
 
 1. Provedor ativo que expõe tools exige autenticação, tenant, PDP fail-closed, audit,
@@ -41,8 +49,10 @@ um arquivo gerado divergir da fonte canônica.
 4. O gateway troca o token frontal por inner token com audiência `mcp:<provider>`.
 5. O contexto contém actor, tenant, papéis, scopes, ambiente, correlação, causação,
    sessão, decisão e aprovações; o payload é assinado com HMAC.
-6. O `devteam-mcp` revalida inner token, audiência, tenant, decisão e assinatura antes
-   de executar.
+6. O provedor revalida inner token, audiência, tenant, decisão e assinatura antes de
+   executar. Isso vale para o `devteam-mcp` e para o runtime seguro compartilhado de
+   `contracts-mcp` e `artifact-provenance-mcp`, que exige `aud == mcp:<provider>` e
+   falha fechado quando não há material de verificação configurado.
 7. Falha de registry, PDP, token exchange, rate limit ou ledger bloqueia a chamada.
 8. Argumentos são inspecionados recursivamente; contexto não confiável e campos de
    segredo não são encaminhados.
@@ -70,10 +80,12 @@ O compose usa `${VAR:?required}` para não iniciar com defaults inseguros.
 | Grupo | Variáveis |
 |---|---|
 | Identidade | `GATEWAY_AS_ISSUER`, `GATEWAY_AS_JWKS_URL`, `GATEWAY_RESOURCE` |
+| Runtime dos provedores | `MCP_CONTEXT_SIGNING_KEY`, `MCP_INNER_TOKEN_ISSUER`, `MCP_INNER_TOKEN_JWKS_URL` (ou `MCP_INNER_TOKEN_PUBLIC_KEY`) |
 | Policy | `GATEWAY_PDP_URL`, `GATEWAY_RATE_LIMITS_JSON` |
 | Delegação | `GATEWAY_TOKEN_EXCHANGE_URL`, `GATEWAY_CONTEXT_SIGNING_KEY` |
 | Ledger runtime | `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` |
 | Rate limit | `REDIS_PASSWORD` |
+| Build privado | `GITHUB_TOKEN_FILE` (arquivo local entregue ao BuildKit como `github_token`) |
 | DevTeam DB | `DB_ENGINE`, `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
 | Tenant resolver | `ADMIN_DB_HOST`, `ADMIN_DB_PORT`, `ADMIN_DB_USER`, `ADMIN_DB_PASSWORD` |
 
@@ -123,6 +135,7 @@ vazios e podia representar ausência de resultado como sucesso.
 ```powershell
 python scripts/validate_mcp_manifests.py
 python scripts/audit_mcp_inventory.py
+python scripts/audit_mcp_tools.py --fail-on-runtime-gaps
 python scripts/generate_mcp_artifacts.py --check
 python -m pytest tests/control_plane -q
 python -m pytest mcp-gateway/tests -q

@@ -1,65 +1,90 @@
-"""Shared MCP HTTP Client for cross-MCP calls in DevTeam."""
-import httpx
-import json
+"""Fail-closed client for cross-MCP calls through the canonical gateway."""
+
+from __future__ import annotations
+
+import os
+import re
 from typing import Any
+
+import httpx
+
+_SERVICE_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_TOOL_NAME = re.compile(r"^[a-z][a-z0-9_-]*$")
+
+
+class MCPClientError(RuntimeError):
+    """A gateway transport or protocol failure."""
+
+
+class MCPToolError(MCPClientError):
+    """A tool returned a canonical JSON-RPC error."""
 
 
 class MCPHttpClient:
-    """HTTP client for calling tools from other MCP services."""
+    """Call governed tools without direct provider URLs or local fallbacks."""
 
-    BASE_URLS = {
-        "qa-mcp": "http://qa-mcp:7109",
-        "docs-mcp": "http://docs-mcp:7111",
-        "infra-mcp": "http://infra-mcp:7106",
-        "test-mcp": "http://test-mcp:7117",
-        "ai-governance-mcp": "http://ai-governance-mcp:7112",
-        "session-mcp": "http://session-mcp:7102",
-    }
+    def __init__(
+        self,
+        gateway_url: str | None = None,
+        access_token: str | None = None,
+        *,
+        timeout: float = 30.0,
+        client: httpx.Client | None = None,
+    ) -> None:
+        self.gateway_url = (gateway_url or os.environ.get("MCP_GATEWAY_URL", "")).rstrip("/")
+        self._access_token = access_token or os.environ.get("MCP_GATEWAY_TOKEN", "")
+        if not self.gateway_url:
+            raise MCPClientError("MCP_GATEWAY_URL is required")
+        if not self._access_token:
+            raise MCPClientError("MCP_GATEWAY_TOKEN is required")
+        self._owns_client = client is None
+        self.client = client or httpx.Client(timeout=timeout)
+        self._request_id = 0
 
-    def __init__(self, timeout: float = 10.0):
-        self.timeout = timeout
-        self.client = httpx.Client(timeout=timeout)
-
-    def call(self, service: str, tool: str, args: dict | None = None) -> dict[str, Any]:
-        """Call a tool on another MCP service.
-
-        Args:
-            service: Service name (key in BASE_URLS)
-            tool: Tool name to invoke
-            args: Arguments to pass to the tool
-
-        Returns:
-            Tool response as dict
-        """
-        base = self.BASE_URLS.get(service)
-        if not base:
-            return {"error": f"Unknown service: {service}"}
-
+    def call(self, service: str, tool: str, args: dict[str, Any] | None = None) -> Any:
+        if not _SERVICE_ID.fullmatch(service):
+            raise MCPClientError("invalid MCP service id")
+        if not _TOOL_NAME.fullmatch(tool):
+            raise MCPClientError("invalid MCP tool name")
+        self._request_id += 1
         try:
-            resp = self.client.post(
-                f"{base}/tools/call",
-                json={"name": tool, "arguments": args or {}},
+            response = self.client.post(
+                f"{self.gateway_url}/mcp/{service}/tools/call",
+                headers={"Authorization": f"Bearer {self._access_token}"},
+                json={"id": self._request_id, "name": tool, "arguments": args or {}},
             )
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.HTTPError as e:
-            return {"error": f"HTTP error calling {service}/{tool}: {str(e)}"}
-        except json.JSONDecodeError as e:
-            return {"error": f"Invalid JSON response from {service}/{tool}: {str(e)}"}
-        except Exception as e:
-            return {"error": f"Error calling {service}/{tool}: {str(e)}"}
+            response.raise_for_status()
+            payload = response.json()
+        except httpx.TimeoutException as exc:
+            raise MCPClientError("MCP gateway request timed out") from exc
+        except httpx.HTTPStatusError as exc:
+            raise MCPClientError(f"MCP gateway returned HTTP {exc.response.status_code}") from exc
+        except (httpx.HTTPError, ValueError) as exc:
+            raise MCPClientError("MCP gateway request failed") from exc
+        if not isinstance(payload, dict):
+            raise MCPClientError("MCP gateway returned a non-object response")
+        error = payload.get("error")
+        if isinstance(error, dict):
+            raise MCPToolError(str(error.get("message") or "MCP tool returned an error"))
+        if "result" not in payload:
+            raise MCPClientError("MCP gateway response has no result")
+        return payload["result"]
 
-    def close(self):
-        """Close the HTTP client."""
-        self.client.close()
+    def close(self) -> None:
+        if self._owns_client:
+            self.client.close()
+
+    def __enter__(self) -> "MCPHttpClient":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
 
 
-# Global client instance
 _client: MCPHttpClient | None = None
 
 
 def get_mcp_client() -> MCPHttpClient:
-    """Get or create the global MCP HTTP client."""
     global _client
     if _client is None:
         _client = MCPHttpClient()

@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: artifact-provenance-mcp/provenance_build_statement
+  uid: artifact-provenance-mcp:provenance_build_statement
+  domain: provenance
+  title: provenance_build_statement @ artifact-provenance-mcp
+  description: Build an in-memory provenance statement from observed hashes and Git state.
+  owner: security
+  tags: [artifact-provenance-mcp, provenance]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: provenance.provenance_build_statement
+  provider_id: artifact-provenance-mcp
+  provider_version: 1.0.0
+  tool: provenance_build_statement
+  endpoint: streamable-http
+  selection: {}
+relations:
+  - {verb: implements, target: provenance.provenance_build_statement}
+  - {verb: provided-by, target: artifact-provenance-mcp}

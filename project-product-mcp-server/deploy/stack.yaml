@@ -1,0 +1,86 @@
+services:
+  api:
+    image: registry.dataforall.tech/platform-project-product@${PROJECT_PRODUCT_IMAGE_DIGEST:?required}
+    command: [python, -m, app.main]
+    environment:
+      RUNTIME_ENV: cloud
+      ENVIRONMENT: production
+      API_PORT: "8000"
+      HEALTH_PORT: "9090"
+      DB_ENGINE: ${PROJECT_PRODUCT_DB_ENGINE:-postgresql}
+      ADMIN_DB_HOST: ${ADMIN_DB_HOST:?required}
+      ADMIN_DB_PORT: ${ADMIN_DB_PORT:-3306}
+      ADMIN_DB_NAME: ${ADMIN_DB_NAME:-ADMIN_DATAFORALL}
+      ADMIN_DB_USER: ${ADMIN_DB_USER:?required}
+      READINESS_TENANT_ID: ${READINESS_TENANT_ID:?required}
+      JWT_ISSUER: ${JWT_ISSUER:?required}
+      JWT_AUDIENCE: platform-project-product
+      JWT_JWKS_URL: ${JWT_JWKS_URL:?required}
+      VAULT_ADDR: ${VAULT_ADDR:?required}
+      VAULT_AUTH_METHOD: aws
+      METRICS_ENABLED: "true"
+      OTEL_TRACES_ENABLED: ${OTEL_TRACES_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
+    networks: [business, management, adapter, identity, cache]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9090/health/ready', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 30s
+      retries: 3
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, order: start-first, failure_action: rollback, monitor: 30s}
+      rollback_config: {parallelism: 1, order: stop-first, monitor: 30s}
+      restart_policy: {condition: on-failure, delay: 5s, max_attempts: 3, window: 60s}
+      placement: {max_replicas_per_node: 1}
+      resources:
+        limits: {cpus: "1.0", memory: 1G}
+        reservations: {cpus: "0.25", memory: 256M}
+  mcp:
+    image: registry.dataforall.tech/platform-project-product@${PROJECT_PRODUCT_IMAGE_DIGEST:?required}
+    command: [python, -m, project_product_mcp.server.mcp_server]
+    working_dir: /app/project-product-mcp-server/mcp
+    environment:
+      RUNTIME_ENV: cloud
+      SERVICE_BASE_URL: http://api:8000
+      SERVICE_READINESS_URL: http://api:9090/health/ready
+      SERVICE_ALLOWED_HOSTS: '["api"]'
+      PRIVATE_NETWORK_ENCRYPTED: "true"
+      GOVERNANCE_BASE_URL: http://platform-governance:8000
+      GOVERNANCE_ALLOWED_HOSTS: '["platform-governance"]'
+      MCP_TWIN_AUDIENCE: mcp:portfolio
+      MCP_TWIN_ISSUER: ${MCP_TWIN_ISSUER:?required}
+      URL_ADMIN_TWIN_JWKS: http://platform-admin:8000/api/v1/twin/jwks.json
+      IDENTITY_ALLOWED_HOSTS: '["platform-admin"]'
+      MCP_RATE_LIMIT_REQUESTS: "120"
+      MCP_RATE_LIMIT_WINDOW_SECONDS: "60"
+      MCP_RATE_LIMIT_KEY_PREFIX: mcp:project_product
+      MCP_RATE_LIMIT_CONNECT_TIMEOUT_SECONDS: "2.0"
+      MCP_PORT: "7121"
+      VAULT_ADDR: ${VAULT_ADDR:?required}
+      VAULT_AUTH_METHOD: aws
+    networks: [adapter, mcp_gateway, identity, governance, cache]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7121/v1/ready', timeout=2)"]
+      interval: 30s
+      timeout: 3s
+      start_period: 20s
+      retries: 3
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, order: start-first, failure_action: rollback, monitor: 30s}
+      rollback_config: {parallelism: 1, order: stop-first, monitor: 30s}
+      restart_policy: {condition: on-failure, delay: 5s, max_attempts: 3, window: 60s}
+      placement: {max_replicas_per_node: 1}
+      resources:
+        limits: {cpus: "0.5", memory: 512M}
+        reservations: {cpus: "0.1", memory: 128M}
+networks:
+  adapter: {driver: overlay, internal: true, attachable: false, driver_opts: {encrypted: "true"}}
+  management: {driver: overlay, internal: true, attachable: false, driver_opts: {encrypted: "true"}}
+  business: {external: true, name: platform-business}
+  mcp_gateway: {external: true, name: platform-mcp-gateway}
+  identity: {external: true, name: platform-identity}
+  governance: {external: true, name: platform-governance}
+  cache: {external: true, name: platform-cache}

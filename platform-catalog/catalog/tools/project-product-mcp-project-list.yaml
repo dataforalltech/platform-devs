@@ -1,0 +1,27 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: project-product-mcp/project_list
+  uid: project-product-mcp:project_list
+  domain: portfolio
+  title: project_list @ project-product-mcp
+  description: List active tenant projects, optionally filtered by product or status.
+  owner: platform-engineering
+  tags:
+  - project-product-mcp
+  - portfolio
+  - project
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: portfolio.project_list
+  provider_id: project-product-mcp
+  provider_version: 1.0.0
+  tool: project_list
+  endpoint: streamable-http
+  selection: {}
+relations:
+- verb: implements
+  target: portfolio.project_list
+- verb: provided-by
+  target: project-product-mcp

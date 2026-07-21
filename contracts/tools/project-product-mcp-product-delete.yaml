@@ -1,0 +1,49 @@
+schema_version: 1
+provider_id: project-product-mcp
+name: product_delete
+description: Soft-delete an empty product after an approved, version-checked request.
+status: active
+input_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    idempotency_key:
+      type: string
+      minLength: 8
+      maxLength: 128
+      pattern: ^[A-Za-z0-9._:-]+$
+    product_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    expected_version:
+      type: integer
+      minimum: 1
+  required:
+  - idempotency_key
+  - product_id
+  - expected_version
+output_schema:
+  type: object
+  additionalProperties: false
+  properties:
+    product_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    deleted:
+      const: true
+  required:
+  - product_id
+  - deleted
+required_scope: portfolio:product:delete
+mutating: true
+risk:
+  level: high
+  effects:
+  - delete
+  blast_radius: tenant
+  approval_required: N2
+secret_reference_only: true

@@ -1,0 +1,48 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: portfolio/project_get
+  uid: portfolio.project_get
+  domain: portfolio
+  title: project get
+  description: Get one active tenant project by canonical identifier.
+  owner: platform-engineering
+  tags:
+  - portfolio
+  - project
+  - read
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: portfolio
+  capability: project-product-registry
+  resource:
+    type: project
+    parent: null
+    namespace: null
+  operation: get
+  authz: read
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions:
+    - trusted tenant context
+    postconditions:
+    - tenant-scoped audit record
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:project

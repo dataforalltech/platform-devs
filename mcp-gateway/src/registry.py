@@ -32,7 +32,10 @@ class Provider:
 
 class RuntimeRegistry:
     def __init__(self, path: str | Path | None = None):
-        self.path = Path(path or os.environ.get("MCP_REGISTRY_FILE", "/app/mcp-runtime-registry.json"))
+        self.path = Path(
+            path
+            or os.environ.get("MCP_REGISTRY_FILE", "/app/mcp-runtime-registry.json")
+        )
 
     def _entries(self) -> dict[str, dict[str, Any]]:
         try:
@@ -46,12 +49,13 @@ class RuntimeRegistry:
 
     @staticmethod
     def _url(entry: dict[str, Any]) -> str | None:
-        if isinstance(entry.get("url"), str):
-            return entry["url"].rstrip("/")
         env_name = entry.get("url_env")
         if isinstance(env_name, str):
             value = os.environ.get(env_name)
-            return value.rstrip("/") if value else None
+            if value:
+                return value.rstrip("/")
+        if isinstance(entry.get("url"), str):
+            return entry["url"].rstrip("/")
         return None
 
     def get(self, name: str) -> Provider | None:

@@ -1,0 +1,18 @@
+apiVersion: catalog.platform.dev/v1
+kind: Provider
+metadata:
+  name: artifact-provenance-mcp
+  uid: artifact-provenance-mcp
+  domain: provenance
+  title: Artifact Provenance MCP
+  description: Read-only artifact hashing, verification and provenance provider.
+  owner: security
+  tags: [provenance]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  server: artifact-provenance-mcp-server
+  kind: mcp-server
+  transport: streamable-http
+  version: 1.0.0
+relations: []

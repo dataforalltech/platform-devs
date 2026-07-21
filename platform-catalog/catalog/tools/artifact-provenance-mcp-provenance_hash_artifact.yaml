@@ -1,0 +1,22 @@
+apiVersion: catalog.platform.dev/v1
+kind: Tool
+metadata:
+  name: artifact-provenance-mcp/provenance_hash_artifact
+  uid: artifact-provenance-mcp:provenance_hash_artifact
+  domain: provenance
+  title: provenance_hash_artifact @ artifact-provenance-mcp
+  description: Compute SHA-256 and Git provenance for one repository artifact.
+  owner: security
+  tags: [artifact-provenance-mcp, provenance]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  operation_id: provenance.provenance_hash_artifact
+  provider_id: artifact-provenance-mcp
+  provider_version: 1.0.0
+  tool: provenance_hash_artifact
+  endpoint: streamable-http
+  selection: {}
+relations:
+  - {verb: implements, target: provenance.provenance_hash_artifact}
+  - {verb: provided-by, target: artifact-provenance-mcp}

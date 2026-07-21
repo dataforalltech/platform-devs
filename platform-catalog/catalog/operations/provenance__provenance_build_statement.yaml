@@ -1,0 +1,26 @@
+apiVersion: catalog.platform.dev/v1
+kind: Operation
+metadata:
+  name: provenance/provenance_build_statement
+  uid: provenance.provenance_build_statement
+  domain: provenance
+  title: build artifact provenance statement
+  description: Build an in-memory provenance statement from observed hashes and Git state.
+  owner: security
+  tags: [provenance, read]
+  lifecycle: stable
+  version: 1.0.0
+spec:
+  domain: provenance
+  capability: artifact-provenance
+  resource: {type: statement, parent: null, namespace: null}
+  operation: build
+  authz: read
+  risk: {effects: [read], requires: [], blast_radius: workspace, default_level: low, approval_required: none}
+  contract:
+    inputs: {}
+    outputs: {}
+    preconditions: []
+    postconditions: []
+    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
+relations: [{verb: acts-on, target: 'resource:statement'}]
