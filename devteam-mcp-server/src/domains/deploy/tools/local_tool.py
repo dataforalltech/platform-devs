@@ -373,3 +373,101 @@ def clone_repo(
         "repos_root": str(root),
         "action": "cloned",
     }
+
+
+def _redact(text: str, settings: DeploySettings) -> str:
+    """Remove o token do output (o remote URL clonado pode carregá-lo embutido)."""
+    token = getattr(settings, "github_token", "") or ""
+    return text.replace(token, "***") if token else text
+
+
+def sync_repo(
+    client: GitHubClient,
+    settings: DeploySettings,
+    *,
+    repo: str,
+    branch: str | None = None,
+    repos_root: str | None = None,
+    target_dir: str | None = None,
+    depth: int | None = None,
+) -> dict[str, Any]:
+    """Clone-or-pull IDEMPOTENTE (ADR-017 D17.9).
+
+    Se o repo ainda nao existe em REPOS_ROOT, clona (delega a ``clone_repo``). Se ja
+    existe, faz ``fetch`` + (opcional ``checkout <branch>``) + pull **fast-forward**.
+    Diferente de ``clone_repo``, NAO falha quando o diretorio ja existe — o objetivo e
+    deixar a arvore pronta de forma repetivel. NUNCA descarta trabalho: se a worktree
+    esta suja ou o pull nao e fast-forward (branch divergiu), sinaliza e para, sem
+    merge/reset.
+    """
+    root = _resolve_repos_root(settings, repos_root)
+    if root is None:
+        return {
+            "error": "REPOS_ROOT nao configurado.",
+            "tip": "Use set_repos_root ou exporte DEPLOY_REPOS_ROOT=<caminho>.",
+        }
+    if not root.exists():
+        return {"error": f"REPOS_ROOT nao existe: {root}"}
+
+    full_repo = repo if "/" in repo else f"{settings.github_org}/{repo}"
+    dest_name = target_dir or full_repo.split("/")[-1]
+    dest_path = root / dest_name
+
+    # Ausente -> clona (mesmo caminho/URL do clone_repo)
+    if not (dest_path / ".git").exists():
+        if dest_path.exists():
+            return {
+                "error": f"Destino existe mas nao e um repositorio git: {dest_path}",
+                "path": str(dest_path),
+            }
+        return clone_repo(
+            client, settings, repo=repo, branch=branch,
+            repos_root=repos_root, target_dir=target_dir, depth=depth,
+        )
+
+    # Presente -> fetch + checkout + pull fast-forward
+    if _git_info(dest_path).get("dirty"):
+        return {
+            "repo": full_repo,
+            "path": str(dest_path),
+            "branch": _git_info(dest_path).get("branch"),
+            "action": "skipped_dirty",
+            "error": "worktree tem mudancas nao commitadas — pull abortado (nao descartamos trabalho).",
+        }
+
+    ok, fetch_out = _run_git(["fetch", "--prune", "origin"], dest_path, timeout=120)
+    if not ok:
+        return {
+            "repo": full_repo, "path": str(dest_path),
+            "error": "git fetch falhou", "details": _redact(fetch_out, settings),
+        }
+
+    if branch:
+        ok, co_out = _run_git(["checkout", branch], dest_path)
+        if not ok:
+            return {
+                "repo": full_repo, "path": str(dest_path),
+                "error": f"checkout de '{branch}' falhou", "details": _redact(co_out, settings),
+            }
+
+    ok, pull_out = _run_git(["merge", "--ff-only", "@{u}"], dest_path, timeout=60)
+    if not ok:
+        return {
+            "repo": full_repo,
+            "path": str(dest_path),
+            "branch": _git_info(dest_path).get("branch"),
+            "action": "skipped_non_ff",
+            "error": "pull nao e fast-forward (a branch divergiu) — nao fizemos merge.",
+            "details": _redact(pull_out, settings),
+        }
+
+    info = _git_info(dest_path)
+    return {
+        "repo": full_repo,
+        "path": str(dest_path),
+        "branch": info.get("branch"),
+        "remote": f"https://github.com/{full_repo}.git",
+        "last_commit": info.get("last_commit"),
+        "repos_root": str(root),
+        "action": "pulled",
+    }
