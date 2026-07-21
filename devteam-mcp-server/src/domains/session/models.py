@@ -44,6 +44,9 @@ class SessionRow(BaseModel):
     repo: str | None = Field(default=None, max_length=255)
     branch: str | None = None
     base_branch: str | None = None
+    project_id: str | None = Field(default=None, max_length=64)  # sessão project-scoped (ADR-017 D17.3)
+    agent_client: str | None = Field(default=None, max_length=128)  # cliente-agente (Claude Code/Codex) D17.4
+    environment_json: str | None = None  # snapshot de ambiente do cliente (JSON TEXT) D17.5
     status: str = Field(default="active", max_length=32)
     progress: str | None = None
     started_at: str | None = None

@@ -36,6 +36,18 @@ SERVICE_REFS_SCHEMA = {
     },
 }
 
+EXTERNAL_LINK_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "owner": {"type": "string", "minLength": 1, "maxLength": 255},
+        "repo": {"type": "string", "minLength": 1, "maxLength": 255},
+        "url": {"anyOf": [{"type": "string", "minLength": 1, "maxLength": 2048}, {"type": "null"}]},
+    },
+    "required": ["owner", "repo"],
+}
+NULLABLE_EXTERNAL_LINK_SCHEMA = {"anyOf": [EXTERNAL_LINK_SCHEMA, {"type": "null"}]}
+
 _PRODUCT_STATUS = ["planned", "active", "paused", "retired"]
 _PROJECT_STATUS = ["planned", "active", "paused", "completed", "archived"]
 
@@ -154,6 +166,7 @@ REPOSITORY_BINDING_SCHEMA: dict[str, Any] = {
             "enum": ["source", "documentation", "infrastructure", "deployment", "other"],
         },
         "metadata": REPOSITORY_METADATA_SCHEMA,
+        "external_link": NULLABLE_EXTERNAL_LINK_SCHEMA,
         "version": {"type": "integer", "minimum": 1},
         "created_at": {"type": "string", "format": "date-time"},
         "updated_at": {"type": "string", "format": "date-time"},
@@ -359,6 +372,7 @@ REPOSITORY_ATTACH_INPUT = {
             "default": "source",
         },
         "metadata": REPOSITORY_METADATA_SCHEMA,
+        "external_link": EXTERNAL_LINK_SCHEMA,
     },
     "required": ["idempotency_key", "project_id", "provider", "connector_ref", "repository_ref"],
 }

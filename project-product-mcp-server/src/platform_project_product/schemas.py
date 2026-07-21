@@ -151,6 +151,15 @@ class ProjectResponse(AuditResponse):
     service_refs: ServiceReferences
 
 
+class ExternalLink(StrictModel):
+    # First-class canonical reference to the upstream repository (github owner/repo).
+    # It is a denormalized pointer for display/traceability; platform-connectors remains
+    # the authority for clone URL + auth (ADR-017 D17.6/D17.7).
+    owner: str = Field(min_length=1, max_length=255)
+    repo: str = Field(min_length=1, max_length=255)
+    url: str | None = Field(default=None, max_length=2048)
+
+
 class RepositoryMetadata(StrictModel):
     display_name: str | None = Field(default=None, min_length=1, max_length=200)
     default_branch: str | None = Field(default=None, min_length=1, max_length=255)
@@ -192,6 +201,7 @@ class RepositoryBindingCreate(StrictModel):
     repository_ref: str = Field(min_length=1, max_length=512)
     role: RepositoryRole = "source"
     metadata: RepositoryMetadata = Field(default_factory=RepositoryMetadata)
+    external_link: ExternalLink | None = None
 
 
 class RepositoryBindingResponse(AuditResponse):
@@ -202,6 +212,7 @@ class RepositoryBindingResponse(AuditResponse):
     repository_ref: str
     role: RepositoryRole
     metadata: RepositoryMetadata
+    external_link: ExternalLink | None = None
 
 
 class Page(StrictModel):

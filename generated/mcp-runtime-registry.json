@@ -2038,6 +2038,38 @@
                 "minLength": 1,
                 "type": "string"
               },
+              "external_link": {
+                "additionalProperties": false,
+                "properties": {
+                  "owner": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "maxLength": 255,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "url": {
+                    "anyOf": [
+                      {
+                        "maxLength": 2048,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "owner",
+                  "repo"
+                ],
+                "type": "object"
+              },
               "idempotency_key": {
                 "maxLength": 128,
                 "minLength": 8,
@@ -2148,6 +2180,45 @@
                 "maxLength": 512,
                 "minLength": 1,
                 "type": "string"
+              },
+              "external_link": {
+                "anyOf": [
+                  {
+                    "additionalProperties": false,
+                    "properties": {
+                      "owner": {
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "repo": {
+                        "maxLength": 255,
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "url": {
+                        "anyOf": [
+                          {
+                            "maxLength": 2048,
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "owner",
+                      "repo"
+                    ],
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "metadata": {
                 "additionalProperties": false,
@@ -2392,6 +2463,45 @@
                       "maxLength": 512,
                       "minLength": 1,
                       "type": "string"
+                    },
+                    "external_link": {
+                      "anyOf": [
+                        {
+                          "additionalProperties": false,
+                          "properties": {
+                            "owner": {
+                              "maxLength": 255,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "repo": {
+                              "maxLength": 255,
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "url": {
+                              "anyOf": [
+                                {
+                                  "maxLength": 2048,
+                                  "minLength": 1,
+                                  "type": "string"
+                                },
+                                {
+                                  "type": "null"
+                                }
+                              ]
+                            }
+                          },
+                          "required": [
+                            "owner",
+                            "repo"
+                          ],
+                          "type": "object"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
                     },
                     "metadata": {
                       "additionalProperties": false,

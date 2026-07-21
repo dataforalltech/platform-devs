@@ -203,6 +203,36 @@ async def test_repository_list_forwards_cursor_and_returns_next_after_id():
     assert client.params["limit"] == 10
 
 
+@pytest.mark.asyncio
+async def test_repository_attach_forwards_and_returns_external_link():
+    class Client:
+        def __init__(self):
+            self.body = None
+
+        async def post(self, path, **kwargs):
+            self.body = kwargs.get("json")
+            record = _record("/repositories/id")
+            record["external_link"] = {"owner": "acme", "repo": "web", "url": None}
+            return record
+
+    client = Client()
+    out = await tools.project_repository_attach(
+        client,
+        {
+            "project_id": "22222222-2222-4222-8222-222222222222",
+            "idempotency_key": "binding-1",
+            "provider": "github",
+            "connector_ref": "connector:1",
+            "repository_ref": "repo:1",
+            "external_link": {"owner": "acme", "repo": "web"},
+        },
+        CTX,
+    )
+    assert client.body["external_link"] == {"owner": "acme", "repo": "web"}
+    assert out["external_link"] == {"owner": "acme", "repo": "web", "url": None}
+    assert server._validate_json_schema(out, server.REPOSITORY_BINDING_SCHEMA) == []
+
+
 def test_public_projection_rejects_missing_or_invalid_audit_fields():
     with pytest.raises(tools.InvalidToolResponseError):
         tools._public({})

@@ -163,3 +163,4 @@ ficam catalogadas aqui para não se perderem no histórico de commits:
 | [ADR-002](ADR-002-REPO-AUTOMATION-GOVERNANCE.md) | **Repo Automation & Governance** |
 | [ADR-015](ADR-015-INFRA-PERSISTENCE-STRATEGY.md) | **Infra Persistence Strategy** — SQLite oficial para `infra`/`session` até haver PG concorrente-seguro; **emenda escopada** à ADR-001 (com critérios de migração) |
 | [ADR-016](ADR-016-CI-VALIDATION-STRATEGY.md) | **CI Validation Strategy** — testes herméticos, venv limpo CI-faithful, plugins obrigatórios (`pytest-cov`/`pytest-asyncio`), cobertura ≥80%, `fail-fast: false`, reporte por contagem |
+| [ADR-017](ADR-017-DEVTEAM-JOURNEY.md) | **DevTeam Journey** — onboarding/tunnel, `session_bootstrap` project-scoped (agente-cliente + ambiente do payload), credenciais SEMPRE via platform-connectors, `RepositoryBinding.external_link` + resolução de clone no connectors, workspace `sync_repo`/`setup_project_workspace`, loop emite o journal da sessão |

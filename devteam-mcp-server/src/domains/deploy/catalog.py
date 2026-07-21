@@ -59,6 +59,7 @@ from .tools import (
     scaffold_pipeline,
     set_repos_root,
     setup_repo,
+    sync_repo,
     trigger_workflow,
 )
 
@@ -762,6 +763,42 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "sync_repo": {
+        "description": (
+            "Clone-or-pull IDEMPOTENTE de um repo em REPOS_ROOT/<repo>. Clona se ausente; "
+            "se ja existe, faz fetch + (checkout branch) + pull fast-forward. Diferente de "
+            "clone_repo, NAO falha se o diretorio existe. Nunca descarta trabalho: worktree "
+            "suja ou pull nao-ff => sinaliza e para (sem merge/reset)."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["repo"],
+            "additionalProperties": False,
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repo ('platform-auth') ou 'owner/repo'.",
+                },
+                "branch": {
+                    "type": "string",
+                    "description": "Branch a fazer checkout antes do pull. Default: branch atual.",
+                },
+                "repos_root": {
+                    "type": "string",
+                    "description": "Pasta destino (sobrepoe REPOS_ROOT configurado).",
+                },
+                "target_dir": {
+                    "type": "string",
+                    "description": "Nome do diretorio destino. Default: nome do repo.",
+                },
+                "depth": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Shallow clone --depth N no caso de clone. Default: completo.",
+                },
+            },
+        },
+    },
     # ── Ledger (consulta do histórico persistido — dual-db, tenant-scoped) ──── #
     "list_deployments": {
         "description": (
@@ -976,6 +1013,11 @@ _POLICY: dict[str, dict[str, str]] = {
         "data_domain": "workspace",
     },
     "clone_repo": {
+        "required_scope": f"{DOMAIN}:workspace:write",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
+    "sync_repo": {
         "required_scope": f"{DOMAIN}:workspace:write",
         "resource_type": "workspace",
         "data_domain": "workspace",
@@ -1433,6 +1475,17 @@ def _dispatch(
         )
     if name == "clone_repo":
         return clone_repo(
+            client,
+            settings,
+            repo=args["repo"],
+            branch=_arg(args, "branch"),
+            repos_root=args.get("repos_root"),
+            target_dir=args.get("target_dir"),
+            depth=args.get("depth"),
+        )
+
+    if name == "sync_repo":
+        return sync_repo(
             client,
             settings,
             repo=args["repo"],

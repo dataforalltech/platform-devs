@@ -64,6 +64,7 @@ from .tools.session_tool import (
     remove_service_dependency,
     resume_session,
     save_checkpoint,
+    session_bootstrap,
     start_session,
     start_task,
     submit_suggestion,
@@ -90,6 +91,24 @@ _ACTOR_SCHEMA = {
     "required": ["type", "id"],
 }
 
+# Snapshot de ambiente do CLIENTE (ADR-017 D17.5) — o devteam-mcp roda remoto, então o
+# ambiente é informado pelo cliente/tunnel, nunca por introspecção server-side. Schema
+# aberto (additionalProperties default true) para evoluir sem quebrar o contrato.
+_ENVIRONMENT_SCHEMA = {
+    "type": "object",
+    "description": "Snapshot de ambiente enviado pelo cliente/tunnel.",
+    "properties": {
+        "os": {"type": "string"},
+        "arch": {"type": "string"},
+        "agent_client": {
+            "type": "object",
+            "properties": {"name": {"type": "string"}, "version": {"type": "string"}},
+        },
+        "repos_root": {"type": "string"},
+        "tool_versions": {"type": "object"},
+    },
+}
+
 # ── Tool Schemas + Policy metadata (STD-MCP-001 CI-2) ─────────────────────────
 # Cada tool declara, além de description/schema, os 4 campos de política:
 #   capability     — id estável <namespace>.<tool> (não derivar por nome no gateway)
@@ -107,6 +126,7 @@ _ACTOR_SCHEMA = {
 _POLICY_SPEC: dict[str, tuple[str, str]] = {
     # ── Sessões ──
     "start_session": ("session", "write"),
+    "session_bootstrap": ("session", "write"),
     "confirm_branch_created": ("session", "write"),
     "save_checkpoint": ("session", "write"),
     "update_session": ("session", "write"),
@@ -148,8 +168,8 @@ _DATA_DOMAIN: dict[str, str] = {"decision": "governance"}
 _TOOL_DEFS: dict[str, dict[str, Any]] = {
     "start_session": {
         "description": (
-            "Registra nova sessão. Devolve branch_name sugerido e next_action para criar via deploy-mcp. "
-            "'repo' obrigatório; 'base_branch' default: develop."
+            "Registra nova sessão. Informe 'repo' (repo-scoped: devolve branch_name + next_action) "
+            "OU 'project_id' (project-scoped — ADR-017). 'base_branch' default: develop."
         ),
         "schema": {
             "type": "object",
@@ -165,14 +185,48 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
                 },
                 "repo": {
                     "type": "string",
-                    "description": "Repositório DONO da sessão (obrigatório).",
+                    "description": "Repositório dono da sessão (repo-scoped). Opcional se project_id for informado.",  # noqa: E501
                 },
                 "base_branch": {
                     "type": "string",
                     "description": "Branch base (default: develop) — usada como from_ref ao criar a branch da sessão.",  # noqa: E501
                 },
+                "project_id": {
+                    "type": "string",
+                    "description": "Projeto canônico (sessão project-scoped). Opcional se repo for informado.",  # noqa: E501
+                },
+                "agent_client": {
+                    "type": "string",
+                    "description": "Cliente-agente de código (ex: 'claude-code', 'codex').",
+                },
+                "environment": _ENVIRONMENT_SCHEMA,
             },
-            "required": ["title", "objective", "repo"],
+            "required": ["title", "objective"],
+        },
+    },
+    "session_bootstrap": {
+        "description": (
+            "Bootstrap da jornada (ADR-017 D17.8): cria uma sessão project-scoped capturando o "
+            "cliente-agente e o snapshot de ambiente do cliente/tunnel. Devolve o envelope com "
+            "credential_status/workspace_status (deferred até as Fatias B/C)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "Projeto canônico da sessão (obrigatório).",
+                },
+                "agent_client": {
+                    "type": "string",
+                    "description": "Cliente-agente de código (ex: 'claude-code', 'codex').",
+                },
+                "environment": _ENVIRONMENT_SCHEMA,
+                "title": {"type": "string", "description": "Título da sessão (opcional)."},
+                "objective": {"type": "string", "description": "Objetivo da sessão (opcional)."},
+            },
+            "required": ["project_id"],
         },
     },
     "confirm_branch_created": {
@@ -768,8 +822,21 @@ async def dispatch(name: str, args: dict[str, Any], store: SessionStore) -> dict
             base,
             title=a.get("title", ""),
             objective=a.get("objective", ""),
-            repo=a.get("repo", ""),
+            repo=a.get("repo") or None,
             base_branch=a.get("base_branch"),
+            project_id=a.get("project_id"),
+            agent_client=a.get("agent_client"),
+            environment=a.get("environment"),
+        )
+    if name == "session_bootstrap":
+        return await session_bootstrap(
+            store,
+            base,
+            project_id=a.get("project_id", ""),
+            agent_client=a.get("agent_client"),
+            environment=a.get("environment"),
+            title=a.get("title"),
+            objective=a.get("objective"),
         )
     if name == "confirm_branch_created":
         return await confirm_branch_created(store, session_id=a.get("session_id", ""), sha=a.get("sha"))
