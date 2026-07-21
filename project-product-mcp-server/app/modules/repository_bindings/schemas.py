@@ -1,5 +1,7 @@
 """Repository-binding HTTP contracts."""
 
+from uuid import UUID
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from platform_project_product.schemas import (
@@ -12,6 +14,7 @@ from platform_project_product.schemas import (
 class RepositoryBindingListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[RepositoryBindingResponse]
+    next_after_id: UUID | None = None
 
 
 class DetachRequest(BaseModel):

@@ -377,14 +377,19 @@ REPOSITORY_LIST_INPUT = {
             "type": "string",
             "enum": ["source", "documentation", "infrastructure", "deployment", "other"],
         },
+        "after_id": UUID_SCHEMA,
+        "limit": {"type": "integer", "minimum": 1, "maximum": 100, "default": 50},
     },
     "required": ["project_id"],
 }
 REPOSITORY_LIST_OUTPUT = {
     "type": "object",
     "additionalProperties": False,
-    "properties": {"items": {"type": "array", "items": REPOSITORY_BINDING_SCHEMA}},
-    "required": ["items"],
+    "properties": {
+        "items": {"type": "array", "items": REPOSITORY_BINDING_SCHEMA},
+        "next_after_id": {"anyOf": [UUID_SCHEMA, {"type": "null"}]},
+    },
+    "required": ["items", "next_after_id"],
 }
 REPOSITORY_DETACH_INPUT = {
     "type": "object",

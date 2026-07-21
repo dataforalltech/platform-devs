@@ -2325,6 +2325,18 @@
           "input_schema": {
             "additionalProperties": false,
             "properties": {
+              "after_id": {
+                "format": "uuid",
+                "maxLength": 36,
+                "minLength": 36,
+                "type": "string"
+              },
+              "limit": {
+                "default": 50,
+                "maximum": 100,
+                "minimum": 1,
+                "type": "integer"
+              },
               "project_id": {
                 "format": "uuid",
                 "maxLength": 36,
@@ -2482,10 +2494,24 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "next_after_id": {
+                "anyOf": [
+                  {
+                    "format": "uuid",
+                    "maxLength": 36,
+                    "minLength": 36,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [
-              "items"
+              "items",
+              "next_after_id"
             ],
             "type": "object"
           },

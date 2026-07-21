@@ -186,11 +186,15 @@ async def list_repositories(
     project_id: UUID,
     provider: str | None = None,
     role: RepositoryRole | None = None,
+    after_id: UUID | None = None,
+    limit: int = Query(default=50, ge=1, le=100),
     repos: PortfolioRepositories = Depends(get_portfolio_repositories),
     actor: ActorContext = Depends(internal_actor_context),
 ):
-    items = await _bindings(repos, actor).list(project_id, provider=provider, role=role)
-    return RepositoryBindingListResponse(items=items)
+    items, next_id = await _bindings(repos, actor).list(
+        project_id, provider=provider, role=role, after_id=after_id, limit=limit
+    )
+    return RepositoryBindingListResponse(items=items, next_after_id=next_id)
 
 
 @router.delete("/projects/{project_id}/repositories/{binding_id}")

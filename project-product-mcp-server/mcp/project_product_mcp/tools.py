@@ -42,12 +42,16 @@ def _page(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _repository_page(payload: dict[str, Any]) -> dict[str, Any]:
-    if not isinstance(payload, dict) or "items" not in payload:
+    if not isinstance(payload, dict) or "items" not in payload or "next_after_id" not in payload:
         raise InvalidToolResponseError("adapter repository page is missing required fields")
     items = payload["items"]
-    if not isinstance(items, list):
+    next_after_id = payload["next_after_id"]
+    if not isinstance(items, list) or not (next_after_id is None or isinstance(next_after_id, str)):
         raise InvalidToolResponseError("adapter repository page has invalid field types")
-    return {"items": [_public(item) for item in items]}
+    return {
+        "items": [_public(item) for item in items],
+        "next_after_id": next_after_id,
+    }
 
 
 def _params(**values: Any) -> dict[str, Any]:
@@ -180,7 +184,12 @@ async def project_repository_list(
 ) -> dict[str, Any]:
     payload = await client.get(
         f"/api/internal/mcp/projects/{args['project_id']}/repositories",
-        params=_params(provider=args.get("provider"), role=args.get("role")),
+        params=_params(
+            provider=args.get("provider"),
+            role=args.get("role"),
+            after_id=args.get("after_id"),
+            limit=args.get("limit", 50),
+        ),
         context=context,
     )
     return _repository_page(payload)

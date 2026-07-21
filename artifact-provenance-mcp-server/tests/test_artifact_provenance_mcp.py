@@ -60,7 +60,7 @@ def _headers(monkeypatch, *scopes: str) -> dict[str, str]:
     payload = {
         "actor_id": "agent-1", "actor_type": "agent", "tenant_id": "tenant-1",
         "scopes": list(scopes), "environment": "test", "correlation_id": "corr-2",
-        "policy_decision_id": "decision-2", "approval_ids": [],
+        "issued_at": int(time.time()), "policy_decision_id": "decision-2", "approval_ids": [],
     }
     encoded = base64.urlsafe_b64encode(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(key.encode(), encoded.encode(), hashlib.sha256).hexdigest()
@@ -126,7 +126,7 @@ def test_invalid_signature_and_missing_decision_are_rejected(monkeypatch) -> Non
     payload = {
         "actor_id": "agent-1", "actor_type": "agent", "tenant_id": "tenant-1",
         "scopes": ["provenance:read"], "environment": "test", "correlation_id": "corr",
-        "policy_decision_id": None, "approval_ids": [],
+        "issued_at": int(time.time()), "policy_decision_id": None, "approval_ids": [],
     }
     encoded = base64.urlsafe_b64encode(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(key.encode(), encoded.encode(), hashlib.sha256).hexdigest()
@@ -201,3 +201,29 @@ def test_missing_inner_token_configuration_fails_closed(monkeypatch) -> None:
     monkeypatch.delenv("MCP_INNER_TOKEN_ISSUER", raising=False)
     monkeypatch.delenv("MCP_INNER_TOKEN_PUBLIC_KEY", raising=False)
     assert _hash_call(TestClient(app), headers).status_code == 503
+
+
+def test_stale_context_is_rejected(monkeypatch) -> None:
+    key = "runtime-test-key"
+    monkeypatch.setenv("MCP_CONTEXT_SIGNING_KEY", key)
+    _configure_inner(monkeypatch)
+    payload = {
+        "actor_id": "agent-1", "actor_type": "agent", "tenant_id": "tenant-1",
+        "scopes": ["provenance:read"], "environment": "test", "correlation_id": "corr",
+        "issued_at": int(time.time()) - 10_000, "policy_decision_id": "d", "approval_ids": [],
+    }
+    encoded = base64.urlsafe_b64encode(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).decode().rstrip("=")
+    signature = hmac.new(key.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+    headers = {"X-MCP-Context": encoded, "X-MCP-Context-Signature": signature, "X-MCP-Inner-Token": _mint_inner_token()}
+    assert _hash_call(TestClient(app), headers).status_code == 401
+
+
+def test_missing_scope_is_denied(monkeypatch) -> None:
+    # F9: the deny path still returns 403 (and now emits a provider audit event).
+    assert _hash_call(TestClient(app), _headers(monkeypatch, "unrelated:read")).status_code == 403
+
+
+def test_build_statement_enforces_aggregate_budget(monkeypatch) -> None:
+    monkeypatch.setattr(server, "_MAX_STATEMENT_BYTES", 1)
+    with pytest.raises(ValueError, match="aggregate hashing budget"):
+        server.build_statement({"paths": ["README.md"]}, None)

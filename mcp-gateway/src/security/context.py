@@ -7,6 +7,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 import uuid
 from dataclasses import dataclass, replace
 from typing import Any
@@ -29,6 +30,7 @@ class ExecutionContext:
     correlation_id: str
     causation_id: str
     session_id: str | None
+    issued_at: int
     policy_decision_id: str | None = None
     approval_ids: list[str] | None = None
 
@@ -46,6 +48,7 @@ class ExecutionContext:
             "correlation_id": self.correlation_id,
             "causation_id": self.causation_id,
             "session_id": self.session_id,
+            "issued_at": self.issued_at,
             "policy_decision_id": self.policy_decision_id,
             "approval_ids": self.approval_ids or [],
         }
@@ -71,6 +74,7 @@ def build_context(
         correlation_id=correlation,
         causation_id=causation_id or correlation,
         session_id=session_id,
+        issued_at=int(time.time()),
     )
 
 

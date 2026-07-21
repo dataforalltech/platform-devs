@@ -103,6 +103,8 @@ async def test_binding_repository_all_scoped_operations():
         7,
         provider="github",
         role="source",
+        after_id=None,
+        limit=50,
     ) == ["row"]
     assert await repository.count_for_project(PROJECT, 2, 7) == 1
     await repository.insert({"provider": "github"}, 7)

@@ -87,6 +87,8 @@ class RepositoryBindingRepository:
         *,
         provider: str | None,
         role: str | None,
+        after_id: UUID | None,
+        limit: int,
     ) -> list[RepositoryBindingRecord]:
         filters: list[Any] = [
             visible(environment, owner),
@@ -96,10 +98,12 @@ class RepositoryBindingRepository:
             filters.append(Condition(column="provider", op=Operator.EQ, value=provider))
         if role:
             filters.append(Condition(column="role", op=Operator.EQ, value=role))
+        if after_id:
+            filters.append(Condition(column="binding_id", op=Operator.GT, value=after_id))
         result = await self._repo.find(
             where=combine(*filters),
             order_by=[Sort(column="binding_id")],
-            limit=100,
+            limit=limit,
         )
         return result.models()
 

@@ -49,6 +49,16 @@ AUDIT = re.compile(r"audit|activity[_-]?ledger|log_tool|mcp_tool_audit", re.I)
 ERRORS = re.compile(r"try\s*:|except\b|catch\s*\(|raise\b|HTTPException|isError|jsonrpc.*error", re.I | re.S)
 
 
+def _word_in(name: str, text: str) -> bool:
+    """Whole-token membership so ``list`` does not match inside ``blocklist``.
+
+    A tool name only counts as tested or documented when it appears as a complete
+    identifier in the corpus; a bare substring collision no longer inflates the
+    evidence that feeds the promotion gate.
+    """
+    return re.search(rf"(?<![\w-]){re.escape(name)}(?![\w-])", text) is not None
+
+
 @dataclass
 class SurfaceEvidence:
     declared_tools: list[str] = field(default_factory=list)
@@ -318,8 +328,10 @@ def audit_repository(root: Path = ROOT) -> list[MCPAudit]:
             source_text += "\n" + _read(root / "shared" / "secure_runtime.py")
         test_text = "\n".join(_read(path) for path in tests)
         local_docs = "\n".join(_read(path) for path in source_files if path.suffix.lower() in {".md", ".rst"})
-        documented = {name for name in all_tools if name in docs_text or name in local_docs}
-        tested = {name for name in all_tools if name in test_text}
+        documented = {
+            name for name in all_tools if _word_in(name, docs_text) or _word_in(name, local_docs)
+        }
+        tested = {name for name in all_tools if _word_in(name, test_text)}
         contracts = {name for (contract_provider, name) in catalog.contracts if contract_provider == provider}
         catalog_names = _catalog_tools(root, provider)
         language = "mixed" if {path.suffix for path in production} & {".py"} and {path.suffix for path in production} & {".ts", ".js"} else ("python" if any(path.suffix == ".py" for path in production) else "typescript")
@@ -339,6 +351,11 @@ def audit_repository(root: Path = ROOT) -> list[MCPAudit]:
             catalog_tools=sorted(catalog_names), contract_tools=sorted(contracts), schema_tools=sorted(schema_tools),
             output_schema_tools=sorted(output_tools), tested_tools=sorted(tested), documented_tools=sorted(documented),
         )
+        # Authorization/tenant/audit are proven at PROVIDER granularity, not per tool:
+        # for providers built on the shared secure runtime (create_mcp_app, appended to
+        # source_text above) enforcement is centralized, so one match legitimately clears
+        # every tool. A handler that bypassed the runtime would not be extracted as a tool
+        # here — treat these as coarse, provider-level signals rather than per-tool proof.
         auth_missing = [] if AUTH.search(source_text) else sorted(all_tools)
         tenant_missing = [] if TENANT.search(source_text) else sorted(all_tools)
         audit_missing = [] if AUDIT.search(source_text) else sorted(all_tools)

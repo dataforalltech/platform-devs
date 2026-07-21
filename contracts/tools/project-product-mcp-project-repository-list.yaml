@@ -25,6 +25,16 @@ input_schema:
       - infrastructure
       - deployment
       - other
+    after_id:
+      type: string
+      format: uuid
+      minLength: 36
+      maxLength: 36
+    limit:
+      type: integer
+      minimum: 1
+      maximum: 100
+      default: 50
   required:
   - project_id
 output_schema:
@@ -121,8 +131,16 @@ output_schema:
         - updated_at
         - created_by_ref
         - updated_by_ref
+    next_after_id:
+      anyOf:
+      - type: string
+        format: uuid
+        minLength: 36
+        maxLength: 36
+      - type: 'null'
   required:
   - items
+  - next_after_id
 required_scope: portfolio:repository:read
 mutating: false
 risk:

@@ -23,6 +23,9 @@ _SENSITIVE_DIRS = {".git", ".ssh", ".gnupg"}
 _SENSITIVE_SUFFIXES = {".key", ".pem", ".p12", ".pfx", ".jks", ".keystore"}
 _SENSITIVE_MARKERS = ("secret", "credential", "private_key", "private-key", "id_rsa", "id_ed25519")
 _MAX_FILE_SIZE = int(os.environ.get("PROVENANCE_MAX_FILE_BYTES", str(100 * 1024 * 1024)))
+_MAX_STATEMENT_BYTES = int(
+    os.environ.get("PROVENANCE_MAX_STATEMENT_BYTES", str(512 * 1024 * 1024))
+)
 
 
 def _resolve_artifact(relative_path: str) -> tuple[Path, str]:
@@ -114,7 +117,16 @@ def hmac_compare(left: str, right: str) -> bool:
 
 
 def build_statement(arguments: dict[str, Any], context: TrustedContext) -> dict[str, Any]:
-    artifacts = [_describe(path) for path in arguments["paths"]]
+    # Bound total hashing work across the batch, not only per file (the per-file and
+    # per-batch caps still apply), so one request cannot fan out into unbounded I/O.
+    artifacts: list[dict[str, Any]] = []
+    total_bytes = 0
+    for path in arguments["paths"]:
+        described = _describe(path)
+        total_bytes += described["size_bytes"]
+        if total_bytes > _MAX_STATEMENT_BYTES:
+            raise ValueError("statement exceeds the configured aggregate hashing budget")
+        artifacts.append(described)
     return {
         "schema_version": 1,
         "subject": artifacts,

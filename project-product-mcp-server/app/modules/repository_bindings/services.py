@@ -141,7 +141,9 @@ class RepositoryBindingService(BaseService[dict, str]):
         *,
         provider: str | None,
         role: str | None,
-    ) -> list[RepositoryBindingResponse]:
+        after_id: UUID | None = None,
+        limit: int = 50,
+    ) -> tuple[list[RepositoryBindingResponse], UUID | None]:
         project = await self.repositories.projects.get(
             project_id,
             self.actor.environment_id,
@@ -155,8 +157,11 @@ class RepositoryBindingService(BaseService[dict, str]):
             self.actor.owner_id,
             provider=provider,
             role=role,
+            after_id=after_id,
+            limit=limit + 1,
         )
-        return [mappers.to_response(item) for item in rows]
+        next_id = rows[limit - 1].binding_id if len(rows) > limit else None
+        return [mappers.to_response(item) for item in rows[:limit]], next_id
 
     async def detach(
         self,

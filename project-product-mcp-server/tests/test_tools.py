@@ -18,7 +18,7 @@ class FakeClient:
         if path.endswith("/products") or path.endswith("/projects"):
             return {"items": [], "next_after_id": None}
         if path.endswith("/repositories"):
-            return {"items": []}
+            return {"items": [], "next_after_id": None}
         return _record(path)
 
     async def post(self, path, **kwargs):
@@ -140,14 +140,31 @@ def test_page_rejects_missing_or_malformed_adapter_payload(payload):
         tools._page(payload)
 
 
-@pytest.mark.parametrize("payload", [{}, {"items": "not-a-list"}, {"items": [{}]}])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"items": []},
+        {"next_after_id": None},
+        {"items": "not-a-list", "next_after_id": None},
+        {"items": [], "next_after_id": 7},
+        {"items": [{}], "next_after_id": None},
+    ],
+)
 def test_repository_page_rejects_missing_or_malformed_adapter_payload(payload):
     with pytest.raises(tools.InvalidToolResponseError):
         tools._repository_page(payload)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("payload", [{}, {"items": "not-a-list"}, {"items": [{}]}])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"items": "not-a-list", "next_after_id": None},
+        {"items": [{}], "next_after_id": None},
+    ],
+)
 async def test_repository_list_propagates_malformed_adapter_payload(payload):
     class MalformedRepositoryPageClient:
         async def get(self, path, **kwargs):
@@ -159,6 +176,31 @@ async def test_repository_list_propagates_malformed_adapter_payload(payload):
             {"project_id": "11111111-1111-4111-8111-111111111111"},
             CTX,
         )
+
+
+@pytest.mark.asyncio
+async def test_repository_list_forwards_cursor_and_returns_next_after_id():
+    class Client:
+        def __init__(self):
+            self.params = None
+
+        async def get(self, path, **kwargs):
+            self.params = kwargs.get("params")
+            return {"items": [], "next_after_id": "33333333-3333-4333-8333-333333333333"}
+
+    client = Client()
+    out = await tools.project_repository_list(
+        client,
+        {
+            "project_id": "22222222-2222-4222-8222-222222222222",
+            "after_id": "11111111-1111-4111-8111-111111111111",
+            "limit": 10,
+        },
+        CTX,
+    )
+    assert out["next_after_id"] == "33333333-3333-4333-8333-333333333333"
+    assert client.params["after_id"] == "11111111-1111-4111-8111-111111111111"
+    assert client.params["limit"] == 10
 
 
 def test_public_projection_rejects_missing_or_invalid_audit_fields():

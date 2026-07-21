@@ -30,6 +30,9 @@ from starlette.concurrency import run_in_threadpool
 
 ToolHandler = Callable[[dict[str, Any], "TrustedContext"], Any | Awaitable[Any]]
 
+# Tolerated clock skew when a signed context appears to be issued in the future.
+_CONTEXT_CLOCK_SKEW_SECONDS = 60
+
 
 @dataclass(frozen=True)
 class TrustedContext:
@@ -119,6 +122,13 @@ def _decode_context(encoded: str, signature: str) -> TrustedContext:
         for field in required
     ):
         raise HTTPException(status_code=401, detail="incomplete gateway context")
+    issued_at = payload.get("issued_at")
+    if not isinstance(issued_at, int) or isinstance(issued_at, bool):
+        raise HTTPException(status_code=401, detail="gateway context is missing issued_at")
+    max_age = int(os.environ.get("MCP_CONTEXT_MAX_AGE_SECONDS", "300"))
+    age = int(time.time()) - issued_at
+    if age > max_age or age < -_CONTEXT_CLOCK_SKEW_SECONDS:
+        raise HTTPException(status_code=401, detail="gateway context is stale")
     scopes = payload.get("scopes")
     approvals = payload.get("approval_ids", [])
     if not isinstance(scopes, list) or not all(
@@ -351,25 +361,37 @@ def create_mcp_app(
         definition = tools.get(name) if isinstance(name, str) else None
         if definition is None:
             return _jsonrpc_error(request_id, -32601, "tool not found")
-        if (
-            definition.required_scope not in context.scopes
-            and "*" not in context.scopes
-        ):
-            raise HTTPException(
-                status_code=403, detail="required tool scope is missing"
-            )
-        minimum_approvals = {"none": 0, "N1": 1, "N2": 2}[definition.approval_required]
-        if len(set(context.approval_ids)) < minimum_approvals:
-            raise HTTPException(
-                status_code=403, detail="required tool approval is missing"
-            )
-        if not isinstance(arguments, dict):
-            return _jsonrpc_error(
-                request_id, -32602, "tool arguments must be an object"
-            )
-        _validate(definition.input_schema, arguments, "input")
+        # Authorization checks run INSIDE the audited try so the finally block emits a
+        # provider audit event for denials too (missing scope/approval/invalid input),
+        # not only for executed calls.
         status = "error"
         try:
+            if (
+                definition.required_scope not in context.scopes
+                and "*" not in context.scopes
+            ):
+                status = "denied"
+                raise HTTPException(
+                    status_code=403, detail="required tool scope is missing"
+                )
+            minimum_approvals = {"none": 0, "N1": 1, "N2": 2}[
+                definition.approval_required
+            ]
+            if len(set(context.approval_ids)) < minimum_approvals:
+                status = "denied"
+                raise HTTPException(
+                    status_code=403, detail="required tool approval is missing"
+                )
+            if not isinstance(arguments, dict):
+                status = "denied"
+                return _jsonrpc_error(
+                    request_id, -32602, "tool arguments must be an object"
+                )
+            try:
+                _validate(definition.input_schema, arguments, "input")
+            except HTTPException:
+                status = "denied"
+                raise
             if inspect.iscoroutinefunction(definition.handler):
                 result = await definition.handler(arguments, context)
             else:

@@ -53,7 +53,7 @@ def _headers(monkeypatch, *scopes: str, decision: str | None = "decision-1") -> 
     payload = {
         "actor_id": "agent-1", "actor_type": "agent", "tenant_id": "tenant-1",
         "scopes": list(scopes), "environment": "test", "correlation_id": "corr-1",
-        "policy_decision_id": decision, "approval_ids": [],
+        "issued_at": int(time.time()), "policy_decision_id": decision, "approval_ids": [],
     }
     encoded = base64.urlsafe_b64encode(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).decode().rstrip("=")
     signature = hmac.new(key.encode(), encoded.encode(), hashlib.sha256).hexdigest()
