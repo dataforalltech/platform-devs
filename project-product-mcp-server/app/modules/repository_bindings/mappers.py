@@ -1,7 +1,11 @@
 """Repository binding record to public response mapping."""
 
 from app.models import RepositoryBindingRecord
-from platform_project_product.schemas import RepositoryBindingResponse, RepositoryMetadata
+from platform_project_product.schemas import (
+    ExternalLink,
+    RepositoryBindingResponse,
+    RepositoryMetadata,
+)
 
 
 def to_response(record: RepositoryBindingRecord) -> RepositoryBindingResponse:
@@ -13,6 +17,11 @@ def to_response(record: RepositoryBindingRecord) -> RepositoryBindingResponse:
         repository_ref=record.repository_ref,
         role=record.role,
         metadata=RepositoryMetadata.model_validate(record.metadata),
+        external_link=(
+            ExternalLink.model_validate(record.external_link)
+            if record.external_link
+            else None
+        ),
         version=record.version,
         is_active=record.is_active,
         id_environment=record.id_environment,

@@ -76,8 +76,9 @@ class RepositoryBindingRecord(Record):
     repository_ref: str
     role: str
     metadata: dict[str, str | None] = Field(default_factory=dict)
+    external_link: dict[str, Any] | None = None
 
-    @field_validator("metadata", mode="before")
+    @field_validator("metadata", "external_link", mode="before")
     @classmethod
     def decode_metadata(cls, value: Any) -> Any:
         return _decode_driver_json(value)

@@ -101,6 +101,29 @@ output_schema:
                   pattern: ^https?://(?![^/?#]*@)(?!.*[\\#\s])[^/?#]+(?:[/?][^#\\\s]*)?$
                   maxLength: 2048
                 - type: 'null'
+          external_link:
+            anyOf:
+            - type: object
+              additionalProperties: false
+              properties:
+                owner:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                repo:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                url:
+                  anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 2048
+                  - type: 'null'
+              required:
+              - owner
+              - repo
+            - type: 'null'
           version:
             type: integer
             minimum: 1
