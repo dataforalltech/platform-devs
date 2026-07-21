@@ -33,7 +33,9 @@ async def test_get_pipeline_none_when_absent(store_a):
 
 async def test_get_pipeline_includes_recent_promotions(store_a):
     await store_a.register_pipeline("svc", "o/svc")
-    await store_a.add_promotion("svc", "dev", "homol", "u", None, {}, "homol", "pending")
+    await store_a.add_promotion(
+        "svc", "dev", "homol", "u", None, {}, "homol", "pending"
+    )
     pipeline = await store_a.get_pipeline("svc")
     assert len(pipeline["recent_promotions"]) == 1
 
@@ -48,8 +50,12 @@ async def test_list_pipelines_filters(store_a):
     assert [p["service"] for p in all_p] == ["a", "b"]  # ordenado por service
 
     assert {p["service"] for p in await store_a.list_pipelines(env="homol")} == {"b"}
-    assert {p["service"] for p in await store_a.list_pipelines(status="blocked")} == {"a"}
-    assert {p["service"] for p in await store_a.list_pipelines(status="active")} == {"b"}
+    assert {p["service"] for p in await store_a.list_pipelines(status="blocked")} == {
+        "a"
+    }
+    assert {p["service"] for p in await store_a.list_pipelines(status="active")} == {
+        "b"
+    }
 
 
 async def test_block_and_set_config(store_a):
@@ -73,19 +79,21 @@ async def test_promotion_lifecycle(store_a):
         "reason",
         {"qa_tests": True},
         "homol",
-        "waiting_approval",
+        "pending_human_approval",
         pr_number=7,
         pr_url="http://pr/7",
     )
     assert isinstance(pid, int) and pid > 0
 
     got = await store_a.get_promotion(pid)
-    assert got["status"] == "waiting_approval"
+    assert got["status"] == "pending_human_approval"
     assert got["pr_number"] == 7
 
     approved = await store_a.approve_promotion(pid, "boss")
-    assert approved["status"] == "approved"
+    assert approved["status"] == "pending_external_execution"
     assert approved["approved_by"] == "boss"
+    assert approved["approved_at"] is not None
+    assert approved["completed_at"] is None
 
     await store_a.complete_promotion(pid, "success")
     assert (await store_a.get_promotion(pid))["status"] == "success"
@@ -141,7 +149,9 @@ async def test_overview_counts(store_a):
     assert ov["total_services"] == 2
     assert ov["by_env"]["dev"]["blocked"] == 1
     assert ov["by_env"]["homol"]["active"] == 1
-    assert ov["services_with_failed_gates"] == [{"service": "s2", "env": "homol", "failed": 1}]
+    assert ov["services_with_failed_gates"] == [
+        {"service": "s2", "env": "homol", "failed": 1}
+    ]
 
 
 # ── Isolamento por tenant (banco-por-tenant, dual-db) ─────────────────────────

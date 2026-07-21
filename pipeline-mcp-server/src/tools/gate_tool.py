@@ -44,7 +44,13 @@ async def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
         return {"error": "not_found", "service": service}
 
     gates_config: dict = pipeline.get("gates_config") or {}
-    required_gates = gates_config.get(env, [])
+    configured_gates = gates_config.get(env)
+    if isinstance(configured_gates, list) and configured_gates:
+        gates_configured = True
+        required_gates = list(dict.fromkeys(configured_gates))
+    else:
+        gates_configured = False
+        required_gates = []
     gate_results = await store.get_gates(service=service, env=env)
     gate_map = {g["gate_type"]: g for g in gate_results}
 
@@ -55,7 +61,9 @@ async def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
     for gate_type in required_gates:
         g = gate_map.get(gate_type)
         if g is None:
-            summary.append({"gate_type": gate_type, "status": "missing", "passed": False})
+            summary.append(
+                {"gate_type": gate_type, "status": "missing", "passed": False}
+            )
             missing.append(gate_type)
             all_passed = False
         else:
@@ -90,7 +98,19 @@ async def get_gate_status(store: PipelineStore, service: str, env: str) -> dict:
     return {
         "service": service,
         "env": env,
-        "can_promote": all_passed and len(missing) == 0,
+        "can_promote": False,
+        "can_recommend": gates_configured and all_passed and len(missing) == 0,
+        "gates_configured": gates_configured,
+        "gates_satisfied": gates_configured and all_passed and len(missing) == 0,
+        "status": (
+            "gates_not_configured"
+            if not gates_configured
+            else (
+                "gates_satisfied"
+                if all_passed and len(missing) == 0
+                else "gates_incomplete"
+            )
+        ),
         "required_gates": required_gates,
         "missing_gates": missing,
         "gates": summary,

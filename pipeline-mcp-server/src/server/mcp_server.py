@@ -21,14 +21,14 @@ Transporte: stdio (primário, MCP) + sidecar HTTP (:MCP_PORT, default 7100):
   GET  /mcp/tools/list   — catálogo governado (com metadados de policy)
   POST /mcp/tools/call   — execução (inner token obrigatório, exceto _EXEMPT_TOOLS)
 
-NOTA: pipeline-mcp é stateful — mantém pipelines/gates/promoções num PostgreSQL via
-`PipelineStore` e chama a GitHub REST API para criar/mergiar PRs. Não há um Trinity
-backend HTTP intermediário, então não há ServiceApiClient; o dispatcher recebe o store.
+NOTA: pipeline-mcp é stateful e estritamente ledger-only: mantém pipelines, gates,
+aprovações e recomendações no banco tenant-scoped. Não chama GitHub, não executa
+gates, não faz merge, build, deploy, promoção ou rollback. Não há um Trinity backend
+HTTP intermediário, então não há ServiceApiClient; o dispatcher recebe o store.
 
 Regras de aprovação:
-  DEV  (PRs → develop):     pipeline-mcp auto-aprova e mergia autonomamente
-  HML  (develop → homol):   pipeline-mcp cria PR, aguarda aprovação humana
-  PROD (homol → main):      pipeline-mcp cria PR, aguarda aprovação humana
+  DEV/HML/PROD: pipeline-mcp apenas registra e recomenda. Toda revisão, aprovação,
+  execução e comprovação externa pertencem a um operador humano autorizado.
 
 Tools:
   Pipeline (8):  register_pipeline, get_pipeline, list_pipeline,
@@ -164,11 +164,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "promote_service": {
         "description": (
-            "Promove um serviço entre ambientes (dev→homol ou homol→prod). "
-            "Verifica todos os gates obrigatórios antes de promover. "
-            "DEV→HML e HML→PROD: cria PR via GitHub e aguarda aprovação humana (status=waiting_approval). "
-            "Após aprovação humana, chame approve_promotion(promotion_id). "
-            "Retorna can_promote=false com lista de gates pendentes se houver falhas."
+            "Registra uma recomendação de promoção dev→homol ou homol→prod. "
+            "Falha fechado se gates obrigatórios estiverem ausentes ou falharem. "
+            "Quando satisfeitos, grava status=pending_human_approval sem criar PR, "
+            "fazer merge ou alterar ambiente; não executa nenhuma ação externa."
         ),
         "capability": "pipeline-mcp.promote_service",
         "required_scope": "pipeline-mcp:promotion:write",
@@ -190,7 +189,9 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "promoted_by": {
                     "type": "string",
-                    "description": "Identificador de quem solicitou a promoção (usuário ou agente).",
+                    "minLength": 1,
+                    "pattern": "\\S",
+                    "description": "Identificador de quem solicitou registrar a recomendação.",
                 },
                 "reason": {
                     "type": "string",
@@ -203,9 +204,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "approve_promotion": {
         "description": (
-            "Registra aprovação humana de uma promoção HML ou PROD e executa o merge da PR. "
-            "Deve ser chamado após o humano aprovar a PR no GitHub. "
-            "Atualiza o ambiente do serviço para to_env após merge bem-sucedido."
+            "Registra a aprovação humana de uma recomendação após revalidar gates. "
+            "Não verifica nem altera GitHub; não executa merge, deploy ou promoção e não "
+            "atualiza ambiente; "
+            "o registro permanece pending_external_execution."
         ),
         "capability": "pipeline-mcp.approve_promotion",
         "required_scope": "pipeline-mcp:promotion:write",
@@ -220,7 +222,9 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "approved_by": {
                     "type": "string",
-                    "description": "Identificador de quem aprovou (usuário GitHub ou nome).",
+                    "minLength": 1,
+                    "pattern": "\\S",
+                    "description": "Identificador da pessoa que tomou a decisão de aprovação.",
                 },
             },
             "required": ["promotion_id", "approved_by"],
@@ -229,13 +233,12 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "watch_prs": {
         "description": (
-            "Escaneia PRs abertas nos repos registrados no pipeline. "
-            "PRs targeting 'develop': auto-aprova e mergia se gates passam (DEV — autonomia total). "
-            "PRs targeting 'homol' ou 'main': lista para aprovação humana sem tocar. "
-            "Configure PIPELINE_GITHUB_TOKEN e PIPELINE_GITHUB_ORG para usar."
+            "Produz recomendações de revisão humana usando apenas repositórios e gates "
+            "registrados no ledger. Não consulta GitHub, não observa PRs e nunca aprova "
+            "ou mescla alterações."
         ),
         "capability": "pipeline-mcp.watch_prs",
-        "required_scope": "pipeline-mcp:pipeline:write",
+        "required_scope": "pipeline-mcp:pipeline:read",
         "resource_type": "pipeline",
         "data_domain": "pipeline",
         "schema": {
@@ -244,7 +247,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 "repos": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "Repos específicos a verificar. Default: todos os registrados.",
+                    "description": "Repos registrados a avaliar. Default: todos os registrados.",
                 },
             },
             "additionalProperties": False,
@@ -275,8 +278,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "rollback": {
         "description": (
-            "Registra um rollback de versão para um serviço em um ambiente. "
-            "Atualiza o status do serviço para 'rollback' e registra no histórico."
+            "Registra uma solicitação de rollback com status=pending_human_approval. "
+            "Não executa rollback e não altera ambiente ou versão do serviço."
         ),
         "capability": "pipeline-mcp.rollback",
         "required_scope": "pipeline-mcp:promotion:write",
@@ -297,7 +300,9 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                 },
                 "rolled_back_by": {
                     "type": "string",
-                    "description": "Identificador de quem executou o rollback.",
+                    "minLength": 1,
+                    "pattern": "\\S",
+                    "description": "Identificador de quem solicitou registrar o rollback.",
                 },
                 "reason": {
                     "type": "string",
@@ -362,7 +367,8 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "description": (
             "Retorna o status de todos os gates para um serviço/ambiente. "
             "Indica quais gates são obrigatórios, quais passaram, falharam ou estão ausentes. "
-            "Inclui campo can_promote: true/false."
+            "Ausência de configuração ou avaliação bloqueia a recomendação; "
+            "can_promote é sempre false porque o MCP não promove."
         ),
         "capability": "pipeline-mcp.get_gate_status",
         "required_scope": "pipeline-mcp:gate:read",
@@ -478,7 +484,7 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 # Health/status são encaminhadas SEM inner token (CI-7 exempt_tools — só tokenless).
-# pipeline-mcp não expõe tool tokenless: TODAS as tools tocam estado/GitHub e exigem
+# pipeline-mcp não expõe tool tokenless: TODAS as tools tocam estado e exigem
 # inner token válido (fail-closed). O liveness fica no endpoint /v1/health (sem tool).
 _EXEMPT_TOOLS: frozenset[str] = frozenset()
 # Denylist fail-safe: tools que retornam segredos NUNCA saem pelo gateway (CI-7).
@@ -503,7 +509,9 @@ def _verify_inner_token(twin_token: str, settings: PipelineSettings) -> dict[str
             "integração com o gateway não configurada: defina MCP_TWIN_AUDIENCE "
             "(mcp:pipeline-mcp) e URL_ADMIN_TWIN_JWKS (ver STD-SEC-006 / IT-006)."
         )
-    signing_key = jwt.PyJWKClient(settings.url_admin_twin_jwks).get_signing_key_from_jwt(twin_token)
+    signing_key = jwt.PyJWKClient(
+        settings.url_admin_twin_jwks
+    ).get_signing_key_from_jwt(twin_token)
     return jwt.decode(
         twin_token,
         signing_key.key,
@@ -519,11 +527,11 @@ def _verify_inner_token(twin_token: str, settings: PipelineSettings) -> dict[str
 async def _dispatch(
     name: str,
     args: dict[str, Any],
-    settings: PipelineSettings,
     store: PipelineStore,
 ) -> dict[str, Any]:
     """Despacha a chamada para a tool (async). O tenant NÃO viaja nos args (INV-3):
-    o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token)."""
+    o ``store`` já está ligado ao pool do tenant (resolvido dos claims do inner token).
+    """
     # ── Pipeline ──────────────────────────────────────────────────────────── #
     if name == "register_pipeline":
         return await register_pipeline(
@@ -535,7 +543,9 @@ async def _dispatch(
     if name == "get_pipeline":
         return await get_pipeline(store, service=args["service"])
     if name == "list_pipeline":
-        return await list_pipeline(store, env=args.get("env"), status=args.get("status"))
+        return await list_pipeline(
+            store, env=args.get("env"), status=args.get("status")
+        )
     if name == "promote_service":
         return await promote_service(
             store,
@@ -544,22 +554,16 @@ async def _dispatch(
             to_env=args["to_env"],
             promoted_by=args["promoted_by"],
             reason=args.get("reason"),
-            github_token=settings.github_token,
-            github_org=settings.github_org,
         )
     if name == "approve_promotion":
         return await approve_promotion(
             store,
             promotion_id=args["promotion_id"],
             approved_by=args["approved_by"],
-            github_token=settings.github_token,
-            github_org=settings.github_org,
         )
     if name == "watch_prs":
         return await watch_prs(
             store,
-            github_token=settings.github_token,
-            github_org=settings.github_org,
             repos=args.get("repos"),
         )
     if name == "block_service":
@@ -595,7 +599,9 @@ async def _dispatch(
         return await clear_gates(store, service=args["service"], env=args["env"])
     # ── History ───────────────────────────────────────────────────────────── #
     if name == "get_promotion_history":
-        return await get_promotion_history(store, service=args.get("service"), limit=args.get("limit", 20))
+        return await get_promotion_history(
+            store, service=args.get("service"), limit=args.get("limit", 20)
+        )
     if name == "get_pipeline_overview":
         return await get_pipeline_overview(store)
     if name == "set_pipeline_config":
@@ -632,7 +638,7 @@ async def _run_tool(
     await _ensure_tenant_schema(settings, tenant_id)
     async with for_tenant(tenant_id) as session:
         store = PipelineStore(session)
-        return await _dispatch(name, arguments, settings, store)
+        return await _dispatch(name, arguments, store)
 
 
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
@@ -675,31 +681,49 @@ def _build_http_app(settings: PipelineSettings) -> FastAPI:
         arguments = dict(params.get("arguments", {}) or {})
 
         if name in _EXCLUDE_TOOLS:
-            return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+            return JSONResponse(
+                status_code=403, content={"error": "tool_excluded", "tool": name}
+            )
 
         # Toda tool do pipeline toca estado do tenant → inner token obrigatório (não há
         # _EXEMPT_TOOLS). O tenant vem SEMPRE dos claims (SEC-035 / INV-3), nunca do arg.
         twin_token = (params.get("_meta") or {}).get("twin_token")
         if not twin_token:
-            return JSONResponse(status_code=401, content={"error": "missing_twin_token"})
+            return JSONResponse(
+                status_code=401, content={"error": "missing_twin_token"}
+            )
         try:
             claims = _verify_inner_token(twin_token, settings)
-        except Exception as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
+        except (
+            Exception
+        ) as exc:  # noqa: BLE001 — fail-closed em qualquer falha de verificação
             _log.warning("inner_token_rejected tool=%s detail=%s", name, exc)
-            return JSONResponse(status_code=401, content={"error": "invalid_twin_token"})
+            return JSONResponse(
+                status_code=401, content={"error": "invalid_twin_token"}
+            )
         tenant_id = claims.get("tenant_id")
         if not tenant_id:
-            return JSONResponse(status_code=401, content={"error": "missing_tenant_scope"})
+            return JSONResponse(
+                status_code=401, content={"error": "missing_tenant_scope"}
+            )
 
         try:
             payload = await _run_tool(name, arguments, settings, str(tenant_id))
         except KeyError:
-            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
+            return JSONResponse(
+                status_code=404, content={"error": "unknown_tool", "tool": name}
+            )
         except Exception as exc:  # noqa: BLE001 — a resposta carrega o erro
             _log.exception("tool_internal_error: %s", name)
             payload = {"error": "internal_error", "detail": str(exc), "tool": name}
-        content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
-        return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
+        content = [
+            TextContent(
+                type="text", text=json.dumps(payload, ensure_ascii=False, indent=2)
+            )
+        ]
+        return {
+            "result": {"content": [c.model_dump(exclude_none=True) for c in content]}
+        }
 
     @app.on_event("shutdown")
     async def _close_pools() -> None:
@@ -721,9 +745,13 @@ def build_server() -> tuple[Any, PipelineSettings, FastAPI]:
     settings = get_settings()
     settings.enforce_security_invariants()  # fail-fast STD-SEC-001/004/006
     configure_logging(settings)  # logging estruturado JSON (STD-OBS-001)
-    configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
+    configure(
+        settings
+    )  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
     http_app = _build_http_app(settings)
-    _log.info("pipeline_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE)
+    _log.info(
+        "pipeline_mcp_ready tools=%d engine=%s", len(_TOOL_SCHEMAS), settings.DB_ENGINE
+    )
 
     server: Server = Server("pipeline-mcp-server")
 
@@ -735,7 +763,9 @@ def build_server() -> tuple[Any, PipelineSettings, FastAPI]:
         ]
 
     @server.call_tool()
-    async def call_tool(name: str, arguments: dict[str, Any] | None) -> list[TextContent]:
+    async def call_tool(
+        name: str, arguments: dict[str, Any] | None
+    ) -> list[TextContent]:
         # O transporte stdio não carrega o inner token (logo, sem tenant). pipeline-mcp
         # é gateway-only: a execução real entra pelo sidecar HTTP (/mcp/tools/call), onde
         # o tenant vem dos claims verificados. Aqui recusamos fail-closed (sem tenant).
@@ -750,7 +780,11 @@ def build_server() -> tuple[Any, PipelineSettings, FastAPI]:
                     "(/mcp/tools/call) com o inner Twin Token — o tenant vem dos claims."
                 ),
             }
-        return [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
+        return [
+            TextContent(
+                type="text", text=json.dumps(payload, ensure_ascii=False, indent=2)
+            )
+        ]
 
     return server, settings, http_app
 
@@ -774,7 +808,9 @@ async def _run() -> None:
     try:
         async with stdio_server() as (read_stream, write_stream):
             await asyncio.gather(
-                server.run(read_stream, write_stream, server.create_initialization_options()),
+                server.run(
+                    read_stream, write_stream, server.create_initialization_options()
+                ),
                 server_http.serve(),
             )
     except (EOFError, BrokenPipeError):
@@ -787,7 +823,9 @@ def main() -> None:
         import uvicorn
 
         _server, settings, http_app = build_server()
-        uvicorn.run(http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning")  # noqa: S104
+        uvicorn.run(
+            http_app, host="0.0.0.0", port=settings.mcp_port, log_level="warning"
+        )  # noqa: S104
         return
     asyncio.run(_run())
 

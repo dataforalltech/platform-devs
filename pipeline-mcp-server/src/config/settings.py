@@ -4,9 +4,10 @@ Config de integração ao MCP Gateway central conforme:
   - docs/standards/STD-MCP-001-mcp-gateway-integration-contract.md
   - docs/standards/STD-SEC-006-token-model-c-inner-token.md
 
-`pipeline-mcp` é uma persona **stateful** (mantém estado de pipelines/gates/promoções)
-e fala com a **GitHub REST API** para criar/mergiar PRs. A persistência roda 100% sobre
-o ORM canônico (`platform_database.orm`), **tenant-scoped e dual-db**: credencial-zero
+`pipeline-mcp` é uma persona **stateful** que mantém estado de pipelines, gates,
+aprovações e recomendações. Ele é estritamente ledger-only: não chama GitHub,
+não executa gates e não promove ambientes. A persistência roda 100% sobre o ORM
+canônico (`platform_database.orm`), **tenant-scoped e dual-db**: credencial-zero
 (ORM-H-12) — o serviço só conhece o `tenant_id`; a credencial do banco do tenant vem de
 `ADMIN_DATAFORALL.PLATFORMS` (resolvida pela lib). Estas Settings expõem os protocolos
 `DBSettings` (`DB_*`, fallback compartilhado) e `AdminDBSettings` (`ADMIN_DB_*`, conexão
@@ -54,8 +55,12 @@ def load_secret(key: str, fallback: str = "") -> str:
             return value
         _log.warning("secret_empty_from_vault key=%s source=env", key)
         return fallback
-    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
-        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
+    except (
+        Exception
+    ) as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
+        _log.warning(
+            "vault_unavailable key=%s source=env err=%s", key, type(exc).__name__
+        )
         return fallback
 
 
@@ -74,7 +79,9 @@ class PipelineSettings(BaseSettings):
     # ── Integração com o gateway (STD-MCP-001 / STD-SEC-006) ──────────────────
     # Audiência exata que o PEP re-verifica no inner token (a falha de integração
     # nº 1 é audiência divergente → 401).
-    mcp_twin_audience: str = Field(default=f"mcp:{NAMESPACE}", validation_alias="MCP_TWIN_AUDIENCE")
+    mcp_twin_audience: str = Field(
+        default=f"mcp:{NAMESPACE}", validation_alias="MCP_TWIN_AUDIENCE"
+    )
     # JWKS do platform-admin (emissor do twin/inner token) — mesma de STD-SEC-006.
     url_admin_twin_jwks: str = Field(default="", validation_alias="URL_ADMIN_TWIN_JWKS")
 
@@ -99,8 +106,12 @@ class PipelineSettings(BaseSettings):
     DB_POOL_ACQUIRE_TIMEOUT_SECONDS: float = Field(
         default=30.0, validation_alias="DB_POOL_ACQUIRE_TIMEOUT_SECONDS"
     )
-    DB_POOL_RECYCLE_SECONDS: int = Field(default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS")
-    DB_QUERY_TIMEOUT_SECONDS: int = Field(default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS")
+    DB_POOL_RECYCLE_SECONDS: int = Field(
+        default=1800, validation_alias="DB_POOL_RECYCLE_SECONDS"
+    )
+    DB_QUERY_TIMEOUT_SECONDS: int = Field(
+        default=60, validation_alias="DB_QUERY_TIMEOUT_SECONDS"
+    )
     DB_HEALTH_POOL_SIZE: int = Field(default=1, validation_alias="DB_HEALTH_POOL_SIZE")
     DB_SSLMODE: str | None = Field(default=None, validation_alias="DB_SSLMODE")
 
@@ -111,10 +122,6 @@ class PipelineSettings(BaseSettings):
     ADMIN_DB_PORT: int = Field(default=3306, validation_alias="ADMIN_DB_PORT")
     ADMIN_DB_USER: str = Field(default="root", validation_alias="ADMIN_DB_USER")
     ADMIN_DB_PASSWORD: str = Field(default="", validation_alias="ADMIN_DB_PASSWORD")
-
-    # ── GitHub (criação/merge de PRs durante promoções) ───────────────────────
-    github_token: str = Field(default="", validation_alias="PIPELINE_GITHUB_TOKEN")
-    github_org: str = Field(default="", validation_alias="PIPELINE_GITHUB_ORG")
 
     @field_validator("runtime_env")
     @classmethod
@@ -128,7 +135,9 @@ class PipelineSettings(BaseSettings):
     def _resolve_secrets(self) -> PipelineSettings:
         """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
         self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", self.DB_PASSWORD)
-        self.ADMIN_DB_PASSWORD = load_secret(f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD)
+        self.ADMIN_DB_PASSWORD = load_secret(
+            f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD
+        )
         return self
 
     def enforce_security_invariants(self) -> None:
@@ -142,12 +151,18 @@ class PipelineSettings(BaseSettings):
           env/Vault (nunca de default no código).
         """
         if self.docs_enabled:
-            raise RuntimeError("INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente")
+            raise RuntimeError(
+                "INVARIANTE STD-SEC-001: DOCS_ENABLED deve ser false em todo ambiente"
+            )
         if not self.mcp_twin_audience.startswith("mcp:"):
-            raise RuntimeError("INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'")
+            raise RuntimeError(
+                "INVARIANTE STD-SEC-006: MCP_TWIN_AUDIENCE deve ser 'mcp:<namespace>'"
+            )
         if self.runtime_env == "cloud":
             if not self.url_admin_twin_jwks:
-                raise RuntimeError("INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud")
+                raise RuntimeError(
+                    "INVARIANTE STD-SEC-006: URL_ADMIN_TWIN_JWKS é obrigatório em cloud"
+                )
             if not self.ADMIN_DB_HOST or not self.ADMIN_DB_PASSWORD:
                 raise RuntimeError(
                     "INVARIANTE STD-SEC-004: ADMIN_DB_HOST/ADMIN_DB_PASSWORD são obrigatórios em "
