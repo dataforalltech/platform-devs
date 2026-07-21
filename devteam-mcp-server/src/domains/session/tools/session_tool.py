@@ -101,8 +101,11 @@ async def start_session(
     *,
     title: str,
     objective: str,
-    repo: str,
+    repo: str | None = None,
     base_branch: str | None = None,
+    project_id: str | None = None,
+    agent_client: str | None = None,
+    environment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Registra uma nova sessão e devolve o `branch_name` sugerido + a próxima ação
     que o agente deve executar via deploy-mcp.
@@ -116,36 +119,85 @@ async def start_session(
     Cada task completada deve carregar um commit_sha (feito via deploy-mcp.commit_files)."""
     if not title or not objective:
         return {"error": "ValidationError", "details": "title e objective são obrigatórios"}
-    if not repo:
+    if not repo and not project_id:
         return {
             "error": "ValidationError",
             "details": (
-                "repo é obrigatório — informe o repositório dono da sessão. "
-                "Para serviços auxiliares, use add_service_dependency após consultar "
-                "o services-mcp."
+                "informe 'repo' (sessão repo-scoped) ou 'project_id' (sessão "
+                "project-scoped). Para serviços auxiliares, use add_service_dependency."
             ),
         }
 
     base = base_branch or default_base_branch
-    session = await store.create_session(title=title, objective=objective, repo=repo)
-    branch_name = _session_branch_name(session.get("name"))
-    await store.set_session_branch(session_id=session["id"], branch=branch_name, base_branch=base)
-    session["branch"] = branch_name
-    session["base_branch"] = base
-    session["next_action"] = {
-        "tool": "mcp__deploy-mcp__create_branch",
-        "args": {"repo": repo, "branch": branch_name, "from_ref": base},
-        "rationale": (
-            "Crie a branch da sessão antes de qualquer commit. Use confirm_branch_created após o sucesso."
-        ),
-    }
-    # Sugestões pendentes para esse repo (cross-repo queue)
-    pending = await store.list_suggestions(target_repo=repo, status="pending", limit=10)
-    session["pending_suggestions"] = {
-        "count": await store.count_pending_suggestions(repo),
-        "items": pending[:5],
-    }
+    session = await store.create_session(
+        title=title,
+        objective=objective,
+        repo=repo,
+        project_id=project_id,
+        agent_client=agent_client,
+        environment=environment,
+    )
+    if repo:
+        branch_name = _session_branch_name(session.get("name"))
+        await store.set_session_branch(session_id=session["id"], branch=branch_name, base_branch=base)
+        session["branch"] = branch_name
+        session["base_branch"] = base
+        session["next_action"] = {
+            "tool": "mcp__deploy-mcp__create_branch",
+            "args": {"repo": repo, "branch": branch_name, "from_ref": base},
+            "rationale": (
+                "Crie a branch da sessão antes de qualquer commit. Use confirm_branch_created após o sucesso."
+            ),
+        }
+        # Sugestões pendentes para esse repo (cross-repo queue)
+        pending = await store.list_suggestions(target_repo=repo, status="pending", limit=10)
+        session["pending_suggestions"] = {
+            "count": await store.count_pending_suggestions(repo),
+            "items": pending[:5],
+        }
     return session
+
+
+async def session_bootstrap(
+    store: SessionStore,
+    default_base_branch: str,
+    *,
+    project_id: str,
+    agent_client: str | None = None,
+    environment: dict[str, Any] | None = None,
+    title: str | None = None,
+    objective: str | None = None,
+) -> dict[str, Any]:
+    """Ponto único de bootstrap da jornada (ADR-017 D17.8).
+
+    Cria uma sessão **project-scoped** capturando o cliente-agente (Claude Code/Codex)
+    e o snapshot de ambiente que o cliente/tunnel envia (o devteam-mcp roda remoto, então
+    o ambiente NÃO é introspecção server-side — D17.5). Devolve o envelope de bootstrap;
+    o status de credenciais (via platform-connectors) e de workspace (clone dos repos do
+    projeto) é preenchido pelas Fatias B/C — aqui sai como ``deferred``.
+    """
+    if not project_id:
+        return {"error": "ValidationError", "details": "project_id é obrigatório no bootstrap"}
+    session = await start_session(
+        store,
+        default_base_branch,
+        title=title or f"Sessão do projeto {project_id}",
+        objective=objective or "Sessão de trabalho project-scoped (bootstrap).",
+        project_id=project_id,
+        agent_client=agent_client,
+        environment=environment,
+    )
+    if session.get("error"):
+        return session
+    return {
+        "session_id": session.get("id"),
+        "project_id": project_id,
+        "agent_client": agent_client,
+        "environment_captured": environment is not None,
+        "credential_status": "deferred",  # Fatia B — resolução via platform-connectors
+        "workspace_status": "deferred",  # Fatia C — setup_project_workspace
+        "session": session,
+    }
 
 
 async def confirm_branch_created(

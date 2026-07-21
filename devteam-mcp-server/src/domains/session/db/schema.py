@@ -16,9 +16,12 @@ tenant (mysql/postgresql), então o MESMO bootstrap serve o dual-db.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from platform_database.orm.ddl import (
+    AddColumn,
+    ColumnDef,
     CreateTable,
     MigrationScript,
     UniqueConstraintSpec,
@@ -35,6 +38,8 @@ from ..models import (
     SuggestionRow,
     TaskRow,
 )
+
+_log = logging.getLogger(__name__)
 
 # Nomes físicos das tabelas (table-case "lower" por padrão — tenants novos).
 SESSIONS_TABLE = "sessions"
@@ -77,14 +82,37 @@ def build_migration() -> MigrationScript:
     )
 
 
+# Colunas aditivas da sessão project-scoped (ADR-017 Fatia A2). Tenants NOVOS já as
+# recebem via CREATE TABLE (o SessionRow as declara); em tenants EXISTENTES o
+# CREATE TABLE IF NOT EXISTS não altera nada, então fazemos um backfill idempotente
+# (o erro de coluna duplicada é esperado e ignorado — não há downgrade destrutivo).
+_SESSION_ADDED_COLUMNS: list[ColumnDef] = [
+    ColumnDef(name="project_id", py_type=str, max_length=64, nullable=True),
+    ColumnDef(name="agent_client", py_type=str, max_length=128, nullable=True),
+    ColumnDef(name="environment_json", raw_type="TEXT", nullable=True),
+]
+
+
 async def ensure_schema(pool: Any, *, engine: str) -> None:
-    """Cria as 7 tabelas no banco do tenant (idempotente `IF NOT EXISTS`).
+    """Cria as 7 tabelas no banco do tenant (idempotente `IF NOT EXISTS`) e faz o
+    backfill aditivo das colunas project-scoped.
 
     ``engine`` é o motor real do tenant (derivado do dialeto do pool), para o DDL IR
     compilar o SQL correto (mysql/postgresql) — é o ponto do dual-db.
     """
     for statement in emit_ddl(build_migration(), engine):
         await pool.execute(statement)
+    backfill = MigrationScript(
+        up=[
+            AddColumn(table=SESSIONS_TABLE, column=col, if_not_exists=True)
+            for col in _SESSION_ADDED_COLUMNS
+        ]
+    )
+    for statement in emit_ddl(backfill, engine):
+        try:
+            await pool.execute(statement)
+        except Exception as exc:  # coluna já existe (MySQL omite IF NOT EXISTS) — idempotente
+            _log.debug("session column backfill skipped: %s (%s)", statement, exc)
 
 
 __all__ = [

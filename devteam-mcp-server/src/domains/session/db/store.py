@@ -202,11 +202,15 @@ class SessionStore:
         self,
         title: str,
         objective: str,
-        repo: str,
+        repo: str | None = None,
         branch: str | None = None,
         base_branch: str | None = None,
+        *,
+        project_id: str | None = None,
+        agent_client: str | None = None,
+        environment: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Cria uma sessão. `repo` (owner repo) é obrigatório."""
+        """Cria uma sessão. `repo` é opcional (sessão pode ser project-scoped — ADR-017 D17.3)."""
         session_uid = _new_id()
         name = _generate_name()
         now = _now()
@@ -219,6 +223,11 @@ class SessionStore:
                 "repo": repo,
                 "branch": branch,
                 "base_branch": base_branch,
+                "project_id": project_id,
+                "agent_client": agent_client,
+                "environment_json": (
+                    json.dumps(environment, ensure_ascii=False) if environment is not None else None
+                ),
                 "status": "active",
                 "started_at": now,
                 "last_updated_at": now,
