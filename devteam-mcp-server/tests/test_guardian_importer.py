@@ -15,6 +15,7 @@ from src.domains.guardian.importer import (
     ImporterError,
     discover_hub_files,
     parse_markdown_doc,
+    parse_traceability_matrix,
     scan_hub,
 )
 
@@ -434,3 +435,112 @@ def test_no_sections_when_no_h2_headings(tmp_path: Path) -> None:
     path = _write(root, "specs", "sem-secoes.md", body)
     doc = parse_markdown_doc("specs", path, root)
     assert doc.sections == ()
+
+
+# -- matriz de rastreabilidade central (documentation-model.md) --------------- #
+
+_MATRIX_MODEL = """# Modelo de Documentação
+
+## Mapa de rastreabilidade (decisão → camadas)
+
+| ADR | Princípio(s) | Standard(s) | Reference Arch. | Runbook(s) |
+|-----|--------------|-------------|-----------------|------------|
+| 0001 Trinity/FastAPI | P-003, P-006 | STD-ARCH-001 | ARCH-001, ARCH-009 | — |
+| 0010 Migrations no startup *(substituído)* | P-002 | — | — | — |
+| 0018 LAB *(retirado — D1)* | P-006 | STD-GOV-001 *(LAB retirado)* \
+| ARCH-009 *(LAB retirado)* | — *(RUNBOOK-lab retirado)* |
+| MCP Gateway † | P-006, P-005 | STD-MCP-001, STD-SEC-006 \
+| ARCH-010, ARCH-011 | RUNBOOK-mcp-gateway-integration |
+
+† nota de rodapé qualquer.
+
+## Fora da matriz (exceções rastreadas)
+
+| ID | Motivo | Fonte |
+|----|--------|-------|
+| STD-GW-001 | Perfil do arquétipo de gateway. | standards/README.md |
+
+## Índice por capacidade
+
+Outra seção qualquer, não deve ser parseada como matriz.
+"""
+
+
+def test_parse_traceability_matrix_extracts_relations_by_column() -> None:
+    result = parse_traceability_matrix(_MATRIX_MODEL)
+    rels = {
+        (r["from_uid"], r["to_ref"], r["relation_type"]) for r in result["relations"]
+    }
+    assert ("ADR-0001", "P-003", "traces_to_principle") in rels
+    assert ("ADR-0001", "P-006", "traces_to_principle") in rels
+    assert ("ADR-0001", "STD-ARCH-001", "traces_to_standard") in rels
+    assert ("ADR-0001", "ARCH-001", "traces_to_reference_arch") in rels
+    assert ("ADR-0001", "ARCH-009", "traces_to_reference_arch") in rels
+    # 0001 não tem runbook (célula "—") -> nenhuma relação traces_to_runbook para ele.
+    assert not any(
+        r["from_uid"] == "ADR-0001" and r["relation_type"] == "traces_to_runbook"
+        for r in result["relations"]
+    )
+
+
+def test_parse_traceability_matrix_strips_annotations_token_by_token() -> None:
+    result = parse_traceability_matrix(_MATRIX_MODEL)
+    rels = {
+        (r["from_uid"], r["to_ref"], r["relation_type"]) for r in result["relations"]
+    }
+    # ADR-0018: anotações *(...)* removidas, célula "— *(RUNBOOK-lab retirado)*"
+    # vira vazia (nenhuma relação de runbook), mas standard/reference_arch ficam.
+    assert ("ADR-0018", "STD-GOV-001", "traces_to_standard") in rels
+    assert ("ADR-0018", "ARCH-009", "traces_to_reference_arch") in rels
+    assert not any(
+        r["from_uid"] == "ADR-0018" and r["relation_type"] == "traces_to_runbook"
+        for r in result["relations"]
+    )
+
+
+def test_parse_traceability_matrix_skips_non_numeric_adr_rows() -> None:
+    result = parse_traceability_matrix(_MATRIX_MODEL)
+    assert result["skipped_rows"] == ["MCP Gateway †"]
+    assert not any(r["from_uid"].startswith("MCP") for r in result["relations"])
+
+
+def test_parse_traceability_matrix_extracts_exceptions() -> None:
+    result = parse_traceability_matrix(_MATRIX_MODEL)
+    assert result["exceptions"] == [
+        {
+            "id": "STD-GW-001",
+            "reason": "Perfil do arquétipo de gateway.",
+            "source": "standards/README.md",
+        }
+    ]
+
+
+def test_parse_traceability_matrix_missing_sections_return_empty() -> None:
+    result = parse_traceability_matrix("# Doc sem nenhuma seção relevante\n")
+    assert result == {"relations": [], "exceptions": [], "skipped_rows": []}
+
+
+_TEMPLATE_MODEL_PATH = (
+    Path(__file__).resolve().parents[3]
+    / "platform-service-template"
+    / "docs"
+    / "documentation-model.md"
+)
+
+
+@pytest.mark.skipif(
+    not _TEMPLATE_MODEL_PATH.is_file(),
+    reason="platform-service-template não está clonado neste ambiente",
+)
+def test_parse_traceability_matrix_against_real_hub_file() -> None:
+    """Validação extra contra o arquivo REAL (não sintético) — roda só quando o
+    repo platform-service-template está clonado ao lado de platform-devs."""
+    text = _TEMPLATE_MODEL_PATH.read_text(encoding="utf-8")
+    result = parse_traceability_matrix(text)
+    assert len(result["relations"]) > 50  # 80 na versão validada nesta sessão
+    assert "MCP Gateway †" in result["skipped_rows"]
+    assert any(e["id"] == "STD-GW-001" for e in result["exceptions"])
+    rels = {
+        (r["from_uid"], r["to_ref"], r["relation_type"]) for r in result["relations"]
+    }
+    assert ("ADR-0022", "RUNBOOK-rollback", "traces_to_runbook") in rels

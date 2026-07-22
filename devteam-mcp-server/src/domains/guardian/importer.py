@@ -331,6 +331,135 @@ def scan_hub(hub_root: Path) -> tuple[list[ImportedDoc], list[dict[str, str]]]:
     return docs, errors
 
 
+# ---------------------------------------------------------------------------
+# Matriz de rastreabilidade central (documentation-model.md) — validado contra
+# o arquivo REAL do platform-service-template (80 relações extraídas, "MCP
+# Gateway †" corretamente pulado — não tem ADR de 4 dígitos, é referência
+# externa por prosa —, anotações *(retirado)*/*(substituído)* stripadas token
+# a token, exceção STD-GW-001 capturada). Diferente de scan_hub (um arquivo por
+# diretriz), esta é UMA tabela central que referencia várias diretrizes por ID
+# textual — parser à parte, não integrado ao fluxo por-arquivo de import_hub.
+# ---------------------------------------------------------------------------
+
+_ANNOTATION = re.compile(r"\*\([^)]*\)\*")  # mesmo padrão de validate_hub.py
+_ADR_ROW_UID = re.compile(r"^(\d{4})\b")
+_EMPTY_CELL = frozenset({"-", "—", "–"})
+
+# Coluna do cabeçalho (substring, case-insensitive) → relation_type. A ordem
+# das colunas na tabela real é ADR|Princípio(s)|Standard(s)|Reference Arch.|
+# Runbook(s), mas casamos por substring (não posição) para tolerar reordenação.
+_MATRIX_COLUMN_RELATION: dict[str, str] = {
+    "princípio": "traces_to_principle",
+    "principio": "traces_to_principle",
+    "standard": "traces_to_standard",
+    "reference": "traces_to_reference_arch",
+    "runbook": "traces_to_runbook",
+}
+
+
+def _clean_cell_tokens(cell: str) -> list[str]:
+    """Remove anotações `*(...)*`, separa por vírgula, descarta placeholders
+    de célula vazia (`-`/`—`/`–`)."""
+    cleaned = _ANNOTATION.sub("", cell).strip()
+    if not cleaned or cleaned in _EMPTY_CELL:
+        return []
+    return [
+        t for t in (p.strip() for p in cleaned.split(",")) if t and t not in _EMPTY_CELL
+    ]
+
+
+def _find_section(text: str, heading_substring: str) -> str | None:
+    """Corpo da seção cujo heading `##` contém `heading_substring`
+    (case-insensitive), até o próximo heading de mesmo nível ou o fim do texto."""
+    pattern = re.compile(
+        rf"^##\s+.*{re.escape(heading_substring)}.*$", re.IGNORECASE | re.MULTILINE
+    )
+    m = pattern.search(text)
+    if not m:
+        return None
+    start = m.end()
+    next_heading = re.search(r"^##\s+", text[start:], re.MULTILINE)
+    end = start + next_heading.start() if next_heading else len(text)
+    return text[start:end]
+
+
+def _parse_markdown_table(section: str) -> tuple[list[str], list[list[str]]]:
+    """Extrai a PRIMEIRA tabela markdown de uma seção: (headers, rows). Pula a
+    linha separadora (`|---|---|`)."""
+    lines = [ln for ln in section.splitlines() if ln.strip().startswith("|")]
+    if len(lines) < 2:
+        return [], []
+
+    def _split_row(line: str) -> list[str]:
+        return [c.strip() for c in line.strip().strip("|").split("|")]
+
+    headers = _split_row(lines[0])
+    rows = []
+    for line in lines[1:]:
+        cells = _split_row(line)
+        if all(re.fullmatch(r":?-{1,}:?", c) for c in cells):
+            continue  # linha separadora do markdown
+        rows.append(cells)
+    return headers, rows
+
+
+def parse_traceability_matrix(model_text: str) -> dict[str, Any]:
+    """Parseia `documentation-model.md` (texto já lido) → relações tipadas para
+    `GuardianStore.add_relation`, exceções documentadas, e linhas puladas (não
+    batem no padrão de ADR de 4 dígitos — ex. "MCP Gateway †", uma referência
+    externa citada por prosa, não por arquivo local).
+
+    Retorna `{"relations": [...], "exceptions": [...], "skipped_rows": [...]}`.
+    Não faz I/O nem persiste nada — puro parsing, mesmo padrão de `scan_hub`."""
+    relations: list[dict[str, str]] = []
+    skipped_rows: list[str] = []
+
+    matrix_section = _find_section(model_text, "rastreabilidade")
+    if matrix_section:
+        headers, rows = _parse_markdown_table(matrix_section)
+        col_relation: dict[int, str] = {}
+        for idx, header in enumerate(headers[1:], start=1):
+            header_lower = header.lower()
+            for key, relation_type in _MATRIX_COLUMN_RELATION.items():
+                if key in header_lower:
+                    col_relation[idx] = relation_type
+                    break
+        for row in rows:
+            if not row:
+                continue
+            adr_cell = _ANNOTATION.sub("", row[0]).strip()
+            m = _ADR_ROW_UID.match(adr_cell)
+            if not m:
+                skipped_rows.append(row[0])
+                continue
+            from_uid = f"ADR-{m.group(1)}"
+            for idx, relation_type in col_relation.items():
+                if idx >= len(row):
+                    continue
+                for token in _clean_cell_tokens(row[idx]):
+                    relations.append(
+                        {
+                            "from_uid": from_uid,
+                            "to_ref": token,
+                            "relation_type": relation_type,
+                        }
+                    )
+
+    exceptions: list[dict[str, str]] = []
+    exceptions_section = _find_section(model_text, "fora da matriz")
+    if exceptions_section:
+        _, exception_rows = _parse_markdown_table(exceptions_section)
+        for row in exception_rows:
+            if len(row) >= 3:
+                exceptions.append({"id": row[0], "reason": row[1], "source": row[2]})
+
+    return {
+        "relations": relations,
+        "exceptions": exceptions,
+        "skipped_rows": skipped_rows,
+    }
+
+
 __all__ = [
     "LAYER_KIND",
     "IMPORT_STATUS_ALIASES",
@@ -339,4 +468,5 @@ __all__ = [
     "parse_markdown_doc",
     "discover_hub_files",
     "scan_hub",
+    "parse_traceability_matrix",
 ]
