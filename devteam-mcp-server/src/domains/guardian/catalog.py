@@ -37,6 +37,9 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "list_status_vocab": ("reference", "read"),
     "import_hub": ("hub_import", "write"),
     "validate_hub": ("hub_import", "read"),
+    "set_lcr_detail": ("lcr", "write"),
+    "get_lcr_detail": ("lcr", "read"),
+    "list_lcr_substitutions": ("lcr", "read"),
 }
 
 # resource_type → data_domain (guardian é governança).
@@ -44,6 +47,7 @@ _DATA_DOMAIN: dict[str, str] = {
     "directive": "governance",
     "reference": "governance",
     "hub_import": "governance",
+    "lcr": "governance",
 }
 
 _KINDS = sorted(KIND_CAPABILITIES)
@@ -177,13 +181,14 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
     },
     "import_hub": {
         "description": (
-            "Importa markdown→DB as 7 camadas estruturadas do hub de governança "
-            "(principles/adr/standards/reference-architecture/runbooks/it/decisions) "
-            "a partir de hub_root (caminho local para a raiz 'docs/' do "
-            "platform-service-template ou equivalente). Idempotente: cria diretrizes "
-            "novas, versiona as que mudaram, não toca as iguais. FORA de escopo nesta "
-            "fase: lib-change-requests/handoffs/specs (schema heterogêneo) e relações "
-            "governado_por/matriz (Fase 2)."
+            "Importa markdown→DB as 10 camadas do hub de governança (principles/adr/"
+            "standards/reference-architecture/runbooks/it/decisions + lib-change-"
+            "requests/handoffs/specs) a partir de hub_root (caminho local para a raiz "
+            "'docs/' do platform-service-template ou equivalente). Idempotente: cria "
+            "diretrizes novas, versiona as que mudaram, não toca as iguais; LCR também "
+            "sincroniza metadados de gestão de mudança (guardian_get_lcr_detail) e "
+            "arestas substituido_por. FORA de escopo: relações governado_por/matriz "
+            "de rastreabilidade (Fase 2)."
         ),
         "schema": {
             "type": "object",
@@ -218,6 +223,68 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
                 }
             },
             "required": ["hub_root"],
+        },
+    },
+    "set_lcr_detail": {
+        "description": (
+            "Cria/atualiza (upsert por directive_uid) os metadados de gestão de "
+            "mudança de um Library Change Request — biblioteca/repositorio/versões/"
+            "tipo/breaking/urgencia/aprovador/solicitante/achado/data_solicitacao. "
+            "Não versiona (não faz parte do núcleo append-only de directive_version)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "directive_uid": _UID,
+                "biblioteca": {"type": "string", "maxLength": 120},
+                "repositorio": {"type": "string", "maxLength": 200},
+                "versao_atual": {"type": "string", "maxLength": 32},
+                "versao_alvo": {"type": "string", "maxLength": 32},
+                "tipo": {
+                    "type": "string",
+                    "enum": ["patch", "minor", "major", "nao-aplicavel"],
+                },
+                "breaking": {"type": "boolean", "default": False},
+                "urgencia": {
+                    "type": "string",
+                    "enum": ["critical", "high", "medium", "low", "nao-aplicavel"],
+                },
+                "aprovador": {"type": "string", "maxLength": 64},
+                "solicitante": {"type": "string", "maxLength": 120},
+                "achado": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "Ref a control id de auditoria (ex.: CRY-02).",
+                },
+                "data_solicitacao": {
+                    "type": "string",
+                    "maxLength": 10,
+                    "description": "YYYY-MM-DD, imutável (distinto de última atualização).",
+                },
+            },
+            "required": ["directive_uid"],
+        },
+    },
+    "get_lcr_detail": {
+        "description": "Retorna os metadados de gestão de mudança de um LCR (ou null se não houver).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"directive_uid": _UID},
+            "required": ["directive_uid"],
+        },
+    },
+    "list_lcr_substitutions": {
+        "description": (
+            "Lista os alvos de substituido_por de um LCR (arestas — normalizadas do "
+            "front-matter, nunca uma lista serializada em coluna)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"directive_uid": _UID},
+            "required": ["directive_uid"],
         },
     },
 }
@@ -351,6 +418,21 @@ async def dispatch(
             return await _import_hub(store, a["hub_root"])
         if name == "validate_hub":
             return await _validate_hub(store, a["hub_root"])
+        if name == "set_lcr_detail":
+            uid = a["directive_uid"]
+            fields = {k: v for k, v in a.items() if k != "directive_uid"}
+            return await store.set_lcr_detail(directive_uid=uid, **fields)
+        if name == "get_lcr_detail":
+            result = await store.get_lcr_detail(a["directive_uid"])
+            return (
+                result
+                if result
+                else {"error": "not_found", "directive_uid": a["directive_uid"]}
+            )
+        if name == "list_lcr_substitutions":
+            return {
+                "substitutions": await store.list_lcr_substitutions(a["directive_uid"])
+            }
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)

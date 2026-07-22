@@ -29,6 +29,8 @@ from src.domains.guardian.db.schema import (
     DIRECTIVE_TABLE,
     DIRECTIVE_VERSION_TABLE,
     KIND_CAPABILITY_TABLE,
+    LCR_DETAIL_TABLE,
+    LCR_SUBSTITUTION_TABLE,
     STATUS_VOCAB_TABLE,
     ensure_schema,
 )
@@ -44,6 +46,8 @@ _PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
 _PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
 _TENANT = "devteam_guardian_test"
 _ALL_TABLES = (
+    LCR_SUBSTITUTION_TABLE,
+    LCR_DETAIL_TABLE,
     DIRECTIVE_VERSION_TABLE,
     DIRECTIVE_TABLE,
     STATUS_VOCAB_TABLE,
@@ -462,3 +466,141 @@ async def test_validate_hub_reports_drift_without_writing(
     assert any(
         d["directive_uid"] == "ADR-0022" for d in after_delete["orphan_directives"]
     )
+
+
+# -- LCR: metadados de gestão de mudança + validação kind-scoped (ADR-018 Fase 1c) #
+
+_LCR_HUB_BODY = """---
+type: lib-change-request
+title: "LCR-005 — Atualizar log-uploader"
+biblioteca: platform-log-uploader-lib
+repositorio: dataforalltech/platform-log-uploader-lib
+versao_atual: "v0.1.0"
+versao_alvo: "v0.2.0"
+tipo: minor
+breaking: false
+urgencia: high
+status: pendente-aprovacao
+aprovador: caiog
+solicitante: alguem
+achado: "CRY-02"
+substituido_por:
+  - "../standards/STD-SEC-001-hardening.md"
+data_solicitacao: "2026-06-04"
+---
+
+# LCR-005 — Atualizar log-uploader
+"""
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_set_and_get_lcr_detail(store: GuardianStore) -> None:
+    await store.create_directive(
+        directive_uid="LCR-005-log-uploader",
+        kind="lib_change_request",
+        title="LCR-005",
+        status="pendente-aprovacao",
+    )
+    out = await store.set_lcr_detail(
+        directive_uid="LCR-005-log-uploader",
+        biblioteca="platform-log-uploader-lib",
+        versao_atual="v0.1.0",
+        versao_alvo="v0.2.0",
+        tipo="minor",
+        breaking=False,
+        urgencia="high",
+        data_solicitacao="2026-06-04",
+    )
+    assert out["biblioteca"] == "platform-log-uploader-lib"
+    assert out["breaking"] is False
+    got = await store.get_lcr_detail("LCR-005-log-uploader")
+    assert got is not None and got["versao_alvo"] == "v0.2.0"
+
+    # Upsert idempotente: reaplicar não duplica, só atualiza.
+    await store.set_lcr_detail(
+        directive_uid="LCR-005-log-uploader", versao_alvo="v0.3.0"
+    )
+    updated = await store.get_lcr_detail("LCR-005-log-uploader")
+    assert updated["versao_alvo"] == "v0.3.0"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_lcr_substitution_edges_are_idempotent(store: GuardianStore) -> None:
+    await store.create_directive(
+        directive_uid="LCR-006",
+        kind="lib_change_request",
+        title="T",
+        status="pendente-aprovacao",
+    )
+    await store.add_lcr_substitution(
+        lcr_directive_uid="LCR-006", target_ref="../standards/STD-SEC-001.md"
+    )
+    await store.add_lcr_substitution(
+        lcr_directive_uid="LCR-006", target_ref="../standards/STD-SEC-001.md"
+    )  # idempotente — não duplica
+    await store.add_lcr_substitution(
+        lcr_directive_uid="LCR-006", target_ref="../standards/STD-SEC-002.md"
+    )
+    subs = await store.list_lcr_substitutions("LCR-006")
+    assert subs == ["../standards/STD-SEC-001.md", "../standards/STD-SEC-002.md"]
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_lcr_status_rejected_for_non_lcr_kind(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(
+            directive_uid="STD-X",
+            kind="standard",
+            status="pendente-aprovacao",
+            title="T",
+        )
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_generic_status_rejected_via_update_and_set_status_kind_scope(
+    store: GuardianStore,
+) -> None:
+    await store.create_directive(
+        directive_uid="LCR-007",
+        kind="lib_change_request",
+        title="T",
+        status="pendente-aprovacao",
+    )
+    # "proposto" é kind-agnóstico (applies_to_kind=None) -> permitido em qualquer kind.
+    ok = await store.update_directive(directive_uid="LCR-007", status="proposto")
+    assert ok["current_version"]["status"] == "proposto"
+    # "aceito" também é kind-agnóstico.
+    ok2 = await store.set_directive_status(directive_uid="LCR-007", status="aceito")
+    assert ok2["current_version"]["status"] == "aceito"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_syncs_lcr_detail_and_substitutions(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(
+        hub, "lib-change-requests", "LCR-005-log-uploader.md", _LCR_HUB_BODY
+    )
+
+    out = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert out["created"] == 1
+
+    detail = await dispatch(
+        "get_lcr_detail", {"directive_uid": "LCR-005-log-uploader"}, store
+    )
+    assert detail["biblioteca"] == "platform-log-uploader-lib"
+    assert detail["data_solicitacao"] == "2026-06-04"
+
+    subs = await dispatch(
+        "list_lcr_substitutions", {"directive_uid": "LCR-005-log-uploader"}, store
+    )
+    assert subs["substitutions"] == ["../standards/STD-SEC-001-hardening.md"]
+
+    directive = await store.get_directive("LCR-005-log-uploader")
+    assert directive["current_version"]["status"] == "pendente-aprovacao"
