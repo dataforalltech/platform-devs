@@ -1,17 +1,19 @@
-# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c + 2 + matriz de rastreabilidade (concluídas, mergeadas, VALIDADAS contra MySQL real)
+# Handoff — ADR-018 Guardian, Fase 1 até Fase 3 + matriz de rastreabilidade (concluídas, mergeadas, VALIDADAS contra MySQL real)
 
 **Data:** 2026-07-22
 **Branches mergeadas em `platform-devs`:** `feat/guardian-domain`,
 `feat/guardian-hub-importer`, `feat/guardian-lcr-schema`,
-`feat/guardian-fase2-sections-relations`, `feat/guardian-traceability-matrix` →
-`develop` (local + remoto, todas deletadas).
+`feat/guardian-fase2-sections-relations`, `feat/guardian-traceability-matrix`,
+`feat/guardian-fase3-conformance-waivers` → `develop` (local + remoto, todas
+deletadas).
 **Branch mergeada em `privates-libs/platform-database-lib`:**
 `fix/unit-of-work-mysql-returning-v2` → `develop` (repo separado, ver seção própria).
 **Commits (platform-devs):** `6d238e7` (fix deploy) → `bc8ac46` (feat guardian Fase 1) →
 merge `8eff2bb` → docs `5510b6c`/`29558b0` → `6f0271b` (Fase 1b importador) → merge
 `b7a8dd8` → docs `45781b9` → `603415e` (Fase 1c LCR/handoffs/specs) → merge `c6a1ba2` →
 docs `f5f6811` → `6cf871f` (Fase 2 seções/relações/archetype) → merge `e5303ca` →
-`f8172c0` (parser da matriz de rastreabilidade) → merge `0644493`.
+`f8172c0` (parser da matriz de rastreabilidade) → merge `0644493` → docs `d671edb` →
+`6af5b16` (Fase 3 conformance/waivers) → merge `28a2c05`.
 
 ## O que foi feito
 
@@ -269,24 +271,63 @@ que `scan_hub` já cobre via `governado_por`).
   extração por coluna, stripping de anotação, skip de linha não-numérica, exceções,
   seções ausentes, persistência via catalog) + 13/13 aggregator sem regressão.
 
+## Fase 3 — conformance controls + waivers (concluída, escopo reduzido por decisão explícita)
+
+Decisão tomada com o usuário antes de implementar (a pergunta certa: "Fases 3-4" nunca
+tinham desenho real, só uma menção apontando pros 4 YAMLs do template): modelar
+**apenas** conformidade e waivers — `service-profile`/`authorization-policy`/
+`network-policy` ficam **fora do guardian de vez**, são configuração de infra/deploy de
+um serviço (runtime, exposição, portas, políticas de rede), território que já pertence
+aos domínios `devops`/`deploy`/`security` do devteam-mcp, não à identidade de "guardião
+das diretrizes". Conformidade é diferente: é genuinamente rastrear se um projeto está
+em dia com o que o guardian já registra.
+
+- **`GovConformanceControlRow`** (nova tabela `gov_conformance_control`, chave natural
+  `(project_ref, control_id)`) — inspirada em `service-conformance.yaml.template`, mas
+  persistida/consultável em vez de um arquivo YAML solto por serviço. `status` tem
+  vocabulário PRÓPRIO (`CONFORMANCE_STATUS`: blocked/fail/not_applicable/
+  not_assessed/partial/pass — **não** é o mesmo vocabulário de `STATUS_VOCAB` da
+  diretriz), com enforcement de verdade: `evidence` obrigatório sse `status='pass'`,
+  `reason` obrigatório para qualquer outro status (mesma regra do
+  `validate_hub.py` do template, "summary deve bater com a contagem por status" virou
+  `conformance_summary()` calculado ao vivo em vez de um campo que pode divergir).
+  `directive_uid` é opcional — nem todo control deriva de uma diretriz já registrada.
+- **`GovWaiverRow`** (nova tabela `gov_waiver`, chave natural
+  `(project_ref, control_id, expires_on)`) — exceção temporária **sempre** com validade
+  e justificativa, nunca uma isenção permanente silenciosa. Renovar com validade
+  DIFERENTE cria um novo registro (histórico natural de renovações); a mesma validade
+  reenviada é idempotente. `status` do waiver (`active`/`expired`/`revoked`) é
+  independente do `CONFORMANCE_STATUS` do control — `expire_waiver`/`revoke_waiver` são
+  marcações EXPLÍCITAS, esta fase **não** calcula expiração automaticamente a partir de
+  `expires_on` na leitura (simplificação deliberada e documentada — um job futuro
+  poderia fazer isso, não existe hoje).
+- 8 tools novas: `guardian_set_conformance_control`/`get_conformance_control`/
+  `list_conformance_controls`/`conformance_summary`, `guardian_create_waiver`/
+  `list_waivers`/`revoke_waiver`/`expire_waiver`.
+- **62/62 testes verdes** no domínio guardian (55 anteriores + 14 novos: evidence/reason
+  obrigatórios por status, upsert de reassessment, summary por contagem, idempotência
+  de waiver, renovação com validade diferente cria 2º registro, revoke/expire,
+  roteamento via catalog) + 13/13 aggregator sem regressão.
+
 ## Fora de escopo mesmo depois de tudo isso
 
-- **Fases 3-4**: gates/waivers/conformance profiles (os YAMLs estruturados do template:
-  `service-profile`, `service-conformance`, `authorization-policy`, `network-policy`)
-  — ainda sem desenho no ADR-018, precisam de uma mini-decisão de escopo antes de
-  implementar (não é só "mais uma tabela", envolve modelar os campos desses 4 YAMLs).
+- `service-profile`/`authorization-policy`/`network-policy` — decisão EXPLÍCITA de não
+  modelar no guardian (ver Fase 3 acima); se algum dia fizer sentido, é mais provável
+  que pertençam a uma extensão dos domínios `devops`/`deploy`/`security` já existentes.
 - "Índice por capacidade" (a 3ª tabela de `documentation-model.md`, complementar ao
   mapa por-ADR) não foi parseada — é redundante com a matriz principal (aponta de
   volta pras mesmas linhas), então não parecia agregar valor extra além do que
   `parse_traceability_matrix` já extrai.
+- Cálculo automático de expiração de waiver (hoje é marcação explícita via
+  `expire_waiver`, não recalculado a cada leitura de `expires_on`).
 
 ## Arquivos-chave para retomar
 
 - `ADR-018-DEVTEAM-GUARDIAN.md` — decisões D18.1-D18.10.
-- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c + 2 + matriz de
+- `devteam-mcp-server/src/domains/guardian/` — Fase 1 até Fase 3 + matriz de
   rastreabilidade completas, validadas contra MySQL real e contra o arquivo real do
   template (`db/store.py`, `catalog.py`, `importer.py`, `models.py`, `db/schema.py`).
-- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 55/55 +
+- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 62/62 +
   27/27 verdes contra MySQL real / sem banco, respectivamente.
 - `MCP_ADR_INDEX.md` — índice atualizado com a entrada do ADR-018.
 - `privates-libs/platform-database-lib/src/platform_database/unit_of_work.py` — fix de
