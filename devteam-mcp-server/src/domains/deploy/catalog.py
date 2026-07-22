@@ -58,6 +58,7 @@ from .tools import (
     merge_pr,
     scaffold_pipeline,
     set_repos_root,
+    setup_project_workspace,
     setup_repo,
     sync_repo,
     trigger_workflow,
@@ -108,7 +109,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
         "schema": {
             "type": "object",
             "properties": {
-                "repo": {"type": "string", "description": "Nome do repo (owner/name ou só name)."},
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repo (owner/name ou só name).",
+                },
                 "branch": {"type": "string", "description": "Nome da nova branch."},
                 "from_ref": {
                     "type": "string",
@@ -472,7 +476,14 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
                     "type": "array",
                     "items": {
                         "type": "string",
-                        "enum": ["ci", "deploy", "cd-dev", "cd-hml", "cd-prod", "pr-validate"],
+                        "enum": [
+                            "ci",
+                            "deploy",
+                            "cd-dev",
+                            "cd-hml",
+                            "cd-prod",
+                            "pr-validate",
+                        ],
                     },
                     "description": (
                         "Templates a instalar. "
@@ -799,6 +810,51 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             },
         },
     },
+    "setup_project_workspace": {
+        "description": (
+            "Orquestra sync_repo sobre os repos de um projeto (ADR-017 D17.9, escopo "
+            "PARCIAL). A lista de repos é fornecida pelo CHAMADOR (não resolvida a "
+            "partir de project_id) — project-product ainda não está no gateway (G9) "
+            "e não há integração com platform-connectors para resolver clone URL+auth "
+            "(D17.7, bloqueado). Autenticação usa o mesmo token de clone_repo/sync_repo "
+            "— não é uma violação nova de credencial."
+        ),
+        "schema": {
+            "type": "object",
+            "required": ["project_id", "repos"],
+            "additionalProperties": False,
+            "properties": {
+                "project_id": {
+                    "type": "string",
+                    "description": "Id do projeto (para rastreio/logging — não usado para resolver repos).",
+                },
+                "repos": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "object",
+                        "required": ["repo"],
+                        "additionalProperties": False,
+                        "properties": {
+                            "repo": {
+                                "type": "string",
+                                "description": "Nome do repo ou 'owner/repo'.",
+                            },
+                            "branch": {
+                                "type": "string",
+                                "description": "Branch a fazer checkout. Default: branch atual.",
+                            },
+                        },
+                    },
+                    "description": "Bindings do projeto: [{repo, branch?}, ...].",
+                },
+                "repos_root": {
+                    "type": "string",
+                    "description": "Pasta destino (sobrepoe REPOS_ROOT configurado).",
+                },
+            },
+        },
+    },
     # ── Ledger (consulta do histórico persistido — dual-db, tenant-scoped) ──── #
     "list_deployments": {
         "description": (
@@ -825,7 +881,9 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "type": "object",
             "required": ["id"],
             "additionalProperties": False,
-            "properties": {"id": {"type": "integer", "description": "Id do deploy no ledger."}},
+            "properties": {
+                "id": {"type": "integer", "description": "Id do deploy no ledger."}
+            },
         },
     },
     "list_deploy_events": {
@@ -837,8 +895,14 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "type": "object",
             "additionalProperties": False,
             "properties": {
-                "kind": {"type": "string", "description": "Filtrar por tipo de evento."},
-                "target": {"type": "string", "description": "Filtrar por alvo (repo/imagem/run)."},
+                "kind": {
+                    "type": "string",
+                    "description": "Filtrar por tipo de evento.",
+                },
+                "target": {
+                    "type": "string",
+                    "description": "Filtrar por alvo (repo/imagem/run).",
+                },
             },
         },
     },
@@ -852,7 +916,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "repo": {"type": "string", "description": "Filtrar por repositório."},
-                "state": {"type": "string", "description": "Filtrar por estado (open/closed/merged)."},
+                "state": {
+                    "type": "string",
+                    "description": "Filtrar por estado (open/closed/merged).",
+                },
             },
         },
     },
@@ -866,7 +933,10 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {
             "additionalProperties": False,
             "properties": {
                 "repo": {"type": "string", "description": "Filtrar por repositório."},
-                "status": {"type": "string", "description": "Filtrar por status do run."},
+                "status": {
+                    "type": "string",
+                    "description": "Filtrar por status do run.",
+                },
             },
         },
     },
@@ -1022,6 +1092,11 @@ _POLICY: dict[str, dict[str, str]] = {
         "resource_type": "workspace",
         "data_domain": "workspace",
     },
+    "setup_project_workspace": {
+        "required_scope": f"{DOMAIN}:workspace:write",
+        "resource_type": "workspace",
+        "data_domain": "workspace",
+    },
     # ── Ledger (consulta do histórico persistido — :read, tenant-scoped) ──────
     "list_deployments": {
         "required_scope": f"{DOMAIN}:deployment:read",
@@ -1089,7 +1164,9 @@ def _is_ok(payload: Any) -> bool:
     return isinstance(payload, dict) and "error" not in payload
 
 
-async def _persist_deploy(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_deploy(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.record_deployment(
         service=result.get("service") or args.get("service") or "",
         environment=result.get("environment") or args.get("environment") or "",
@@ -1101,7 +1178,9 @@ async def _persist_deploy(store: DeployStore, args: dict[str, Any], result: dict
     )
 
 
-async def _persist_create_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_create_pr(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     number = result.get("number")
     if number is None:
         return
@@ -1116,7 +1195,9 @@ async def _persist_create_pr(store: DeployStore, args: dict[str, Any], result: d
     )
 
 
-async def _persist_get_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_get_pr(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     number = result.get("number") or args.get("pr_number")
     if number is None:
         return
@@ -1131,15 +1212,21 @@ async def _persist_get_pr(store: DeployStore, args: dict[str, Any], result: dict
     )
 
 
-async def _persist_merge_pr(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_merge_pr(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     number = args.get("pr_number")
     if number is None:
         return
     # Só state='merged' — _prune preserva título/base/head do create_pr/get_pr anterior.
-    await store.upsert_pull_request(repo=args.get("repo") or "", number=int(number), state="merged")
+    await store.upsert_pull_request(
+        repo=args.get("repo") or "", number=int(number), state="merged"
+    )
 
 
-async def _persist_create_branch(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_create_branch(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.upsert_branch(
         repo=result.get("repo") or args.get("repo") or "",
         branch=result.get("branch") or args.get("branch") or "",
@@ -1148,7 +1235,9 @@ async def _persist_create_branch(store: DeployStore, args: dict[str, Any], resul
     )
 
 
-async def _persist_trigger_workflow(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_trigger_workflow(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     # O dispatch do GitHub NÃO retorna run_id (a chave natural (repo, run_id) do
     # WorkflowRunRow exige um); então o disparo entra como evento append-only. O run
     # real, com id, é gravado por get_workflow_run (upsert refresh). Ver relatório.
@@ -1160,7 +1249,9 @@ async def _persist_trigger_workflow(store: DeployStore, args: dict[str, Any], re
     )
 
 
-async def _persist_get_workflow_run(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_get_workflow_run(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     run_id = result.get("id") or args.get("run_id")
     if run_id is None:
         return
@@ -1185,16 +1276,24 @@ async def _persist_cancel_workflow_run(
     )
 
 
-async def _persist_commit_files(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_commit_files(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.record_event(
         kind="commit",
         target=f"{args.get('repo')}@{args.get('branch')}",
         status="committed",
-        detail={"sha": result.get("sha"), "url": result.get("url"), "files": result.get("files")},
+        detail={
+            "sha": result.get("sha"),
+            "url": result.get("url"),
+            "files": result.get("files"),
+        },
     )
 
 
-async def _persist_acr_build(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_acr_build(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.record_event(
         kind="acr_build",
         target=result.get("image") or args.get("image_name"),
@@ -1218,7 +1317,9 @@ async def _persist_scaffold_pipeline(
     )
 
 
-async def _persist_clone_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_clone_repo(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.record_event(
         kind="clone",
         target=result.get("repo") or args.get("repo"),
@@ -1231,7 +1332,9 @@ async def _persist_clone_repo(store: DeployStore, args: dict[str, Any], result: 
     )
 
 
-async def _persist_setup_repo(store: DeployStore, args: dict[str, Any], result: dict[str, Any]) -> None:
+async def _persist_setup_repo(
+    store: DeployStore, args: dict[str, Any], result: dict[str, Any]
+) -> None:
     await store.upsert_repo(
         repo=result.get("repo") or args.get("repo") or "",
         config={
@@ -1265,7 +1368,9 @@ _LEDGER_PERSISTERS: dict[str, Any] = {
 # ── Dispatcher do ledger (async: recebe o store ligado ao pool do tenant) ──────
 
 
-async def _dispatch_ledger(name: str, args: dict[str, Any], store: DeployStore) -> dict[str, Any]:
+async def _dispatch_ledger(
+    name: str, args: dict[str, Any], store: DeployStore
+) -> dict[str, Any]:
     """Despacha as tools NOVAS de consulta do ledger (leem do banco do tenant)."""
     if name == "list_deployments":
         return await list_deployments(
@@ -1277,11 +1382,17 @@ async def _dispatch_ledger(name: str, args: dict[str, Any], store: DeployStore) 
     if name == "get_deployment":
         return await get_deployment(store, deployment_id=args["id"])
     if name == "list_deploy_events":
-        return await list_deploy_events(store, kind=args.get("kind"), target=args.get("target"))
+        return await list_deploy_events(
+            store, kind=args.get("kind"), target=args.get("target")
+        )
     if name == "list_pr_history":
-        return await list_pr_history(store, repo=args.get("repo"), state=args.get("state"))
+        return await list_pr_history(
+            store, repo=args.get("repo"), state=args.get("state")
+        )
     if name == "list_workflow_history":
-        return await list_workflow_history(store, repo=args.get("repo"), status=args.get("status"))
+        return await list_workflow_history(
+            store, repo=args.get("repo"), status=args.get("status")
+        )
     if name == "list_registered_repos":
         return await list_registered_repos(store)
     raise KeyError(name)
@@ -1349,7 +1460,9 @@ def _dispatch(
             draft=args.get("draft", False),
         )
     if name == "get_pr":
-        return get_pr(client, repo=_arg(args, "repo"), pr_number=_arg(args, "pr_number"))
+        return get_pr(
+            client, repo=_arg(args, "repo"), pr_number=_arg(args, "pr_number")
+        )
     if name == "merge_pr":
         return merge_pr(
             client,
@@ -1386,9 +1499,13 @@ def _dispatch(
             limit=args.get("limit", 10),
         )
     if name == "get_workflow_run":
-        return get_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
+        return get_workflow_run(
+            client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id")
+        )
     if name == "cancel_workflow_run":
-        return cancel_workflow_run(client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id"))
+        return cancel_workflow_run(
+            client, repo=_arg(args, "repo"), run_id=_arg(args, "run_id")
+        )
     # ── Deploy ────────────────────────────────────────────────────────────── #
     if name == "deploy":
         return deploy(
@@ -1495,13 +1612,24 @@ def _dispatch(
             depth=args.get("depth"),
         )
 
+    if name == "setup_project_workspace":
+        return setup_project_workspace(
+            client,
+            settings,
+            project_id=_arg(args, "project_id"),
+            repos=args["repos"],
+            repos_root=args.get("repos_root"),
+        )
+
     raise KeyError(name)
 
 
 # ── Dispatcher (orquestra ação→ledger; recebe a Store do domínio ligada ao tenant) ──
 
 
-async def dispatch(name: str, args: dict[str, Any], store: DeployStore) -> dict[str, Any]:
+async def dispatch(
+    name: str, args: dict[str, Any], store: DeployStore
+) -> dict[str, Any]:
     """Despacha a chamada (async). ``name`` é o nome de op SEM prefixo de domínio (o
     ``plugin.dispatch`` já o retirou) e ``store`` já está ligado ao pool do tenant.
 
