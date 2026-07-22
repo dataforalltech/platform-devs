@@ -793,3 +793,56 @@ async def test_import_hub_syncs_sections_and_governed_by(
         "STD-ARCH-001",
         "STD-DATA-001",
     ]
+
+
+# -- matriz de rastreabilidade central (documentation-model.md) --------------- #
+
+_MATRIX_MODEL_FOR_IMPORT = """# Modelo
+
+## Mapa de rastreabilidade (decisão → camadas)
+
+| ADR | Princípio(s) | Standard(s) | Reference Arch. | Runbook(s) |
+|-----|--------------|-------------|-----------------|------------|
+| 0022 Swarm oficial | P-001, P-005 | STD-DEPLOY-001 | ARCH-007 | RUNBOOK-rollback |
+| MCP Gateway † | P-006 | STD-MCP-001 | ARCH-010 | RUNBOOK-mcp-gateway |
+
+## Fora da matriz (exceções rastreadas)
+
+| ID | Motivo | Fonte |
+|----|--------|-------|
+| STD-GW-001 | Perfil de arquétipo. | standards/README.md |
+"""
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_traceability_matrix_persists_relations(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    model_path = tmp_path / "documentation-model.md"
+    model_path.write_text(_MATRIX_MODEL_FOR_IMPORT, encoding="utf-8")
+
+    out = await dispatch(
+        "import_traceability_matrix", {"model_path": str(model_path)}, store
+    )
+    assert out["relations_added"] == 5  # ADR-0022: 2 principle + 1 std + 1 arch + 1 rb
+    assert out["skipped_rows"] == ["MCP Gateway †"]
+    assert out["exceptions"] == [
+        {
+            "id": "STD-GW-001",
+            "reason": "Perfil de arquétipo.",
+            "source": "standards/README.md",
+        }
+    ]
+
+    relations = await store.list_relations("ADR-0022")
+    assert {(r["to_ref"], r["relation_type"]) for r in relations} == {
+        ("P-001", "traces_to_principle"),
+        ("P-005", "traces_to_principle"),
+        ("STD-DEPLOY-001", "traces_to_standard"),
+        ("ARCH-007", "traces_to_reference_arch"),
+        ("RUNBOOK-rollback", "traces_to_runbook"),
+    }
+    # MCP Gateway não foi persistido (pulado no parsing, não é um ADR de 4 dígitos).
+    mcp_relations = await store.list_relations("MCP Gateway †")
+    assert mcp_relations == []

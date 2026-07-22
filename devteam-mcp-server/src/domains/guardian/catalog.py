@@ -22,7 +22,7 @@ from .db.store import (
     GuardianStore,
     GuardianValidationError,
 )
-from .importer import scan_hub
+from .importer import parse_traceability_matrix, scan_hub
 
 DOMAIN = "guardian"
 
@@ -46,6 +46,7 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "add_relation": ("relation", "write"),
     "list_relations": ("relation", "read"),
     "remove_relation": ("relation", "write"),
+    "import_traceability_matrix": ("relation", "write"),
 }
 
 # resource_type → data_domain (guardian é governança).
@@ -396,6 +397,30 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
             "required": ["from_uid", "to_ref", "relation_type"],
         },
     },
+    "import_traceability_matrix": {
+        "description": (
+            "Importa a matriz de rastreabilidade central (documentation-model.md: "
+            "tabela ADR -> Princípios/Standards/Reference Arch./Runbooks) como "
+            "arestas traces_to_* em gov_directive_relation. Diferente de import_hub "
+            "(um arquivo por diretriz), esta é UMA tabela central que referencia "
+            "várias diretrizes por ID textual. Linhas cujo ADR não bate com a "
+            "convenção de 4 dígitos (ex. referência externa citada por prosa) são "
+            "puladas, não erram. `model_path` aponta para o arquivo "
+            "documentation-model.md (ou equivalente)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "model_path": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Caminho local absoluto para documentation-model.md.",
+                }
+            },
+            "required": ["model_path"],
+        },
+    },
 }
 
 
@@ -470,6 +495,25 @@ async def _resolve_current_version(store: GuardianStore, directive_uid: str) -> 
             f"directive_uid não encontrado ou sem versão vigente: {directive_uid!r}"
         )
     return directive["current_version"]["version"]
+
+
+async def _import_traceability_matrix(
+    store: GuardianStore, model_path: str
+) -> dict[str, Any]:
+    text = Path(model_path).read_text(encoding="utf-8")
+    parsed = parse_traceability_matrix(text)
+    for relation in parsed["relations"]:
+        await store.add_relation(
+            from_uid=relation["from_uid"],
+            to_ref=relation["to_ref"],
+            relation_type=relation["relation_type"],
+        )
+    return {
+        "model_path": model_path,
+        "relations_added": len(parsed["relations"]),
+        "exceptions": parsed["exceptions"],
+        "skipped_rows": parsed["skipped_rows"],
+    }
 
 
 async def dispatch(
@@ -588,6 +632,8 @@ async def dispatch(
                 relation_type=a["relation_type"],
             )
             return {"ok": True}
+        if name == "import_traceability_matrix":
+            return await _import_traceability_matrix(store, a["model_path"])
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)
