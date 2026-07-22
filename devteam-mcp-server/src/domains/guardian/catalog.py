@@ -57,6 +57,7 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "list_waivers": ("waiver", "read"),
     "revoke_waiver": ("waiver", "write"),
     "expire_waiver": ("waiver", "write"),
+    "sweep_expired_waivers": ("waiver", "write"),
 }
 
 # resource_type → data_domain (guardian é governança).
@@ -553,6 +554,19 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
             "required": ["waiver_id"],
         },
     },
+    "sweep_expired_waivers": {
+        "description": (
+            "Varre waivers 'active' cujo expires_on já passou e marca como "
+            "'expired' — resolve de fato o 'hoje > expires_on' (ao contrário de "
+            "expire_waiver, que é uma marcação manual por id). project_ref "
+            "opcional restringe a varredura a um projeto."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"project_ref": {"type": "string", "maxLength": 64}},
+        },
+    },
 }
 
 
@@ -816,6 +830,12 @@ async def dispatch(
         if name == "expire_waiver":
             await store.expire_waiver(a["waiver_id"])
             return {"ok": True}
+        if name == "sweep_expired_waivers":
+            return {
+                "expired": await store.sweep_expired_waivers(
+                    project_ref=a.get("project_ref")
+                )
+            }
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)
