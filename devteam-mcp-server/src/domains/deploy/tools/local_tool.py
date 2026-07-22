@@ -6,6 +6,9 @@ Tools
 - set_repos_root    : define REPOS_ROOT no config-mcp e opcionalmente cria o diretorio
 - list_local_repos  : lista repos clonados em REPOS_ROOT com branch atual, remote e ultimo commit
 - clone_repo        : clona um repo do GitHub para dentro de REPOS_ROOT
+- sync_repo         : clone-or-pull idempotente de um unico repo (ADR-017 D17.9)
+- setup_project_workspace : orquestra sync_repo sobre os repos de um projeto (D17.9,
+  escopo PARCIAL — repos fornecida pelo chamador, ver docstring da funcao)
 
 Resolucao de REPOS_ROOT (ordem de prioridade)
 ---------------------------------------------
@@ -65,7 +68,9 @@ def _git_info(repo_path: Path) -> dict[str, Any]:
     ok, remote_out = _run_git(["remote", "get-url", "origin"], repo_path)
     remote = remote_out if ok else None
 
-    ok, commit_out = _run_git(["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path)
+    ok, commit_out = _run_git(
+        ["log", "-1", "--format=%h %s (%ar)", "--no-merges"], repo_path
+    )
     last_commit = commit_out if ok else None
 
     ok, status_out = _run_git(["status", "--porcelain"], repo_path)
@@ -103,7 +108,9 @@ def _resolve_repos_root(
 
         client = ConfigClient.from_env()
         ws = client.get_workspace_config()
-        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get("REPOS_ROOT", {}).get("value")
+        repos_root_val = ws.get("REPOS_ROOT") or (ws.get("config") or {}).get(
+            "REPOS_ROOT", {}
+        ).get("value")
         if repos_root_val:
             return Path(repos_root_val).expanduser().resolve()
     except Exception as exc:
@@ -168,7 +175,11 @@ def get_repos_root(
         source = "auto_detected_or_config_mcp"
 
     exists = resolved.exists()
-    repo_count = sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists()) if exists else 0
+    repo_count = (
+        sum(1 for p in resolved.iterdir() if p.is_dir() and (p / ".git").exists())
+        if exists
+        else 0
+    )
 
     return {
         "repos_root": str(resolved),
@@ -421,8 +432,13 @@ def sync_repo(
                 "path": str(dest_path),
             }
         return clone_repo(
-            client, settings, repo=repo, branch=branch,
-            repos_root=repos_root, target_dir=target_dir, depth=depth,
+            client,
+            settings,
+            repo=repo,
+            branch=branch,
+            repos_root=repos_root,
+            target_dir=target_dir,
+            depth=depth,
         )
 
     # Presente -> fetch + checkout + pull fast-forward
@@ -438,16 +454,20 @@ def sync_repo(
     ok, fetch_out = _run_git(["fetch", "--prune", "origin"], dest_path, timeout=120)
     if not ok:
         return {
-            "repo": full_repo, "path": str(dest_path),
-            "error": "git fetch falhou", "details": _redact(fetch_out, settings),
+            "repo": full_repo,
+            "path": str(dest_path),
+            "error": "git fetch falhou",
+            "details": _redact(fetch_out, settings),
         }
 
     if branch:
         ok, co_out = _run_git(["checkout", branch], dest_path)
         if not ok:
             return {
-                "repo": full_repo, "path": str(dest_path),
-                "error": f"checkout de '{branch}' falhou", "details": _redact(co_out, settings),
+                "repo": full_repo,
+                "path": str(dest_path),
+                "error": f"checkout de '{branch}' falhou",
+                "details": _redact(co_out, settings),
             }
 
     ok, pull_out = _run_git(["merge", "--ff-only", "@{u}"], dest_path, timeout=60)
@@ -470,4 +490,68 @@ def sync_repo(
         "last_commit": info.get("last_commit"),
         "repos_root": str(root),
         "action": "pulled",
+    }
+
+
+def setup_project_workspace(
+    client: GitHubClient,
+    settings: DeploySettings,
+    *,
+    project_id: str,
+    repos: list[dict[str, Any]],
+    repos_root: str | None = None,
+) -> dict[str, Any]:
+    """Orquestra `sync_repo` sobre os repos de um projeto (ADR-017 D17.9 —
+    escopo PARCIAL, ver TODO abaixo).
+
+    `repos`: `[{"repo": "owner/name", "branch": "develop"}, ...]` — fornecida
+    pelo CHAMADOR, não resolvida aqui a partir de `project_id`. Isso é
+    deliberado: `project-product-mcp-server` ainda não está registrado no
+    gateway (G9 pendente) e o devteam-mcp não tem NENHUMA integração com
+    `platform-connectors` para resolver clone URL+auth (D17.7, bloqueado —
+    ver `docs/architecture/connectors-devteam-journey.md`; confirmado sem
+    progresso do lado connectors nesta sessão). A autenticação usa o mesmo
+    `settings.github_token` que `clone_repo`/`sync_repo` já usam — NÃO é uma
+    violação nova de D17.2 (credenciais sempre via connectors), é a mesma
+    violação pré-existente documentada no próprio ADR-017.
+
+    TODO(D17.7/G9): quando `platform-connectors` expuser `resolve_repo_clone()`
+    e `project-product` estiver no gateway, esta função pode passar a aceitar
+    só `project_id` (buscando os bindings internamente e resolvendo URL/auth
+    via connectors em vez do token estático) sem quebrar quem já chama com
+    `repos` explícito — o parâmetro vira opcional/derivado, não removido.
+    """
+    if not repos:
+        return {
+            "project_id": project_id,
+            "error": "repos é obrigatório e não pode ser vazio: [{repo, branch}, ...].",
+        }
+    results: list[dict[str, Any]] = []
+    for entry in repos:
+        repo = entry.get("repo")
+        if not repo:
+            results.append(
+                {"error": "entrada de 'repos' sem campo 'repo'", "entry": entry}
+            )
+            continue
+        results.append(
+            sync_repo(
+                client,
+                settings,
+                repo=repo,
+                branch=entry.get("branch"),
+                repos_root=repos_root,
+            )
+        )
+    ok = sum(1 for r in results if r.get("action") in ("cloned", "pulled"))
+    skipped = sum(1 for r in results if str(r.get("action", "")).startswith("skipped"))
+    errored = len(results) - ok - skipped
+    return {
+        "project_id": project_id,
+        "repos_root": repos_root,
+        "total": len(repos),
+        "ok": ok,
+        "skipped": skipped,
+        "errored": errored,
+        "results": results,
     }

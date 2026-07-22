@@ -1,4 +1,4 @@
-"""deploy-mcp-server — exportacoes de todas as 24 tools."""
+"""deploy-mcp-server — exportacoes de todas as 25 tools."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from .local_tool import (
     get_repos_root,
     list_local_repos,
     set_repos_root,
+    setup_project_workspace,
     sync_repo,
 )
 from .pipeline_tool import get_pipeline_templates, scaffold_pipeline
@@ -64,6 +65,7 @@ __all__ = [
     "list_local_repos",
     "clone_repo",
     "sync_repo",
+    "setup_project_workspace",
     # ledger (consulta do histórico persistido — dual-db, tenant-scoped)
     "list_deployments",
     "get_deployment",
