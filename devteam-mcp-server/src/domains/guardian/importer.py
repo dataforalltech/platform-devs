@@ -1,17 +1,19 @@
-"""Importador markdown→DB do hub de governança (ADR-018 Fase 1b).
+"""Importador markdown→DB do hub de governança (ADR-018 Fase 1b + 1c).
 
-Escopo HONESTO desta fase (documentado para não prometer mais do que entrega):
-
-Importa as **7 camadas estruturadas** do hub (`principles/adr/standards/
+Fase 1b: importa as **7 camadas estruturadas** do hub (`principles/adr/standards/
 reference-architecture/runbooks/it/decisions`) — as únicas com front-matter
 uniformemente obrigatório (`type/camada/status/escopo/ultima_atualizacao`) e
 convenção de nome de arquivo estável o bastante para derivar um `directive_uid`.
 
-Deliberadamente FORA de escopo nesta fase (ver HANDOFF-GUARDIAN-FASE1.md):
-- `lib-change-requests/`, `handoffs/`, `specs/` — front-matter rico e
-  heterogêneo (vocabulário de status próprio, campos de gestão de mudança sem
-  coluna equivalente) que exigiria extensão de schema (EAV ou colunas
-  específicas por kind) — Fase 1c.
+Fase 1c: soma `lib-change-requests/` (LCR — metadados de gestão de mudança
+capturados em `GovLcrDetailRow`/`GovLcrSubstitutionRow`, ver `db/store.py`),
+`handoffs/` e `specs/` — estas 3 têm front-matter mais heterogêneo (o
+`validate_hub.py` do template não as valida estruturalmente), então a
+derivação de UID é mais permissiva (nome do arquivo inteiro, sem regex de
+convenção) e o campo `status` tem um fallback ("aceito") quando ausente em
+handoffs/specs — documentado como heurística, não uma convenção confirmada.
+
+Deliberadamente FORA de escopo (ver HANDOFF-GUARDIAN-FASE1.md):
 - Relações `governado_por`/matriz de rastreabilidade N:N:N:N
   (`documentation-model.md`) — exige uma tabela de arestas tipadas
   (`gov_directive_reference`), fora do núcleo versionado da Fase 1 — Fase 2.
@@ -32,6 +34,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -44,7 +47,17 @@ LAYER_KIND: dict[str, str] = {
     "runbooks": "runbook",
     "it": "work_instruction",
     "decisions": "platform_decision",
+    "lib-change-requests": "lib_change_request",
+    "handoffs": "handoff",
+    "specs": "spec",
 }
+
+# Camadas SEM convenção de nome de arquivo uniformemente imposta pelo hub (Fase
+# 1c) — o UID é o stem inteiro do arquivo, sem regex de validação de formato.
+# LCR em particular permite números duplicados com slugs diferentes
+# (ex.: dois arquivos "LCR-005-*" coexistindo com assuntos distintos), então
+# usar só o prefixo numérico colidiria — o stem completo é a única chave segura.
+_LOOSE_UID_LAYERS = frozenset({"lib-change-requests", "handoffs", "specs"})
 
 _FRONT_MATTER = re.compile(r"^---\r?\n(?P<yaml>.*?)\r?\n---\r?\n?", re.DOTALL)
 _H1 = re.compile(r"^#\s+(.+?)\s*$", re.MULTILINE)
@@ -83,7 +96,11 @@ class ImporterError(ValueError):
 
 @dataclass(frozen=True)
 class ImportedDoc:
-    """Um documento do hub já parseado e pronto para `GuardianStore.import_directive`."""
+    """Um documento do hub já parseado e pronto para `GuardianStore.import_directive`.
+
+    `lcr_detail`/`lcr_substituted_by` só são preenchidos para
+    `kind == "lib_change_request"` (Fase 1c) — `None`/vazio para os demais kinds.
+    """
 
     directive_uid: str
     kind: str
@@ -93,9 +110,13 @@ class ImportedDoc:
     body_context: str | None
     body_decision: str | None
     source_path: str  # relativo ao hub_root — só para diagnóstico, não persistido
+    lcr_detail: dict[str, Any] | None = None
+    lcr_substituted_by: tuple[str, ...] = ()
 
 
 def _derive_uid(layer: str, filename: str) -> str:
+    if layer in _LOOSE_UID_LAYERS:
+        return filename[:-3] if filename.endswith(".md") else filename
     pattern = _UID_PATTERNS[layer]
     m = pattern.match(filename)
     if not m:
@@ -158,9 +179,18 @@ def parse_markdown_doc(layer: str, path: Path, hub_root: Path) -> ImportedDoc:
     raw_status = str(front_matter.get("status") or "").strip()
     status = IMPORT_STATUS_ALIASES.get(raw_status, raw_status)
     if not status:
-        raise ImporterError(f"{rel}: front-matter sem campo 'status'")
+        if layer in ("handoffs", "specs"):
+            # Fallback documentado (não uma convenção confirmada do hub): estas
+            # 2 camadas não têm front-matter estrutural uniformemente exigido.
+            status = "aceito"
+        else:
+            raise ImporterError(f"{rel}: front-matter sem campo 'status'")
 
     body_context, body_decision = _split_body(body)
+    lcr_detail = (
+        _extract_lcr_detail(front_matter) if layer == "lib-change-requests" else None
+    )
+    lcr_substituted_by = _extract_lcr_substituted_by(front_matter)
     return ImportedDoc(
         directive_uid=uid,
         kind=kind,
@@ -170,12 +200,50 @@ def parse_markdown_doc(layer: str, path: Path, hub_root: Path) -> ImportedDoc:
         body_context=body_context,
         body_decision=body_decision,
         source_path=rel,
+        lcr_detail=lcr_detail,
+        lcr_substituted_by=lcr_substituted_by,
     )
 
 
+def _stringify(value: Any) -> str | None:
+    if value is None:
+        return None
+    return value if isinstance(value, str) else str(value)
+
+
+def _extract_lcr_detail(front_matter: dict) -> dict[str, Any]:
+    """Campos de gestão de mudança do LCR (ADR-018 Fase 1c) — front-matter direto,
+    sem derivação. `None` onde ausente (colunas opcionais em `GovLcrDetailRow`)."""
+    return {
+        "biblioteca": front_matter.get("biblioteca"),
+        "repositorio": front_matter.get("repositorio"),
+        "versao_atual": _stringify(front_matter.get("versao_atual")),
+        "versao_alvo": _stringify(front_matter.get("versao_alvo")),
+        "tipo": front_matter.get("tipo"),
+        "breaking": bool(front_matter.get("breaking", False)),
+        "urgencia": front_matter.get("urgencia"),
+        "aprovador": front_matter.get("aprovador"),
+        "solicitante": front_matter.get("solicitante"),
+        "achado": front_matter.get("achado"),
+        "data_solicitacao": _stringify(front_matter.get("data_solicitacao")),
+    }
+
+
+def _extract_lcr_substituted_by(front_matter: dict) -> tuple[str, ...]:
+    """`substituido_por` é uma LISTA no front-matter do LCR — normalizada em
+    arestas (`GovLcrSubstitutionRow`), nunca serializada de volta (D18.2)."""
+    raw = front_matter.get("substituido_por")
+    if isinstance(raw, list):
+        return tuple(str(item) for item in raw)
+    if isinstance(raw, str) and raw.strip():
+        return (raw.strip(),)
+    return ()
+
+
 def discover_hub_files(hub_root: Path) -> list[tuple[str, Path]]:
-    """Lista (layer, path) de todo `*.md` nas 7 camadas estruturadas, excluindo
-    `README.md` (índice da pasta, não é uma diretriz)."""
+    """Lista (layer, path) de todo `*.md` em `LAYER_KIND` (as 7 camadas estruturadas
+    + lib-change-requests/handoffs/specs da Fase 1c), excluindo `README.md` (índice
+    da pasta, não é uma diretriz)."""
     found: list[tuple[str, Path]] = []
     for layer, layer_dir in ((layer, hub_root / layer) for layer in LAYER_KIND):
         if not layer_dir.is_dir():

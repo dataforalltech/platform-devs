@@ -104,9 +104,57 @@ class GovDirectiveVersionRow(BaseModel):
     content_sha256: str | None = Field(default=None, max_length=64)
 
 
+class GovLcrDetailRow(BaseModel):
+    """Metadados de gestão de mudança específicos de Library Change Request
+    (ADR-018 Fase 1c) — SEM equivalente em ``gov_directive``/``gov_directive_version``
+    (achado real na pesquisa do hub: LCR carrega campos de risco/versionamento que uma
+    diretriz normativa comum não tem). Relação 1:1 com uma diretriz de
+    ``kind='lib_change_request'``. Chave natural única: ``directive_uid``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    directive_uid: str = Field(max_length=64)
+    biblioteca: str | None = Field(default=None, max_length=120)
+    repositorio: str | None = Field(default=None, max_length=200)
+    versao_atual: str | None = Field(default=None, max_length=32)
+    versao_alvo: str | None = Field(default=None, max_length=32)
+    tipo: str | None = Field(
+        default=None, max_length=24
+    )  # patch | minor | major | nao-aplicavel
+    breaking: bool = False
+    urgencia: str | None = Field(default=None, max_length=24)
+    aprovador: str | None = Field(default=None, max_length=64)
+    solicitante: str | None = Field(default=None, max_length=120)
+    achado: str | None = Field(
+        default=None, max_length=64
+    )  # ref a control id de auditoria (ex.: CRY-02)
+    data_solicitacao: str | None = Field(
+        default=None, max_length=10
+    )  # YYYY-MM-DD, imutável (distinto de ultima_atualizacao)
+
+
+class GovLcrSubstitutionRow(BaseModel):
+    """Aresta ``lcr → substituido_por`` — o front-matter do LCR carrega isso como uma
+    LISTA YAML; aqui vira uma linha por alvo (rejeição de JSON-blob, D18.2), não uma
+    coluna serializada. ``target_ref`` é referência FRACA (caminho/uid livre, sem FK —
+    mesmo padrão de ``project_ref`` em ``gov_directive``). Chave natural única:
+    ``(lcr_directive_uid, target_ref)``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    lcr_directive_uid: str = Field(max_length=64)
+    target_ref: str = Field(max_length=200)
+
+
 __all__ = [
     "GovKindCapabilityRow",
     "GovStatusVocabRow",
     "GovDirectiveRow",
     "GovDirectiveVersionRow",
+    "GovLcrDetailRow",
+    "GovLcrSubstitutionRow",
 ]

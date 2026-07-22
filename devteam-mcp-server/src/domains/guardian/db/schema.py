@@ -1,4 +1,4 @@
-"""Bootstrap de schema por-tenant do domínio `guardian` (ADR-018 Fase 1).
+"""Bootstrap de schema por-tenant do domínio `guardian` (ADR-018 Fase 1 + 1c).
 
 Cada tabela é um `CreateTable` derivado do modelo Pydantic (`create_table_from_model`,
 injeta as colunas-padrão da plataforma). As tabelas com **chave natural** ganham uma
@@ -11,6 +11,11 @@ o núcleo versionado; `gov_kind_capability` (kind único) + `gov_status_vocab` (
 — dados de referência (semeados por `store.seed_reference_data`). CHECK/FK entre tabelas
 são enforce-ados app-level nesta fase (D18: matriz honesta) — o wiring de CHECK/FK no DDL
 IR fica p/ refinamento.
+
+Fase 1c: `gov_lcr_detail` (directive_uid único) — metadados de gestão de mudança de
+Library Change Request, sem equivalente no núcleo versionado; `gov_lcr_substitution`
+(directive_uid+target_ref único) — a aresta `substituido_por` do LCR (lista no
+front-matter) normalizada em linhas, não serializada (D18.2: rejeição de JSON-blob).
 """
 
 from __future__ import annotations
@@ -29,6 +34,8 @@ from ..models import (
     GovDirectiveRow,
     GovDirectiveVersionRow,
     GovKindCapabilityRow,
+    GovLcrDetailRow,
+    GovLcrSubstitutionRow,
     GovStatusVocabRow,
 )
 
@@ -37,6 +44,8 @@ KIND_CAPABILITY_TABLE = "gov_kind_capability"
 STATUS_VOCAB_TABLE = "gov_status_vocab"
 DIRECTIVE_TABLE = "gov_directive"
 DIRECTIVE_VERSION_TABLE = "gov_directive_version"
+LCR_DETAIL_TABLE = "gov_lcr_detail"
+LCR_SUBSTITUTION_TABLE = "gov_lcr_substitution"
 
 
 def _with_uniques(
@@ -75,6 +84,18 @@ def build_migration() -> MigrationScript:
                 DIRECTIVE_VERSION_TABLE,
                 unique=["directive_uid", "version"],
                 unique_name="uq_gov_directive_version",
+            ),
+            _with_uniques(
+                GovLcrDetailRow,
+                LCR_DETAIL_TABLE,
+                unique=["directive_uid"],
+                unique_name="uq_gov_lcr_detail_uid",
+            ),
+            _with_uniques(
+                GovLcrSubstitutionRow,
+                LCR_SUBSTITUTION_TABLE,
+                unique=["lcr_directive_uid", "target_ref"],
+                unique_name="uq_gov_lcr_substitution",
             ),
         ]
     )

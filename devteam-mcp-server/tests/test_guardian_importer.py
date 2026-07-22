@@ -197,3 +197,151 @@ def test_scan_hub_empty_root_returns_nothing(tmp_path: Path) -> None:
     docs, errors = scan_hub(tmp_path / "docs")
     assert docs == []
     assert errors == []
+
+
+# -- Fase 1c: lib-change-requests / handoffs / specs -------------------------- #
+
+_LCR_BODY = """---
+type: lib-change-request
+title: "LCR-005 — Atualizar log-uploader"
+codigo: LCR-005
+camada: lcr
+escopo: servico
+biblioteca: platform-log-uploader-lib
+repositorio: dataforalltech/platform-log-uploader-lib
+versao_atual: "v0.1.0"
+versao_alvo: "v0.2.0"
+tipo: minor
+breaking: false
+urgencia: high
+status: pendente-aprovacao
+aprovador: caiog
+solicitante: alguem
+achado: "CRY-02"
+governado_por: "../standards/STD-ARCH-002-shared-libraries.md"
+substituido_por:
+  - "../standards/STD-SEC-001-hardening.md"
+  - "../standards/STD-SEC-002-outro.md"
+data_solicitacao: "2026-06-04"
+ultima_atualizacao: 2026-07-20
+---
+
+# LCR-005 — Atualizar log-uploader
+
+## O que mudar na lib
+
+Bump de versão.
+"""
+
+_LCR_DUPLICATE_NUMBER_BODY = """---
+type: lib-change-request
+title: "LCR-005 — Atualizar ws-ticket"
+status: aprovado
+data_solicitacao: "2026-06-10"
+---
+
+# LCR-005 — Atualizar ws-ticket
+"""
+
+_HANDOFF_BODY = """---
+type: handoff
+title: Handoff da sessão de guardian
+---
+
+# Handoff 2026-07-22
+
+Resumo da sessão.
+"""
+
+_HANDOFF_NO_STATUS = """# Handoff sem front-matter completo
+
+Só um título, sem front-matter de verdade (nem YAML).
+"""
+
+_SPEC_BODY = """---
+type: spec
+title: Spec de exemplo
+---
+
+# Spec — exemplo
+
+Descrição pontual.
+"""
+
+
+def test_parse_lcr_extracts_change_management_fields(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "lib-change-requests", "LCR-005-log-uploader.md", _LCR_BODY)
+    doc = parse_markdown_doc("lib-change-requests", path, root)
+    assert doc.directive_uid == "LCR-005-log-uploader"  # stem inteiro, sem regex
+    assert doc.kind == "lib_change_request"
+    assert doc.status == "pendente-aprovacao"
+    assert doc.lcr_detail is not None
+    assert doc.lcr_detail["biblioteca"] == "platform-log-uploader-lib"
+    assert doc.lcr_detail["versao_atual"] == "v0.1.0"
+    assert doc.lcr_detail["breaking"] is False
+    assert doc.lcr_detail["data_solicitacao"] == "2026-06-04"
+    assert doc.lcr_substituted_by == (
+        "../standards/STD-SEC-001-hardening.md",
+        "../standards/STD-SEC-002-outro.md",
+    )
+
+
+def test_lcr_duplicate_number_different_slug_does_not_collide(tmp_path: Path) -> None:
+    """Achado real da pesquisa: LCR permite números duplicados com slugs
+    diferentes (dois LCR-005 coexistindo). O UID tem que ser o stem inteiro,
+    não só o prefixo numérico, senão os dois colidem."""
+    root = tmp_path / "docs"
+    _write(root, "lib-change-requests", "LCR-005-log-uploader.md", _LCR_BODY)
+    _write(
+        root,
+        "lib-change-requests",
+        "LCR-005-ws-ticket.md",
+        _LCR_DUPLICATE_NUMBER_BODY,
+    )
+    docs, errors = scan_hub(root)
+    assert errors == []
+    uids = {d.directive_uid for d in docs}
+    assert uids == {"LCR-005-log-uploader", "LCR-005-ws-ticket"}
+
+
+def test_parse_handoff_uses_full_stem_as_uid(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "handoffs", "2026-07-22-guardian-fase1.md", _HANDOFF_BODY)
+    doc = parse_markdown_doc("handoffs", path, root)
+    assert doc.directive_uid == "2026-07-22-guardian-fase1"
+    assert doc.kind == "handoff"
+    assert doc.title == "Handoff da sessão de guardian"
+    assert doc.lcr_detail is None
+    assert doc.lcr_substituted_by == ()
+
+
+def test_parse_handoff_without_front_matter_falls_back_to_aceito_status(
+    tmp_path: Path,
+) -> None:
+    """Handoffs/specs não têm front-matter uniformemente exigido pelo hub —
+    ausência total de front-matter ainda é um erro (sem seção YAML nenhuma),
+    mas status ausente COM front-matter presente cai no fallback 'aceito'."""
+    root = tmp_path / "docs"
+    path = _write(root, "handoffs", "2026-07-22-sem-status.md", _HANDOFF_NO_STATUS)
+    with pytest.raises(ImporterError, match="sem front-matter"):
+        parse_markdown_doc("handoffs", path, root)
+
+
+def test_parse_handoff_with_front_matter_but_no_status_defaults_to_aceito(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "docs"
+    body = "---\ntype: handoff\n---\n\n# Handoff sem status\n"
+    path = _write(root, "handoffs", "2026-07-22-sem-status-field.md", body)
+    doc = parse_markdown_doc("handoffs", path, root)
+    assert doc.status == "aceito"
+
+
+def test_parse_spec_uses_stem_as_uid(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "specs", "exemplo-de-spec.md", _SPEC_BODY)
+    doc = parse_markdown_doc("specs", path, root)
+    assert doc.directive_uid == "exemplo-de-spec"
+    assert doc.kind == "spec"
+    assert doc.title == "Spec de exemplo"  # front-matter tem precedência sobre H1

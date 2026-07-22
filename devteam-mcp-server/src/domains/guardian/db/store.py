@@ -26,12 +26,16 @@ from ..models import (
     GovDirectiveRow,
     GovDirectiveVersionRow,
     GovKindCapabilityRow,
+    GovLcrDetailRow,
+    GovLcrSubstitutionRow,
     GovStatusVocabRow,
 )
 from .schema import (
     DIRECTIVE_TABLE,
     DIRECTIVE_VERSION_TABLE,
     KIND_CAPABILITY_TABLE,
+    LCR_DETAIL_TABLE,
+    LCR_SUBSTITUTION_TABLE,
     STATUS_VOCAB_TABLE,
 )
 
@@ -64,6 +68,12 @@ KIND_CAPABILITIES: dict[str, tuple[int | None, bool, bool, str]] = {
 # original da Fase 1. "vigente" (visto em runbooks reais) é tratado como alias
 # de "aceito" na camada de import (ver importer.IMPORT_STATUS_ALIASES), não
 # precisa de entrada própria aqui.
+#
+# Os 4 códigos com applies_to_kind="lib_change_request" (Fase 1c) são o
+# vocabulário PRÓPRIO do LCR (achado real: pendente-aprovacao/aprovado/
+# implementado/bloqueado-dependencia-externa não têm sentido para uma
+# diretriz normativa comum) — "substituido" já existe kind-agnóstico e é
+# reaproveitado para o LCR (mesmo significado: foi substituído por outro).
 STATUS_VOCAB: dict[str, tuple[str | None, bool]] = {
     "proposto": (None, False),
     "aceito": (None, False),
@@ -73,6 +83,10 @@ STATUS_VOCAB: dict[str, tuple[str | None, bool]] = {
     "deprecated": (None, True),
     "historico": (None, False),
     "historico-substituido": (None, True),
+    "pendente-aprovacao": ("lib_change_request", False),
+    "aprovado": ("lib_change_request", False),
+    "implementado": ("lib_change_request", True),
+    "bloqueado-dependencia-externa": ("lib_change_request", True),
 }
 
 
@@ -83,7 +97,7 @@ class GuardianValidationError(ValueError):
 # Colunas TINYINT que o driver MySQL devolve como int (0/1) — normalizadas para bool
 # real na saída da API (Postgres já devolve bool nativo, então isto é idempotente lá).
 _BOOL_KEYS = frozenset(
-    {"is_current", "allows_rfc2119", "allows_fileline", "is_terminal"}
+    {"is_current", "allows_rfc2119", "allows_fileline", "is_terminal", "breaking"}
 )
 
 
@@ -116,7 +130,7 @@ def _content_sha256(
 
 
 class GuardianStore:
-    """Store tenant-scoped: 4 repositórios ligados ao pool do tenant (fail-closed)."""
+    """Store tenant-scoped: 6 repositórios ligados ao pool do tenant (fail-closed)."""
 
     def __init__(self, session: Any) -> None:
         self._directives = session.repository(
@@ -130,6 +144,12 @@ class GuardianStore:
         )
         self._status = session.repository(
             GovStatusVocabRow, table_name=STATUS_VOCAB_TABLE
+        )
+        self._lcr_details = session.repository(
+            GovLcrDetailRow, table_name=LCR_DETAIL_TABLE
+        )
+        self._lcr_substitutions = session.repository(
+            GovLcrSubstitutionRow, table_name=LCR_SUBSTITUTION_TABLE
         )
 
     # -- referência (seed idempotente + leitura) ------------------------------- #
@@ -210,6 +230,12 @@ class GuardianStore:
         if status not in STATUS_VOCAB:
             raise GuardianValidationError(
                 f"status inválido: {status!r} (∈ {sorted(STATUS_VOCAB)})"
+            )
+        applies_to_kind, _ = STATUS_VOCAB[status]
+        if applies_to_kind is not None and applies_to_kind != kind:
+            raise GuardianValidationError(
+                f"status {status!r} é exclusivo do kind {applies_to_kind!r}, "
+                f"não de {kind!r}"
             )
 
     # -- CRUD de diretriz ------------------------------------------------------ #
@@ -316,15 +342,12 @@ class GuardianStore:
         change_reason: str | None = None,
         author_ref: str | None = None,
     ) -> dict[str, Any]:
-        if status not in STATUS_VOCAB:
-            raise GuardianValidationError(
-                f"status inválido: {status!r} (∈ {sorted(STATUS_VOCAB)})"
-            )
         directive = await self._directive_raw(directive_uid)
         if directive is None:
             raise GuardianValidationError(
                 f"directive_uid não encontrado: {directive_uid!r}"
             )
+        self._validate(directive["kind"], status)
         version = await self._next_version(directive_uid)
         # Invariante "uma vigente por uid" (D18.3): UPDATE→INSERT atômico.
         async with self._versions.transaction() as tx:
@@ -358,13 +381,12 @@ class GuardianStore:
     async def set_directive_status(
         self, *, directive_uid: str, status: str
     ) -> dict[str, Any]:
-        if status not in STATUS_VOCAB:
-            raise GuardianValidationError(f"status inválido: {status!r}")
-        current = await self._current_version(directive_uid)
-        if current is None:
+        directive = await self._directive_raw(directive_uid)
+        if directive is None:
             raise GuardianValidationError(
                 f"directive_uid não encontrado: {directive_uid!r}"
             )
+        self._validate(directive["kind"], status)
         await self._versions.update_where(
             {"directive_uid": directive_uid, "is_current": True},
             {"status": status},
@@ -402,7 +424,13 @@ class GuardianStore:
         aqui — se um reimport trouxer kind/scope diferentes do cabeçalho já
         persistido, isso é sinalizado em `kind_scope_mismatch` (não aplicado
         silenciosamente; provável erro de reorganização do hub que merece
-        revisão humana, não um "corrigir e seguir" automático)."""
+        revisão humana, não um "corrigir e seguir" automático).
+
+        Fase 1c: quando `doc.kind == "lib_change_request"`, os metadados de
+        gestão de mudança (`lcr_detail`) e as arestas `substituido_por` são
+        persistidos independente de a diretriz ser nova ou já existir — são
+        upserts por chave natural, sem versionamento (não fazem parte do
+        núcleo append-only)."""
         existing = await self._directive_raw(doc.directive_uid)
         if existing is None:
             created = await self.create_directive(
@@ -415,6 +443,7 @@ class GuardianStore:
                 body_decision=doc.body_decision,
                 author_ref="hub-import",
             )
+            await self._sync_lcr_extras(doc)
             return {
                 "directive_uid": doc.directive_uid,
                 "action": "created",
@@ -433,6 +462,7 @@ class GuardianStore:
             and (existing["title"] or None) == (doc.title or None)
         )
         if unchanged:
+            await self._sync_lcr_extras(doc)
             return {
                 "directive_uid": doc.directive_uid,
                 "action": "unchanged",
@@ -453,12 +483,23 @@ class GuardianStore:
             change_reason="reimport do hub markdown",
             author_ref="hub-import",
         )
+        await self._sync_lcr_extras(doc)
         return {
             "directive_uid": doc.directive_uid,
             "action": "updated",
             "directive": updated,
             "kind_scope_mismatch": mismatch,
         }
+
+    async def _sync_lcr_extras(self, doc: ImportedDoc) -> None:
+        if doc.kind != "lib_change_request":
+            return
+        if doc.lcr_detail is not None:
+            await self.set_lcr_detail(directive_uid=doc.directive_uid, **doc.lcr_detail)
+        for target_ref in doc.lcr_substituted_by:
+            await self.add_lcr_substitution(
+                lcr_directive_uid=doc.directive_uid, target_ref=target_ref
+            )
 
     async def diff_hub(self, imported_uids: set[str]) -> list[dict[str, Any]]:
         """Diretivas de escopo 'platform' persistidas que NÃO aparecem no
@@ -467,3 +508,68 @@ class GuardianStore:
         return [
             _jsonable(d) for d in res.rows() if d["directive_uid"] not in imported_uids
         ]
+
+    # -- Library Change Request: metadados de gestão de mudança (Fase 1c) ------- #
+
+    async def set_lcr_detail(
+        self,
+        *,
+        directive_uid: str,
+        biblioteca: str | None = None,
+        repositorio: str | None = None,
+        versao_atual: str | None = None,
+        versao_alvo: str | None = None,
+        tipo: str | None = None,
+        breaking: bool = False,
+        urgencia: str | None = None,
+        aprovador: str | None = None,
+        solicitante: str | None = None,
+        achado: str | None = None,
+        data_solicitacao: str | None = None,
+    ) -> dict[str, Any]:
+        """Upsert por `directive_uid` (chave natural) — relação 1:1 com uma
+        diretriz de `kind='lib_change_request'`, sem versionamento."""
+        await self._lcr_details.upsert(
+            {
+                "directive_uid": directive_uid,
+                "biblioteca": biblioteca,
+                "repositorio": repositorio,
+                "versao_atual": versao_atual,
+                "versao_alvo": versao_alvo,
+                "tipo": tipo,
+                "breaking": breaking,
+                "urgencia": urgencia,
+                "aprovador": aprovador,
+                "solicitante": solicitante,
+                "achado": achado,
+                "data_solicitacao": data_solicitacao,
+            },
+            ["directive_uid"],
+            user_id=_SYSTEM_USER,
+        )
+        return await self.get_lcr_detail(directive_uid) or {}
+
+    async def get_lcr_detail(self, directive_uid: str) -> dict[str, Any] | None:
+        res = await self._lcr_details.find(
+            where={"directive_uid": directive_uid}, limit=1
+        )
+        rows = res.rows()
+        return _jsonable(rows[0]) if rows else None
+
+    async def add_lcr_substitution(
+        self, *, lcr_directive_uid: str, target_ref: str
+    ) -> None:
+        """Idempotente por `(lcr_directive_uid, target_ref)` — reimportar o
+        mesmo LCR não duplica a aresta."""
+        await self._lcr_substitutions.upsert(
+            {"lcr_directive_uid": lcr_directive_uid, "target_ref": target_ref},
+            ["lcr_directive_uid", "target_ref"],
+            user_id=_SYSTEM_USER,
+        )
+
+    async def list_lcr_substitutions(self, lcr_directive_uid: str) -> list[str]:
+        res = await self._lcr_substitutions.find(
+            where={"lcr_directive_uid": lcr_directive_uid},
+            order_by=[Sort(column="target_ref")],
+        )
+        return [row["target_ref"] for row in res.rows()]
