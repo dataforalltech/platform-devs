@@ -10,6 +10,8 @@ Fase 1: CRUD do núcleo versionado das diretrizes + referência (kinds/status).
 
 from __future__ import annotations
 
+from collections import Counter
+from pathlib import Path
 from typing import Any
 
 from .db.store import (
@@ -19,6 +21,7 @@ from .db.store import (
     GuardianStore,
     GuardianValidationError,
 )
+from .importer import scan_hub
 
 DOMAIN = "guardian"
 
@@ -32,10 +35,16 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "seed_reference_data": ("reference", "write"),
     "list_kinds": ("reference", "read"),
     "list_status_vocab": ("reference", "read"),
+    "import_hub": ("hub_import", "write"),
+    "validate_hub": ("hub_import", "read"),
 }
 
 # resource_type → data_domain (guardian é governança).
-_DATA_DOMAIN: dict[str, str] = {"directive": "governance", "reference": "governance"}
+_DATA_DOMAIN: dict[str, str] = {
+    "directive": "governance",
+    "reference": "governance",
+    "hub_import": "governance",
+}
 
 _KINDS = sorted(KIND_CAPABILITIES)
 _STATUS = sorted(STATUS_VOCAB)
@@ -166,6 +175,51 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
         "description": "Lista o vocabulário de status.",
         "schema": {"type": "object", "additionalProperties": False, "properties": {}},
     },
+    "import_hub": {
+        "description": (
+            "Importa markdown→DB as 7 camadas estruturadas do hub de governança "
+            "(principles/adr/standards/reference-architecture/runbooks/it/decisions) "
+            "a partir de hub_root (caminho local para a raiz 'docs/' do "
+            "platform-service-template ou equivalente). Idempotente: cria diretrizes "
+            "novas, versiona as que mudaram, não toca as iguais. FORA de escopo nesta "
+            "fase: lib-change-requests/handoffs/specs (schema heterogêneo) e relações "
+            "governado_por/matriz (Fase 2)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "hub_root": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Caminho local absoluto para a pasta 'docs/' do hub.",
+                }
+            },
+            "required": ["hub_root"],
+        },
+    },
+    "validate_hub": {
+        "description": (
+            "Dry-run do import_hub: reporta drift entre o filesystem e o que está "
+            "persistido (diretrizes que seriam criadas/atualizadas, diretivas órfãs "
+            "no DB sem arquivo correspondente, erros de parsing) SEM escrever nada. "
+            "Não é paridade completa com scripts/validate_hub.py do template (que "
+            "cobre templates YAML/K8s/segurança/SoA — fora do escopo do guardian, "
+            "que é registry+policy, não executor) — cobre só a governança documental."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "hub_root": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Caminho local absoluto para a pasta 'docs/' do hub.",
+                }
+            },
+            "required": ["hub_root"],
+        },
+    },
 }
 
 
@@ -183,6 +237,54 @@ def _meta(name: str) -> dict[str, Any]:
 
 
 _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {name: _meta(name) for name in _TOOL_DEFS}
+
+
+async def _import_hub(store: GuardianStore, hub_root: str) -> dict[str, Any]:
+    docs, errors = scan_hub(Path(hub_root))
+    results = [await store.import_directive(doc) for doc in docs]
+    counts = Counter(r["action"] for r in results)
+    mismatches = [r for r in results if r.get("kind_scope_mismatch")]
+    return {
+        "hub_root": hub_root,
+        "scanned": len(docs) + len(errors),
+        "created": counts.get("created", 0),
+        "updated": counts.get("updated", 0),
+        "unchanged": counts.get("unchanged", 0),
+        "parse_errors": errors,
+        "kind_scope_mismatches": mismatches,
+    }
+
+
+async def _validate_hub(store: GuardianStore, hub_root: str) -> dict[str, Any]:
+    docs, errors = scan_hub(Path(hub_root))
+    uids: set[str] = set()
+    drift: list[dict[str, Any]] = []
+    for doc in docs:
+        uids.add(doc.directive_uid)
+        existing = await store.get_directive(doc.directive_uid)
+        if existing is None:
+            drift.append({"directive_uid": doc.directive_uid, "drift": "missing_in_db"})
+            continue
+        current = existing.get("current_version")
+        out_of_sync = current is None or (
+            current["status"] != doc.status
+            or (current.get("body_context") or None) != (doc.body_context or None)
+            or (current.get("body_decision") or None) != (doc.body_decision or None)
+            or (existing.get("title") or None) != (doc.title or None)
+        )
+        if out_of_sync:
+            drift.append(
+                {"directive_uid": doc.directive_uid, "drift": "content_out_of_sync"}
+            )
+    orphans = await store.diff_hub(uids)
+    return {
+        "hub_root": hub_root,
+        "scanned": len(docs) + len(errors),
+        "parse_errors": errors,
+        "drift": drift,
+        "orphan_directives": orphans,
+        "in_sync": not drift and not orphans and not errors,
+    }
 
 
 async def dispatch(
@@ -245,6 +347,10 @@ async def dispatch(
             return {"kinds": await store.list_kinds()}
         if name == "list_status_vocab":
             return {"status": await store.list_status_vocab()}
+        if name == "import_hub":
+            return await _import_hub(store, a["hub_root"])
+        if name == "validate_hub":
+            return await _validate_hub(store, a["hub_root"])
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)
