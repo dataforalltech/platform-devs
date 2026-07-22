@@ -901,3 +901,25 @@ class GuardianStore:
         chamador — operador ou job futuro — decidir quando "hoje > expires_on"
         vira uma transição de status real, em vez de recalcular a cada leitura)."""
         await self._set_waiver_status(waiver_id=waiver_id, status="expired")
+
+    async def sweep_expired_waivers(
+        self, *, project_ref: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Varre waivers `active` cujo `expires_on` já passou e marca como
+        `expired` — o job/chamador explícito mencionado em `expire_waiver`.
+        Comparação lexicográfica de string funciona porque `expires_on` é
+        sempre YYYY-MM-DD (ISO 8601 ordena igual a data real). Retorna os
+        waivers que foram efetivamente expirados nesta chamada."""
+        where: dict[str, Any] = {"status": "active"}
+        if project_ref:
+            where["project_ref"] = project_ref
+        res = await self._waivers.find(where=where)
+        today = date.today().isoformat()
+        expired: list[dict[str, Any]] = []
+        for row in res.rows():
+            if row["expires_on"] < today:
+                await self._waivers.update_where(
+                    {"id": row["id"]}, {"status": "expired"}, user_id=_SYSTEM_USER
+                )
+                expired.append(_jsonable({**row, "status": "expired"}))
+        return expired

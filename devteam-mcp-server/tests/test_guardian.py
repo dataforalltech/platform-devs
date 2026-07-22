@@ -1016,3 +1016,41 @@ async def test_conformance_and_waiver_via_catalog_dispatch(
         "list_waivers", {"project_ref": "proj-cat", "status": "revoked"}, store
     )
     assert len(listed_revoked["waivers"]) == 1
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_sweep_expired_waivers_only_flips_past_active_ones(
+    store: GuardianStore,
+) -> None:
+    past = await store.create_waiver(
+        project_ref="proj-sweep",
+        control_id="SEC-01",
+        approver_ref="caio",
+        expires_on="2020-01-01",  # claramente no passado
+    )
+    future = await store.create_waiver(
+        project_ref="proj-sweep",
+        control_id="SEC-02",
+        approver_ref="caio",
+        expires_on="2099-01-01",  # claramente no futuro
+    )
+    already_revoked = await store.create_waiver(
+        project_ref="proj-sweep",
+        control_id="SEC-03",
+        approver_ref="caio",
+        expires_on="2020-01-01",
+    )
+    await store.revoke_waiver(already_revoked["id"])
+
+    expired = await store.sweep_expired_waivers(project_ref="proj-sweep")
+    assert [w["id"] for w in expired] == [past["id"]]
+
+    all_waivers = {w["id"]: w["status"] for w in await store.list_waivers("proj-sweep")}
+    assert all_waivers[past["id"]] == "expired"
+    assert all_waivers[future["id"]] == "active"  # não mexeu no futuro
+    assert all_waivers[already_revoked["id"]] == "revoked"  # não mexeu no revogado
+
+    # Idempotente: rodar de novo não re-expira nada (já não está mais 'active').
+    second_sweep = await store.sweep_expired_waivers(project_ref="proj-sweep")
+    assert second_sweep == []
