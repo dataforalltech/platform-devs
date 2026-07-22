@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import socket
+from pathlib import Path
 from typing import Any
 
 import aiomysql
@@ -309,3 +310,155 @@ async def test_dispatch_validation_error_is_enveloped(store: GuardianStore) -> N
 async def test_get_missing_directive_returns_not_found(store: GuardianStore) -> None:
     out = await dispatch("get_directive", {"directive_uid": "DOES-NOT-EXIST"}, store)
     assert out["error"] == "not_found"
+
+
+# -- import_hub / validate_hub (ADR-018 Fase 1b) ------------------------------ #
+
+_HUB_ADR = """---
+type: adr
+camada: "ADR (Camada 2)"
+status: aceito
+ultima_atualizacao: 2026-07-15
+escopo: plataforma
+---
+
+# ADR-0022 — Runtime oficial Docker Swarm
+
+## Contexto
+
+Precisamos de um runtime oficial.
+
+## Decisão
+
+Docker Swarm é o runtime oficial.
+"""
+
+_HUB_ADR_V2 = """---
+type: adr
+camada: "ADR (Camada 2)"
+status: aceito
+ultima_atualizacao: 2026-08-01
+escopo: plataforma
+---
+
+# ADR-0022 — Runtime oficial Docker Swarm
+
+## Contexto
+
+Precisamos de um runtime oficial (revisado).
+
+## Decisão
+
+Docker Swarm é o runtime oficial; Kubernetes fica experimental.
+"""
+
+_HUB_PRINCIPLE = """---
+type: architecture-principle
+camada: 1
+status: aceito
+ultima_atualizacao: 2026-07-15
+escopo: servico
+---
+
+# Cloud-native first
+
+## Enunciado
+
+Serviços devem ser cloud-native por padrão.
+"""
+
+
+def _write_hub_file(root: Path, layer: str, name: str, content: str) -> None:
+    layer_dir = root / layer
+    layer_dir.mkdir(parents=True, exist_ok=True)
+    (layer_dir / name).write_text(content, encoding="utf-8")
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_creates_directives_from_markdown(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR)
+    _write_hub_file(hub, "principles", "P-001-cloud-native.md", _HUB_PRINCIPLE)
+
+    out = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert out["created"] == 2
+    assert out["updated"] == 0
+    assert out["parse_errors"] == []
+
+    adr = await store.get_directive("ADR-0022")
+    assert adr is not None
+    assert adr["current_version"]["status"] == "aceito"
+    principle = await store.get_directive("P-001")
+    assert principle is not None and principle["kind"] == "principle"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_is_idempotent_and_versions_on_change(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR)
+
+    first = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert first["created"] == 1
+
+    # Reimport sem mudança nenhuma -> no-op.
+    second = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert second["created"] == 0
+    assert second["updated"] == 0
+    assert second["unchanged"] == 1
+
+    # Conteúdo mudou -> nova versão (append-only), não sobrescreve.
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR_V2)
+    third = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert third["updated"] == 1
+    adr = await store.get_directive("ADR-0022")
+    assert adr["current_version"]["version"] == 2
+    assert "Kubernetes" in adr["current_version"]["body_decision"]
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_reports_parse_errors_without_aborting(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR)
+    _write_hub_file(hub, "adr", "sem-front-matter.md", "# Sem front matter\n")
+
+    out = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert out["created"] == 1
+    assert len(out["parse_errors"]) == 1
+    assert "sem-front-matter" in out["parse_errors"][0]["path"]
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_validate_hub_reports_drift_without_writing(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR)
+
+    before = await dispatch("validate_hub", {"hub_root": str(hub)}, store)
+    assert before["in_sync"] is False
+    assert any(d["drift"] == "missing_in_db" for d in before["drift"])
+    # validate_hub é dry-run: nada foi persistido.
+    assert await store.get_directive("ADR-0022") is None
+
+    await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    after_import = await dispatch("validate_hub", {"hub_root": str(hub)}, store)
+    assert after_import["in_sync"] is True
+    assert after_import["drift"] == []
+
+    # Diretiva órfã: existe no DB mas o arquivo sumiu do hub.
+    (hub / "adr" / "0022-runtime-swarm.md").unlink()
+    after_delete = await dispatch("validate_hub", {"hub_root": str(hub)}, store)
+    assert after_delete["in_sync"] is False
+    assert any(
+        d["directive_uid"] == "ADR-0022" for d in after_delete["orphan_directives"]
+    )

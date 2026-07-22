@@ -21,6 +21,7 @@ from typing import Any
 
 from platform_database.orm import Sort, SortDirection
 
+from ..importer import ImportedDoc
 from ..models import (
     GovDirectiveRow,
     GovDirectiveVersionRow,
@@ -57,6 +58,12 @@ KIND_CAPABILITIES: dict[str, tuple[int | None, bool, bool, str]] = {
 }
 
 # Vocabulário de status. (applies_to_kind, is_terminal)
+# "historico-substituido" existe no hub real (docs antigos que ficam como
+# referência histórica de algo já substituído) além do "historico" simples —
+# achado na importação do hub (ADR-018 Fase 1b), não estava no vocabulário
+# original da Fase 1. "vigente" (visto em runbooks reais) é tratado como alias
+# de "aceito" na camada de import (ver importer.IMPORT_STATUS_ALIASES), não
+# precisa de entrada própria aqui.
 STATUS_VOCAB: dict[str, tuple[str | None, bool]] = {
     "proposto": (None, False),
     "aceito": (None, False),
@@ -65,6 +72,7 @@ STATUS_VOCAB: dict[str, tuple[str | None, bool]] = {
     "arquivado": (None, True),
     "deprecated": (None, True),
     "historico": (None, False),
+    "historico-substituido": (None, True),
 }
 
 
@@ -383,3 +391,79 @@ class GuardianStore:
             user_id=_SYSTEM_USER,
         )
         return await self._shaped(directive_uid) or {}
+
+    # -- importação markdown→DB (ADR-018 Fase 1b) ------------------------------ #
+
+    async def import_directive(self, doc: ImportedDoc) -> dict[str, Any]:
+        """Importa um `importer.ImportedDoc` já parseado — idempotente: cria se
+        novo, versiona (append-only) se o conteúdo mudou, no-op se está igual.
+
+        `kind`/`directive_scope` são fixados na criação e NÃO são versionáveis
+        aqui — se um reimport trouxer kind/scope diferentes do cabeçalho já
+        persistido, isso é sinalizado em `kind_scope_mismatch` (não aplicado
+        silenciosamente; provável erro de reorganização do hub que merece
+        revisão humana, não um "corrigir e seguir" automático)."""
+        existing = await self._directive_raw(doc.directive_uid)
+        if existing is None:
+            created = await self.create_directive(
+                directive_uid=doc.directive_uid,
+                kind=doc.kind,
+                title=doc.title,
+                scope=doc.scope,
+                status=doc.status,
+                body_context=doc.body_context,
+                body_decision=doc.body_decision,
+                author_ref="hub-import",
+            )
+            return {
+                "directive_uid": doc.directive_uid,
+                "action": "created",
+                "directive": created,
+            }
+
+        mismatch = (
+            existing["kind"] != doc.kind or existing["directive_scope"] != doc.scope
+        )
+        current = await self._current_version(doc.directive_uid)
+        unchanged = (
+            current is not None
+            and current["status"] == doc.status
+            and (current["body_context"] or None) == (doc.body_context or None)
+            and (current["body_decision"] or None) == (doc.body_decision or None)
+            and (existing["title"] or None) == (doc.title or None)
+        )
+        if unchanged:
+            return {
+                "directive_uid": doc.directive_uid,
+                "action": "unchanged",
+                "kind_scope_mismatch": mismatch,
+            }
+
+        if existing["title"] != doc.title:
+            await self._directives.update_where(
+                {"directive_uid": doc.directive_uid},
+                {"title": doc.title},
+                user_id=_SYSTEM_USER,
+            )
+        updated = await self.update_directive(
+            directive_uid=doc.directive_uid,
+            status=doc.status,
+            body_context=doc.body_context,
+            body_decision=doc.body_decision,
+            change_reason="reimport do hub markdown",
+            author_ref="hub-import",
+        )
+        return {
+            "directive_uid": doc.directive_uid,
+            "action": "updated",
+            "directive": updated,
+            "kind_scope_mismatch": mismatch,
+        }
+
+    async def diff_hub(self, imported_uids: set[str]) -> list[dict[str, Any]]:
+        """Diretivas de escopo 'platform' persistidas que NÃO aparecem no
+        conjunto importado desta rodada — candidatas a órfã/retirada do hub."""
+        res = await self._directives.find(where={"directive_scope": "platform"})
+        return [
+            _jsonable(d) for d in res.rows() if d["directive_uid"] not in imported_uids
+        ]
