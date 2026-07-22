@@ -1,15 +1,17 @@
-# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c + 2 (concluídas, mergeadas, VALIDADAS contra MySQL real)
+# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c + 2 + matriz de rastreabilidade (concluídas, mergeadas, VALIDADAS contra MySQL real)
 
 **Data:** 2026-07-22
 **Branches mergeadas em `platform-devs`:** `feat/guardian-domain`,
 `feat/guardian-hub-importer`, `feat/guardian-lcr-schema`,
-`feat/guardian-fase2-sections-relations` → `develop` (local + remoto, todas deletadas).
+`feat/guardian-fase2-sections-relations`, `feat/guardian-traceability-matrix` →
+`develop` (local + remoto, todas deletadas).
 **Branch mergeada em `privates-libs/platform-database-lib`:**
 `fix/unit-of-work-mysql-returning-v2` → `develop` (repo separado, ver seção própria).
 **Commits (platform-devs):** `6d238e7` (fix deploy) → `bc8ac46` (feat guardian Fase 1) →
 merge `8eff2bb` → docs `5510b6c`/`29558b0` → `6f0271b` (Fase 1b importador) → merge
 `b7a8dd8` → docs `45781b9` → `603415e` (Fase 1c LCR/handoffs/specs) → merge `c6a1ba2` →
-docs `f5f6811` → `6cf871f` (Fase 2 seções/relações/archetype) → merge `e5303ca`.
+docs `f5f6811` → `6cf871f` (Fase 2 seções/relações/archetype) → merge `e5303ca` →
+`f8172c0` (parser da matriz de rastreabilidade) → merge `0644493`.
 
 ## O que foi feito
 
@@ -237,24 +239,55 @@ As 3 frentes que ficaram deliberadamente de fora até aqui:
   rejeição de relation_type desconhecido, sync via import_hub) + 21 unitários do
   importer (seções + governado_por incluídos).
 
-## Fora de escopo mesmo depois da Fase 2
+## Parser da matriz de rastreabilidade central (documentation-model.md) — concluído
+
+Fechava a última pendência explícita da Fase 2: a tabela de arestas
+(`gov_directive_relation`) já existia, faltava o parser que lê especificamente esse
+arquivo central (formato de tabela markdown, diferente do front-matter por-documento
+que `scan_hub` já cobre via `governado_por`).
+
+- `importer.parse_traceability_matrix(model_text)` — parsing puro (sem I/O). Acha a
+  seção "## Mapa de rastreabilidade" (por substring de heading, tolerante a variação
+  de texto) e extrai a tabela; casa colunas por substring do header
+  (Princípio/Standard/Reference/Runbook → `relation_type` `traces_to_*`), não por
+  posição fixa. Remove anotações `*(...)*` token a token (mesmo regex de
+  `validate_hub.py`). Linhas cujo primeiro campo não bate com `\d{4}` no início (ex.
+  "MCP Gateway †" — referência externa citada por prosa, sem ADR local) são puladas
+  sem erro, coletadas em `skipped_rows`. Também extrai a seção "## Fora da matriz"
+  (exceções documentadas) para relatório — não vira relação, só é reportada.
+- Tool nova: `guardian_import_traceability_matrix(model_path)` — parseia e persiste
+  via `store.add_relation` (já existente da Fase 2).
+- **Validado contra o arquivo REAL** do `platform-service-template`
+  (`docs/documentation-model.md`, disponível localmente neste ambiente) — não só
+  fixture sintética: 80 relações extraídas corretamente, "MCP Gateway †" pulado,
+  as anotações complexas do ADR-0018 (`*(retirado — D1)*`, `*(LAB retirado)*` em 3
+  células diferentes) stripadas certo por token, exceção `STD-GW-001` capturada. O
+  teste que roda contra o arquivo real é `skipif` gracioso quando o repo
+  `platform-service-template` não está clonado ao lado (não quebra CI em outros
+  ambientes).
+- **55/55 testes verdes** no domínio guardian (48 de Fase 1+1b+1c+2 + 7 novos:
+  extração por coluna, stripping de anotação, skip de linha não-numérica, exceções,
+  seções ausentes, persistência via catalog) + 13/13 aggregator sem regressão.
+
+## Fora de escopo mesmo depois de tudo isso
 
 - **Fases 3-4**: gates/waivers/conformance profiles (os YAMLs estruturados do template:
-  `service-profile`, `service-conformance`, `authorization-policy`, `network-policy`).
-- Parser da matriz de rastreabilidade de `documentation-model.md` propriamente dita
-  (a tabela markdown central com anotações `*(substituído)*`) — a tabela de arestas
-  (`gov_directive_relation`) já existe e está pronta para receber essas linhas, mas o
-  parser que lê especificamente esse arquivo (formato de tabela, não front-matter por
-  documento) não foi escrito; hoje só `governado_por` (por documento) é sincronizado.
+  `service-profile`, `service-conformance`, `authorization-policy`, `network-policy`)
+  — ainda sem desenho no ADR-018, precisam de uma mini-decisão de escopo antes de
+  implementar (não é só "mais uma tabela", envolve modelar os campos desses 4 YAMLs).
+- "Índice por capacidade" (a 3ª tabela de `documentation-model.md`, complementar ao
+  mapa por-ADR) não foi parseada — é redundante com a matriz principal (aponta de
+  volta pras mesmas linhas), então não parecia agregar valor extra além do que
+  `parse_traceability_matrix` já extrai.
 
 ## Arquivos-chave para retomar
 
 - `ADR-018-DEVTEAM-GUARDIAN.md` — decisões D18.1-D18.10.
-- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c + 2 completas, validadas
-  contra MySQL real (`db/store.py`, `catalog.py`, `importer.py`, `models.py`,
-  `db/schema.py`).
-- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 48/48 +
-  21/21 verdes contra MySQL real / sem banco, respectivamente.
+- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c + 2 + matriz de
+  rastreabilidade completas, validadas contra MySQL real e contra o arquivo real do
+  template (`db/store.py`, `catalog.py`, `importer.py`, `models.py`, `db/schema.py`).
+- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 55/55 +
+  27/27 verdes contra MySQL real / sem banco, respectivamente.
 - `MCP_ADR_INDEX.md` — índice atualizado com a entrada do ADR-018.
 - `privates-libs/platform-database-lib/src/platform_database/unit_of_work.py` — fix de
   RETURNING no MySQL dentro de transação (repo separado, já mergeado em `develop`).
