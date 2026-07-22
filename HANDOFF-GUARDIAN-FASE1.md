@@ -1,14 +1,15 @@
-# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c (concluídas, mergeadas, VALIDADAS contra MySQL real)
+# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c + 2 (concluídas, mergeadas, VALIDADAS contra MySQL real)
 
 **Data:** 2026-07-22
 **Branches mergeadas em `platform-devs`:** `feat/guardian-domain`,
-`feat/guardian-hub-importer`, `feat/guardian-lcr-schema` → `develop` (local + remoto,
-todas deletadas).
+`feat/guardian-hub-importer`, `feat/guardian-lcr-schema`,
+`feat/guardian-fase2-sections-relations` → `develop` (local + remoto, todas deletadas).
 **Branch mergeada em `privates-libs/platform-database-lib`:**
 `fix/unit-of-work-mysql-returning-v2` → `develop` (repo separado, ver seção própria).
 **Commits (platform-devs):** `6d238e7` (fix deploy) → `bc8ac46` (feat guardian Fase 1) →
 merge `8eff2bb` → docs `5510b6c`/`29558b0` → `6f0271b` (Fase 1b importador) → merge
-`b7a8dd8` → docs `45781b9` → `603415e` (Fase 1c LCR/handoffs/specs) → merge `c6a1ba2`.
+`b7a8dd8` → docs `45781b9` → `603415e` (Fase 1c LCR/handoffs/specs) → merge `c6a1ba2` →
+docs `f5f6811` → `6cf871f` (Fase 2 seções/relações/archetype) → merge `e5303ca`.
 
 ## O que foi feito
 
@@ -194,22 +195,66 @@ silenciosamente desatualizado. Use `git fetch origin` (sem refspec restrito) ou
 confirme via `gh api repos/.../branches/develop --jq '.commit.sha'` antes de basear
 qualquer branch nova.
 
-## O que fica para depois (fora do escopo de Fase 1 + 1b + 1c)
+## Fase 2 — corpo tipado por seção, relações governado_por/matriz, escopo archetype (concluída)
 
-- **Fase 2**: corpo tipado por seção (child tables em vez de `body_context`/
-  `body_decision` como TEXT livre), tabela de relações `governado_por`/matriz como
-  arestas tipadas, escopo `project`/`archetype` completo (hoje `archetype` só existe no
-  rank, colapsado em `platform` por decisão do usuário).
+As 3 frentes que ficaram deliberadamente de fora até aqui:
+
+- **`GovDirectiveSectionRow`** (nova tabela `gov_directive_section`, chave natural
+  `(directive_uid, version, order_index)`) — uma linha por heading `##` do corpo
+  original, versionada junto com `gov_directive_version`. Complementa (não substitui)
+  `body_context`/`body_decision` da Fase 1 — aqueles continuam existindo. `order_index`
+  (não `section_key`) é o desambiguador porque headings podem se repetir.
+- **`GovDirectiveRelationRow`** (nova tabela `gov_directive_relation`, chave natural
+  `(from_uid, to_ref, relation_type)`) — aresta tipada que cobre uniformemente o campo
+  `governado_por` (it/decisions/LCR → standard/ADR) E a matriz de rastreabilidade de
+  `documentation-model.md` (vocabulário: `governed_by` + 4 `traces_to_*`). `to_ref` é
+  referência FRACA (pode ser externo ao guardian).
+- **Escopo `archetype` ativado de verdade**: `SCOPE_RANK` ganhou `archetype: 2` (era só
+  reservado, colapsado em `platform` na Fase 1); `gov_directive` ganhou `archetype_ref`
+  (backfill idempotente via `AddColumn`, mesmo padrão do domínio `session`) — obrigatória
+  sse `scope='archetype'`, mesma validação de `project_ref`.
+- **Importer**: parsing genérico de seções por heading `##` (qualquer kind, sem
+  hardcoding por camada — cobre ADR/Standard/Princípio/IT/Runbook uniformemente) +
+  extração de `governado_por` do front-matter (lista YAML OU string `"STD-A, STD-B"`
+  separada por vírgula) — ambos sincronizados via `import_hub` para qualquer camada,
+  não só LCR.
+- 5 tools novas: `guardian_replace_sections`, `guardian_list_sections`,
+  `guardian_add_relation`, `guardian_list_relations`, `guardian_remove_relation`.
+- **Bug real achado rodando contra MySQL**: `replace_sections` tentava um "full
+  replace" via `delete_where()` + insert dentro de `transaction()` — mas
+  `Repository.delete_where` é **soft-delete** (`UPDATE excluded=1`), e o MySQL não tem
+  índice único parcial, então a linha "excluída" continuava colidindo com a constraint
+  UNIQUE ao reinserir a mesma chave natural (`IntegrityError 1062`). Redesenhado para
+  **upsert puro** por `(directive_uid, version, order_index)` — sem delete físico
+  (mesmo princípio de D18.8: nunca soft-deletar uma chave natural reaproveitável).
+  **Limitação documentada** (não escondida): reimportar com MENOS seções não remove o
+  `order_index` extra da rodada anterior — fica com conteúdo antigo até ser
+  sobrescrito, não desaparece silenciosamente. Aceitável porque `body_context`/
+  `body_decision` continuam sendo a fonte de verdade completa; seções são conveniência
+  de leitura, não uma segunda fonte de verdade.
+- **48/48 testes verdes contra MySQL 8.4 real** (37 de Fase 1+1b+1c + 11 novos:
+  archetype scope, seções upsert-in-place, relações idempotentes, kind-scoping,
+  rejeição de relation_type desconhecido, sync via import_hub) + 21 unitários do
+  importer (seções + governado_por incluídos).
+
+## Fora de escopo mesmo depois da Fase 2
+
 - **Fases 3-4**: gates/waivers/conformance profiles (os YAMLs estruturados do template:
   `service-profile`, `service-conformance`, `authorization-policy`, `network-policy`).
+- Parser da matriz de rastreabilidade de `documentation-model.md` propriamente dita
+  (a tabela markdown central com anotações `*(substituído)*`) — a tabela de arestas
+  (`gov_directive_relation`) já existe e está pronta para receber essas linhas, mas o
+  parser que lê especificamente esse arquivo (formato de tabela, não front-matter por
+  documento) não foi escrito; hoje só `governado_por` (por documento) é sincronizado.
 
 ## Arquivos-chave para retomar
 
 - `ADR-018-DEVTEAM-GUARDIAN.md` — decisões D18.1-D18.10.
-- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c completas, validadas
-  contra MySQL real (`db/store.py`, `catalog.py`, `importer.py`, `models.py`).
-- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 37/37 +
-  16/16 verdes contra MySQL real / sem banco, respectivamente.
+- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c + 2 completas, validadas
+  contra MySQL real (`db/store.py`, `catalog.py`, `importer.py`, `models.py`,
+  `db/schema.py`).
+- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 48/48 +
+  21/21 verdes contra MySQL real / sem banco, respectivamente.
 - `MCP_ADR_INDEX.md` — índice atualizado com a entrada do ADR-018.
 - `privates-libs/platform-database-lib/src/platform_database/unit_of_work.py` — fix de
   RETURNING no MySQL dentro de transação (repo separado, já mergeado em `develop`).
