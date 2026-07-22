@@ -15,10 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from .db.store import (
+    CONFORMANCE_STATUS,
     KIND_CAPABILITIES,
     RELATION_TYPES,
     SCOPE_RANK,
     STATUS_VOCAB,
+    WAIVER_STATUS,
     GuardianStore,
     GuardianValidationError,
 )
@@ -47,6 +49,14 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "list_relations": ("relation", "read"),
     "remove_relation": ("relation", "write"),
     "import_traceability_matrix": ("relation", "write"),
+    "set_conformance_control": ("conformance", "write"),
+    "get_conformance_control": ("conformance", "read"),
+    "list_conformance_controls": ("conformance", "read"),
+    "conformance_summary": ("conformance", "read"),
+    "create_waiver": ("waiver", "write"),
+    "list_waivers": ("waiver", "read"),
+    "revoke_waiver": ("waiver", "write"),
+    "expire_waiver": ("waiver", "write"),
 }
 
 # resource_type → data_domain (guardian é governança).
@@ -57,10 +67,14 @@ _DATA_DOMAIN: dict[str, str] = {
     "lcr": "governance",
     "section": "governance",
     "relation": "governance",
+    "conformance": "governance",
+    "waiver": "governance",
 }
 
 _KINDS = sorted(KIND_CAPABILITIES)
 _STATUS = sorted(STATUS_VOCAB)
+_CONFORMANCE_STATUS = sorted(CONFORMANCE_STATUS)
+_WAIVER_STATUS = sorted(WAIVER_STATUS)
 _SCOPES = sorted(SCOPE_RANK)
 
 _UID = {
@@ -421,6 +435,124 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
             "required": ["model_path"],
         },
     },
+    "set_conformance_control": {
+        "description": (
+            "Cria/atualiza (upsert por project_ref+control_id) o estado de "
+            "conformidade de um projeto frente a um control de governança. "
+            "evidence é obrigatório sse status='pass'; reason é obrigatório para "
+            "qualquer outro status (mesma regra do service-conformance.yaml do hub)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_ref": {"type": "string", "maxLength": 64},
+                "control_id": {"type": "string", "maxLength": 64},
+                "status": {"type": "string", "enum": _CONFORMANCE_STATUS},
+                "reason": {"type": "string"},
+                "evidence": {"type": "string"},
+                "directive_uid": _UID,
+                "assessed_by": {"type": "string", "maxLength": 64},
+                "assessed_at": {
+                    "type": "string",
+                    "maxLength": 10,
+                    "description": "YYYY-MM-DD.",
+                },
+            },
+            "required": ["project_ref", "control_id", "status"],
+        },
+    },
+    "get_conformance_control": {
+        "description": "Retorna o estado de conformidade de um control específico (ou null).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_ref": {"type": "string", "maxLength": 64},
+                "control_id": {"type": "string", "maxLength": 64},
+            },
+            "required": ["project_ref", "control_id"],
+        },
+    },
+    "list_conformance_controls": {
+        "description": "Lista os controls de um projeto (filtro opcional por status).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_ref": {"type": "string", "maxLength": 64},
+                "status": {"type": "string", "enum": _CONFORMANCE_STATUS},
+            },
+            "required": ["project_ref"],
+        },
+    },
+    "conformance_summary": {
+        "description": "Contagem de controls por status para um projeto (calculado ao vivo).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"project_ref": {"type": "string", "maxLength": 64}},
+            "required": ["project_ref"],
+        },
+    },
+    "create_waiver": {
+        "description": (
+            "Cria uma exceção temporária a um control — SEMPRE com validade "
+            "(expires_on) e aprovador; upsert por project_ref+control_id+expires_on "
+            "(renovar com validade diferente cria um novo registro)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_ref": {"type": "string", "maxLength": 64},
+                "control_id": {"type": "string", "maxLength": 64},
+                "approver_ref": {"type": "string", "maxLength": 64},
+                "expires_on": {
+                    "type": "string",
+                    "maxLength": 10,
+                    "description": "YYYY-MM-DD, obrigatório.",
+                },
+                "justification": {"type": "string"},
+            },
+            "required": ["project_ref", "control_id", "approver_ref", "expires_on"],
+        },
+    },
+    "list_waivers": {
+        "description": "Lista waivers de um projeto (filtros opcionais: control_id, status).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "project_ref": {"type": "string", "maxLength": 64},
+                "control_id": {"type": "string", "maxLength": 64},
+                "status": {"type": "string", "enum": _WAIVER_STATUS},
+            },
+            "required": ["project_ref"],
+        },
+    },
+    "revoke_waiver": {
+        "description": "Marca um waiver como revogado (status='revoked').",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"waiver_id": {"type": "integer", "minimum": 1}},
+            "required": ["waiver_id"],
+        },
+    },
+    "expire_waiver": {
+        "description": (
+            "Marca um waiver como expirado (status='expired') — marcação "
+            "EXPLÍCITA, esta fase não calcula expiração automaticamente a "
+            "partir de expires_on na leitura."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"waiver_id": {"type": "integer", "minimum": 1}},
+            "required": ["waiver_id"],
+        },
+    },
 }
 
 
@@ -634,6 +766,56 @@ async def dispatch(
             return {"ok": True}
         if name == "import_traceability_matrix":
             return await _import_traceability_matrix(store, a["model_path"])
+        if name == "set_conformance_control":
+            fields = {
+                k: v for k, v in a.items() if k not in ("project_ref", "control_id")
+            }
+            return await store.set_conformance_control(
+                project_ref=a["project_ref"], control_id=a["control_id"], **fields
+            )
+        if name == "get_conformance_control":
+            result = await store.get_conformance_control(
+                a["project_ref"], a["control_id"]
+            )
+            return (
+                result
+                if result
+                else {
+                    "error": "not_found",
+                    "project_ref": a["project_ref"],
+                    "control_id": a["control_id"],
+                }
+            )
+        if name == "list_conformance_controls":
+            return {
+                "controls": await store.list_conformance_controls(
+                    a["project_ref"], status=a.get("status")
+                )
+            }
+        if name == "conformance_summary":
+            return await store.conformance_summary(a["project_ref"])
+        if name == "create_waiver":
+            return await store.create_waiver(
+                project_ref=a["project_ref"],
+                control_id=a["control_id"],
+                approver_ref=a["approver_ref"],
+                expires_on=a["expires_on"],
+                justification=a.get("justification"),
+            )
+        if name == "list_waivers":
+            return {
+                "waivers": await store.list_waivers(
+                    a["project_ref"],
+                    control_id=a.get("control_id"),
+                    status=a.get("status"),
+                )
+            }
+        if name == "revoke_waiver":
+            await store.revoke_waiver(a["waiver_id"])
+            return {"ok": True}
+        if name == "expire_waiver":
+            await store.expire_waiver(a["waiver_id"])
+            return {"ok": True}
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)

@@ -5,6 +5,10 @@ o núcleo versionado das diretrizes (`gov_directive` + `gov_directive_version`) 
 dados de referência (`gov_kind_capability`/`gov_status_vocab`). Fase 1c: metadados de
 LCR. Fase 2: corpo tipado por seção (`gov_directive_section`), relações tipadas
 `governado_por`/matriz (`gov_directive_relation`) e o escopo `archetype` ativado.
+Fase 3 (escopo reduzido — decisão explícita: `service-profile`/`authorization-policy`/
+`network-policy` ficam FORA do guardian, território de devops/deploy/security):
+conformidade por projeto (`gov_conformance_control`) e exceções temporárias com
+validade obrigatória (`gov_waiver`).
 
 Invariantes-chave (ADR-018):
 - D18.3: identidade imutável por `directive_uid`; revisões append-only; "exatamente uma
@@ -27,6 +31,7 @@ from platform_database.orm import Sort, SortDirection
 
 from ..importer import ImportedDoc
 from ..models import (
+    GovConformanceControlRow,
     GovDirectiveRelationRow,
     GovDirectiveRow,
     GovDirectiveSectionRow,
@@ -35,8 +40,10 @@ from ..models import (
     GovLcrDetailRow,
     GovLcrSubstitutionRow,
     GovStatusVocabRow,
+    GovWaiverRow,
 )
 from .schema import (
+    CONFORMANCE_CONTROL_TABLE,
     DIRECTIVE_RELATION_TABLE,
     DIRECTIVE_SECTION_TABLE,
     DIRECTIVE_TABLE,
@@ -45,6 +52,7 @@ from .schema import (
     LCR_DETAIL_TABLE,
     LCR_SUBSTITUTION_TABLE,
     STATUS_VOCAB_TABLE,
+    WAIVER_TABLE,
 )
 
 _SYSTEM_USER = 0
@@ -74,6 +82,18 @@ RELATION_TYPES: frozenset[str] = frozenset(
         "traces_to_adr",
     }
 )
+
+# Vocabulário de status de um control de conformidade (ADR-018 Fase 3) — igual ao
+# `service-conformance.yaml.template` do hub. NÃO é o mesmo vocabulário de
+# STATUS_VOCAB (aquele é do ciclo de vida da diretriz; este é do estado de
+# conformidade de um projeto). "pass" exige evidence; qualquer outro exige reason
+# (mesma regra do validate_hub.py do template).
+CONFORMANCE_STATUS: frozenset[str] = frozenset(
+    {"blocked", "fail", "not_applicable", "not_assessed", "partial", "pass"}
+)
+
+# Ciclo de vida do PRÓPRIO waiver (não confundir com CONFORMANCE_STATUS).
+WAIVER_STATUS: frozenset[str] = frozenset({"active", "expired", "revoked"})
 
 # Capacidades por kind (ADR-018 D18 N1). (layer, allows_rfc2119, allows_fileline, body_shape)
 KIND_CAPABILITIES: dict[str, tuple[int | None, bool, bool, str]] = {
@@ -160,7 +180,7 @@ def _content_sha256(
 
 
 class GuardianStore:
-    """Store tenant-scoped: 8 repositórios ligados ao pool do tenant (fail-closed)."""
+    """Store tenant-scoped: 10 repositórios ligados ao pool do tenant (fail-closed)."""
 
     def __init__(self, session: Any) -> None:
         self._directives = session.repository(
@@ -187,6 +207,10 @@ class GuardianStore:
         self._relations = session.repository(
             GovDirectiveRelationRow, table_name=DIRECTIVE_RELATION_TABLE
         )
+        self._conformance = session.repository(
+            GovConformanceControlRow, table_name=CONFORMANCE_CONTROL_TABLE
+        )
+        self._waivers = session.repository(GovWaiverRow, table_name=WAIVER_TABLE)
 
     # -- referência (seed idempotente + leitura) ------------------------------- #
 
@@ -726,3 +750,154 @@ class GuardianStore:
         await self._relations.delete_where(
             {"from_uid": from_uid, "to_ref": to_ref, "relation_type": relation_type}
         )
+
+    # -- conformidade + waivers (ADR-018 Fase 3) -------------------------------- #
+
+    @staticmethod
+    def _validate_conformance(
+        status: str, reason: str | None, evidence: str | None
+    ) -> None:
+        if status not in CONFORMANCE_STATUS:
+            raise GuardianValidationError(
+                f"status de conformidade inválido: {status!r} "
+                f"(∈ {sorted(CONFORMANCE_STATUS)})"
+            )
+        if status == "pass" and not evidence:
+            raise GuardianValidationError("evidence é obrigatório quando status='pass'")
+        if status != "pass" and not reason:
+            raise GuardianValidationError(
+                "reason é obrigatório quando status != 'pass'"
+            )
+
+    async def set_conformance_control(
+        self,
+        *,
+        project_ref: str,
+        control_id: str,
+        status: str,
+        reason: str | None = None,
+        evidence: str | None = None,
+        directive_uid: str | None = None,
+        assessed_by: str | None = None,
+        assessed_at: str | None = None,
+    ) -> dict[str, Any]:
+        """Upsert por `(project_ref, control_id)` — reassessment sobrescreve o
+        estado atual (histórico de mudança de status fica fora de escopo desta
+        fase; ver docstring de `GovConformanceControlRow`)."""
+        self._validate_conformance(status, reason, evidence)
+        await self._conformance.upsert(
+            {
+                "project_ref": project_ref,
+                "control_id": control_id,
+                "status": status,
+                "reason": reason,
+                "evidence": evidence,
+                "directive_uid": directive_uid,
+                "assessed_by": assessed_by,
+                "assessed_at": assessed_at,
+            },
+            ["project_ref", "control_id"],
+            user_id=_SYSTEM_USER,
+        )
+        return await self.get_conformance_control(project_ref, control_id) or {}
+
+    async def get_conformance_control(
+        self, project_ref: str, control_id: str
+    ) -> dict[str, Any] | None:
+        res = await self._conformance.find(
+            where={"project_ref": project_ref, "control_id": control_id}, limit=1
+        )
+        rows = res.rows()
+        return _jsonable(rows[0]) if rows else None
+
+    async def list_conformance_controls(
+        self, project_ref: str, *, status: str | None = None
+    ) -> list[dict[str, Any]]:
+        where: dict[str, Any] = {"project_ref": project_ref}
+        if status:
+            where["status"] = status
+        res = await self._conformance.find(
+            where=where, order_by=[Sort(column="control_id")]
+        )
+        return [_jsonable(r) for r in res.rows()]
+
+    async def conformance_summary(self, project_ref: str) -> dict[str, int]:
+        """Contagem por status — equivalente ao "resumo quantitativo" do
+        `service-conformance.yaml.template`, mas calculado ao vivo (não um
+        campo que pode divergir da lista de controls, como o YAML permite)."""
+        controls = await self.list_conformance_controls(project_ref)
+        summary = {code: 0 for code in sorted(CONFORMANCE_STATUS)}
+        for control in controls:
+            summary[control["status"]] = summary.get(control["status"], 0) + 1
+        return summary
+
+    async def create_waiver(
+        self,
+        *,
+        project_ref: str,
+        control_id: str,
+        approver_ref: str,
+        expires_on: str,
+        justification: str | None = None,
+    ) -> dict[str, Any]:
+        """Upsert por `(project_ref, control_id, expires_on)` — renovar com uma
+        validade DIFERENTE cria um novo registro (histórico natural de
+        renovações); reenviar a mesma validade é idempotente."""
+        await self._waivers.upsert(
+            {
+                "project_ref": project_ref,
+                "control_id": control_id,
+                "justification": justification,
+                "approver_ref": approver_ref,
+                "expires_on": expires_on,
+                "status": "active",
+            },
+            ["project_ref", "control_id", "expires_on"],
+            user_id=_SYSTEM_USER,
+        )
+        res = await self._waivers.find(
+            where={
+                "project_ref": project_ref,
+                "control_id": control_id,
+                "expires_on": expires_on,
+            },
+            limit=1,
+        )
+        rows = res.rows()
+        return _jsonable(rows[0]) if rows else {}
+
+    async def list_waivers(
+        self,
+        project_ref: str,
+        *,
+        control_id: str | None = None,
+        status: str | None = None,
+    ) -> list[dict[str, Any]]:
+        where: dict[str, Any] = {"project_ref": project_ref}
+        if control_id:
+            where["control_id"] = control_id
+        if status:
+            where["status"] = status
+        res = await self._waivers.find(
+            where=where, order_by=[Sort(column="expires_on", direction=_DESC)]
+        )
+        return [_jsonable(r) for r in res.rows()]
+
+    async def _set_waiver_status(self, *, waiver_id: int, status: str) -> None:
+        if status not in WAIVER_STATUS:
+            raise GuardianValidationError(
+                f"status de waiver inválido: {status!r} (∈ {sorted(WAIVER_STATUS)})"
+            )
+        await self._waivers.update_where(
+            {"id": waiver_id}, {"status": status}, user_id=_SYSTEM_USER
+        )
+
+    async def revoke_waiver(self, waiver_id: int) -> None:
+        await self._set_waiver_status(waiver_id=waiver_id, status="revoked")
+
+    async def expire_waiver(self, waiver_id: int) -> None:
+        """Marcação EXPLÍCITA — esta fase não calcula expiração automaticamente
+        a partir de `expires_on` na leitura (simplificação deliberada: exige um
+        chamador — operador ou job futuro — decidir quando "hoje > expires_on"
+        vira uma transição de status real, em vez de recalcular a cada leitura)."""
+        await self._set_waiver_status(waiver_id=waiver_id, status="expired")
