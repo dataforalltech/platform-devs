@@ -1,0 +1,311 @@
+"""Testes de integração do domínio `guardian` (ADR-018 Fase 1) — banco REAL.
+
+Credencial-zero (FID-02): rodam contra um MySQL real via ``get_pool_for_tenant`` e são
+SKIPADOS sem ``MYSQL_ROOT_PASSWORD``. Cobrem o núcleo versionado das diretrizes
+(``gov_directive`` + ``gov_directive_version``), o vocabulário de referência (kinds/status),
+a invariante "exatamente uma versão vigente por uid" e o roteamento via catálogo.
+"""
+
+from __future__ import annotations
+
+import os
+import socket
+from typing import Any
+
+import aiomysql
+import pytest
+import pytest_asyncio
+from platform_core.request_context import reset_tenant_id, set_tenant_id
+from platform_database import close_tenant_pools
+from platform_database.orm import configure
+from platform_database.orm.dialects import dialect_for_pool
+from platform_database.orm.tenant import TenantSession
+from platform_database.tenant_resolver import get_pool_for_tenant
+
+from src.config.settings import DevteamSettings
+from src.domains.guardian.catalog import dispatch
+from src.domains.guardian.db.schema import (
+    DIRECTIVE_TABLE,
+    DIRECTIVE_VERSION_TABLE,
+    KIND_CAPABILITY_TABLE,
+    STATUS_VOCAB_TABLE,
+    ensure_schema,
+)
+from src.domains.guardian.db.store import (
+    KIND_CAPABILITIES,
+    STATUS_VOCAB,
+    GuardianStore,
+    GuardianValidationError,
+)
+
+_HOST = os.environ.get("PILOT_MYSQL_HOST", "127.0.0.1")
+_PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
+_PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
+_TENANT = "devteam_guardian_test"
+_ALL_TABLES = (
+    DIRECTIVE_VERSION_TABLE,
+    DIRECTIVE_TABLE,
+    STATUS_VOCAB_TABLE,
+    KIND_CAPABILITY_TABLE,
+)
+_configured = False
+
+
+def _mysql_up() -> bool:
+    if not _PW:
+        return False
+    try:
+        with socket.create_connection((_HOST, _PORT), timeout=2):
+            return True
+    except OSError:
+        return False
+
+
+requires_mysql = pytest.mark.skipif(
+    not _mysql_up(),
+    reason="MySQL real indisponível (defina MYSQL_ROOT_PASSWORD/PILOT_MYSQL_HOST/PILOT_MYSQL_PORT)",
+)
+
+
+def _settings() -> DevteamSettings:
+    return DevteamSettings(
+        MCP_TWIN_AUDIENCE="mcp:devteam-mcp",
+        URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
+        DB_ENGINE="mysql",
+        DB_HOST=_HOST,
+        DB_PORT=_PORT,
+        DB_USER="root",
+        DB_PASSWORD=_PW,
+        ADMIN_DB_HOST=_HOST,
+        ADMIN_DB_PORT=_PORT,
+        ADMIN_DB_USER="root",
+        ADMIN_DB_PASSWORD=_PW,
+    )
+
+
+async def _lookup(tenant_id: str, _s: Any) -> dict[str, Any] | None:
+    if tenant_id != _TENANT:
+        return None
+    return {
+        "tenant_id": tenant_id,
+        "db_engine": "mysql",
+        "db_host": _HOST,
+        "db_port": _PORT,
+        "db_name": tenant_id,
+        "db_user": "root",
+        "db_password": _PW,
+    }
+
+
+async def _root_exec(sql: str) -> None:
+    conn = await aiomysql.connect(
+        host=_HOST, port=_PORT, user="root", password=_PW, autocommit=True
+    )
+    try:
+        async with conn.cursor() as cur:
+            await cur.execute(sql)
+    finally:
+        conn.close()
+
+
+async def _make_store() -> tuple[GuardianStore, Any]:
+    global _configured
+    settings = _settings()
+    if not _configured:
+        configure(settings)
+        _configured = True
+    await _root_exec(f"CREATE DATABASE IF NOT EXISTS {_TENANT} CHARACTER SET utf8mb4")
+    pool = await get_pool_for_tenant(
+        settings, _TENANT, platform_lookup=_lookup, strict=True
+    )
+    await ensure_schema(pool, engine=dialect_for_pool(pool).name)
+    for table in _ALL_TABLES:
+        await pool.execute(f"TRUNCATE TABLE {table}")
+    token = set_tenant_id(_TENANT)
+    return GuardianStore(TenantSession(pool, _TENANT)), token
+
+
+@pytest_asyncio.fixture
+async def store():
+    st, token = await _make_store()
+    yield st
+    reset_tenant_id(token)
+    await close_tenant_pools()
+
+
+# -- referência (seed + leitura) ---------------------------------------------- #
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_seed_reference_data_is_idempotent(store: GuardianStore) -> None:
+    first = await store.seed_reference_data()
+    assert first == {"kinds": len(KIND_CAPABILITIES), "status": len(STATUS_VOCAB)}
+    # Idempotente: rodar de novo não duplica (upsert por chave natural).
+    await store.seed_reference_data()
+    kinds = await store.list_kinds()
+    status = await store.list_status_vocab()
+    assert len(kinds) == len(KIND_CAPABILITIES)
+    assert len(status) == len(STATUS_VOCAB)
+    std = next(k for k in kinds if k["kind"] == "standard")
+    assert std["allows_rfc2119"] is True and std["layer"] == 3
+
+
+# -- CRUD do núcleo versionado ------------------------------------------------ #
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_create_directive_persists_header_and_v1(store: GuardianStore) -> None:
+    out = await store.create_directive(
+        directive_uid="STD-SEC-001",
+        kind="standard",
+        title="Hardening",
+        body_context="Contexto",
+        body_decision="Decisão",
+        author_ref="caio",
+    )
+    assert out["directive_uid"] == "STD-SEC-001"
+    assert out["directive_scope"] == "platform"
+    assert out["scope_rank"] == 1
+    cur = out["current_version"]
+    assert cur["version"] == 1 and cur["is_current"] is True
+    assert cur["status"] == "proposto"
+    assert cur["content_sha256"]
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_create_directive_rejects_bad_kind(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(directive_uid="X-1", kind="nope", title="T")
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_project_scope_requires_project_ref(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(
+            directive_uid="STD-P-1", kind="standard", title="T", scope="project"
+        )
+    ok = await store.create_directive(
+        directive_uid="STD-P-2",
+        kind="standard",
+        title="T",
+        scope="project",
+        project_ref="proj-1",
+    )
+    assert ok["directive_scope"] == "project"
+    assert ok["scope_rank"] == 3
+    assert ok["project_ref"] == "proj-1"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_duplicate_uid_rejected(store: GuardianStore) -> None:
+    await store.create_directive(directive_uid="ADR-0001", kind="adr", title="A")
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(
+            directive_uid="ADR-0001", kind="adr", title="A dup"
+        )
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_update_directive_appends_version_and_keeps_one_current(
+    store: GuardianStore,
+) -> None:
+    await store.create_directive(directive_uid="ADR-0002", kind="adr", title="A")
+    updated = await store.update_directive(
+        directive_uid="ADR-0002",
+        status="aceito",
+        body_decision="v2",
+        change_reason="revisão",
+    )
+    assert updated["current_version"]["version"] == 2
+    assert updated["current_version"]["status"] == "aceito"
+    # Invariante: exatamente 1 vigente por uid.
+    res = await store._versions.find(
+        where={"directive_uid": "ADR-0002", "is_current": True}
+    )
+    assert len(res.rows()) == 1
+    # E existem 2 versões no total (append-only).
+    allv = await store._versions.find(where={"directive_uid": "ADR-0002"})
+    assert len(allv.rows()) == 2
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_set_directive_status(store: GuardianStore) -> None:
+    await store.create_directive(
+        directive_uid="P-005", kind="principle", title="Least privilege"
+    )
+    out = await store.set_directive_status(directive_uid="P-005", status="aceito")
+    assert out["current_version"]["status"] == "aceito"
+    assert out["current_version"]["version"] == 1  # sem nova versão
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_supersede_directive(store: GuardianStore) -> None:
+    await store.create_directive(directive_uid="STD-OLD", kind="standard", title="Old")
+    await store.create_directive(directive_uid="STD-NEW", kind="standard", title="New")
+    out = await store.supersede_directive(
+        directive_uid="STD-OLD", superseded_by_uid="STD-NEW"
+    )
+    assert out["superseded_by_uid"] == "STD-NEW"
+    assert out["current_version"]["status"] == "substituido"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_list_directives_filters(store: GuardianStore) -> None:
+    await store.create_directive(directive_uid="STD-A", kind="standard", title="A")
+    await store.create_directive(directive_uid="RB-A", kind="runbook", title="B")
+    await store.set_directive_status(directive_uid="STD-A", status="aceito")
+    only_std = await store.list_directives(kind="standard")
+    assert [d["directive_uid"] for d in only_std] == ["STD-A"]
+    accepted = await store.list_directives(status="aceito")
+    assert [d["directive_uid"] for d in accepted] == ["STD-A"]
+    assert only_std[0]["current_status"] == "aceito"
+
+
+# -- roteamento via catálogo (contrato do plugin) ----------------------------- #
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_dispatch_create_and_get_via_catalog(store: GuardianStore) -> None:
+    created = await dispatch(
+        "create_directive",
+        {
+            "directive_uid": "ADR-0009",
+            "kind": "adr",
+            "title": "Guardian",
+            "status": "aceito",
+        },
+        store,
+    )
+    assert created["directive_uid"] == "ADR-0009"
+    got = await dispatch("get_directive", {"directive_uid": "ADR-0009"}, store)
+    assert got["current_version"]["status"] == "aceito"
+    listing = await dispatch("list_directives", {"kind": "adr"}, store)
+    assert any(d["directive_uid"] == "ADR-0009" for d in listing["directives"])
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_dispatch_validation_error_is_enveloped(store: GuardianStore) -> None:
+    out = await dispatch(
+        "create_directive",
+        {"directive_uid": "Z-1", "kind": "bogus", "title": "T"},
+        store,
+    )
+    assert out["error"] == "ValidationError"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_get_missing_directive_returns_not_found(store: GuardianStore) -> None:
+    out = await dispatch("get_directive", {"directive_uid": "DOES-NOT-EXIST"}, store)
+    assert out["error"] == "not_found"
