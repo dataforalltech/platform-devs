@@ -332,3 +332,55 @@ em dia com o que o guardian já registra.
 - `MCP_ADR_INDEX.md` — índice atualizado com a entrada do ADR-018.
 - `privates-libs/platform-database-lib/src/platform_database/unit_of_work.py` — fix de
   RETURNING no MySQL dentro de transação (repo separado, já mergeado em `develop`).
+
+## Cadastro real: platform-service-template como exemplo/teste (2026-07-22)
+
+Rodado o pipeline `import_hub` + `import_traceability_matrix` do guardian contra o
+repositório REAL `C:\Users\caiog\Documents\repositorios\platform-service-template`
+(93 arquivos em `docs/`), não fixtures sintéticas — a primeira validação ponta-a-ponta
+contra dado real do mundo. Achou e corrigiu 2 bugs (commit `0ee2d63`, branch
+`fix/guardian-real-import-bugs` → merge `6b6a6a1` em `develop`):
+
+1. **`GovDirectiveVersionRow.status` com `max_length=24` insuficiente** — o valor
+   `bloqueado-dependencia-externa` (vocabulário LCR, 29 chars) estourava a coluna e
+   disparava `ValidationError` do Pydantic antes de chegar no banco. Corrigido para
+   `max_length=32` (confirmado: nenhum outro valor de vocabulário passa de 24 chars).
+2. **`_import_hub` abortava o lote inteiro num único erro de persistência** — a
+   list comprehension deixava um `GuardianValidationError` de UM arquivo escapar até
+   o `except` genérico do `dispatch()`, que substituía a resposta inteira por um
+   envelope de erro, perdendo o resultado de TODOS os arquivos já importados com
+   sucesso no mesmo lote. Corrigido: erros de persistência agora são coletados por
+   arquivo em `persist_errors` (mesmo padrão de `parse_errors`), sem abortar o lote.
+   2 testes de regressão novos; **65/65 testes verdes** (62 + 2 novos + 1 de status
+   longo) + 13/13 aggregator sem regressão.
+
+**Resultado final da importação real** (após os fixes, idempotente/reprodutível):
+
+- 84 diretivas criadas (principles, ADR, standards, reference-architecture,
+  runbooks, IT, decisions, LCR, handoffs, specs).
+- 80 relações de rastreabilidade importadas da matriz central
+  (`documentation-model.md`).
+- 2 `persist_errors` genuínos — **drift real de conteúdo no próprio template**, não
+  bug do importador: `LCR-005-log-uploader-credential-normalization.md` usa
+  `status: "APPROVED"` (inglês/maiúsculo, fora do vocabulário PT-BR) e
+  `specs/connector-version-icon.md` usa `status: aprovado`, que só é válido para
+  `kind='lib_change_request'`, não para `spec`.
+- 7 `parse_errors` (arquivos fora da convenção de nome/front-matter esperada pelo
+  importador — não investigado a fundo, fora do escopo deste cadastro).
+- `validate_hub` pós-import confirma consistência: os únicos 2 itens fora de sync
+  são exatamente os 2 que falharam a persistência; 0 diretivas órfãs.
+
+**Banco persistente (deliberadamente NÃO descartado ao final da sessão, ao contrário
+de todo container de teste usado neste projeto):**
+
+- Container Docker: `guardian-example-mysql`, porta `33062`.
+- Tenant/database: `devteam_guardian_example`.
+- Credenciais: apenas no script local
+  `register_template_example.py` (scratchpad da sessão, **não commitado**) — senha
+  root `ExampleOnly_2026!`. Para reconectar/reconsultar depois, subir uma
+  `TenantSession` apontando pro tenant acima na mesma porta, ou usar
+  `docker exec -it guardian-example-mysql mysql -uroot -p`.
+- Este container fica de pé como registro consultável (exemplo real de diretriz
+  de governança cadastrada), diferente do padrão de container descartável usado em
+  todo o resto da sessão — é preciso derrubá-lo manualmente
+  (`docker rm -f guardian-example-mysql`) quando não for mais necessário.
