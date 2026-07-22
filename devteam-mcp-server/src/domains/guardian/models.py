@@ -56,8 +56,9 @@ class GovDirectiveRow(BaseModel):
     """Cabeçalho de uma diretriz — identidade natural imutável ``directive_uid`` (D18.3).
 
     Nunca soft-deletada (D18.8): mudança de conteúdo = nova versão; obsolescência =
-    supersedência (``superseded_by_uid``). Escopo hierárquico (D18.4): baseline<platform<
-    project (archetype reservado no rank, adicionado depois).
+    supersedência (``superseded_by_uid``). Escopo hierárquico (D18.4): baseline<archetype<
+    platform<project — ``archetype`` foi ativado na Fase 2 (antes só existia reservado
+    no rank, colapsado em ``platform`` por decisão do usuário na Fase 1).
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -69,13 +70,16 @@ class GovDirectiveRow(BaseModel):
     kind: str = Field(max_length=40)
     directive_scope: str = Field(
         default="platform", max_length=24
-    )  # baseline | platform | project
+    )  # baseline | archetype | platform | project
     scope_rank: int = Field(
         default=1
-    )  # materializado: baseline=0, platform=1, (archetype=2), project=3
+    )  # materializado: baseline=0, archetype=2, platform=1, project=3
     project_ref: str | None = Field(
         default=None, max_length=64
     )  # referência FRACA ao project-product (D18.6)
+    archetype_ref: str | None = Field(
+        default=None, max_length=64
+    )  # referência FRACA ao registro de arquétipo (Fase 2) — obrigatória sse scope='archetype'
     title: str = Field(max_length=300)
     superseded_by_uid: str | None = Field(default=None, max_length=64)
     owner_ref: str | None = Field(default=None, max_length=64)
@@ -150,6 +154,48 @@ class GovLcrSubstitutionRow(BaseModel):
     target_ref: str = Field(max_length=200)
 
 
+class GovDirectiveSectionRow(BaseModel):
+    """Corpo tipado por seção (ADR-018 Fase 2) — uma linha por heading ``##`` do
+    documento original, versionada junto com ``gov_directive_version``. Complementa
+    (não substitui) ``body_context``/``body_decision`` da Fase 1: aqueles continuam
+    existindo para o split heurístico contexto/decisão; as seções dão granularidade
+    real por título (ex. "Consequências", "Enunciado", "Procedimento") — queryável,
+    sem re-parsear markdown toda vez. Chave natural única:
+    ``(directive_uid, version, order_index)`` — ``order_index`` (não ``section_key``)
+    é o desambiguador porque headings podem se repetir (ex. duas seções
+    "Consequências" — positivas/negativas — no mesmo documento).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    directive_uid: str = Field(max_length=64)
+    version: int = 1
+    order_index: int = 0
+    section_key: str = Field(max_length=80)  # heading normalizado (slug): "contexto"
+    heading: str = Field(max_length=200)  # texto original do heading, sem normalizar
+    content: str | None = None
+
+
+class GovDirectiveRelationRow(BaseModel):
+    """Aresta tipada entre diretrizes (ADR-018 Fase 2) — cobre `governado_por`
+    (it/decisions/LCR → standard/ADR) E a matriz de rastreabilidade de
+    ``documentation-model.md`` (ADR → Princípios/Standards/Reference Arch/Runbooks),
+    modeladas uniformemente em vez de uma tabela por tipo de relação. ``to_ref`` é
+    referência FRACA (sem FK — mesmo padrão de ``project_ref``): o alvo pode ser
+    externo ao guardian (ex. a linha "MCP Gateway †" do hub, que cita decisões de
+    OUTRO repositório por prosa, não por arquivo local). Chave natural única:
+    ``(from_uid, to_ref, relation_type)``.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    from_uid: str = Field(max_length=64)
+    to_ref: str = Field(max_length=200)
+    relation_type: str = Field(max_length=32)
+
+
 __all__ = [
     "GovKindCapabilityRow",
     "GovStatusVocabRow",
@@ -157,4 +203,6 @@ __all__ = [
     "GovDirectiveVersionRow",
     "GovLcrDetailRow",
     "GovLcrSubstitutionRow",
+    "GovDirectiveSectionRow",
+    "GovDirectiveRelationRow",
 ]

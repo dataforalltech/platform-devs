@@ -345,3 +345,92 @@ def test_parse_spec_uses_stem_as_uid(tmp_path: Path) -> None:
     assert doc.directive_uid == "exemplo-de-spec"
     assert doc.kind == "spec"
     assert doc.title == "Spec de exemplo"  # front-matter tem precedência sobre H1
+
+
+# -- Fase 2: seções tipadas + governado_por ------------------------------------ #
+
+_IT_WITH_GOVERNED_BY = """---
+title: IT-001 — Criar novo serviço
+type: instrucao-de-trabalho
+codigo: IT-001
+camada: it
+status: aceito
+escopo: servico
+governado_por: STD-ARCH-001, STD-DATA-001
+---
+
+# IT-001 — Criar novo serviço
+
+## Pré-requisitos
+
+Ter acesso ao repo.
+
+## Procedimento
+
+1. Clonar.
+2. Configurar.
+
+## Verificação local
+
+Rodar os testes.
+"""
+
+_IT_GOVERNED_BY_YAML_LIST = """---
+title: IT-002
+type: instrucao-de-trabalho
+status: aceito
+governado_por:
+  - STD-ARCH-001
+  - STD-DATA-001
+---
+
+# IT-002
+
+## Procedimento
+
+Passo único.
+"""
+
+
+def test_parse_sections_splits_by_heading_in_order(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "it", "IT-001-criar-servico.md", _IT_WITH_GOVERNED_BY)
+    doc = parse_markdown_doc("it", path, root)
+    assert [s["heading"] for s in doc.sections] == [
+        "Pré-requisitos",
+        "Procedimento",
+        "Verificação local",
+    ]
+    assert [s["order_index"] for s in doc.sections] == [0, 1, 2]
+    assert doc.sections[1]["section_key"] == "procedimento"
+    assert "Clonar" in doc.sections[1]["content"]
+
+
+def test_parse_governed_by_comma_separated_string(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "it", "IT-001-criar-servico.md", _IT_WITH_GOVERNED_BY)
+    doc = parse_markdown_doc("it", path, root)
+    assert doc.governed_by == ("STD-ARCH-001", "STD-DATA-001")
+
+
+def test_parse_governed_by_yaml_list(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "it", "IT-002-outro.md", _IT_GOVERNED_BY_YAML_LIST)
+    doc = parse_markdown_doc("it", path, root)
+    assert doc.governed_by == ("STD-ARCH-001", "STD-DATA-001")
+
+
+def test_single_h2_heading_yields_one_section(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    path = _write(root, "principles", "P-001-cloud-native.md", _PRINCIPLE_BODY)
+    doc = parse_markdown_doc("principles", path, root)
+    assert len(doc.sections) == 1
+    assert doc.sections[0]["heading"] == "Enunciado"
+
+
+def test_no_sections_when_no_h2_headings(tmp_path: Path) -> None:
+    root = tmp_path / "docs"
+    body = "---\ntype: spec\n---\n\n# Só um H1, sem heading nível 2\n\nProsa solta.\n"
+    path = _write(root, "specs", "sem-secoes.md", body)
+    doc = parse_markdown_doc("specs", path, root)
+    assert doc.sections == ()

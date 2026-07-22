@@ -16,6 +16,7 @@ from typing import Any
 
 from .db.store import (
     KIND_CAPABILITIES,
+    RELATION_TYPES,
     SCOPE_RANK,
     STATUS_VOCAB,
     GuardianStore,
@@ -40,6 +41,11 @@ _POLICY_SPEC: dict[str, tuple[str, str]] = {
     "set_lcr_detail": ("lcr", "write"),
     "get_lcr_detail": ("lcr", "read"),
     "list_lcr_substitutions": ("lcr", "read"),
+    "replace_sections": ("section", "write"),
+    "list_sections": ("section", "read"),
+    "add_relation": ("relation", "write"),
+    "list_relations": ("relation", "read"),
+    "remove_relation": ("relation", "write"),
 }
 
 # resource_type → data_domain (guardian é governança).
@@ -48,6 +54,8 @@ _DATA_DOMAIN: dict[str, str] = {
     "reference": "governance",
     "hub_import": "governance",
     "lcr": "governance",
+    "section": "governance",
+    "relation": "governance",
 }
 
 _KINDS = sorted(KIND_CAPABILITIES)
@@ -80,6 +88,11 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
                     "type": "string",
                     "maxLength": 64,
                     "description": "Obrigatório sse scope='project' (ref fraca ao project-product).",
+                },  # noqa: E501
+                "archetype_ref": {
+                    "type": "string",
+                    "maxLength": 64,
+                    "description": "Obrigatório sse scope='archetype' (ref fraca ao registro de arquétipo).",
                 },  # noqa: E501
                 "owner_ref": {"type": "string", "maxLength": 64},
                 "status": {"type": "string", "enum": _STATUS, "default": "proposto"},
@@ -117,6 +130,7 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
                 "kind": {"type": "string", "enum": _KINDS},
                 "scope": {"type": "string", "enum": _SCOPES},
                 "project_ref": {"type": "string", "maxLength": 64},
+                "archetype_ref": {"type": "string", "maxLength": 64},
                 "status": {"type": "string", "enum": _STATUS},
                 "limit": {
                     "type": "integer",
@@ -287,6 +301,101 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
             "required": ["directive_uid"],
         },
     },
+    "replace_sections": {
+        "description": (
+            "Substitui TODAS as seções de uma (directive_uid, version) atomicamente "
+            "(full-replace, não merge) — corpo tipado por heading (ADR-018 Fase 2). "
+            "Sem version, usa a versão vigente."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "directive_uid": _UID,
+                "version": {"type": "integer", "minimum": 1},
+                "sections": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "order_index": {"type": "integer", "minimum": 0},
+                            "section_key": {"type": "string", "maxLength": 80},
+                            "heading": {"type": "string", "maxLength": 200},
+                            "content": {"type": "string"},
+                        },
+                        "required": ["order_index", "section_key", "heading"],
+                    },
+                },
+            },
+            "required": ["directive_uid", "sections"],
+        },
+    },
+    "list_sections": {
+        "description": (
+            "Lista as seções tipadas de uma diretriz (versão vigente se `version` "
+            "for omitido), em ordem."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "directive_uid": _UID,
+                "version": {"type": "integer", "minimum": 1},
+            },
+            "required": ["directive_uid"],
+        },
+    },
+    "add_relation": {
+        "description": (
+            "Cria uma aresta tipada entre diretrizes (governed_by ou "
+            "traces_to_<principle|standard|reference_arch|runbook|adr>) — cobre o "
+            "campo governado_por do front-matter e a matriz de rastreabilidade de "
+            "documentation-model.md. Idempotente por (from_uid, to_ref, relation_type)."
+        ),
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "from_uid": _UID,
+                "to_ref": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Ref FRACA (uid/caminho livre, pode ser externo ao guardian).",
+                },  # noqa: E501
+                "relation_type": {
+                    "type": "string",
+                    "enum": sorted(RELATION_TYPES),
+                },
+            },
+            "required": ["from_uid", "to_ref", "relation_type"],
+        },
+    },
+    "list_relations": {
+        "description": "Lista as arestas de uma diretriz (filtro opcional por relation_type).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "from_uid": _UID,
+                "relation_type": {"type": "string", "enum": sorted(RELATION_TYPES)},
+            },
+            "required": ["from_uid"],
+        },
+    },
+    "remove_relation": {
+        "description": "Remove uma aresta específica (from_uid, to_ref, relation_type).",
+        "schema": {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "from_uid": _UID,
+                "to_ref": {"type": "string", "maxLength": 200},
+                "relation_type": {"type": "string", "enum": sorted(RELATION_TYPES)},
+            },
+            "required": ["from_uid", "to_ref", "relation_type"],
+        },
+    },
 }
 
 
@@ -354,6 +463,15 @@ async def _validate_hub(store: GuardianStore, hub_root: str) -> dict[str, Any]:
     }
 
 
+async def _resolve_current_version(store: GuardianStore, directive_uid: str) -> int:
+    directive = await store.get_directive(directive_uid)
+    if directive is None or directive.get("current_version") is None:
+        raise GuardianValidationError(
+            f"directive_uid não encontrado ou sem versão vigente: {directive_uid!r}"
+        )
+    return directive["current_version"]["version"]
+
+
 async def dispatch(
     name: str, args: dict[str, Any], store: GuardianStore
 ) -> dict[str, Any]:
@@ -367,6 +485,7 @@ async def dispatch(
                 title=a["title"],
                 scope=a.get("scope", "platform"),
                 project_ref=a.get("project_ref"),
+                archetype_ref=a.get("archetype_ref"),
                 owner_ref=a.get("owner_ref"),
                 status=a.get("status", "proposto"),
                 body_context=a.get("body_context"),
@@ -386,6 +505,7 @@ async def dispatch(
                     kind=a.get("kind"),
                     scope=a.get("scope"),
                     project_ref=a.get("project_ref"),
+                    archetype_ref=a.get("archetype_ref"),
                     status=a.get("status"),
                     limit=a.get("limit", 50),
                 )
@@ -433,6 +553,41 @@ async def dispatch(
             return {
                 "substitutions": await store.list_lcr_substitutions(a["directive_uid"])
             }
+        if name == "replace_sections":
+            return {
+                "sections": await store.replace_sections(
+                    directive_uid=a["directive_uid"],
+                    version=a.get("version")
+                    or await _resolve_current_version(store, a["directive_uid"]),
+                    sections=a["sections"],
+                )
+            }
+        if name == "list_sections":
+            return {
+                "sections": await store.list_sections(
+                    a["directive_uid"], version=a.get("version")
+                )
+            }
+        if name == "add_relation":
+            await store.add_relation(
+                from_uid=a["from_uid"],
+                to_ref=a["to_ref"],
+                relation_type=a["relation_type"],
+            )
+            return {"ok": True}
+        if name == "list_relations":
+            return {
+                "relations": await store.list_relations(
+                    a["from_uid"], relation_type=a.get("relation_type")
+                )
+            }
+        if name == "remove_relation":
+            await store.remove_relation(
+                from_uid=a["from_uid"],
+                to_ref=a["to_ref"],
+                relation_type=a["relation_type"],
+            )
+            return {"ok": True}
     except GuardianValidationError as exc:
         return {"error": "ValidationError", "details": str(exc)}
     raise KeyError(name)
