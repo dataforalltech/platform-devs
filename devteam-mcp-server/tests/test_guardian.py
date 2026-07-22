@@ -26,6 +26,8 @@ from platform_database.tenant_resolver import get_pool_for_tenant
 from src.config.settings import DevteamSettings
 from src.domains.guardian.catalog import dispatch
 from src.domains.guardian.db.schema import (
+    DIRECTIVE_RELATION_TABLE,
+    DIRECTIVE_SECTION_TABLE,
     DIRECTIVE_TABLE,
     DIRECTIVE_VERSION_TABLE,
     KIND_CAPABILITY_TABLE,
@@ -46,6 +48,8 @@ _PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
 _PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
 _TENANT = "devteam_guardian_test"
 _ALL_TABLES = (
+    DIRECTIVE_RELATION_TABLE,
+    DIRECTIVE_SECTION_TABLE,
     LCR_SUBSTITUTION_TABLE,
     LCR_DETAIL_TABLE,
     DIRECTIVE_VERSION_TABLE,
@@ -604,3 +608,188 @@ async def test_import_hub_syncs_lcr_detail_and_substitutions(
 
     directive = await store.get_directive("LCR-005-log-uploader")
     assert directive["current_version"]["status"] == "pendente-aprovacao"
+
+
+# -- Fase 2: escopo archetype, seções tipadas, relações ------------------------ #
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_archetype_scope_requires_archetype_ref(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(
+            directive_uid="STD-ARQ-1", kind="standard", title="T", scope="archetype"
+        )
+    ok = await store.create_directive(
+        directive_uid="STD-ARQ-2",
+        kind="standard",
+        title="T",
+        scope="archetype",
+        archetype_ref="frontend-produto",
+    )
+    assert ok["directive_scope"] == "archetype"
+    assert ok["scope_rank"] == 2
+    assert ok["archetype_ref"] == "frontend-produto"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_project_ref_rejected_outside_project_scope(
+    store: GuardianStore,
+) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.create_directive(
+            directive_uid="STD-X",
+            kind="standard",
+            title="T",
+            scope="platform",
+            project_ref="proj-1",  # project_ref só faz sentido com scope='project'
+        )
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_replace_sections_upserts_in_place(store: GuardianStore) -> None:
+    await store.create_directive(
+        directive_uid="IT-001", kind="work_instruction", title="T"
+    )
+    first = await store.replace_sections(
+        directive_uid="IT-001",
+        version=1,
+        sections=[
+            {
+                "order_index": 0,
+                "section_key": "pre_requisitos",
+                "heading": "Pré-requisitos",
+                "content": "A",
+            },
+            {
+                "order_index": 1,
+                "section_key": "procedimento",
+                "heading": "Procedimento",
+                "content": "B",
+            },
+        ],
+    )
+    assert [s["heading"] for s in first] == ["Pré-requisitos", "Procedimento"]
+
+    # Reimportação do MESMO conjunto de índices -> upsert em cima (idempotente).
+    second = await store.replace_sections(
+        directive_uid="IT-001",
+        version=1,
+        sections=[
+            {
+                "order_index": 0,
+                "section_key": "pre_requisitos",
+                "heading": "Pré-requisitos",
+                "content": "A2",
+            },
+            {
+                "order_index": 1,
+                "section_key": "procedimento",
+                "heading": "Procedimento",
+                "content": "B2",
+            },
+        ],
+    )
+    assert [s["content"] for s in second] == ["A2", "B2"]
+
+    # Limitação DOCUMENTADA: reimportar com MENOS seções não remove o
+    # order_index extra da rodada anterior (fica stale até ser sobrescrito) —
+    # o MySQL não tem índice único parcial, então soft-delete colidiria com a
+    # constraint natural ao reinserir a mesma chave.
+    third = await store.replace_sections(
+        directive_uid="IT-001",
+        version=1,
+        sections=[
+            {
+                "order_index": 0,
+                "section_key": "pre_requisitos",
+                "heading": "Pré-requisitos",
+                "content": "A3",
+            },
+        ],
+    )
+    assert [s["content"] for s in third] == ["A3", "B2"]  # index 1 = stale, não sumiu
+
+    listed = await store.list_sections("IT-001")  # sem version -> vigente (1)
+    assert listed == third
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_relations_add_list_remove_are_idempotent(store: GuardianStore) -> None:
+    await store.create_directive(
+        directive_uid="IT-002", kind="work_instruction", title="T"
+    )
+    await store.add_relation(
+        from_uid="IT-002", to_ref="STD-ARCH-001", relation_type="governed_by"
+    )
+    await store.add_relation(  # idempotente — não duplica
+        from_uid="IT-002", to_ref="STD-ARCH-001", relation_type="governed_by"
+    )
+    await store.add_relation(
+        from_uid="IT-002", to_ref="STD-DATA-001", relation_type="governed_by"
+    )
+    rels = await store.list_relations("IT-002")
+    assert [r["to_ref"] for r in rels] == ["STD-ARCH-001", "STD-DATA-001"]
+
+    await store.remove_relation(
+        from_uid="IT-002", to_ref="STD-ARCH-001", relation_type="governed_by"
+    )
+    remaining = await store.list_relations("IT-002")
+    assert [r["to_ref"] for r in remaining] == ["STD-DATA-001"]
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_add_relation_rejects_unknown_relation_type(
+    store: GuardianStore,
+) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.add_relation(
+            from_uid="IT-003", to_ref="STD-X", relation_type="bogus_relation"
+        )
+
+
+_IT_HUB_BODY = """---
+type: instrucao-de-trabalho
+title: IT-001 — Criar novo serviço
+status: aceito
+governado_por: STD-ARCH-001, STD-DATA-001
+---
+
+# IT-001 — Criar novo serviço
+
+## Pré-requisitos
+
+Ter acesso ao repo.
+
+## Procedimento
+
+1. Clonar.
+"""
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_syncs_sections_and_governed_by(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "it", "IT-001-criar-servico.md", _IT_HUB_BODY)
+
+    out = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert out["created"] == 1
+
+    sections = await dispatch("list_sections", {"directive_uid": "IT-001"}, store)
+    assert [s["heading"] for s in sections["sections"]] == [
+        "Pré-requisitos",
+        "Procedimento",
+    ]
+
+    relations = await dispatch("list_relations", {"from_uid": "IT-001"}, store)
+    assert [r["to_ref"] for r in relations["relations"]] == [
+        "STD-ARCH-001",
+        "STD-DATA-001",
+    ]

@@ -2,14 +2,18 @@
 
 Persistência tenant-scoped credencial-zero (`for_tenant`), dual-db. Fase 1 (ADR-018):
 o núcleo versionado das diretrizes (`gov_directive` + `gov_directive_version`) e os
-dados de referência (`gov_kind_capability`/`gov_status_vocab`).
+dados de referência (`gov_kind_capability`/`gov_status_vocab`). Fase 1c: metadados de
+LCR. Fase 2: corpo tipado por seção (`gov_directive_section`), relações tipadas
+`governado_por`/matriz (`gov_directive_relation`) e o escopo `archetype` ativado.
 
 Invariantes-chave (ADR-018):
 - D18.3: identidade imutável por `directive_uid`; revisões append-only; "exatamente uma
   vigente por uid" via `Repository.transaction()` (UPDATE is_current=0 → INSERT is_current=1).
 - D18.8: directive nunca soft-deletada; reimport = upsert por `directive_uid`.
 - Enums (kind/status) validados app-level contra `KIND_CAPABILITIES`/`STATUS_VOCAB`
-  (a matriz honesta do ADR — DB-CHECK/FK fica p/ refinamento).
+  (a matriz honesta do ADR — DB-CHECK/FK fica p/ refinamento); status também validado
+  contra o `kind` da diretriz via `applies_to_kind` (Fase 2 passou a fazer cumprir isto
+  em `update_directive`/`set_directive_status`, não só em `create_directive`).
 """
 
 from __future__ import annotations
@@ -23,7 +27,9 @@ from platform_database.orm import Sort, SortDirection
 
 from ..importer import ImportedDoc
 from ..models import (
+    GovDirectiveRelationRow,
     GovDirectiveRow,
+    GovDirectiveSectionRow,
     GovDirectiveVersionRow,
     GovKindCapabilityRow,
     GovLcrDetailRow,
@@ -31,6 +37,8 @@ from ..models import (
     GovStatusVocabRow,
 )
 from .schema import (
+    DIRECTIVE_RELATION_TABLE,
+    DIRECTIVE_SECTION_TABLE,
     DIRECTIVE_TABLE,
     DIRECTIVE_VERSION_TABLE,
     KIND_CAPABILITY_TABLE,
@@ -42,8 +50,30 @@ from .schema import (
 _SYSTEM_USER = 0
 _DESC = SortDirection.DESC
 
-# Ranking do escopo hierárquico (ADR-018 D18.4): archetype=2 reservado (adicionado depois).
-SCOPE_RANK: dict[str, int] = {"baseline": 0, "platform": 1, "project": 3}
+# Ranking do escopo hierárquico (ADR-018 D18.4): baseline < archetype < platform <
+# project. "archetype" foi ativado na Fase 2 (antes só existia reservado no rank,
+# colapsado em "platform" por decisão do usuário na Fase 1).
+SCOPE_RANK: dict[str, int] = {
+    "baseline": 0,
+    "archetype": 2,
+    "platform": 1,
+    "project": 3,
+}
+
+# Vocabulário de tipos de relação (ADR-018 Fase 2) — cobre `governado_por`
+# (it/decisions/lcr -> standard/adr, campo de front-matter livre) e a matriz de
+# rastreabilidade de documentation-model.md (ADR -> Princípios/Standards/
+# Reference Arch/Runbooks), modelados uniformemente como arestas tipadas.
+RELATION_TYPES: frozenset[str] = frozenset(
+    {
+        "governed_by",
+        "traces_to_principle",
+        "traces_to_standard",
+        "traces_to_reference_arch",
+        "traces_to_runbook",
+        "traces_to_adr",
+    }
+)
 
 # Capacidades por kind (ADR-018 D18 N1). (layer, allows_rfc2119, allows_fileline, body_shape)
 KIND_CAPABILITIES: dict[str, tuple[int | None, bool, bool, str]] = {
@@ -130,7 +160,7 @@ def _content_sha256(
 
 
 class GuardianStore:
-    """Store tenant-scoped: 6 repositórios ligados ao pool do tenant (fail-closed)."""
+    """Store tenant-scoped: 8 repositórios ligados ao pool do tenant (fail-closed)."""
 
     def __init__(self, session: Any) -> None:
         self._directives = session.repository(
@@ -150,6 +180,12 @@ class GuardianStore:
         )
         self._lcr_substitutions = session.repository(
             GovLcrSubstitutionRow, table_name=LCR_SUBSTITUTION_TABLE
+        )
+        self._sections = session.repository(
+            GovDirectiveSectionRow, table_name=DIRECTIVE_SECTION_TABLE
+        )
+        self._relations = session.repository(
+            GovDirectiveRelationRow, table_name=DIRECTIVE_RELATION_TABLE
         )
 
     # -- referência (seed idempotente + leitura) ------------------------------- #
@@ -248,6 +284,7 @@ class GuardianStore:
         title: str,
         scope: str = "platform",
         project_ref: str | None = None,
+        archetype_ref: str | None = None,
         owner_ref: str | None = None,
         status: str = "proposto",
         body_context: str | None = None,
@@ -263,6 +300,10 @@ class GuardianStore:
             raise GuardianValidationError(
                 "project_ref é obrigatório sse scope='project'"
             )
+        if (scope == "archetype") != (archetype_ref is not None):
+            raise GuardianValidationError(
+                "archetype_ref é obrigatório sse scope='archetype'"
+            )
         if await self._directive_raw(directive_uid) is not None:
             raise GuardianValidationError(
                 f"directive_uid já existe: {directive_uid!r} (use update_directive)"
@@ -275,6 +316,7 @@ class GuardianStore:
                 "directive_scope": scope,
                 "scope_rank": SCOPE_RANK[scope],
                 "project_ref": project_ref,
+                "archetype_ref": archetype_ref,
                 "title": title,
                 "owner_ref": owner_ref,
             },
@@ -306,6 +348,7 @@ class GuardianStore:
         kind: str | None = None,
         scope: str | None = None,
         project_ref: str | None = None,
+        archetype_ref: str | None = None,
         status: str | None = None,
         limit: int = 50,
     ) -> list[dict[str, Any]]:
@@ -316,6 +359,8 @@ class GuardianStore:
             where["directive_scope"] = scope
         if project_ref:
             where["project_ref"] = project_ref
+        if archetype_ref:
+            where["archetype_ref"] = archetype_ref
         res = await self._directives.find(
             where=where or None,
             order_by=[Sort(column="directive_uid")],
@@ -430,7 +475,11 @@ class GuardianStore:
         gestão de mudança (`lcr_detail`) e as arestas `substituido_por` são
         persistidos independente de a diretriz ser nova ou já existir — são
         upserts por chave natural, sem versionamento (não fazem parte do
-        núcleo append-only)."""
+        núcleo append-only).
+
+        Fase 2: `sections` (corpo tipado por heading, full-replace por versão) e
+        `governed_by` (arestas `relation_type='governed_by'`) são sincronizados
+        para QUALQUER kind, não só LCR."""
         existing = await self._directive_raw(doc.directive_uid)
         if existing is None:
             created = await self.create_directive(
@@ -444,6 +493,7 @@ class GuardianStore:
                 author_ref="hub-import",
             )
             await self._sync_lcr_extras(doc)
+            await self._sync_fase2_extras(doc, created["current_version"]["version"])
             return {
                 "directive_uid": doc.directive_uid,
                 "action": "created",
@@ -463,6 +513,8 @@ class GuardianStore:
         )
         if unchanged:
             await self._sync_lcr_extras(doc)
+            if current is not None:  # sempre verdadeiro aqui (parte de `unchanged`)
+                await self._sync_fase2_extras(doc, current["version"])
             return {
                 "directive_uid": doc.directive_uid,
                 "action": "unchanged",
@@ -484,6 +536,7 @@ class GuardianStore:
             author_ref="hub-import",
         )
         await self._sync_lcr_extras(doc)
+        await self._sync_fase2_extras(doc, updated["current_version"]["version"])
         return {
             "directive_uid": doc.directive_uid,
             "action": "updated",
@@ -499,6 +552,18 @@ class GuardianStore:
         for target_ref in doc.lcr_substituted_by:
             await self.add_lcr_substitution(
                 lcr_directive_uid=doc.directive_uid, target_ref=target_ref
+            )
+
+    async def _sync_fase2_extras(self, doc: ImportedDoc, version: int) -> None:
+        if doc.sections:
+            await self.replace_sections(
+                directive_uid=doc.directive_uid,
+                version=version,
+                sections=list(doc.sections),
+            )
+        for ref in doc.governed_by:
+            await self.add_relation(
+                from_uid=doc.directive_uid, to_ref=ref, relation_type="governed_by"
             )
 
     async def diff_hub(self, imported_uids: set[str]) -> list[dict[str, Any]]:
@@ -573,3 +638,91 @@ class GuardianStore:
             order_by=[Sort(column="target_ref")],
         )
         return [row["target_ref"] for row in res.rows()]
+
+    # -- corpo tipado por seção (ADR-018 Fase 2) -------------------------------- #
+
+    async def replace_sections(
+        self, *, directive_uid: str, version: int, sections: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Upsert de cada seção por `(directive_uid, version, order_index)`.
+
+        NÃO é um delete físico seguido de insert: `Repository.delete_where` é
+        soft-delete (UPDATE `excluded=1`), e o MySQL não tem índice único
+        parcial — a linha "excluída" continuaria colidindo com a constraint
+        UNIQUE ao reinserir a mesma chave natural (mesmo princípio de D18.8:
+        nunca soft-deletar algo cuja chave natural pode ser reaproveitada).
+
+        Limitação conhecida e documentada (não escondida): se uma reimportação
+        trouxer MENOS seções que a anterior para a MESMA versão, os
+        `order_index` extras da rodada anterior ficam com o conteúdo antigo
+        até serem sobrescritos numa reimportação futura — não desaparecem
+        silenciosamente, mas também não são removidos automaticamente. Isso é
+        aceitável porque `list_sections` é sempre lida junto com `body_context`/
+        `body_decision` (Fase 1) como fonte de verdade completa; a seção tipada
+        é conveniência de leitura, não uma segunda fonte de verdade.
+
+        `sections`: lista ordenada de
+        `{"order_index", "section_key", "heading", "content"}`."""
+        for section in sections:
+            await self._sections.upsert(
+                {
+                    "directive_uid": directive_uid,
+                    "version": version,
+                    "order_index": section["order_index"],
+                    "section_key": section["section_key"],
+                    "heading": section["heading"],
+                    "content": section.get("content"),
+                },
+                ["directive_uid", "version", "order_index"],
+                user_id=_SYSTEM_USER,
+            )
+        return await self.list_sections(directive_uid, version=version)
+
+    async def list_sections(
+        self, directive_uid: str, *, version: int | None = None
+    ) -> list[dict[str, Any]]:
+        """Seções de uma versão específica, ou da versão VIGENTE se `version` for
+        omitido."""
+        if version is None:
+            current = await self._current_version(directive_uid)
+            if current is None:
+                return []
+            version = current["version"]
+        res = await self._sections.find(
+            where={"directive_uid": directive_uid, "version": version},
+            order_by=[Sort(column="order_index")],
+        )
+        return [_jsonable(r) for r in res.rows()]
+
+    # -- relações tipadas: governado_por / matriz de rastreabilidade (Fase 2) --- #
+
+    async def add_relation(
+        self, *, from_uid: str, to_ref: str, relation_type: str
+    ) -> None:
+        """Idempotente por `(from_uid, to_ref, relation_type)`."""
+        if relation_type not in RELATION_TYPES:
+            raise GuardianValidationError(
+                f"relation_type inválido: {relation_type!r} "
+                f"(∈ {sorted(RELATION_TYPES)})"
+            )
+        await self._relations.upsert(
+            {"from_uid": from_uid, "to_ref": to_ref, "relation_type": relation_type},
+            ["from_uid", "to_ref", "relation_type"],
+            user_id=_SYSTEM_USER,
+        )
+
+    async def list_relations(
+        self, from_uid: str, *, relation_type: str | None = None
+    ) -> list[dict[str, Any]]:
+        where: dict[str, Any] = {"from_uid": from_uid}
+        if relation_type:
+            where["relation_type"] = relation_type
+        res = await self._relations.find(where=where, order_by=[Sort(column="to_ref")])
+        return [_jsonable(r) for r in res.rows()]
+
+    async def remove_relation(
+        self, *, from_uid: str, to_ref: str, relation_type: str
+    ) -> None:
+        await self._relations.delete_where(
+            {"from_uid": from_uid, "to_ref": to_ref, "relation_type": relation_type}
+        )

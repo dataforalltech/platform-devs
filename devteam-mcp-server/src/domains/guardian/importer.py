@@ -100,6 +100,8 @@ class ImportedDoc:
 
     `lcr_detail`/`lcr_substituted_by` só são preenchidos para
     `kind == "lib_change_request"` (Fase 1c) — `None`/vazio para os demais kinds.
+    `sections`/`governed_by` (Fase 2) são computados para QUALQUER kind — vazios
+    quando o documento não tem heading `##` ou campo `governado_por`.
     """
 
     directive_uid: str
@@ -112,6 +114,8 @@ class ImportedDoc:
     source_path: str  # relativo ao hub_root — só para diagnóstico, não persistido
     lcr_detail: dict[str, Any] | None = None
     lcr_substituted_by: tuple[str, ...] = ()
+    sections: tuple[dict[str, Any], ...] = ()
+    governed_by: tuple[str, ...] = ()
 
 
 def _derive_uid(layer: str, filename: str) -> str:
@@ -191,16 +195,20 @@ def parse_markdown_doc(layer: str, path: Path, hub_root: Path) -> ImportedDoc:
         _extract_lcr_detail(front_matter) if layer == "lib-change-requests" else None
     )
     lcr_substituted_by = _extract_lcr_substituted_by(front_matter)
+    sections = _parse_sections(body)
+    governed_by = _extract_governed_by(front_matter)
     return ImportedDoc(
         directive_uid=uid,
         kind=kind,
         title=title,
-        scope="platform",  # ADR-018: archetype colapsado em platform por ora
+        scope="platform",  # ADR-018: docs do hub são globais, nunca archetype/project
         status=status,
         body_context=body_context,
         body_decision=body_decision,
         source_path=rel,
         lcr_detail=lcr_detail,
+        sections=sections,
+        governed_by=governed_by,
         lcr_substituted_by=lcr_substituted_by,
     )
 
@@ -238,6 +246,58 @@ def _extract_lcr_substituted_by(front_matter: dict) -> tuple[str, ...]:
     if isinstance(raw, str) and raw.strip():
         return (raw.strip(),)
     return ()
+
+
+def _extract_governed_by(front_matter: dict) -> tuple[str, ...]:
+    """`governado_por` (ADR-018 Fase 2) — visto em `it/`/`decisions/`/LCR como
+    texto livre (uma lista YAML OU uma string "STD-A, STD-B" separada por
+    vírgula) referenciando os Standards/ADRs de quem o documento deriva.
+    Normalizado em arestas `relation_type='governed_by'`, nunca guardado como
+    string livre numa coluna."""
+    raw = front_matter.get("governado_por")
+    if isinstance(raw, list):
+        return tuple(str(item).strip() for item in raw if str(item).strip())
+    if isinstance(raw, str) and raw.strip():
+        return tuple(p.strip() for p in raw.split(",") if p.strip())
+    return ()
+
+
+def _slugify_heading(heading: str) -> str:
+    ascii_ish = re.sub(r"[^\w\s-]", "", heading, flags=re.UNICODE).strip().lower()
+    slug = re.sub(r"[\s_]+", "_", ascii_ish) or "secao"
+    return slug[:80]
+
+
+_SECTION_HEADING = re.compile(r"^##\s+(.+?)\s*$", re.MULTILINE)
+
+
+def _parse_sections(body: str) -> tuple[dict[str, Any], ...]:
+    """Extrai TODAS as seções `##` do corpo, em ordem (ADR-018 Fase 2) — usado
+    para popular `gov_directive_section`. Genérico por design: não hardcoda
+    headings específicos por kind (o hub varia a convenção por camada — ADR usa
+    Contexto/Decisão/Consequências, Princípio usa Enunciado/Racional/
+    Implicações, IT usa Pré-requisitos/Procedimento — ver pesquisa no
+    handoff); só segmenta por heading de nível 2, o que cobre todas elas
+    uniformemente."""
+    stripped = body.strip()
+    matches = list(_SECTION_HEADING.finditer(stripped))
+    if not matches:
+        return ()
+    sections = []
+    for idx, m in enumerate(matches):
+        start = m.end()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(stripped)
+        heading = m.group(1).strip()
+        content = stripped[start:end].strip() or None
+        sections.append(
+            {
+                "order_index": idx,
+                "section_key": _slugify_heading(heading),
+                "heading": heading,
+                "content": content,
+            }
+        )
+    return tuple(sections)
 
 
 def discover_hub_files(hub_root: Path) -> list[tuple[str, Path]]:
