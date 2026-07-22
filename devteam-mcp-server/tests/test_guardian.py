@@ -26,6 +26,7 @@ from platform_database.tenant_resolver import get_pool_for_tenant
 from src.config.settings import DevteamSettings
 from src.domains.guardian.catalog import dispatch
 from src.domains.guardian.db.schema import (
+    CONFORMANCE_CONTROL_TABLE,
     DIRECTIVE_RELATION_TABLE,
     DIRECTIVE_SECTION_TABLE,
     DIRECTIVE_TABLE,
@@ -34,6 +35,7 @@ from src.domains.guardian.db.schema import (
     LCR_DETAIL_TABLE,
     LCR_SUBSTITUTION_TABLE,
     STATUS_VOCAB_TABLE,
+    WAIVER_TABLE,
     ensure_schema,
 )
 from src.domains.guardian.db.store import (
@@ -48,6 +50,8 @@ _PORT = int(os.environ.get("PILOT_MYSQL_PORT", "3306"))
 _PW = os.environ.get("MYSQL_ROOT_PASSWORD", "")
 _TENANT = "devteam_guardian_test"
 _ALL_TABLES = (
+    WAIVER_TABLE,
+    CONFORMANCE_CONTROL_TABLE,
     DIRECTIVE_RELATION_TABLE,
     DIRECTIVE_SECTION_TABLE,
     LCR_SUBSTITUTION_TABLE,
@@ -846,3 +850,169 @@ async def test_import_traceability_matrix_persists_relations(
     # MCP Gateway não foi persistido (pulado no parsing, não é um ADR de 4 dígitos).
     mcp_relations = await store.list_relations("MCP Gateway †")
     assert mcp_relations == []
+
+
+# -- conformidade + waivers (ADR-018 Fase 3) ----------------------------------- #
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_conformance_pass_requires_evidence(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.set_conformance_control(
+            project_ref="proj-1", control_id="CRY-02", status="pass"
+        )
+    ok = await store.set_conformance_control(
+        project_ref="proj-1", control_id="CRY-02", status="pass", evidence="link"
+    )
+    assert ok["status"] == "pass"
+    assert ok["evidence"] == "link"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_conformance_non_pass_requires_reason(store: GuardianStore) -> None:
+    with pytest.raises(GuardianValidationError):
+        await store.set_conformance_control(
+            project_ref="proj-1", control_id="SEC-01", status="fail"
+        )
+    ok = await store.set_conformance_control(
+        project_ref="proj-1", control_id="SEC-01", status="fail", reason="pendente"
+    )
+    assert ok["status"] == "fail"
+    assert ok["reason"] == "pendente"
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_set_conformance_control_is_upsert(store: GuardianStore) -> None:
+    await store.set_conformance_control(
+        project_ref="proj-1", control_id="SEC-01", status="fail", reason="r1"
+    )
+    updated = await store.set_conformance_control(
+        project_ref="proj-1",
+        control_id="SEC-01",
+        status="pass",
+        evidence="ev",
+    )
+    assert updated["status"] == "pass"
+    all_controls = await store.list_conformance_controls("proj-1")
+    assert len(all_controls) == 1  # upsert, não duplicou
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_conformance_summary_counts_by_status(store: GuardianStore) -> None:
+    await store.set_conformance_control(
+        project_ref="proj-1", control_id="C-1", status="pass", evidence="e"
+    )
+    await store.set_conformance_control(
+        project_ref="proj-1", control_id="C-2", status="pass", evidence="e"
+    )
+    await store.set_conformance_control(
+        project_ref="proj-1", control_id="C-3", status="fail", reason="r"
+    )
+    summary = await store.conformance_summary("proj-1")
+    assert summary["pass"] == 2
+    assert summary["fail"] == 1
+    assert summary["not_assessed"] == 0
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_create_waiver_requires_expiry_and_is_idempotent(
+    store: GuardianStore,
+) -> None:
+    first = await store.create_waiver(
+        project_ref="proj-1",
+        control_id="SEC-01",
+        approver_ref="caio",
+        expires_on="2026-12-31",
+        justification="risco aceito temporariamente",
+    )
+    assert first["status"] == "active"
+    # Reenviar a MESMA validade é idempotente (upsert).
+    await store.create_waiver(
+        project_ref="proj-1",
+        control_id="SEC-01",
+        approver_ref="caio",
+        expires_on="2026-12-31",
+    )
+    waivers = await store.list_waivers("proj-1")
+    assert len(waivers) == 1
+
+    # Renovar com validade DIFERENTE cria um segundo registro (histórico).
+    await store.create_waiver(
+        project_ref="proj-1",
+        control_id="SEC-01",
+        approver_ref="caio",
+        expires_on="2027-06-30",
+    )
+    waivers_after_renewal = await store.list_waivers("proj-1")
+    assert len(waivers_after_renewal) == 2
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_revoke_and_expire_waiver(store: GuardianStore) -> None:
+    created = await store.create_waiver(
+        project_ref="proj-1",
+        control_id="SEC-01",
+        approver_ref="caio",
+        expires_on="2026-12-31",
+    )
+    await store.revoke_waiver(created["id"])
+    revoked = await store.list_waivers("proj-1", status="revoked")
+    assert len(revoked) == 1
+
+    created2 = await store.create_waiver(
+        project_ref="proj-1",
+        control_id="SEC-02",
+        approver_ref="caio",
+        expires_on="2026-11-30",
+    )
+    await store.expire_waiver(created2["id"])
+    expired = await store.list_waivers("proj-1", status="expired")
+    assert len(expired) == 1
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_conformance_and_waiver_via_catalog_dispatch(
+    store: GuardianStore,
+) -> None:
+    set_out = await dispatch(
+        "set_conformance_control",
+        {
+            "project_ref": "proj-cat",
+            "control_id": "SEC-01",
+            "status": "pass",
+            "evidence": "ev",
+        },
+        store,
+    )
+    assert set_out["status"] == "pass"
+
+    summary = await dispatch("conformance_summary", {"project_ref": "proj-cat"}, store)
+    assert summary["pass"] == 1
+
+    waiver_out = await dispatch(
+        "create_waiver",
+        {
+            "project_ref": "proj-cat",
+            "control_id": "SEC-02",
+            "approver_ref": "caio",
+            "expires_on": "2026-12-31",
+        },
+        store,
+    )
+    assert waiver_out["status"] == "active"
+
+    listed = await dispatch("list_waivers", {"project_ref": "proj-cat"}, store)
+    assert len(listed["waivers"]) == 1
+
+    await dispatch("revoke_waiver", {"waiver_id": waiver_out["id"]}, store)
+    listed_revoked = await dispatch(
+        "list_waivers", {"project_ref": "proj-cat", "status": "revoked"}, store
+    )
+    assert len(listed_revoked["waivers"]) == 1

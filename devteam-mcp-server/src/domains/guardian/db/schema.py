@@ -1,4 +1,4 @@
-"""Bootstrap de schema por-tenant do domínio `guardian` (ADR-018 Fase 1 + 1c + 2).
+"""Bootstrap de schema por-tenant do domínio `guardian` (ADR-018 Fase 1 + 1c + 2 + 3).
 
 Cada tabela é um `CreateTable` derivado do modelo Pydantic (`create_table_from_model`,
 injeta as colunas-padrão da plataforma). As tabelas com **chave natural** ganham uma
@@ -23,6 +23,13 @@ arestas `governado_por`/matriz de rastreabilidade. `gov_directive` ganha a colun
 `archetype_ref` (backfill idempotente para tenants já provisionados na Fase 1 — o
 `CREATE TABLE IF NOT EXISTS` não altera tabelas existentes, mesmo padrão do domínio
 `session`, ADR-017 Fatia A2).
+
+Fase 3 (escopo reduzido, decisão explícita do usuário — deixa `service-profile`/
+`authorization-policy`/`network-policy` FORA do guardian, território de devops/
+deploy/security): `gov_conformance_control` (project_ref+control_id único) —
+conformidade de um projeto a um control, inspirado em `service-conformance.yaml`
+mas persistido/consultável; `gov_waiver` (project_ref+control_id+expires_on único)
+— exceção temporária SEMPRE com validade e justificativa.
 """
 
 from __future__ import annotations
@@ -41,6 +48,7 @@ from platform_database.orm.ddl import (
 )
 
 from ..models import (
+    GovConformanceControlRow,
     GovDirectiveRelationRow,
     GovDirectiveRow,
     GovDirectiveSectionRow,
@@ -49,6 +57,7 @@ from ..models import (
     GovLcrDetailRow,
     GovLcrSubstitutionRow,
     GovStatusVocabRow,
+    GovWaiverRow,
 )
 
 _log = logging.getLogger(__name__)
@@ -62,6 +71,8 @@ LCR_DETAIL_TABLE = "gov_lcr_detail"
 LCR_SUBSTITUTION_TABLE = "gov_lcr_substitution"
 DIRECTIVE_SECTION_TABLE = "gov_directive_section"
 DIRECTIVE_RELATION_TABLE = "gov_directive_relation"
+CONFORMANCE_CONTROL_TABLE = "gov_conformance_control"
+WAIVER_TABLE = "gov_waiver"
 
 # Coluna aditiva do escopo archetype (Fase 2) — ver docstring do módulo.
 _DIRECTIVE_ADDED_COLUMNS: list[ColumnDef] = [
@@ -130,6 +141,18 @@ def build_migration() -> MigrationScript:
                 unique=["from_uid", "to_ref", "relation_type"],
                 unique_name="uq_gov_directive_relation",
             ),
+            _with_uniques(
+                GovConformanceControlRow,
+                CONFORMANCE_CONTROL_TABLE,
+                unique=["project_ref", "control_id"],
+                unique_name="uq_gov_conformance_control",
+            ),
+            _with_uniques(
+                GovWaiverRow,
+                WAIVER_TABLE,
+                unique=["project_ref", "control_id", "expires_on"],
+                unique_name="uq_gov_waiver",
+            ),
         ]
     )
 
@@ -164,6 +187,8 @@ __all__ = [
     "LCR_SUBSTITUTION_TABLE",
     "DIRECTIVE_SECTION_TABLE",
     "DIRECTIVE_RELATION_TABLE",
+    "CONFORMANCE_CONTROL_TABLE",
+    "WAIVER_TABLE",
     "build_migration",
     "ensure_schema",
 ]

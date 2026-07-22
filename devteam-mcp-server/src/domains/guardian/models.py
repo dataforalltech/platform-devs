@@ -196,6 +196,56 @@ class GovDirectiveRelationRow(BaseModel):
     relation_type: str = Field(max_length=32)
 
 
+class GovConformanceControlRow(BaseModel):
+    """Estado de conformidade de um projeto frente a um control de governança
+    (ADR-018 Fase 3) — inspirado no `service-conformance.yaml.template` do hub,
+    mas persistido/consultável como registro, não um arquivo YAML solto por
+    serviço. `project_ref` é referência FRACA ao project-product (D18.6, mesmo
+    padrão de `gov_directive.project_ref`); `directive_uid` é opcional (nem todo
+    control deriva de uma diretriz já registrada no guardian). Chave natural
+    única: `(project_ref, control_id)` — reassessment é upsert, não histórico
+    (o histórico de MUDANÇA de status fica fora de escopo desta fase; se
+    precisar depois, vira um child table versionado como
+    `gov_directive_version`).
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    project_ref: str = Field(max_length=64)
+    control_id: str = Field(max_length=64)
+    status: str = Field(
+        max_length=24
+    )  # blocked | fail | not_applicable | not_assessed | partial | pass
+    reason: str | None = None  # obrigatório sse status != 'pass' (app-level)
+    evidence: str | None = None  # obrigatório sse status == 'pass' (app-level)
+    directive_uid: str | None = Field(default=None, max_length=64)
+    assessed_by: str | None = Field(default=None, max_length=64)
+    assessed_at: str | None = Field(default=None, max_length=10)  # YYYY-MM-DD
+
+
+class GovWaiverRow(BaseModel):
+    """Exceção temporária a um control de conformidade (ADR-018 Fase 3) —
+    SEMPRE com validade e justificativa; nunca uma isenção permanente
+    silenciosa (o oposto do "nada de JSON blob perdido" do domínio: aqui é
+    "nada de exceção sem prazo"). `status` rastreia o ciclo de vida do próprio
+    waiver (`active`/`expired`/`revoked`), não é o mesmo vocabulário de
+    `GovConformanceControlRow.status`. Chave natural única:
+    `(project_ref, control_id, expires_on)` — permite renovações (waivers
+    sucessivos com validade diferente) sem duplicar o mesmo período.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    project_ref: str = Field(max_length=64)
+    control_id: str = Field(max_length=64)
+    justification: str | None = None  # TEXT — prosa da justificativa
+    approver_ref: str = Field(max_length=64)
+    expires_on: str = Field(max_length=10)  # YYYY-MM-DD, obrigatório
+    status: str = Field(default="active", max_length=16)  # active | expired | revoked
+
+
 __all__ = [
     "GovKindCapabilityRow",
     "GovStatusVocabRow",
@@ -205,4 +255,6 @@ __all__ = [
     "GovLcrSubstitutionRow",
     "GovDirectiveSectionRow",
     "GovDirectiveRelationRow",
+    "GovConformanceControlRow",
+    "GovWaiverRow",
 ]
