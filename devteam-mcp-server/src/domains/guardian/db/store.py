@@ -72,9 +72,20 @@ class GuardianValidationError(ValueError):
     """Erro de validação de negócio (kind/status/uid) — mapeado a erro de tool."""
 
 
+# Colunas TINYINT que o driver MySQL devolve como int (0/1) — normalizadas para bool
+# real na saída da API (Postgres já devolve bool nativo, então isto é idempotente lá).
+_BOOL_KEYS = frozenset(
+    {"is_current", "allows_rfc2119", "allows_fileline", "is_terminal"}
+)
+
+
 def _jsonable(row: dict[str, Any]) -> dict[str, Any]:
     return {
-        k: (v.isoformat() if isinstance(v, (datetime, date)) else v)
+        k: (
+            v.isoformat()
+            if isinstance(v, (datetime, date))
+            else bool(v) if k in _BOOL_KEYS and v is not None else v
+        )
         for k, v in row.items()
     }
 
@@ -127,11 +138,13 @@ class GuardianStore:
                     "allows_fileline": fileline,
                     "body_shape": shape,
                 },
+                ["kind"],
                 user_id=_SYSTEM_USER,
             )
         for code, (applies, terminal) in STATUS_VOCAB.items():
             await self._status.upsert(
                 {"code": code, "applies_to_kind": applies, "is_terminal": terminal},
+                ["code"],
                 user_id=_SYSTEM_USER,
             )
         return {"kinds": len(KIND_CAPABILITIES), "status": len(STATUS_VOCAB)}
@@ -327,6 +340,10 @@ class GuardianStore:
                     ),
                 },
                 user_id=_SYSTEM_USER,
+                # UnitOfWork.fetch_one (usado dentro de transaction()) não emula
+                # RETURNING no MySQL como o pool top-level faz — pedir o id de volta
+                # aqui quebraria com syntax error; não precisamos do id mesmo.
+                returning=None,
             )
         return await self._shaped(directive_uid) or {}
 
