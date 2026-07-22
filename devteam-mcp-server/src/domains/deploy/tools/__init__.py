@@ -14,7 +14,13 @@ from .ledger_tool import (
     list_registered_repos,
     list_workflow_history,
 )
-from .local_tool import clone_repo, get_repos_root, list_local_repos, set_repos_root
+from .local_tool import (
+    clone_repo,
+    get_repos_root,
+    list_local_repos,
+    set_repos_root,
+    sync_repo,
+)
 from .pipeline_tool import get_pipeline_templates, scaffold_pipeline
 from .pr_tool import create_pr, get_pr, list_prs, merge_pr
 from .workflow_tool import (
@@ -57,6 +63,7 @@ __all__ = [
     "set_repos_root",
     "list_local_repos",
     "clone_repo",
+    "sync_repo",
     # ledger (consulta do histórico persistido — dual-db, tenant-scoped)
     "list_deployments",
     "get_deployment",
