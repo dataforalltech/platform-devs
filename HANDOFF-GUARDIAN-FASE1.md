@@ -1,10 +1,14 @@
-# Handoff — ADR-018 Guardian, Fase 1 + Fase 1b (concluídas, mergeadas e VALIDADAS contra MySQL real)
+# Handoff — ADR-018 Guardian, Fase 1 + 1b + 1c (concluídas, mergeadas, VALIDADAS contra MySQL real)
 
 **Data:** 2026-07-22
-**Branches mergeadas:** `feat/guardian-domain` e `feat/guardian-hub-importer` → `develop`
-(local + remoto, ambas deletadas)
-**Commits:** `6d238e7` (fix deploy) → `bc8ac46` (feat guardian Fase 1) → merge `8eff2bb` →
-`5510b6c`/`29558b0` (docs handoff) → `6f0271b` (feat Fase 1b importador) → merge `b7a8dd8`.
+**Branches mergeadas em `platform-devs`:** `feat/guardian-domain`,
+`feat/guardian-hub-importer`, `feat/guardian-lcr-schema` → `develop` (local + remoto,
+todas deletadas).
+**Branch mergeada em `privates-libs/platform-database-lib`:**
+`fix/unit-of-work-mysql-returning-v2` → `develop` (repo separado, ver seção própria).
+**Commits (platform-devs):** `6d238e7` (fix deploy) → `bc8ac46` (feat guardian Fase 1) →
+merge `8eff2bb` → docs `5510b6c`/`29558b0` → `6f0271b` (Fase 1b importador) → merge
+`b7a8dd8` → docs `45781b9` → `603415e` (Fase 1c LCR/handoffs/specs) → merge `c6a1ba2`.
 
 ## O que foi feito
 
@@ -112,10 +116,8 @@ prometer paridade total — documentado explicitamente no código, não só aqui
   + 10 unitários do parser em `tmp_path`, sem depender do repo `platform-service-template`
   estar clonado no ambiente).
 
-**Deliberadamente FORA de escopo** (documentado em `importer.py` e para retomar depois):
-- `lib-change-requests/`, `handoffs/`, `specs/` — front-matter heterogêneo e vocabulário
-  de status próprio (LCR tem `pendente-aprovacao/aprovado/implementado/...`, diferente
-  do `STATUS_VOCAB` normativo); exigiria EAV ou colunas específicas por kind — **Fase 1c**.
+**Deliberadamente FORA de escopo nesta fase** (LCR/handoffs/specs foram cobertos
+depois, na Fase 1c — ver abaixo):
 - Relações `governado_por` e a matriz de rastreabilidade N:N:N:N de
   `documentation-model.md` — exige uma tabela de arestas tipadas
   (`gov_directive_reference(from_uid, to_uid, relation_type)`), fora do núcleo
@@ -126,10 +128,74 @@ prometer paridade total — documentado explicitamente no código, não só aqui
   ("registry+policy, NÃO executor" — D18); `guardian_validate_hub` cobre só drift de
   governança documental (filesystem × `gov_directive`/`gov_directive_version`).
 
-## O que fica para depois (fora do escopo de Fase 1 + Fase 1b)
+## Fase 1c — schema LCR/handoffs/specs + status kind-scoped (concluída)
 
-- **Fase 1c**: schema para LCR/handoffs/specs (campos de gestão de mudança, vocabulário
-  de status próprio por família).
+Cobre as 3 camadas que a Fase 1b deixou de fora por terem front-matter heterogêneo
+(sem convenção estrutural uniforme imposta pelo `validate_hub.py` do template):
+
+- **`GovLcrDetailRow`** (nova tabela `gov_lcr_detail`, 1:1 por `directive_uid`) —
+  metadados de gestão de mudança do Library Change Request sem equivalente no núcleo
+  versionado: `biblioteca`, `repositorio`, `versao_atual`, `versao_alvo`, `tipo`
+  (patch/minor/major), `breaking`, `urgencia`, `aprovador`, `solicitante`, `achado`
+  (ref a control id de auditoria), `data_solicitacao` (imutável).
+- **`GovLcrSubstitutionRow`** (nova tabela `gov_lcr_substitution`) — a aresta
+  `substituido_por` do LCR é uma LISTA no front-matter; normalizada em uma linha por
+  alvo (rejeição de JSON-blob, D18.2), não serializada numa coluna.
+- **Status kind-scoped, de verdade agora**: `STATUS_VOCAB` ganhou 4 códigos com
+  `applies_to_kind='lib_change_request'` (`pendente-aprovacao`/`aprovado`/
+  `implementado`/`bloqueado-dependencia-externa`) — o vocabulário próprio do LCR,
+  distinto do vocabulário normativo de diretriz. A coluna `applies_to_kind` já
+  existia desde a Fase 1 mas **não era enforced** — `_validate()` agora rejeita, por
+  exemplo, `status='pendente-aprovacao'` numa diretriz `kind='standard'`.
+  `update_directive`/`set_directive_status` passaram a validar contra o kind também
+  (antes só `create_directive` validava).
+- **Importer**: `directive_uid` para `lib-change-requests/`, `handoffs/`, `specs/` é
+  o **stem inteiro do arquivo** (sem regex de convenção) — achado real: LCR permite
+  números duplicados com slugs diferentes (dois arquivos `LCR-005-*` coexistindo com
+  assuntos distintos), então usar só o prefixo numérico colidiria. Status de
+  handoffs/specs tem fallback `"aceito"` quando ausente (heurística documentada, não
+  uma convenção confirmada do hub).
+- 3 tools novas: `guardian_set_lcr_detail`, `guardian_get_lcr_detail`,
+  `guardian_list_lcr_substitutions`. `import_hub`/`validate_hub` agora cobrem as 10
+  camadas (7 da Fase 1b + 3 da Fase 1c) — LCR sincroniza detail+substituições junto
+  com a diretriz.
+- **37/37 testes verdes contra MySQL 8.4 real** (26 de Fase 1+1b + 11 novos: detail
+  idempotente, substituições idempotentes, kind-scoping aceito/rejeitado, sync via
+  import_hub) + 16 unitários do importer (LCR/handoffs/specs incluídos).
+
+## Fix na `platform-database-lib` (repo separado — concluído)
+
+Achado durante a validação da Fase 1: `UnitOfWork.fetch_one`/`fetchval` (usados
+dentro de `Repository.transaction()`) **não emulavam `RETURNING` no MySQL** como o
+`MySQLPool` top-level faz — qualquer `insert()`/`upsert()` com `returning` não-None
+chamado dentro de uma transação quebrava com `ProgrammingError` (MySQL não tem
+`RETURNING`). Corrigido em
+`privates-libs/platform-database-lib/src/platform_database/unit_of_work.py`: os dois
+métodos agora detectam a cláusula e replicam a emulação do pool (INSERT→lastrowid/PK;
+UPDATE→WHERE original) **na mesma conexão da transação, sem commit intermediário**
+(committar no meio quebraria a atomicidade que `transaction()` promete). 3 testes de
+regressão novos (`tests/test_unit_of_work_returning.py`), 271/271 verdes na suíte
+completa da lib. Mergeado em `develop` desse repo (commit `5243c03`).
+
+⚠️ **O `platform-devs` ainda usa o workaround `returning=None`** em
+`store.py::update_directive` — o fix da lib não foi revertido do guardian porque a
+dependência do `platform-devs` é pinada numa tag/versão específica (não uma branch),
+e a lib corrigida ainda não foi tagueada/lançada. Quando uma nova versão da
+`platform-database-lib` for adotada, dá pra remover o `returning=None` e deixar
+`update_directive` usar `RETURNING id` normalmente (não é urgente — o workaround
+funciona, é só um comentário de código a mais).
+
+**Cuidado ao trabalhar em `privates-libs/platform-database-lib`:** o `.git/config`
+desse repo só tem fetch refspec para `main` (`+refs/heads/main:refs/remotes/origin/main`)
+— um `git fetch origin <branch>` popula `FETCH_HEAD` mas NÃO atualiza
+`refs/remotes/origin/<branch>` corretamente, então `origin/develop` local fica
+silenciosamente desatualizado. Use `git fetch origin` (sem refspec restrito) ou
+`git fetch origin +refs/heads/develop:refs/remotes/origin/develop` explicitamente, ou
+confirme via `gh api repos/.../branches/develop --jq '.commit.sha'` antes de basear
+qualquer branch nova.
+
+## O que fica para depois (fora do escopo de Fase 1 + 1b + 1c)
+
 - **Fase 2**: corpo tipado por seção (child tables em vez de `body_context`/
   `body_decision` como TEXT livre), tabela de relações `governado_por`/matriz como
   arestas tipadas, escopo `project`/`archetype` completo (hoje `archetype` só existe no
@@ -140,19 +206,10 @@ prometer paridade total — documentado explicitamente no código, não só aqui
 ## Arquivos-chave para retomar
 
 - `ADR-018-DEVTEAM-GUARDIAN.md` — decisões D18.1-D18.10.
-- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + Fase 1b completas, validadas
-  contra MySQL real (`db/store.py`, `catalog.py`, `importer.py`).
-- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 26/26
-  verdes contra MySQL real.
+- `devteam-mcp-server/src/domains/guardian/` — Fase 1 + 1b + 1c completas, validadas
+  contra MySQL real (`db/store.py`, `catalog.py`, `importer.py`, `models.py`).
+- `devteam-mcp-server/tests/test_guardian.py` + `test_guardian_importer.py` — 37/37 +
+  16/16 verdes contra MySQL real / sem banco, respectivamente.
 - `MCP_ADR_INDEX.md` — índice atualizado com a entrada do ADR-018.
-
-## Achado colateral para investigar depois (fora do escopo desta sessão)
-
-`UnitOfWork.fetch_one` (`privates-libs/platform-database-lib/src/platform_database/unit_of_work.py`)
-não emula `RETURNING` no MySQL como o `MySQLPool` top-level faz (ver `repository.py`
-`_fetch_returning_row`, comentário "MySQL's pool emulates RETURNING on fetch_one").
-Qualquer domínio que chame `Repository.insert()`/`upsert()` com `returning` não-None
-**dentro de um `transaction()`** vai quebrar com `ProgrammingError` no MySQL. Hoje o
-guardian contorna passando `returning=None` onde não precisa do id, mas isso é um
-gap real da lib compartilhada — vale corrigir na origem (fazer `UnitOfWork.fetch_one`
-emular RETURNING como o pool normal) para não pegar o próximo domínio de surpresa.
+- `privates-libs/platform-database-lib/src/platform_database/unit_of_work.py` — fix de
+  RETURNING no MySQL dentro de transação (repo separado, já mergeado em `develop`).
