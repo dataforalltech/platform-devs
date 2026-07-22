@@ -215,10 +215,12 @@ _TOOL_DEFS: dict[str, dict[str, Any]] = {
             "standards/reference-architecture/runbooks/it/decisions + lib-change-"
             "requests/handoffs/specs) a partir de hub_root (caminho local para a raiz "
             "'docs/' do platform-service-template ou equivalente). Idempotente: cria "
-            "diretrizes novas, versiona as que mudaram, não toca as iguais; LCR também "
-            "sincroniza metadados de gestão de mudança (guardian_get_lcr_detail) e "
-            "arestas substituido_por. FORA de escopo: relações governado_por/matriz "
-            "de rastreabilidade (Fase 2)."
+            "diretrizes novas, versiona as que mudaram, não toca as iguais; também "
+            "sincroniza metadados de LCR, seções tipadas e arestas governado_por "
+            "(Fase 2). Erros de parsing (parse_errors) e de validação de negócio "
+            "(persist_errors — ex.: status fora do vocabulário) são coletados POR "
+            "ARQUIVO, sem abortar o lote inteiro. Não importa a matriz de "
+            "rastreabilidade central (use guardian_import_traceability_matrix)."
         ),
         "schema": {
             "type": "object",
@@ -588,7 +590,25 @@ _TOOL_SCHEMAS: dict[str, dict[str, Any]] = {name: _meta(name) for name in _TOOL_
 
 async def _import_hub(store: GuardianStore, hub_root: str) -> dict[str, Any]:
     docs, errors = scan_hub(Path(hub_root))
-    results = [await store.import_directive(doc) for doc in docs]
+    results: list[dict[str, Any]] = []
+    # Erro de PERSISTÊNCIA (ex.: status fora do vocabulário — drift real do hub,
+    # como "APPROVED" maiúsculo em inglês num LCR em vez do vocabulário PT-BR)
+    # não pode derrubar o lote inteiro: um GuardianValidationError num arquivo
+    # perderia o resultado de TODOS os outros já importados com sucesso (mesmo
+    # padrão de resiliência de scan_hub.parse_errors, aplicado agora também à
+    # camada de persistência).
+    persist_errors: list[dict[str, str]] = []
+    for doc in docs:
+        try:
+            results.append(await store.import_directive(doc))
+        except GuardianValidationError as exc:
+            persist_errors.append(
+                {
+                    "directive_uid": doc.directive_uid,
+                    "source_path": doc.source_path,
+                    "error": str(exc),
+                }
+            )
     counts = Counter(r["action"] for r in results)
     mismatches = [r for r in results if r.get("kind_scope_mismatch")]
     return {
@@ -598,6 +618,7 @@ async def _import_hub(store: GuardianStore, hub_root: str) -> dict[str, Any]:
         "updated": counts.get("updated", 0),
         "unchanged": counts.get("unchanged", 0),
         "parse_errors": errors,
+        "persist_errors": persist_errors,
         "kind_scope_mismatches": mismatches,
     }
 

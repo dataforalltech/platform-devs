@@ -448,6 +448,40 @@ async def test_import_hub_reports_parse_errors_without_aborting(
     assert "sem-front-matter" in out["parse_errors"][0]["path"]
 
 
+_HUB_LCR_BAD_STATUS = """---
+type: lib-change-request
+title: "LCR-999 — status fora do vocabulário"
+status: "APPROVED"
+---
+
+# LCR-999
+"""
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_import_hub_reports_persist_errors_without_aborting_the_batch(
+    store: GuardianStore, tmp_path: Path
+) -> None:
+    """Regressão de bug real (achado importando o platform-service-template de
+    verdade): um GuardianValidationError num arquivo (ex. status fora do
+    vocabulário) derrubava o dispatch inteiro via o except genérico, perdendo
+    o resultado de TODOS os arquivos já importados com sucesso no mesmo lote."""
+    hub = tmp_path / "docs"
+    _write_hub_file(hub, "adr", "0022-runtime-swarm.md", _HUB_ADR)
+    _write_hub_file(
+        hub, "lib-change-requests", "LCR-999-status-invalido.md", _HUB_LCR_BAD_STATUS
+    )
+
+    out = await dispatch("import_hub", {"hub_root": str(hub)}, store)
+    assert out["created"] == 1  # ADR-0022 foi importado normalmente
+    assert len(out["persist_errors"]) == 1
+    assert out["persist_errors"][0]["directive_uid"] == "LCR-999-status-invalido"
+    assert "status inválido" in out["persist_errors"][0]["error"]
+    assert await store.get_directive("ADR-0022") is not None
+    assert await store.get_directive("LCR-999-status-invalido") is None
+
+
 @requires_mysql
 @pytest.mark.asyncio
 async def test_validate_hub_reports_drift_without_writing(
@@ -565,6 +599,22 @@ async def test_lcr_status_rejected_for_non_lcr_kind(store: GuardianStore) -> Non
             status="pendente-aprovacao",
             title="T",
         )
+
+
+@requires_mysql
+@pytest.mark.asyncio
+async def test_longest_status_code_fits_the_column(store: GuardianStore) -> None:
+    """Regressão de bug real (achado importando o platform-service-template de
+    verdade): 'bloqueado-dependencia-externa' (29 chars) estourava o
+    max_length=24 original de GovDirectiveVersionRow.status — ValidationError
+    do Pydantic antes mesmo de chegar no banco."""
+    out = await store.create_directive(
+        directive_uid="LCR-LONGEST-STATUS",
+        kind="lib_change_request",
+        status="bloqueado-dependencia-externa",
+        title="T",
+    )
+    assert out["current_version"]["status"] == "bloqueado-dependencia-externa"
 
 
 @requires_mysql

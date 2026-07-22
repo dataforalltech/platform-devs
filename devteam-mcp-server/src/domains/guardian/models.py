@@ -97,7 +97,7 @@ class GovDirectiveVersionRow(BaseModel):
     id: int | None = None
     directive_uid: str = Field(max_length=64)
     version: int = 1
-    status: str = Field(default="proposto", max_length=24)
+    status: str = Field(default="proposto", max_length=32)
     is_current: bool = True
     body_context: str | None = None  # prosa (Contexto/Enunciado/Racional) — TEXT
     body_decision: str | None = (
