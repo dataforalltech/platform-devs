@@ -270,5 +270,5 @@ Response:
 
 - [MCP Consolidation Complete](./mcp-consolidation-complete.md)
 - Política vigente de validação/entrega: `platform-infra/docs/architecture/delivery-without-github-actions.md`
-- [AGENTS.md § 54 — MCP Standards](../../platform-service-template/AGENTS.md#54-mcp-standards)
-- [Phase 5 Tool Specifications](../../platform-service-template/docs/phase-5-mcp-tool-specifications.md)
+- [AGENTS.md § 54 — MCP Standards](../../private-libs/platform-service-template/AGENTS.md#54-mcp-standards)
+- [Phase 5 Tool Specifications](../../private-libs/platform-service-template/docs/phase-5-mcp-tool-specifications.md)

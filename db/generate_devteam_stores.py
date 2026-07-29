@@ -122,7 +122,7 @@ DEVTEAM = {
 TEMPLATE = '''import { nanoid } from 'nanoid';
 import * as path from 'path';
 import * as fs from 'fs';
-import { DevTeamPostgresStore } from '../../../platform-service-template/lib/postgres_sync';
+import { DevTeamPostgresStore } from '../../../private-libs/platform-service-template/lib/postgres_sync';
 
 // ============================================================================
 // Interfaces
