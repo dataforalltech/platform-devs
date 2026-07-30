@@ -2,7 +2,10 @@ FROM python:3.11-slim
 WORKDIR /app
 RUN pip install --no-cache-dir fastapi==0.104.1 uvicorn[standard]==0.24.0 pydantic==2.4.2
 COPY dev_twin_mcp.py .
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
 EXPOSE 7101
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:7101/health')" || exit 1
+    CMD curl -fsS http://localhost:7101/health || exit 1
 CMD ["python3", "dev_twin_mcp.py"]
