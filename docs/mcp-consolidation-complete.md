@@ -195,9 +195,9 @@ Example:
 ## Related Documents
 
 - [platform-devs/README.md](../README.md) — Repository overview
-- [platform-service-template/.mcp.json](../../platform-service-template/.mcp.json) — Central config
-- [AGENTS.md § 54 — MCP Standards](../../platform-service-template/AGENTS.md#54-mcp-standards) — Tool naming and governance
-- [Phase 5 MCP Tool Specifications](../../platform-service-template/docs/phase-5-mcp-tool-specifications.md) — Tool definitions
+- [platform-service-template/.mcp.json](../../private-libs/platform-service-template/.mcp.json) — Central config
+- [AGENTS.md § 54 — MCP Standards](../../private-libs/platform-service-template/AGENTS.md#54-mcp-standards) — Tool naming and governance
+- [Phase 5 MCP Tool Specifications](../../private-libs/platform-service-template/docs/phase-5-mcp-tool-specifications.md) — Tool definitions
 
 ---
 

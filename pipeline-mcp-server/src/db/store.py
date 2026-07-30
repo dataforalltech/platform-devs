@@ -44,7 +44,13 @@ def _now() -> str:
 DEFAULT_GATES: dict[str, list[str]] = {
     "dev": ["audit_compliance"],
     "homol": ["qa_tests", "pr_approved", "audit_compliance"],
-    "prod": ["qa_tests", "security_scan", "pr_approved", "health_check", "audit_compliance"],
+    "prod": [
+        "qa_tests",
+        "security_scan",
+        "pr_approved",
+        "health_check",
+        "audit_compliance",
+    ],
 }
 
 VALID_ENVS = {"dev", "homol", "prod", "blocked", "rollback"}
@@ -104,14 +110,20 @@ class PipelineStore:
         rows = res.rows()
         return rows[0] if rows else None
 
-    async def _gate_row(self, service: str, env: str, gate_type: str) -> dict[str, Any] | None:
-        res = await self._gates.find(where={"service": service, "env": env, "gate_type": gate_type}, limit=1)
+    async def _gate_row(
+        self, service: str, env: str, gate_type: str
+    ) -> dict[str, Any] | None:
+        res = await self._gates.find(
+            where={"service": service, "env": env, "gate_type": gate_type}, limit=1
+        )
         rows = res.rows()
         return rows[0] if rows else None
 
     # -- Pipelines ------------------------------------------------------------- #
 
-    async def register_pipeline(self, service: str, repo: str, base_branch: str = "develop") -> dict:
+    async def register_pipeline(
+        self, service: str, repo: str, base_branch: str = "develop"
+    ) -> dict:
         now = _now()
         existing = await self._pipeline_row(service)
         if existing is None:
@@ -154,7 +166,9 @@ class PipelineStore:
         pipeline["recent_promotions"] = [_jsonable(p) for p in promos.rows()]
         return pipeline
 
-    async def list_pipelines(self, env: str | None = None, status: str | None = None) -> list[dict]:
+    async def list_pipelines(
+        self, env: str | None = None, status: str | None = None
+    ) -> list[dict]:
         where: dict[str, Any] = {}
         if env:
             where["current_env"] = env
@@ -163,11 +177,14 @@ class PipelineStore:
         elif status == "active":
             where["blocked"] = 0
         res = await self._pipelines.find(
-            where=where or None, order_by=[Sort(column="service", direction=SortDirection.ASC)]
+            where=where or None,
+            order_by=[Sort(column="service", direction=SortDirection.ASC)],
         )
         return [_shape_pipeline(r) for r in res.rows()]
 
-    async def update_pipeline_env(self, service: str, env: str, version: str | None = None) -> None:
+    async def update_pipeline_env(
+        self, service: str, env: str, version: str | None = None
+    ) -> None:
         await self._pipelines.update_where(
             {"service": service},
             {"current_env": env, "current_version": version, "updated_at": _now()},
@@ -234,14 +251,22 @@ class PipelineStore:
 
     async def complete_promotion(self, promotion_id: int, status: str) -> None:
         await self._promotions.update(
-            promotion_id, {"status": status, "completed_at": _now()}, user_id=_SYSTEM_USER
+            promotion_id,
+            {"status": status, "completed_at": _now()},
+            user_id=_SYSTEM_USER,
         )
 
-    async def approve_promotion(self, promotion_id: int, approved_by: str) -> dict | None:
+    async def approve_promotion(
+        self, promotion_id: int, approved_by: str
+    ) -> dict | None:
         now = _now()
         await self._promotions.update(
             promotion_id,
-            {"approved_by": approved_by, "approved_at": now, "status": "approved", "completed_at": now},
+            {
+                "approved_by": approved_by,
+                "approved_at": now,
+                "status": "pending_external_execution",
+            },
             user_id=_SYSTEM_USER,
         )
         row = await self._promotion_row(promotion_id)
@@ -251,7 +276,9 @@ class PipelineStore:
         row = await self._promotion_row(promotion_id)
         return _jsonable(row) if row else None
 
-    async def get_promotion_history(self, service: str | None = None, limit: int = 20) -> list[dict]:
+    async def get_promotion_history(
+        self, service: str | None = None, limit: int = 20
+    ) -> list[dict]:
         res = await self._promotions.find(
             where={"service": service} if service else None,
             order_by=[Sort(column="created_at", direction=SortDirection.DESC)],
@@ -296,7 +323,9 @@ class PipelineStore:
     async def clear_gates(self, service: str, env: str) -> int:
         # Soft-delete canônico (excluded=1): as leituras filtram excluded=0, então os
         # gates "somem"; um novo add_gate_result reativa a linha via upsert.
-        res = await self._gates.delete_where({"service": service, "env": env}, user_id=_SYSTEM_USER)
+        res = await self._gates.delete_where(
+            {"service": service, "env": env}, user_id=_SYSTEM_USER
+        )
         return res.rowcount
 
     async def get_pipeline_overview(self) -> dict:

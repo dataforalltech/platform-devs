@@ -2,11 +2,12 @@
 # Build context = raiz do repo (mesma convenção dos demais servers).
 #
 # Deps privadas (platform-database-lib/tenant-lib/core-lib) via git+https → o build
-# precisa de git + auth. Padrão K10: builder stage instala tudo num venv com o token
+# precisa de git + auth. Padrão K10: builder stage instala tudo num venv com token
+# efêmero e read-only emitido pelo mecanismo aprovado; PAT estático não é aceito. O token é
 # montado como secret (--mount=type=secret,id=github_token); o runtime slim só copia o
 # venv — sem git, sem token, sem gitconfig no image final.
 #   Build: docker build -f pipeline-mcp-server/Dockerfile \
-#            --secret id=github_token,src=<arquivo-com-o-PAT> -t pipeline-mcp:local .
+#            --secret id=github_token,src=<arquivo-com-token-efemero> -t pipeline-mcp:local .
 
 FROM python:3.12-slim AS builder
 

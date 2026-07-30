@@ -1,13 +1,6 @@
 from __future__ import annotations
 
-import logging
-from typing import Any
-
-import httpx
-
 from ..db.store import PipelineStore
-
-_log = logging.getLogger(__name__)
 
 # Branch mapping: source → target per promotion direction
 _BRANCH_MAP: dict[str, tuple[str, str]] = {
@@ -15,11 +8,60 @@ _BRANCH_MAP: dict[str, tuple[str, str]] = {
     "homol->prod": ("homol", "main"),
 }
 
-# PRs targeting these branches are auto-approved/merged by pipeline-mcp
-_AUTO_APPROVE_TARGETS = {"develop"}
+_PENDING_HUMAN_APPROVAL = "pending_human_approval"
+_PENDING_EXTERNAL_EXECUTION = "pending_external_execution"
+_LEGACY_PENDING_STATUSES = {_PENDING_HUMAN_APPROVAL, "waiting_approval", "pending"}
 
-# These promotions require human approval — pipeline creates PR but does not merge
-_HUMAN_APPROVAL_REQUIRED = {"homol", "prod"}
+
+def _assess_required_gates(
+    pipeline: dict,
+    gate_results: list[dict],
+    target_env: str,
+) -> dict:
+    """Avalia gates de forma fail-closed sem converter ausência em aprovação."""
+    gates_config = pipeline.get("gates_config") or {}
+    configured_gates = gates_config.get(target_env)
+    if isinstance(configured_gates, list) and configured_gates:
+        gates_configured = True
+        required_gates = list(dict.fromkeys(configured_gates))
+    else:
+        gates_configured = False
+        required_gates = []
+    gate_map = {gate["gate_type"]: gate for gate in gate_results}
+
+    missing_gates = [
+        gate_type for gate_type in required_gates if gate_type not in gate_map
+    ]
+    failed_gates = [
+        gate_type
+        for gate_type in required_gates
+        if gate_type in gate_map and not bool(gate_map[gate_type].get("passed"))
+    ]
+    gates_snapshot = {
+        gate_type: (
+            bool(gate_map[gate_type].get("passed")) if gate_type in gate_map else None
+        )
+        for gate_type in required_gates
+    }
+
+    if not gates_configured:
+        status = "gates_not_configured"
+    elif missing_gates:
+        status = "gates_not_evaluated"
+    elif failed_gates:
+        status = "gates_failed"
+    else:
+        status = "gates_satisfied"
+
+    return {
+        "gates_configured": gates_configured,
+        "gates_satisfied": status == "gates_satisfied",
+        "gate_status": status,
+        "required_gates": required_gates,
+        "missing_gates": missing_gates,
+        "failed_gates": failed_gates,
+        "gates_snapshot": gates_snapshot,
+    }
 
 
 async def register_pipeline(
@@ -28,7 +70,9 @@ async def register_pipeline(
     repo: str,
     base_branch: str = "develop",
 ) -> dict:
-    return await store.register_pipeline(service=service, repo=repo, base_branch=base_branch)
+    return await store.register_pipeline(
+        service=service, repo=repo, base_branch=base_branch
+    )
 
 
 async def get_pipeline(store: PipelineStore, service: str) -> dict:
@@ -58,17 +102,26 @@ async def promote_service(
     to_env: str,
     promoted_by: str,
     reason: str | None = None,
-    github_token: str = "",
-    github_org: str = "",
 ) -> dict:
-    """Promove serviço entre ambientes.
+    """Registra uma recomendação de promoção; nunca executa a promoção."""
+    promoted_by = promoted_by.strip()
+    if not promoted_by:
+        return {
+            "error": "invalid_promoted_by",
+            "can_promote": False,
+            "can_recommend": False,
+            "promoted": False,
+            "external_action_performed": False,
+        }
 
-    DEV→HML e HML→PROD: cria PR via GitHub e aguarda aprovação humana.
-    O merge só ocorre quando humano chama approve_promotion().
-    """
     pipeline = await store.get_pipeline(service)
     if pipeline is None:
-        return {"error": "not_found", "service": service, "can_promote": False}
+        return {
+            "error": "not_found",
+            "service": service,
+            "can_promote": False,
+            "external_action_performed": False,
+        }
 
     if pipeline.get("blocked"):
         return {
@@ -76,6 +129,7 @@ async def promote_service(
             "service": service,
             "block_reason": pipeline.get("block_reason"),
             "can_promote": False,
+            "external_action_performed": False,
         }
 
     if pipeline.get("current_env") != from_env:
@@ -85,69 +139,34 @@ async def promote_service(
             "current_env": pipeline.get("current_env"),
             "requested_from_env": from_env,
             "can_promote": False,
-        }
-
-    # Verify gates
-    gates_config: dict[str, list[str]] = pipeline.get("gates_config") or {}
-    required_gates = gates_config.get(to_env, [])
-    gate_results = await store.get_gates(service, from_env)
-    gate_map = {g["gate_type"]: g for g in gate_results}
-    failed_gates = [gt for gt in required_gates if not gate_map.get(gt, {}).get("passed")]
-    gates_snapshot = {g["gate_type"]: bool(g["passed"]) for g in gate_results}
-
-    if failed_gates:
-        return {
-            "can_promote": False,
-            "service": service,
-            "from_env": from_env,
-            "to_env": to_env,
-            "failed_gates": failed_gates,
-            "gates_snapshot": gates_snapshot,
+            "external_action_performed": False,
         }
 
     direction = f"{from_env}->{to_env}"
     branch_pair = _BRANCH_MAP.get(direction)
     if branch_pair is None:
-        return {"error": "invalid_direction", "direction": direction, "can_promote": False}
+        return {
+            "error": "invalid_direction",
+            "direction": direction,
+            "can_promote": False,
+            "external_action_performed": False,
+        }
 
     source_branch, target_branch = branch_pair
-    repo_name = pipeline.get("repo", "")
+    gate_results = await store.get_gates(service, from_env)
+    gate_assessment = _assess_required_gates(pipeline, gate_results, to_env)
 
-    # HML and PROD: create PR, wait for human approval
-    pr_number: int | None = None
-    pr_url: str | None = None
-    promotion_status = "waiting_approval"
-
-    pr_result = _create_pr(
-        github_token=github_token,
-        github_org=github_org,
-        repo=repo_name,
-        source_branch=source_branch,
-        target_branch=target_branch,
-        title=f"[{to_env.upper()}] Promote {service}: {source_branch} → {target_branch}",
-        body=(
-            f"Pipeline promotion: **{service}** `{from_env}` → `{to_env}`\n\n"
-            f"Promoted by: {promoted_by}\n"
-            f"Reason: {reason or 'N/A'}\n\n"
-            f"**⚠️ Esta PR requer aprovação humana antes do merge.**\n\n"
-            f"Gates: {gates_snapshot}"
-        ),
-    )
-    if pr_result.get("success"):
-        pr_number = pr_result["pr_number"]
-        pr_url = pr_result["pr_url"]
-    elif pr_result.get("unavailable"):
-        promotion_status = "pending"
-        _log.warning("github_unavailable service=%s — promotion registered as pending", service)
-    else:
+    if not gate_assessment["gates_satisfied"]:
         return {
-            "can_promote": True,
+            "can_promote": False,
+            "can_recommend": False,
             "promoted": False,
             "service": service,
             "from_env": from_env,
             "to_env": to_env,
-            "status": "failed",
-            "error": pr_result.get("error"),
+            "status": gate_assessment["gate_status"],
+            "external_action_performed": False,
+            **gate_assessment,
         }
 
     promo_id = await store.add_promotion(
@@ -156,29 +175,33 @@ async def promote_service(
         to_env=to_env,
         promoted_by=promoted_by,
         reason=reason,
-        gates_snapshot=gates_snapshot,
+        gates_snapshot=gate_assessment["gates_snapshot"],
         deploy_ref=target_branch,
-        status=promotion_status,
-        pr_number=pr_number,
-        pr_url=pr_url,
+        status=_PENDING_HUMAN_APPROVAL,
     )
 
     return {
-        "can_promote": True,
-        "promoted": True,
+        "can_promote": False,
+        "can_recommend": True,
+        "promotion_recommended": True,
+        "promoted": False,
         "service": service,
         "from_env": from_env,
         "to_env": to_env,
         "promoted_by": promoted_by,
         "promotion_id": promo_id,
-        "status": promotion_status,
-        "pr_number": pr_number,
-        "pr_url": pr_url,
+        "status": _PENDING_HUMAN_APPROVAL,
+        "source_branch": source_branch,
+        "target_branch": target_branch,
+        "pr_number": None,
+        "pr_url": None,
+        "external_action_performed": False,
         "message": (
-            f"PR criada: {pr_url}. "
-            f"Aguardando aprovação humana. Após aprovar, chame approve_promotion(promotion_id={promo_id})."
+            "Recomendação registrada no ledger. Um operador autorizado deve abrir/revisar "
+            "a PR e executar a promoção pelo runbook canônico; o pipeline-mcp não executou "
+            "nenhuma ação externa."
         ),
-        "gates_snapshot": gates_snapshot,
+        **gate_assessment,
     }
 
 
@@ -186,185 +209,188 @@ async def approve_promotion(
     store: PipelineStore,
     promotion_id: int,
     approved_by: str,
-    github_token: str = "",
-    github_org: str = "",
 ) -> dict:
-    """Registra aprovação humana e executa o merge da PR de HML/PROD."""
+    """Registra uma aprovação humana; nunca faz merge, deploy ou promoção."""
+    approved_by = approved_by.strip()
+    if not approved_by:
+        return {
+            "error": "invalid_approved_by",
+            "approved": False,
+            "approval_recorded": False,
+            "external_action_performed": False,
+        }
+
     promotion = await store.get_promotion(promotion_id)
     if promotion is None:
-        return {"error": "not_found", "promotion_id": promotion_id}
+        return {
+            "error": "not_found",
+            "promotion_id": promotion_id,
+            "external_action_performed": False,
+        }
 
-    if promotion.get("status") not in ("waiting_approval", "pending"):
+    if promotion.get("status") not in _LEGACY_PENDING_STATUSES:
         return {
             "error": "invalid_status",
             "promotion_id": promotion_id,
             "current_status": promotion.get("status"),
-            "message": "Somente promoções com status waiting_approval ou pending podem ser aprovadas.",
+            "message": "Somente recomendações pendentes de aprovação humana podem ser aprovadas.",
+            "external_action_performed": False,
         }
 
     service = promotion["service"]
     pipeline = await store.get_pipeline(service)
     if pipeline is None:
-        return {"error": "service_not_found", "service": service}
-
-    # Execute merge via GitHub API
-    repo_name = pipeline.get("repo", "")
-    pr_number = promotion.get("pr_number")
-    merge_result: dict[str, Any] = {"success": True}
-
-    if pr_number and github_token and github_org:
-        merge_result = _merge_pr(
-            github_token=github_token,
-            github_org=github_org,
-            repo=repo_name,
-            pr_number=pr_number,
-            commit_message=f"Merge PR #{pr_number} — {service} {promotion['from_env']}→{promotion['to_env']} (approved by {approved_by})",  # noqa: E501
-        )
-
-    if not merge_result.get("success") and not merge_result.get("unavailable"):
         return {
-            "approved": False,
-            "promotion_id": promotion_id,
-            "error": merge_result.get("error"),
-            "message": "Aprovação registrada mas merge falhou. Execute o merge manualmente.",
+            "error": "service_not_found",
+            "service": service,
+            "external_action_performed": False,
         }
 
-    await store.approve_promotion(promotion_id=promotion_id, approved_by=approved_by)
-    await store.update_pipeline_env(service=service, env=promotion["to_env"])
+    if pipeline.get("blocked"):
+        return {
+            "error": "service_blocked",
+            "promotion_id": promotion_id,
+            "service": service,
+            "block_reason": pipeline.get("block_reason"),
+            "approved": False,
+            "external_action_performed": False,
+        }
+
+    if pipeline.get("current_env") != promotion.get("from_env"):
+        return {
+            "error": "env_mismatch",
+            "promotion_id": promotion_id,
+            "service": service,
+            "current_env": pipeline.get("current_env"),
+            "promotion_from_env": promotion.get("from_env"),
+            "approved": False,
+            "approval_recorded": False,
+            "external_action_performed": False,
+        }
+
+    gate_results = await store.get_gates(service, promotion["from_env"])
+    gate_assessment = _assess_required_gates(
+        pipeline, gate_results, promotion["to_env"]
+    )
+    if not gate_assessment["gates_satisfied"]:
+        return {
+            "approved": False,
+            "approval_recorded": False,
+            "promotion_id": promotion_id,
+            "service": service,
+            "status": gate_assessment["gate_status"],
+            "external_action_performed": False,
+            **gate_assessment,
+        }
+
+    recorded = await store.approve_promotion(
+        promotion_id=promotion_id, approved_by=approved_by
+    )
 
     return {
         "approved": True,
+        "approval_recorded": True,
         "promotion_id": promotion_id,
         "service": service,
         "from_env": promotion["from_env"],
         "to_env": promotion["to_env"],
         "approved_by": approved_by,
-        "pr_number": pr_number,
-        "merge_sha": merge_result.get("sha"),
-        "message": f"{service} promovido para {promotion['to_env']} com sucesso.",
+        "status": recorded.get("status") if recorded else _PENDING_EXTERNAL_EXECUTION,
+        "promoted": False,
+        "merge_sha": None,
+        "external_action_performed": False,
+        "message": (
+            "Aprovação humana registrada no ledger. Merge, build, deploy e atualização "
+            "de ambiente continuam pendentes de um operador autorizado e de evidência externa."
+        ),
+        **gate_assessment,
     }
 
 
 async def watch_prs(
     store: PipelineStore,
-    github_token: str = "",
-    github_org: str = "",
     repos: list[str] | None = None,
 ) -> dict:
-    """Escaneia PRs abertas nos repos registrados no pipeline.
+    """Recomenda revisão humana usando apenas dados do ledger; não consulta GitHub."""
+    pipelines = await store.list_pipelines()
+    requested_repos = set(repos or [])
+    if requested_repos:
+        pipelines = [
+            pipeline
+            for pipeline in pipelines
+            if pipeline.get("repo") in requested_repos
+        ]
 
-    PRs targeting 'develop': avalia gates e auto-aprova/mergia se todos passam.
-    PRs targeting 'homol'/'main': lista para aprovação humana (não toca).
-    """
-    if not github_token or not github_org:
-        return {
-            "error": "github_not_configured",
-            "message": "Configure PIPELINE_GITHUB_TOKEN e PIPELINE_GITHUB_ORG para usar watch_prs.",
-        }
+    recommendations: list[dict] = []
+    for pipeline in pipelines:
+        service = pipeline["service"]
+        gate_results = await store.get_gates(service, "dev")
+        gate_assessment = _assess_required_gates(pipeline, gate_results, "dev")
+        blocked = bool(pipeline.get("blocked"))
+        can_recommend = gate_assessment["gates_satisfied"] and not blocked
+        if blocked:
+            status = "service_blocked"
+            recommended_action = "resolve_service_block_before_human_review"
+        elif can_recommend:
+            status = _PENDING_HUMAN_APPROVAL
+            recommended_action = "human_review_required"
+        else:
+            status = gate_assessment["gate_status"]
+            recommended_action = "complete_or_fix_gates_before_human_review"
+        recommendations.append(
+            {
+                "service": service,
+                "repo": pipeline.get("repo"),
+                "pr_state": "not_observed",
+                "status": status,
+                "can_recommend": can_recommend,
+                "recommended_action": recommended_action,
+                **gate_assessment,
+            }
+        )
 
-    # Determine repos to watch
-    if repos:
-        repo_list = repos
-    else:
-        pipelines = await store.list_pipelines()
-        repo_list = list({p["repo"] for p in pipelines if p.get("repo")})
+    registered_repos = {pipeline.get("repo") for pipeline in pipelines}
+    unregistered_repos = sorted(
+        repo for repo in requested_repos if repo not in registered_repos
+    )
 
-    if not repo_list:
-        return {"message": "Nenhum repo registrado no pipeline.", "repos_checked": 0}
-
-    auto_approved: list[dict] = []
-    waiting_human: list[dict] = []
-    errors: list[dict] = []
-
-    for repo in repo_list:
-        prs_result = _list_open_prs(github_token=github_token, github_org=github_org, repo=repo)
-        if not prs_result.get("success"):
-            errors.append({"repo": repo, "error": prs_result.get("error")})
-            continue
-
-        for pr in prs_result.get("prs", []):
-            base = pr.get("base_branch", "")
-            pr_num = pr.get("number")
-            pr_url = pr.get("url")
-            pr_title = pr.get("title", "")
-
-            if base in _AUTO_APPROVE_TARGETS:
-                # Find service for this repo
-                service = await _find_service_for_repo(store, repo)
-                can_auto = True
-                gate_details = "no gates required for dev"
-
-                if service:
-                    # Check if qa_tests gate passed for this service/dev
-                    gates = await store.get_gates(service, "dev")
-                    gate_map = {g["gate_type"]: g for g in gates}
-                    qa = gate_map.get("qa_tests")
-                    if qa and not qa["passed"]:
-                        can_auto = False
-                        gate_details = "qa_tests gate failed"
-                    elif not qa:
-                        gate_details = "qa_tests gate not evaluated — proceeding with auto-approve"
-
-                if can_auto:
-                    merge_result = _merge_pr(
-                        github_token=github_token,
-                        github_org=github_org,
-                        repo=repo,
-                        pr_number=pr_num,
-                        commit_message=f"Auto-merge PR #{pr_num}: {pr_title} [pipeline-mcp]",
-                    )
-                    auto_approved.append(
-                        {
-                            "repo": repo,
-                            "pr_number": pr_num,
-                            "pr_url": pr_url,
-                            "title": pr_title,
-                            "target_branch": base,
-                            "merged": merge_result.get("success", False),
-                            "merge_sha": merge_result.get("sha"),
-                            "error": merge_result.get("error") if not merge_result.get("success") else None,
-                            "gate_details": gate_details,
-                        }
-                    )
-                else:
-                    waiting_human.append(
-                        {
-                            "repo": repo,
-                            "pr_number": pr_num,
-                            "pr_url": pr_url,
-                            "title": pr_title,
-                            "target_branch": base,
-                            "reason": gate_details,
-                        }
-                    )
-
-            elif base in ("homol", "main"):
-                waiting_human.append(
-                    {
-                        "repo": repo,
-                        "pr_number": pr_num,
-                        "pr_url": pr_url,
-                        "title": pr_title,
-                        "target_branch": base,
-                        "reason": "human approval required for homol/prod",
-                    }
-                )
+    waiting_human = [
+        recommendation
+        for recommendation in recommendations
+        if recommendation["status"] == _PENDING_HUMAN_APPROVAL
+    ]
 
     return {
-        "repos_checked": len(repo_list),
-        "auto_approved_count": len(auto_approved),
+        "ledger_only": True,
+        "external_action_performed": False,
+        "external_query_performed": False,
+        "repos_assessed": len(recommendations),
+        "repos_checked": 0,
+        "prs_observed": 0,
+        "auto_approved_count": 0,
+        "auto_merged_count": 0,
         "waiting_human_count": len(waiting_human),
-        "auto_approved": auto_approved,
+        "auto_approved": [],
         "waiting_human": waiting_human,
-        "errors": errors,
+        "recommendations": recommendations,
+        "unregistered_repos": unregistered_repos,
+        "errors": [],
+        "message": (
+            "Nenhum PR foi consultado, aprovado ou mesclado. As recomendações usam "
+            "somente gates registrados no ledger e exigem verificação humana externa."
+        ),
     }
 
 
-async def block_service(store: PipelineStore, service: str, reason: str, blocked_by: str) -> dict:
+async def block_service(
+    store: PipelineStore, service: str, reason: str, blocked_by: str
+) -> dict:
     pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
-    result = await store.block_pipeline(service=service, reason=reason, blocked_by=blocked_by)
+    result = await store.block_pipeline(
+        service=service, reason=reason, blocked_by=blocked_by
+    )
     return {"blocked": True, "service": service, "pipeline": result}
 
 
@@ -376,11 +402,33 @@ async def rollback(
     rolled_back_by: str,
     reason: str | None = None,
 ) -> dict:
+    rolled_back_by = rolled_back_by.strip()
+    if not rolled_back_by:
+        return {
+            "error": "invalid_rolled_back_by",
+            "rollback_requested": False,
+            "rolled_back": False,
+            "external_action_performed": False,
+        }
+
     pipeline = await store.get_pipeline(service)
     if pipeline is None:
-        return {"error": "not_found", "service": service}
+        return {
+            "error": "not_found",
+            "service": service,
+            "external_action_performed": False,
+        }
 
-    await store.update_pipeline_env(service=service, env="rollback", version=to_version)
+    if pipeline.get("current_env") != env:
+        return {
+            "error": "env_mismatch",
+            "service": service,
+            "current_env": pipeline.get("current_env"),
+            "requested_env": env,
+            "rolled_back": False,
+            "external_action_performed": False,
+        }
+
     promo_id = await store.add_promotion(
         service=service,
         from_env=env,
@@ -389,22 +437,35 @@ async def rollback(
         reason=reason or f"Rollback to {to_version}",
         gates_snapshot={},
         deploy_ref=to_version,
-        status="success",
+        status=_PENDING_HUMAN_APPROVAL,
     )
-    await store.complete_promotion(promo_id, "success")
     return {
-        "rolled_back": True,
+        "rollback_requested": True,
+        "rolled_back": False,
         "service": service,
         "env": env,
         "to_version": to_version,
         "rolled_back_by": rolled_back_by,
         "promotion_id": promo_id,
+        "status": _PENDING_HUMAN_APPROVAL,
+        "external_action_performed": False,
+        "message": (
+            "Solicitação de rollback registrada no ledger. Um operador autorizado deve "
+            "executar e comprovar o rollback fora do pipeline-mcp."
+        ),
     }
 
 
-async def get_promotion_history(store: PipelineStore, service: str | None = None, limit: int = 20) -> dict:
+async def get_promotion_history(
+    store: PipelineStore, service: str | None = None, limit: int = 20
+) -> dict:
     history = await store.get_promotion_history(service=service, limit=limit)
-    return {"total": len(history), "service": service, "limit": limit, "promotions": history}
+    return {
+        "total": len(history),
+        "service": service,
+        "limit": limit,
+        "promotions": history,
+    }
 
 
 async def get_pipeline_overview(store: PipelineStore) -> dict:
@@ -417,124 +478,7 @@ async def set_pipeline_config(
     pipeline = await store.get_pipeline(service)
     if pipeline is None:
         return {"error": "not_found", "service": service}
-    result = await store.set_gates_config(service=service, gates_required=gates_required)
+    result = await store.set_gates_config(
+        service=service, gates_required=gates_required
+    )
     return {"updated": True, "service": service, "pipeline": result}
-
-
-# ── GitHub API helpers ────────────────────────────────────────────────────── #
-
-
-def _gh_headers(token: str) -> dict[str, str]:
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28",
-    }
-
-
-def _create_pr(
-    github_token: str,
-    github_org: str,
-    repo: str,
-    source_branch: str,
-    target_branch: str,
-    title: str,
-    body: str,
-) -> dict[str, Any]:
-    if not github_token or not github_org:
-        return {"success": False, "unavailable": True, "error": "github not configured"}
-    repo_slug = repo if "/" in repo else f"{github_org}/{repo}"
-    url = f"https://api.github.com/repos/{repo_slug}/pulls"
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.post(
-                url,
-                headers=_gh_headers(github_token),
-                json={"title": title, "body": body, "head": source_branch, "base": target_branch},
-            )
-        if resp.status_code in (200, 201):
-            data = resp.json()
-            return {"success": True, "pr_number": data["number"], "pr_url": data["html_url"]}
-        if resp.status_code == 422:
-            # PR may already exist
-            err = resp.json()
-            if "already exists" in str(err):
-                return {"success": False, "error": "PR already exists for this branch pair"}
-        return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
-    except httpx.ConnectError:
-        return {"success": False, "unavailable": True, "error": "github not reachable"}
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "error": str(exc)}
-
-
-def _merge_pr(
-    github_token: str,
-    github_org: str,
-    repo: str,
-    pr_number: int,
-    commit_message: str = "",
-) -> dict[str, Any]:
-    if not github_token or not github_org:
-        return {"success": False, "unavailable": True, "error": "github not configured"}
-    repo_slug = repo if "/" in repo else f"{github_org}/{repo}"
-    url = f"https://api.github.com/repos/{repo_slug}/pulls/{pr_number}/merge"
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.put(
-                url,
-                headers=_gh_headers(github_token),
-                json={"merge_method": "merge", "commit_message": commit_message},
-            )
-        if resp.status_code == 200:
-            data = resp.json()
-            return {"success": True, "sha": data.get("sha"), "message": data.get("message")}
-        return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text[:300]}"}
-    except httpx.ConnectError:
-        return {"success": False, "unavailable": True, "error": "github not reachable"}
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "error": str(exc)}
-
-
-def _list_open_prs(
-    github_token: str,
-    github_org: str,
-    repo: str,
-) -> dict[str, Any]:
-    repo_slug = repo if "/" in repo else f"{github_org}/{repo}"
-    url = f"https://api.github.com/repos/{repo_slug}/pulls"
-    try:
-        with httpx.Client(timeout=15.0) as client:
-            resp = client.get(
-                url,
-                headers=_gh_headers(github_token),
-                params={"state": "open", "per_page": 50},
-            )
-        if resp.status_code == 200:
-            prs = [
-                {
-                    "number": pr["number"],
-                    "title": pr["title"],
-                    "url": pr["html_url"],
-                    "base_branch": pr["base"]["ref"],
-                    "head_branch": pr["head"]["ref"],
-                    "author": pr["user"]["login"],
-                    "created_at": pr["created_at"],
-                }
-                for pr in resp.json()
-            ]
-            return {"success": True, "prs": prs}
-        return {"success": False, "error": f"HTTP {resp.status_code}: {resp.text[:200]}"}
-    except httpx.ConnectError:
-        return {"success": False, "unavailable": True, "error": "github not reachable"}
-    except Exception as exc:  # noqa: BLE001
-        return {"success": False, "error": str(exc)}
-
-
-async def _find_service_for_repo(store: PipelineStore, repo: str) -> str | None:
-    pipelines = await store.list_pipelines()
-    repo_slug = repo.split("/")[-1] if "/" in repo else repo
-    for p in pipelines:
-        p_repo = p.get("repo", "")
-        if p_repo == repo or p_repo.split("/")[-1] == repo_slug:
-            return p["service"]
-    return None

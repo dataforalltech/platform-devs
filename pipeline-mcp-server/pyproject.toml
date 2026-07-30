@@ -1,7 +1,7 @@
 [project]
 name = "pipeline-mcp"
 version = "0.1.0"
-description = "MCP sidecar (kind=mcp_http, Model C) do pipeline DEV→HML→PROD — persona stateful, gateway-ready."
+description = "Ledger MCP stateful e fail-closed para gates, aprovações e recomendações DEV→HML→PROD."
 requires-python = ">=3.12"
 license = { text = "Proprietary" }
 authors = [{ name = "dataforalltech platform team" }]
@@ -13,9 +13,8 @@ dependencies = [
     "uvicorn[standard]>=0.24.0",
     "pyjwt[crypto]>=2.8.0",
     "cryptography>=42.0.0",
-    "httpx>=0.27.0,<1.0",
     # ORM canônico (dual-db) + resolução credencial-zero do tenant (privadas, git+https).
-    # O build (Dockerfile) autentica via --mount=type=secret,id=github_token (padrão K10).
+    # O build usa token read-only efêmero via BuildKit secret; nunca credencial de runtime.
     "aiomysql>=0.2",
     "platform-database-lib @ git+https://github.com/dataforalltech/platform-database-lib.git@v1.1.0",
     "platform-tenant-lib @ git+https://github.com/dataforalltech/platform-tenant-lib.git@v0.2.1",
@@ -57,7 +56,7 @@ select = ["E", "F", "I", "UP", "B", "S"]
 ignore = ["S104"]
 
 [tool.ruff.lint.per-file-ignores]
-# S101 assert; S105/S106 tokens de teste fake (github_token) — não são segredos reais.
+# S101 assert; S105/S106 tokens criptográficos de teste — não são segredos reais.
 "tests/*" = ["S101", "S105", "S106"]
 
 [tool.mypy]

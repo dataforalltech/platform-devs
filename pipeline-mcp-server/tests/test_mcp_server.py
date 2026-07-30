@@ -38,8 +38,6 @@ def _settings(**over) -> PipelineSettings:
     return PipelineSettings(
         MCP_TWIN_AUDIENCE="mcp:pipeline-mcp",
         URL_ADMIN_TWIN_JWKS="http://admin.local/jwks.json",
-        github_token="",
-        github_org="",
         **over,
     )
 
@@ -59,6 +57,19 @@ def test_required_fields_are_subset_of_properties():
         props = set(meta["schema"].get("properties", {}).keys())
         required = set(meta["schema"].get("required", []))
         assert required <= props, f"{name}: required fora de properties"
+
+
+def test_execution_like_tools_publish_ledger_only_contract():
+    promote = M._TOOL_SCHEMAS["promote_service"]
+    approve = M._TOOL_SCHEMAS["approve_promotion"]
+    watch = M._TOOL_SCHEMAS["watch_prs"]
+    rollback_schema = M._TOOL_SCHEMAS["rollback"]
+
+    assert "não executa" in promote["description"].casefold()
+    assert "não executa" in approve["description"].casefold()
+    assert "não consulta" in watch["description"].casefold()
+    assert "não executa" in rollback_schema["description"].casefold()
+    assert watch["required_scope"].endswith(":read")
 
 
 def test_health(client: TestClient):
@@ -81,18 +92,25 @@ def test_tools_list_has_policy_fields(client: TestClient):
 # ── /mcp/tools/call — PEP (RS256 real), caminhos que retornam antes do DB ──────
 def test_call_missing_twin_token(client: TestClient):
     r = client.post(
-        "/mcp/tools/call", json={"params": {"name": "get_pipeline", "arguments": {"service": "s"}}}
+        "/mcp/tools/call",
+        json={"params": {"name": "get_pipeline", "arguments": {"service": "s"}}},
     )
     assert r.status_code == 401 and r.json()["error"] == "missing_twin_token"
 
 
 def test_call_invalid_audience_rejected(client: TestClient, monkeypatch, rsa_key):
     patch_jwks(monkeypatch, rsa_key)
-    tok = mint_token(rsa_key, aud="mcp:outro-servico")  # audiência errada → verificador real rejeita
+    tok = mint_token(
+        rsa_key, aud="mcp:outro-servico"
+    )  # audiência errada → verificador real rejeita
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {"name": "get_pipeline", "arguments": {"service": "s"}, "_meta": {"twin_token": tok}}
+            "params": {
+                "name": "get_pipeline",
+                "arguments": {"service": "s"},
+                "_meta": {"twin_token": tok},
+            }
         },
     )
     assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
@@ -104,7 +122,11 @@ def test_call_token_without_jti_rejected(client: TestClient, monkeypatch, rsa_ke
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {"name": "get_pipeline", "arguments": {"service": "s"}, "_meta": {"twin_token": tok}}
+            "params": {
+                "name": "get_pipeline",
+                "arguments": {"service": "s"},
+                "_meta": {"twin_token": tok},
+            }
         },
     )
     assert r.status_code == 401 and r.json()["error"] == "invalid_twin_token"
@@ -116,7 +138,11 @@ def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
     r = client.post(
         "/mcp/tools/call",
         json={
-            "params": {"name": "get_pipeline", "arguments": {"service": "s"}, "_meta": {"twin_token": tok}}
+            "params": {
+                "name": "get_pipeline",
+                "arguments": {"service": "s"},
+                "_meta": {"twin_token": tok},
+            }
         },
     )
     assert r.status_code == 401 and r.json()["error"] == "missing_tenant_scope"
@@ -125,14 +151,15 @@ def test_call_token_without_tenant(client: TestClient, monkeypatch, rsa_key):
 def test_call_excluded_tool(client: TestClient, monkeypatch):
     monkeypatch.setattr(M, "_EXCLUDE_TOOLS", frozenset({"get_pipeline"}))
     r = client.post(
-        "/mcp/tools/call", json={"params": {"name": "get_pipeline", "arguments": {"service": "s"}}}
+        "/mcp/tools/call",
+        json={"params": {"name": "get_pipeline", "arguments": {"service": "s"}}},
     )
     assert r.status_code == 403 and r.json()["error"] == "tool_excluded"
 
 
 # ── _verify_inner_token (RS256 real) ──────────────────────────────────────────
 def test_verify_inner_token_unconfigured():
-    s = PipelineSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="", github_token="", github_org="")
+    s = PipelineSettings(MCP_TWIN_AUDIENCE="", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(PermissionError):
         M._verify_inner_token("tok", s)
 
@@ -158,39 +185,63 @@ def test_build_server_stdio_and_smoke(monkeypatch):
 @pytest.mark.integration
 @requires_mysql
 async def test_dispatch_routes_all_tools(store_a):
-    s = _settings()
     await store_a.register_pipeline("svc-a", "o/svc-a")
 
     async def d(name, args):
-        return await M._dispatch(name, args, s, store_a)
+        return await M._dispatch(name, args, store_a)
 
-    assert (await d("register_pipeline", {"service": "n", "repo": "o/n"}))["action"] == "created"
+    assert (await d("register_pipeline", {"service": "n", "repo": "o/n"}))[
+        "action"
+    ] == "created"
     assert (await d("get_pipeline", {"service": "svc-a"}))["service"] == "svc-a"
     assert (await d("list_pipeline", {}))["total"] >= 1
     assert (
         await d(
-            "promote_service", {"service": "svc-a", "from_env": "dev", "to_env": "homol", "promoted_by": "u"}
+            "promote_service",
+            {
+                "service": "svc-a",
+                "from_env": "dev",
+                "to_env": "homol",
+                "promoted_by": "u",
+            },
         )
     )["can_promote"] is False
-    assert (await d("approve_promotion", {"promotion_id": 999, "approved_by": "a"}))["error"] == "not_found"
-    assert (await d("watch_prs", {}))["error"] == "github_not_configured"
-    assert (await d("block_service", {"service": "svc-a", "reason": "r", "blocked_by": "a"}))["blocked"]
-    await d("register_pipeline", {"service": "svc-r", "repo": "o/r"})
+    assert (await d("approve_promotion", {"promotion_id": 999, "approved_by": "a"}))[
+        "error"
+    ] == "not_found"
+    watched = await d("watch_prs", {})
+    assert watched["ledger_only"] is True
+    assert watched["external_query_performed"] is False
     assert (
-        await d("rollback", {"service": "svc-r", "env": "prod", "to_version": "v1", "rolled_back_by": "ops"})
-    )["rolled_back"] is True
+        await d("block_service", {"service": "svc-a", "reason": "r", "blocked_by": "a"})
+    )["blocked"]
+    await d("register_pipeline", {"service": "svc-r", "repo": "o/r"})
+    rollback_result = await d(
+        "rollback",
+        {"service": "svc-r", "env": "dev", "to_version": "v1", "rolled_back_by": "ops"},
+    )
+    assert rollback_result["rollback_requested"] is True
+    assert rollback_result["rolled_back"] is False
     assert (
         await d(
-            "add_gate_result", {"service": "svc-a", "env": "dev", "gate_type": "qa_tests", "passed": True}
+            "add_gate_result",
+            {"service": "svc-a", "env": "dev", "gate_type": "qa_tests", "passed": True},
         )
     )["gate_recorded"] is True
-    assert "can_promote" in (await d("get_gate_status", {"service": "svc-a", "env": "homol"}))
-    assert (await d("clear_gates", {"service": "svc-a", "env": "dev"}))["cleared"] is True
+    assert "can_promote" in (
+        await d("get_gate_status", {"service": "svc-a", "env": "homol"})
+    )
+    assert (await d("clear_gates", {"service": "svc-a", "env": "dev"}))[
+        "cleared"
+    ] is True
     assert (await d("get_promotion_history", {}))["limit"] == 20
     assert (await d("get_pipeline_overview", {}))["total_services"] >= 1
-    assert (await d("set_pipeline_config", {"service": "svc-a", "gates_required": {"homol": ["qa_tests"]}}))[
-        "updated"
-    ] is True
+    assert (
+        await d(
+            "set_pipeline_config",
+            {"service": "svc-a", "gates_required": {"homol": ["qa_tests"]}},
+        )
+    )["updated"] is True
     with pytest.raises(KeyError):
         await d("does_not_exist", {})
 
@@ -201,8 +252,12 @@ async def test_run_tool_credential_zero_end_to_end(seed_platforms):
     """Caminho REAL: _run_tool -> _ensure_tenant_schema -> for_tenant (get_platform ->
     PLATFORMS) -> PipelineStore -> _dispatch, tudo em MySQL real."""
     M._SCHEMA_READY.discard(TENANT_A)
-    settings = _test_settings()  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
-    result = await M._run_tool("register_pipeline", {"service": "e2e", "repo": "o/e2e"}, settings, TENANT_A)
+    settings = (
+        _test_settings()
+    )  # com ADMIN_DB_*/DB_* reais (resolve o tenant via PLATFORMS)
+    result = await M._run_tool(
+        "register_pipeline", {"service": "e2e", "repo": "o/e2e"}, settings, TENANT_A
+    )
     assert result["action"] == "created"
     got = await M._run_tool("get_pipeline", {"service": "e2e"}, settings, TENANT_A)
     assert got["service"] == "e2e"

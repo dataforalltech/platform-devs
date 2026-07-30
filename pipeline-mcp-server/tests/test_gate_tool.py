@@ -26,7 +26,9 @@ async def test_add_gate_service_not_found(store_a):
 async def test_add_and_status(store_a):
     await store_a.register_pipeline("svc", "o/svc")
     await store_a.set_gates_config("svc", {"homol": ["qa_tests", "pr_approved"]})
-    rec = await add_gate_result(store_a, "svc", "homol", "qa_tests", True, details="ok", evaluated_by="ci")
+    rec = await add_gate_result(
+        store_a, "svc", "homol", "qa_tests", True, details="ok", evaluated_by="ci"
+    )
     assert rec["gate_recorded"] is True
 
     status = await get_gate_status(store_a, "svc", "homol")
@@ -44,7 +46,22 @@ async def test_status_all_pass(store_a):
     await store_a.set_gates_config("svc", {"homol": ["qa_tests"]})
     await add_gate_result(store_a, "svc", "homol", "qa_tests", True)
     status = await get_gate_status(store_a, "svc", "homol")
-    assert status["can_promote"] is True
+    assert status["can_promote"] is False
+    assert status["can_recommend"] is True
+    assert status["gates_satisfied"] is True
+    assert status["status"] == "gates_satisfied"
+
+
+async def test_empty_gate_configuration_fails_closed(store_a):
+    await store_a.register_pipeline("svc", "o/svc")
+    await store_a.set_gates_config("svc", {"homol": []})
+    status = await get_gate_status(store_a, "svc", "homol")
+
+    assert status["gates_configured"] is False
+    assert status["gates_satisfied"] is False
+    assert status["can_promote"] is False
+    assert status["can_recommend"] is False
+    assert status["status"] == "gates_not_configured"
 
 
 async def test_get_gate_status_not_found(store_a):

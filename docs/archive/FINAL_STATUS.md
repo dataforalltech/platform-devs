@@ -182,4 +182,4 @@ claude mcp remove session-mcp
 For questions or issues, refer to:
 - [MIGRATION_STATUS.md](MIGRATION_STATUS.md) — Detailed technical log
 - [MCP_STARTUP_GUIDE.md](MCP_STARTUP_GUIDE.md) — Manual registration
-- [platform-service-template/AGENTS.md](../platform-service-template/AGENTS.md) — Policy reference
+- [platform-service-template/AGENTS.md](../private-libs/platform-service-template/AGENTS.md) — Policy reference
