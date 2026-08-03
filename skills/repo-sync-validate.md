@@ -8,7 +8,7 @@ Use `platform-infra/db/validate_and_sync_repos.py` e respeite o filtro canônico
 reconciliação, clone/sync em massa e qualquer efeito externo exigem autorização.
 
 ```bash
-cd ../platform-infra
+cd ../../platform-infra
 python db/validate_and_sync_repos.py --validate --report
 python scripts/validate_no_github_actions.py
 ```

@@ -4677,8 +4677,8 @@ campo `stack=<nome>` opcional para usar template específico). Exemplo:
 
 ```
 # backends Python — usam pointer (Parte I + Parte II do template canônico)
-../platform-analytics
-../platform-cdc
+../../product-dataforall/platform-analytics
+../../product-dataforall/platform-cdc
 
 # frontends — usam template Next.js como Parte II local
 ../webapp-admin   stack=nextjs
