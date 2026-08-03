@@ -7,7 +7,7 @@ Antes de operar, consulte o ADR-002 do `platform-infra` e filtre somente
 repositórios `active=true AND allows_automation=true`.
 
 ```bash
-cd ../platform-infra
+cd ../../platform-infra
 python db/clone_and_sync_repos.py --status
 ```
 
