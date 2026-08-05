@@ -5,7 +5,7 @@ metadata:
   uid: infra.get_lease
   domain: infra
   title: get lease
-  description: ''
+  description: Estado atual de um lease (PENDING/ACTIVE/RELEASED/EXPIRED) + connection_hint.
   owner: platform
   tags:
   - infra
@@ -31,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        lease_id:
+          type: string
+      required:
+      - lease_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

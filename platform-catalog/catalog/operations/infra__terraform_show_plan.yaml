@@ -5,7 +5,8 @@ metadata:
   uid: infra.terraform_show_plan
   domain: infra
   title: terraform show plan
-  description: ''
+  description: Devolve o terraform plan em JSON estruturado para análise programática
+    (via `terraform show -json <plan>`). Use depois de terraform_plan.
   owner: platform
   tags:
   - infra
@@ -31,7 +32,16 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_path:
+          type: string
+        path:
+          type: string
+      required:
+      - plan_path
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

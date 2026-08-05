@@ -5,7 +5,8 @@ metadata:
   uid: infra.get_physical_info
   domain: infra
   title: get physical info
-  description: ''
+  description: 'Coleta informações do ambiente físico atual: OS, CPU, RAM, discos
+    e rede.'
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,9 @@ metadata:
   uid: infra.policy_scan_checkov
   domain: infra
   title: policy scan checkov
-  description: ''
+  description: 'Roda checkov sobre código terraform (ou outro framework) e devolve
+    findings agrupados por severity. Marca hard_stop=True se houver qualquer HIGH
+    ou CRITICAL (cicd-deploy.md §4 #3 do ai-governance).'
   owner: platform
   tags:
   - infra
@@ -31,7 +33,28 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        path:
+          type: string
+        framework:
+          type: string
+          enum:
+          - terraform
+          - terraform_plan
+          - kubernetes
+          - dockerfile
+          - all
+          default: terraform
+        skip_checks:
+          type: array
+          items:
+            type: string
+          description: 'Lista de check_ids para ignorar (ex.: CKV_AZURE_42)'
+      required:
+      - path
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

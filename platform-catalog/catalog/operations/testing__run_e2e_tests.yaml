@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_e2e_tests
   domain: testing
   title: run e2e tests
-  description: ''
+  description: Roda testes E2E via Playwright (test_*.py ou *.spec.ts). Detecta tipo
+    de arquivo e usa comando correto.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,32 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        test_path:
+          type: string
+          description: Diretório com os testes E2E
+        base_url:
+          type: string
+          description: URL base da aplicação
+        browser:
+          type: string
+          enum:
+          - chromium
+          - firefox
+          - webkit
+          default: chromium
+        headless:
+          type: boolean
+          default: true
+        timeout:
+          type: integer
+          description: Timeout em segundos
+      required:
+      - test_path
+      - base_url
     outputs: {}
     preconditions: []
     postconditions: []

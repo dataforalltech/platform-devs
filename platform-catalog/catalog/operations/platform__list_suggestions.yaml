@@ -5,7 +5,8 @@ metadata:
   uid: platform.list_suggestions
   domain: platform
   title: list suggestions
-  description: ''
+  description: Lista sugestões cross-repo com filtros. Use target_repo para ver a
+    fila que cabe ao seu repo trabalhar.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,26 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        target_repo:
+          type: string
+        source_repo:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - accepted
+          - rejected
+          - deferred
+          - superseded
+        limit:
+          type: integer
+          default: 50
+      required: []
     outputs: {}
     preconditions: []
     postconditions: []

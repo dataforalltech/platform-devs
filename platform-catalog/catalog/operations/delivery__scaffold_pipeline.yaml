@@ -5,7 +5,10 @@ metadata:
   uid: delivery.scaffold_pipeline
   domain: delivery
   title: scaffold pipeline
-  description: ''
+  description: Instala os workflows padrão do platform-service-template em um repositório.
+    Cria/atualiza .github/workflows/*.yml via commit. Os templates são genéricos —
+    IMAGE_NAME e secrets são configurados no repo via Settings → Secrets and variables.
+    Use get_pipeline_templates para ver os templates disponíveis.
   owner: platform
   tags:
   - delivery
@@ -32,7 +35,35 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+          description: Nome do repo alvo.
+        templates:
+          type: array
+          items:
+            type: string
+            enum:
+            - ci
+            - deploy
+            - cd-dev
+            - cd-hml
+            - cd-prod
+            - pr-validate
+          description: 'Templates a instalar. Default: todos (ci, deploy, cd-dev,
+            cd-hml, cd-prod, pr-validate).'
+        branch:
+          type: string
+          description: 'Branch onde fazer o commit. Default: develop.'
+          default: develop
+        commit_message:
+          type: string
+          description: 'Mensagem do commit. Default: mensagem padrão.'
+      required:
+      - repo
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

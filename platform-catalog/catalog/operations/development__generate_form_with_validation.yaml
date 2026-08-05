@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_form_with_validation
   domain: development
   title: generate form with validation
-  description: ''
+  description: Gera um formulário react-hook-form + zod determinístico a partir dos
+    campos e regras.
   owner: platform
   tags:
   - development
@@ -30,7 +31,19 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do formulário.
+        fields:
+          type: array
+          description: 'Campos [{name,type?,rules?}] (rules: required|email|url|min:N|max:N).'
+      required:
+      - name
+      - fields
     outputs: {}
     preconditions: []
     postconditions: []

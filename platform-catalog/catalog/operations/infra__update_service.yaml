@@ -5,7 +5,8 @@ metadata:
   uid: infra.update_service
   domain: infra
   title: update service
-  description: ''
+  description: Atualizacampos de um servico existente. Pelo menos um campo deve ser
+    informado alem do name.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,52 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico aatualizar.
+        host:
+          type: string
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+        url:
+          type: string
+        type:
+          type: string
+          enum:
+          - docker
+          - process
+          - remote
+          - unknown
+        environment:
+          type: string
+          enum:
+          - local
+          - dev
+          - hml
+          - prod
+        status:
+          type: string
+          enum:
+          - running
+          - stopped
+          - unknown
+        health_path:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

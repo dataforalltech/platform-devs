@@ -5,7 +5,7 @@ metadata:
   uid: testing.generate_cypress_tests
   domain: testing
   title: generate cypress tests
-  description: ''
+  description: Gera uma spec Cypress (JS) determinística a partir de páginas e ações.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,19 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        pages:
+          type: array
+          description: Páginas [{name?,url?}] ou strings (opcional).
+        actions:
+          type: array
+          description: Ações [{type,selector?,value?}] aplicadas por página (opcional).
+        suite:
+          type: string
+          description: Nome da suite (opcional).
     outputs: {}
     preconditions: []
     postconditions: []

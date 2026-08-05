@@ -5,7 +5,9 @@ metadata:
   uid: infra.redis_status
   domain: infra
   title: redis status
-  description: ''
+  description: Verifica conectividade com o Redis via TCP + RESP PING. Se url nao
+    for passado, busca no registry (type='redis'/'cache'). Retorna reachable, latencia_ms
+    e resposta do PING.
   owner: platform
   tags:
   - infra
@@ -31,7 +33,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          description: 'URL Redis: redis://host:port/db ou host:port. Se omitido,
+            usa registry.'
     outputs: {}
     preconditions: []
     postconditions: []

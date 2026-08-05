@@ -5,13 +5,14 @@ metadata:
   uid: product.generate_feature_spec
   domain: product
   title: generate feature spec
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - product
   - product-management
   - write
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: product

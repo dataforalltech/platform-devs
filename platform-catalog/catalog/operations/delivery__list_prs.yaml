@@ -5,7 +5,7 @@ metadata:
   uid: delivery.list_prs
   domain: delivery
   title: list prs
-  description: ''
+  description: Lista Pull Requests de um repositório com filtros opcionais.
   owner: platform
   tags:
   - delivery
@@ -32,7 +32,28 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        state:
+          type: string
+          enum:
+          - open
+          - closed
+          - all
+          description: 'Estado dos PRs. Default: open.'
+          default: open
+        base:
+          type: string
+          description: 'Filtrar por branch de destino (ex: main, develop).'
+        author:
+          type: string
+          description: Filtrar por login do autor.
+      required:
+      - repo
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

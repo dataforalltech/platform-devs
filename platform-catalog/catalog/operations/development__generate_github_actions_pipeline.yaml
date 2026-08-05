@@ -5,7 +5,7 @@ metadata:
   uid: development.generate_github_actions_pipeline
   domain: development
   title: generate github actions pipeline
-  description: ''
+  description: Gera um workflow do GitHub Actions determinístico a partir de jobs/steps.
   owner: platform
   tags:
   - development
@@ -30,7 +30,22 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do workflow.
+        'on':
+          type: array
+          description: Gatilhos (default [push, pull_request]).
+        jobs:
+          type: array
+          description: Jobs [{name,runs_on?,steps:[{name?,uses?,run?,with?}]}].
+      required:
+      - name
+      - jobs
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: documentation.lint_markdown
   domain: documentation
   title: lint markdown
-  description: ''
+  description: 'Linting de markdown: headings, blocos de código, links vazios, headings
+    duplicados, linhas longas e h1 ausente.'
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: Caminho absoluto do arquivo markdown
+      required:
+      - file_path
     outputs: {}
     preconditions: []
     postconditions: []

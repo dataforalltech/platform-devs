@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_deploy_status
   domain: delivery
   title: get deploy status
-  description: ''
+  description: Retorna os últimos runs de deploy para um serviço e ambiente. Mostra
+    status (in_progress/completed), conclusion (success/failure) e URL de cada run.
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,30 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+        environment:
+          type: string
+          enum:
+          - dev
+          - hml
+          - prod
+        repo:
+          type: string
+          description: Nome do repo (se diferente do service).
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 20
+          description: 'Máximo de runs. Default: 5.'
+          default: 5
+      required:
+      - service
+      - environment
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_auth_policy
   domain: development
   title: generate auth policy
-  description: ''
+  description: Gera um documento de política RBAC (Markdown) determinístico a partir
+    de roles/resources/rules.
   owner: platform
   tags:
   - development
@@ -30,7 +31,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        roles:
+          type: array
+          items: &id001
+            type: string
+          description: Papéis do RBAC.
+        resources:
+          type: array
+          items: *id001
+          description: Recursos protegidos.
+        rules:
+          type: array
+          description: Regras [{role,resource,actions,effect}] (opcional).
+        title:
+          type: string
+          description: Título do doc (default 'RBAC Policy').
+      required:
+      - roles
+      - resources
     outputs: {}
     preconditions: []
     postconditions: []

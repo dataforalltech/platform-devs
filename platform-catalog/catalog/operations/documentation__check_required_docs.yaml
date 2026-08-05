@@ -5,7 +5,8 @@ metadata:
   uid: documentation.check_required_docs
   domain: documentation
   title: check required docs
-  description: ''
+  description: 'Verifica se o repositório tem os arquivos obrigatórios para o nível
+    de standard: minimal, standard, full ou service.'
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        standard:
+          type: string
+          enum:
+          - minimal
+          - standard
+          - full
+          - service
+          description: Nível de exigência documental
+          default: standard
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

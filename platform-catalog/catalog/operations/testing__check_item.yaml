@@ -5,7 +5,8 @@ metadata:
   uid: testing.check_item
   domain: testing
   title: check item
-  description: ''
+  description: Marca um item do checklist como passed, failed, na (não aplicável)
+    ou blocked.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,29 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        run_id:
+          type: string
+          description: ID da execução do checklist
+        item_id:
+          type: integer
+          description: ID numérico do item
+        status:
+          type: string
+          enum:
+          - passed
+          - failed
+          - na
+          - blocked
+        notes:
+          type: string
+          description: Observação sobre o item
+      required:
+      - run_id
+      - item_id
+      - status
     outputs: {}
     preconditions: []
     postconditions: []

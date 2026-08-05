@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_helm_chart
   domain: development
   title: generate helm chart
-  description: ''
+  description: Gera um Helm chart multi-arquivo (Chart.yaml/values.yaml/templates)
+    determinístico.
   owner: platform
   tags:
   - development
@@ -30,7 +31,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do chart/app.
+        image:
+          type: string
+          description: Repositório da imagem.
+        port:
+          type: integer
+          description: Porta do serviço (default 80).
+        values:
+          type: object
+          description: Valores extras (opcional).
+        app_version:
+          type: string
+          description: appVersion / tag (default 1.0.0).
+      required:
+      - name
+      - image
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: infra.push_env_to_store
   domain: infra
   title: push env to store
-  description: ''
+  description: Le um arquivo .env do disco e importa as variaveis para o ConfigStore
+    encriptado no namespace env.<environment>.
   owner: platform
   tags:
   - infra
@@ -31,7 +32,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      - environment
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho do arquivo .env a importar.
+        environment:
+          type: string
+          description: 'Perfil de ambiente destino (ex: ''dev'', ''local'').'
+        overwrite:
+          type: boolean
+          default: false
+          description: 'Sobrescrever vars ja existentes no store. Default: false.'
+        secrets_only:
+          type: boolean
+          default: false
+          description: 'Importar apenas vars identificadas como secrets. Default:
+            false.'
     outputs: {}
     preconditions: []
     postconditions: []

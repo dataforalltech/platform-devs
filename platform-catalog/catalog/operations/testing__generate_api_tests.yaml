@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_api_tests
   domain: testing
   title: generate api tests
-  description: ''
+  description: Gera testes de API determinísticos (pytest + requests) a partir dos
+    endpoints.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,19 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        base:
+          type: string
+          description: Base URL da API.
+        endpoints:
+          type: array
+          description: Endpoints [{method?,path?,expected_status?,name?}].
+      required:
+      - base
+      - endpoints
     outputs: {}
     preconditions: []
     postconditions: []

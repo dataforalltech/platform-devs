@@ -5,7 +5,7 @@ metadata:
   uid: infra.set_env_var
   domain: infra
   title: set env var
-  description: ''
+  description: Define uma variável de ambiente para um perfil específico.
   owner: platform
   tags:
   - infra
@@ -30,7 +30,23 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        environment:
+          type: string
+          description: 'Ex: ''dev'', ''staging'', ''production''.'
+        key:
+          type: string
+          description: 'Nome da variável. Ex: ''DATABASE_URL''.'
+        value:
+          type: string
+          description: Valor da variável.
+      required:
+      - environment
+      - key
+      - value
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

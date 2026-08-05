@@ -5,7 +5,10 @@ metadata:
   uid: governance.validate_agent_decision
   domain: governance
   title: validate agent decision
-  description: ''
+  description: Valida uma decisão proposta pelo agente. Bloqueia (approved=false)
+    decisões com fallback silencioso, hardcoded de credencial, bypass de auth, mock
+    em prod, remoção de teste, DROP em código de app. Marca como alto risco contratos
+    sem consumidor declarado, dependências sem justificativa, alterações fora do escopo.
   owner: platform
   tags:
   - governance
@@ -30,7 +33,45 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repository_name:
+          type: string
+        task_description:
+          type: string
+        proposed_change:
+          type: string
+        affected_files:
+          type: array
+          items:
+            type: string
+        affected_layers:
+          type: array
+          items:
+            type: string
+            enum:
+            - frontend
+            - backend
+            - database
+            - integrations
+            - infrastructure
+            - security
+            - observability
+            - testing
+        changes_contracts:
+          type: boolean
+        adds_fallback:
+          type: boolean
+        adds_dependency:
+          type: boolean
+        modifies_security:
+          type: boolean
+      required:
+      - repository_name
+      - task_description
+      - proposed_change
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_pipeline_templates
   domain: delivery
   title: get pipeline templates
-  description: ''
+  description: Lista os templates de CI/CD disponíveis para scaffold_pipeline. Inclui
+    nome, descrição, secrets/variables obrigatórios e trigger de cada template.
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

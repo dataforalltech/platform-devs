@@ -5,7 +5,10 @@ metadata:
   uid: infra.cancel_queued_request
   domain: infra
   title: cancel queued request
-  description: ''
+  description: Cancela um request WAITING na fila de provisão de VM. Use quando o
+    agente não precisa mais da VM aguardada (job cancelado, timeout). request_id foi
+    retornado por request_vm quando outcome=QUEUED. Retorna erro se request_id não
+    existe ou já foi FULFILLED/CANCELLED.
   owner: platform
   tags:
   - infra
@@ -31,7 +34,18 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        request_id:
+          type: string
+          description: ID retornado por request_vm (campo request_id quando outcome=QUEUED).
+        by:
+          type: string
+          description: Identificador de quem está cancelando (audit).
+      required:
+      - request_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

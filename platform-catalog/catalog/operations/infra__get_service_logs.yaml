@@ -5,7 +5,11 @@ metadata:
   uid: infra.get_service_logs
   domain: infra
   title: get service logs
-  description: ''
+  description: 'Retorna as ultimas N linhas de log de um servico registrado. Suporta
+    Docker (container_name), arquivo de log (metadata.log_path) e systemd/journald
+    (Linux). since: ''30m'', ''1h'', ''2h30m'', ''5s'' ou timestamp ISO 8601. grep:
+    filtro regex case-insensitive nas linhas retornadas. timestamps: inclui timestamp
+    Docker em cada linha.'
   owner: platform
   tags:
   - infra
@@ -30,7 +34,29 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - name
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do servico no registry.
+        lines:
+          type: integer
+          default: 100
+          description: 'Numero de linhas a retornar. Default: 100.'
+        since:
+          type: string
+          description: 'Janela de tempo: ''30m'', ''1h'', ''5s'' ou ISO 8601. Opcional.'
+        grep:
+          type: string
+          description: Filtro regex case-insensitive nas linhas. Opcional.
+        timestamps:
+          type: boolean
+          default: false
+          description: 'Inclui timestamp Docker. Default: false.'
     outputs: {}
     preconditions: []
     postconditions: []

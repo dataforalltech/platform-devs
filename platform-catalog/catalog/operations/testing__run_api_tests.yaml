@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_api_tests
   domain: testing
   title: run api tests
-  description: ''
+  description: Testa endpoints HTTP com verificação de status e chaves de resposta.
+    Suporta GET, POST, PUT, DELETE com headers e body customizados.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,41 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        base_url:
+          type: string
+          description: 'URL base da API (ex: http://localhost:8000)'
+        endpoints:
+          type: array
+          description: Lista de endpoints a testar
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+              method:
+                type: string
+              headers:
+                type: object
+              body:
+                type: object
+              expect_status:
+                type: integer
+              expect_keys:
+                type: array
+                items:
+                  type: string
+            required:
+            - path
+        timeout:
+          type: number
+          description: Timeout HTTP em segundos
+      required:
+      - base_url
+      - endpoints
     outputs: {}
     preconditions: []
     postconditions: []

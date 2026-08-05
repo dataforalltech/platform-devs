@@ -5,7 +5,12 @@ metadata:
   uid: infra.sync_infra_env
   domain: infra
   title: sync infra env
-  description: ''
+  description: 'Atualiza TODAS as vars de conexao de infraestrutura num arquivo .env
+    a partir do registry. DB: DB_HOST, DB_PORT, ADMIN_DB_HOST, ADMIN_DB_PORT (detecta
+    DB_ENGINE automaticamente). Redis: REDIS_URL, RATE_LIMIT_STORAGE_URI, CACHE_URL,
+    CELERY_BROKER_URL, etc. Kafka: KAFKA_BOOTSTRAP_SERVERS (usa porta EXTERNAL/host_port
+    se registrada). Postgres: DATABASE_URL (reconstroi DSN). Use dry_run=true para
+    simular antes de aplicar.'
   owner: platform
   tags:
   - infra
@@ -30,7 +35,27 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho absoluto do arquivo .env a atualizar.
+        dry_run:
+          type: boolean
+          default: false
+          description: 'Simular sem alterar o arquivo. Default: false.'
+        db_kind:
+          type: string
+          enum:
+          - mysql
+          - mariadb
+          - postgres
+          description: 'Forca o tipo de DB se DB_ENGINE nao estiver no arquivo. Default:
+            mysql.'
     outputs: {}
     preconditions: []
     postconditions: []

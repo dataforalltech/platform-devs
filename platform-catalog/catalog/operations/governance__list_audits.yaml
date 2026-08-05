@@ -5,7 +5,8 @@ metadata:
   uid: governance.list_audits
   domain: governance
   title: list audits
-  description: ''
+  description: Lista auditorias de conformidade persistidas, com filtros opcionais
+    por status, ambiente e serviço e limite de resultados.
   owner: platform
   tags:
   - governance
@@ -30,7 +31,21 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Filtro por status
+        env:
+          type: string
+          description: Filtro por ambiente
+        service:
+          type: string
+          description: Filtro por serviço
+        limit:
+          type: integer
+          description: 'Limite de resultados (default: 50)'
     outputs: {}
     preconditions: []
     postconditions: []

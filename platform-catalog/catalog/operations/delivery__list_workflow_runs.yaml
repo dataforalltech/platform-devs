@@ -5,7 +5,8 @@ metadata:
   uid: delivery.list_workflow_runs
   domain: delivery
   title: list workflow runs
-  description: ''
+  description: Lista runs recentes de workflows. Use após trigger_workflow para encontrar
+    o run_id do dispatch.
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,36 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        workflow_id:
+          type: string
+          description: 'Filtrar por workflow (arquivo ou ID). Default: todos.'
+        branch:
+          type: string
+          description: Filtrar por branch.
+        status:
+          type: string
+          enum:
+          - queued
+          - in_progress
+          - completed
+          - success
+          - failure
+          - cancelled
+          description: Filtrar por status.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+          description: 'Máximo de runs. Default: 10.'
+          default: 10
+      required:
+      - repo
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_gherkin_scenarios
   domain: testing
   title: generate gherkin scenarios
-  description: ''
+  description: Gera um arquivo .feature (Gherkin) determinístico a partir dos cenários
+    da spec.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        feature:
+          type: string
+          description: Nome da funcionalidade.
+        scenarios:
+          type: array
+          description: Cenários [{name,given?,when?,then?}] (given/when/then str ou
+            lista).
+        description:
+          type: string
+          description: Descrição da feature (opcional).
+      required:
+      - feature
+      - scenarios
     outputs: {}
     preconditions: []
     postconditions: []

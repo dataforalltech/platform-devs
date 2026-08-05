@@ -5,7 +5,8 @@ metadata:
   uid: platform.list_sessions
   domain: platform
   title: list sessions
-  description: ''
+  description: Lista sessões recentes. Filtre por status (active/paused/completed)
+    ou repo para ver sessões em andamento.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,25 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+          - active
+          - paused
+          - completed
+          description: Filtrar por status
+        repo:
+          type: string
+          description: Filtrar por nome/caminho do repo (busca parcial)
+        limit:
+          type: integer
+          description: 'Máximo de sessões a retornar (default: 20)'
+          default: 20
+      required: []
     outputs: {}
     preconditions: []
     postconditions: []

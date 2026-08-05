@@ -30,8 +30,167 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        provider:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-z0-9][a-z0-9._-]*$
+        role:
+          type: string
+          enum:
+          - source
+          - documentation
+          - infrastructure
+          - deployment
+          - other
+        after_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      required:
+      - project_id
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              binding_id:
+                type: string
+                format: uuid
+                minLength: 36
+                maxLength: 36
+              project_id:
+                type: string
+                format: uuid
+                minLength: 36
+                maxLength: 36
+              provider:
+                type: string
+                minLength: 1
+                maxLength: 64
+                pattern: ^[a-z0-9][a-z0-9._-]*$
+              connector_ref:
+                type: string
+                minLength: 1
+                maxLength: 512
+              repository_ref:
+                type: string
+                minLength: 1
+                maxLength: 512
+              role:
+                type: string
+                enum:
+                - source
+                - documentation
+                - infrastructure
+                - deployment
+                - other
+              metadata:
+                type: object
+                additionalProperties: false
+                properties:
+                  display_name:
+                    anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 200
+                    - type: 'null'
+                  default_branch:
+                    anyOf:
+                    - type: string
+                      minLength: 1
+                      maxLength: 255
+                    - type: 'null'
+                  web_url:
+                    anyOf:
+                    - type: string
+                      format: uri
+                      pattern: ^https?://(?![^/?#]*@)(?!.*[\\#\s])[^/?#]+(?:[/?][^#\\\s]*)?$
+                      maxLength: 2048
+                    - type: 'null'
+              external_link:
+                anyOf:
+                - type: object
+                  additionalProperties: false
+                  properties:
+                    owner:
+                      type: string
+                      minLength: 1
+                      maxLength: 255
+                    repo:
+                      type: string
+                      minLength: 1
+                      maxLength: 255
+                    url:
+                      anyOf:
+                      - type: string
+                        minLength: 1
+                        maxLength: 2048
+                      - type: 'null'
+                  required:
+                  - owner
+                  - repo
+                - type: 'null'
+              version:
+                type: integer
+                minimum: 1
+              created_at:
+                type: string
+                format: date-time
+              updated_at:
+                type: string
+                format: date-time
+              created_by_ref:
+                type: string
+                minLength: 1
+                maxLength: 512
+              updated_by_ref:
+                type: string
+                minLength: 1
+                maxLength: 512
+            required:
+            - binding_id
+            - project_id
+            - provider
+            - connector_ref
+            - repository_ref
+            - role
+            - metadata
+            - version
+            - created_at
+            - updated_at
+            - created_by_ref
+            - updated_by_ref
+        next_after_id:
+          anyOf:
+          - type: string
+            format: uuid
+            minLength: 36
+            maxLength: 36
+          - type: 'null'
+      required:
+      - items
+      - next_after_id
     preconditions:
     - trusted tenant context
     postconditions:

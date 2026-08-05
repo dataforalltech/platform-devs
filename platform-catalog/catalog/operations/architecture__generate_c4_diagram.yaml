@@ -5,7 +5,8 @@ metadata:
   uid: architecture.generate_c4_diagram
   domain: architecture
   title: generate c4 diagram
-  description: ''
+  description: Gera um diagrama C4 em Mermaid (context|container|component) determinístico
+    a partir da spec.
   owner: platform
   tags:
   - architecture
@@ -30,7 +31,26 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        level:
+          type: string
+          description: 'Nível: context|container|component.'
+        elements:
+          type: array
+          description: Elementos [{name,type?,technology?,description?,id?}] ou nomes
+            (str).
+        relations:
+          type: array
+          description: Relações [{from,to,text?,technology?}] ou 'A -> B' (opcional).
+        title:
+          type: string
+          description: Título do diagrama (opcional).
+      required:
+      - level
+      - elements
     outputs: {}
     preconditions: []
     postconditions: []

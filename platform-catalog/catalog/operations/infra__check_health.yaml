@@ -5,7 +5,8 @@ metadata:
   uid: infra.check_health
   domain: infra
   title: check health
-  description: ''
+  description: RealizaHTTP GET no health endpoint de um servico registrado. Atualizalast_check_at
+    e last_check_ok no registry.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,21 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico.
+        timeout:
+          type: number
+          minimum: 0.1
+          maximum: 30.0
+          description: 'Timeout HTTP em segundos. Default: 3.0.'
+          default: 3.0
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

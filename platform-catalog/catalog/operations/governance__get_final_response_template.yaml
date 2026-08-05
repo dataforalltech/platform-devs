@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_final_response_template
   domain: governance
   title: get final response template
-  description: ''
+  description: Template obrigatório de resposta final do agente.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,12 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        task_type:
+          type: string
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

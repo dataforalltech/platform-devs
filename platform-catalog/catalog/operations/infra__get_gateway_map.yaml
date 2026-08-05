@@ -5,7 +5,11 @@ metadata:
   uid: infra.get_gateway_map
   domain: infra
   title: get gateway map
-  description: ''
+  description: 'Retornao MAPPING_GATEWAY  -  mapade todos os servicos com URLs internae
+    externa. Paracadaservico informa: external_url (localhost:porta), internal_url
+    (container:porta), active_url (qual usar no contexto atual), context (docker ou
+    local) e status. Use pararotear chamadas entre servicos corretamente em Docker
+    e uvicorn.'
   owner: platform
   tags:
   - infra
@@ -30,7 +34,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

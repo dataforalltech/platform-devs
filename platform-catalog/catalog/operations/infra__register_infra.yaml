@@ -5,7 +5,9 @@ metadata:
   uid: infra.register_infra
   domain: infra
   title: register infra
-  description: ''
+  description: 'Registra um servico de infraestrutura no registry com defaults inteligentes
+    por tipo. Tipos suportados: mysql, mariadb, postgres, redis, kafka, mongodb. Para
+    Kafka, use host_port para a porta EXTERNAL (ex: 9094) acessivel do host.'
   owner: platform
   tags:
   - infra
@@ -30,7 +32,49 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - name
+      - kind
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: 'Nome unico no registry (ex: mysql, redis, kafka).'
+        kind:
+          type: string
+          enum:
+          - mysql
+          - mariadb
+          - postgres
+          - redis
+          - kafka
+          - mongodb
+          description: Tipo de infraestrutura.
+        host:
+          type: string
+          default: localhost
+          description: 'Host. Default: localhost.'
+        port:
+          type: integer
+          description: Porta. Se omitido, usa o default do tipo (mysql:3306, redis:6379,
+            kafka:9092).
+        host_port:
+          type: integer
+          description: 'Porta mapeada no host para acesso externo (Kafka EXTERNAL
+            listener). Ex: 9094.'
+        environment:
+          type: string
+          default: local
+          description: 'Ambiente. Default: local.'
+        container_name:
+          type: string
+          description: Nome do container Docker, se aplicavel.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Metadados extras livres.
     outputs: {}
     preconditions: []
     postconditions: []

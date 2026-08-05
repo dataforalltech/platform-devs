@@ -7,20 +7,70 @@ metadata:
   title: validate MCP contract catalog
   description: Validate canonical MCP manifests and tool-contract references.
   owner: platform-engineering
-  tags: [contracts, validate, read]
+  tags:
+  - contracts
+  - validate
+  - read
   lifecycle: stable
   version: 1.0.0
 spec:
   domain: contracts
   capability: contract-governance
-  resource: {type: catalog, parent: null, namespace: null}
+  resource:
+    type: catalog
+    parent: null
+    namespace: null
   operation: validate
   authz: read
-  risk: {effects: [read], requires: [], blast_radius: none, default_level: low, approval_required: none}
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            type: string
+        manifest_count:
+          type: integer
+          minimum: 0
+        executable_provider_count:
+          type: integer
+          minimum: 0
+        contract_count:
+          type: integer
+          minimum: 0
+        providers_with_contracts:
+          type: integer
+          minimum: 0
+      required:
+      - valid
+      - errors
+      - manifest_count
+      - executable_provider_count
+      - contract_count
+      - providers_with_contracts
     preconditions: []
     postconditions: []
-    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
-relations: [{verb: acts-on, target: 'resource:catalog'}]
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:catalog

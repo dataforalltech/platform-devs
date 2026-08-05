@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_repository_layer
   domain: development
   title: generate repository layer
-  description: ''
+  description: Gera o scaffold de um repositório ORM async determinístico a partir
+    de entity+fields.
   owner: platform
   tags:
   - development
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        entity:
+          type: string
+          description: Entidade alvo (nome da classe/tabela).
+        fields:
+          type: array
+          description: Campos [{name,type}] (documentados nas colunas).
+      required:
+      - entity
     outputs: {}
     preconditions: []
     postconditions: []

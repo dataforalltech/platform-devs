@@ -5,7 +5,8 @@ metadata:
   uid: documentation.check_links
   domain: documentation
   title: check links
-  description: ''
+  description: Detecta links quebrados em markdown. Verifica links internos (existência
+    de arquivo), âncoras (#heading) e opcionalmente links externos via HTTP.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: Caminho absoluto do arquivo markdown
+        check_external:
+          type: boolean
+          description: Verificar links externos via HTTP (lento)
+      required:
+      - file_path
     outputs: {}
     preconditions: []
     postconditions: []

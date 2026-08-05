@@ -5,7 +5,8 @@ metadata:
   uid: infra.register_service
   domain: infra
   title: register service
-  description: ''
+  description: Registraou atualizaum servico no registry local. Se o servico ja existir,
+    atualizaos campos fornecidos. Retornaaction=created ou action=updated.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,90 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome unico do servico.
+        host:
+          type: string
+          description: 'Host onde o servico roda. Default: localhost.'
+          default: localhost
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: PortaTCP do servico.
+        url:
+          type: string
+          description: 'URL base do servico (ex: http://localhost:8080).'
+        type:
+          type: string
+          enum:
+          - docker
+          - process
+          - remote
+          - unknown
+          - mysql
+          - mariadb
+          - postgres
+          - redis
+          - kafka
+          - mongodb
+          description: 'Tipo do servico. Default: unknown.'
+          default: unknown
+        environment:
+          type: string
+          enum:
+          - local
+          - dev
+          - hml
+          - prod
+          description: 'Ambiente do servico. Default: local.'
+          default: local
+        health_path:
+          type: string
+          description: 'Path do health check. Default: /health.'
+          default: /health
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags paraclassificacaoo.
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Metadados extras (chave-valor livre).
+        runtime:
+          type: string
+          description: 'Runtime do servico: uvicorn, gunicorn, node, java, docker,
+            etc.'
+        deploy_mode:
+          type: string
+          enum:
+          - asgi
+          - wsgi
+          - node
+          - jvm
+          - proxy
+          - docker
+          - script
+          - unknown
+          description: Modo de deploy derivado do runtime.
+        os_name:
+          type: string
+          description: 'Sistema operacional: linux, windows, darwin.'
+        os_release:
+          type: string
+          description: 'Versao do OS/kernel (ex: 5.15.0-78-generic).'
+        hostname:
+          type: string
+          description: Hostname do container ou da maquina.
+      required:
+      - name
+      - port
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

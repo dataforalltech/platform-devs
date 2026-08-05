@@ -5,7 +5,8 @@ metadata:
   uid: governance.get_service_metadata
   domain: governance
   title: get service metadata
-  description: ''
+  description: Devolve atributos completos de um nó + dependências diretas + consumidores
+    + canonical_redirect quando o nó está deprecado (aponta para o substituto).
   owner: platform
   tags:
   - governance
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        node_id:
+          type: string
+      required:
+      - node_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

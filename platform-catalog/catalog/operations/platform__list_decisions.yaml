@@ -5,7 +5,8 @@ metadata:
   uid: platform.list_decisions
   domain: platform
   title: list decisions
-  description: ''
+  description: 'Audit trail: lista decisões registradas com filtros (target, actor,
+    ação, sessão). Use para governança e revisão de quem decidiu o quê e por quê.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,36 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        target_type:
+          type: string
+          enum:
+          - task
+          - suggestion
+          - session
+          description: Tipo da entidade alvo.
+        target_id:
+          type: string
+          description: ID da entidade alvo (string).
+        actor_type:
+          type: string
+          enum:
+          - human
+          - agent
+          - system
+        actor_id:
+          type: string
+        action:
+          type: string
+        session_id:
+          type: string
+        limit:
+          type: integer
+          default: 100
+      required: []
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_audit_report
   domain: governance
   title: get audit report
-  description: ''
+  description: Retorna relatório consolidado de conformidade
   owner: platform
   tags:
   - governance
@@ -30,7 +30,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Filtro por serviço (opcional)
+        env:
+          type: string
+          description: Filtro por ambiente (opcional)
+        period_days:
+          type: integer
+          description: 'Período de relatório em dias (default: 30)'
     outputs: {}
     preconditions: []
     postconditions: []

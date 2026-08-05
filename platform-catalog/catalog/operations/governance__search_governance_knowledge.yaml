@@ -5,7 +5,7 @@ metadata:
   uid: governance.search_governance_knowledge
   domain: governance
   title: search governance knowledge
-  description: ''
+  description: Busca textual simples na knowledge-base; devolve trechos com fonte.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        query:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 50
+      required:
+      - query
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

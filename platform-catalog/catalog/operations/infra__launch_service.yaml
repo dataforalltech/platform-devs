@@ -5,7 +5,10 @@ metadata:
   uid: infra.launch_service
   domain: infra
   title: launch service
-  description: ''
+  description: 'Sobe um servico viauvicorn, docker run ou docker-compose e registrano
+    registry. Apos o start faz polling no health_path ate wait_timeout segundos. Modos:
+    ''uvicorn'' (requer app), ''docker'' (requer image), ''docker-compose'' (usacompose_file/compose_service).
+    Retorna: started, healthy, ready_in_ms, attempts, external_url, pid/container_id.'
   owner: platform
   tags:
   - infra
@@ -30,7 +33,93 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - name
+      - mode
+      - port
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do servico (usado no registry e como container name).
+        mode:
+          type: string
+          enum:
+          - uvicorn
+          - docker
+          - docker-compose
+          description: Modo de start.
+        port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: Portado host.
+        app:
+          type: string
+          description: 'uvicorn: caminho ASGI (ex: ''mypackage.main:app'').'
+        host:
+          type: string
+          default: localhost
+          description: 'Host parauvicorn. Default: localhost.'
+        cwd:
+          type: string
+          description: Diretorio de trabalho (uvicorn / docker-compose).
+        extra_args:
+          type: array
+          items:
+            type: string
+          description: Args extras passados ao comando.
+        env_vars:
+          type: object
+          additionalProperties:
+            type: string
+          description: Variaveis de ambiente.
+        image:
+          type: string
+          description: 'docker: imagem Docker (ex: ''nginx:latest'').'
+        container_port:
+          type: integer
+          description: 'docker: portainternado container. Default: igual ao port.'
+        container_name:
+          type: string
+          description: 'docker: nome do container. Default: igual ao name.'
+        compose_file:
+          type: string
+          description: 'docker-compose: path parao compose file. Default: docker-compose.yml.'
+        compose_service:
+          type: string
+          description: 'docker-compose: nome do servico no compose. Default: igual
+            ao name.'
+        health_path:
+          type: string
+          default: /v1/health
+          description: 'Path do health check. Default: /v1/health.'
+        environment:
+          type: string
+          enum:
+          - local
+          - dev
+          - hml
+          - prod
+          default: local
+          description: Ambiente pararegistro.
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags parao servico.
+        wait_timeout:
+          type: integer
+          minimum: 1
+          maximum: 300
+          default: 30
+          description: 'Segundos aguardando o servico responder. Default: 30.'
+        detach:
+          type: boolean
+          default: true
+          description: 'Rodar em background. Default: true.'
     outputs: {}
     preconditions: []
     postconditions: []

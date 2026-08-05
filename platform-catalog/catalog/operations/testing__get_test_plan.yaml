@@ -5,7 +5,7 @@ metadata:
   uid: testing.get_test_plan
   domain: testing
   title: get test plan
-  description: ''
+  description: Retorna um plano de teste com métricas de cobertura, resultados e findings.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+        include_scenarios:
+          type: boolean
+          description: Incluir lista completa de cenários no retorno
+      required:
+      - plan_id
     outputs: {}
     preconditions: []
     postconditions: []

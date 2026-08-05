@@ -5,7 +5,8 @@ metadata:
   uid: infra.terraform_validate
   domain: infra
   title: terraform validate
-  description: ''
+  description: Roda `terraform validate -json` no diretório. Retorna diagnostics estruturados
+    (erros + warnings). Read-only — não modifica state nem consulta provider remoto.
   owner: platform
   tags:
   - infra
@@ -31,7 +32,13 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        path:
+          type: string
+          description: 'Diretório do módulo terraform. Default: INFRA_TERRAFORM_ROOT.'
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

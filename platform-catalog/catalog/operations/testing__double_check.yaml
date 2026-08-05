@@ -5,7 +5,8 @@ metadata:
   uid: testing.double_check
   domain: testing
   title: double check
-  description: ''
+  description: 'Executa verificação completa do plano: lista cenários não executados,
+    falhas abertas e findings críticos. Retorna veredicto APROVADO ou BLOQUEADO.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+      required:
+      - plan_id
     outputs: {}
     preconditions: []
     postconditions: []

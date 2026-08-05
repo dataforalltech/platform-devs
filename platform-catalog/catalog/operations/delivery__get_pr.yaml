@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_pr
   domain: delivery
   title: get pr
-  description: ''
+  description: 'Retorna detalhes de um PR: estado, mergeable_state, check runs (CI
+    status) e informações de review.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        pr_number:
+          type: integer
+          description: Número do PR.
+      required:
+      - repo
+      - pr_number
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

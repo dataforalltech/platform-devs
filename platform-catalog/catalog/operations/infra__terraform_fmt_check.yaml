@@ -5,7 +5,8 @@ metadata:
   uid: infra.terraform_fmt_check
   domain: infra
   title: terraform fmt check
-  description: ''
+  description: Roda `terraform fmt -check -diff` (recursivo). Não modifica arquivos.
+    Retorna lista de arquivos não-formatados + diff.
   owner: platform
   tags:
   - infra
@@ -31,7 +32,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        path:
+          type: string
+        recursive:
+          type: boolean
+          default: true
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

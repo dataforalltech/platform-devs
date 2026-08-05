@@ -5,7 +5,10 @@ metadata:
   uid: infra.sync_broker_urls
   domain: infra
   title: sync broker urls
-  description: ''
+  description: 'Atualiza vars de conexao de Kafka e Redis num arquivo .env a partir
+    do registry. Vars tratadas: KAFKA_BOOTSTRAP_SERVERS, REDIS_URL, REDIS_HOST, REDIS_URI,
+    RATE_LIMIT_STORAGE_URI, CACHE_URL, CELERY_BROKER_URL, CELERY_RESULT_BACKEND. Preserva
+    o /db da URL Redis existente. Use dry_run=true para simular.'
   owner: platform
   tags:
   - infra
@@ -30,7 +33,19 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho absoluto do arquivo .env a atualizar.
+        dry_run:
+          type: boolean
+          default: false
+          description: 'Simular sem alterar o arquivo. Default: false.'
     outputs: {}
     preconditions: []
     postconditions: []

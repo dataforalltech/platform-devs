@@ -5,7 +5,8 @@ metadata:
   uid: infra.unregister_service
   domain: infra
   title: unregister service
-  description: ''
+  description: Remove (soft-delete) um servico do registry pelo nome; some das leituras
+    ativas e um novo registro reativa a linha.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,15 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico aremover.
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

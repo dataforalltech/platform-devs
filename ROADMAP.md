@@ -47,20 +47,35 @@ domínio — hoje não suporta.**
 
 ## 2. Preencher o contrato das 307 operations do `platform-catalog`
 
-**Maior razão valor/esforço do roadmap inteiro, e sem bloqueio externo.**
+> **✅ Feito em 2026-08-05.** `description` e `contract.inputs` derivados do código em 266
+> das 307; `contract.outputs` em 19 (só os provedores governados têm contrato de saída).
+> Ver [BACKLOG B13](BACKLOG.md).
+>
+> **O que o preenchimento revelou:** **37 Operations marcadas `lifecycle: stable` não têm
+> tool nenhuma que as implemente** no runtime — o catálogo anunciava capacidade inexistente.
+> Foram para `lifecycle: retired`. Outras 4 (`*.status`) têm nome ambíguo entre domínios e
+> ficaram intocadas: escolher um domínio ali seria inventar o binding.
 
-**[HEAD]** 307 de 307 operations com `contract.inputs: {}` e `contract.outputs: {}`;
-288 de 307 com `metadata.description` vazia. Todas marcadas `lifecycle: stable`.
-Nas tools: description vazia em 298/317 e `selection: {}` em 317/317. Nos providers:
-description vazia em 20/23.
+**Era a maior razão valor/esforço do roadmap, e não tinha bloqueio externo.**
 
-**Consequência de produto:** a camada Operation-first que as runbooks e os agentes
-consultam para escolher uma capacidade **só carrega o id**. Um agente que escolhe
-`development.generate_fastapi_router` não tem como saber, pelo catálogo, que a tool
-devolve um esqueleto com `raise NotImplementedError`. A honestidade que existe no código
-(ver [RELEASES §5.8](RELEASES.md)) não chega a quem seleciona.
+**O estado anterior:** 307 de 307 operations com `contract.inputs: {}` e
+`contract.outputs: {}`; 288 de 307 com `metadata.description` vazia — todas marcadas
+`lifecycle: stable`. A camada Operation-first que runbooks e agentes consultam para
+**escolher** uma capacidade só carregava o id. Um agente que escolhesse
+`development.generate_fastapi_router` não tinha como saber, pelo catálogo, que a tool
+devolve um esqueleto com `raise NotImplementedError` — a honestidade que existe no código
+(ver [RELEASES §5.8](RELEASES.md)) não chegava a quem seleciona. Hoje chega: a description
+da Operation é a da própria tool, e diz "Gera o **scaffold** de um APIRouter FastAPI".
 
-**Bloqueio:** nenhum. É trabalho de conteúdo.
+**O que continua aberto no catálogo:**
+
+- **`contract.outputs` em 288 das 307.** Não é omissão deste trabalho: nenhum servidor de
+  persona declara output schema, e só os 3 provedores governados têm contrato de saída
+  canônico. Preencher exige escrever os contratos, não derivá-los.
+- **`selection: {}` em 317/317 tools** e description vazia em 20/23 providers.
+- **As 4 `*.status`** ficaram sem contrato por ambiguidade de nome entre domínios.
+- **As 37 `retired`** precisam de decisão: apagar do catálogo, ou reimplementar a
+  capacidade que elas anunciavam.
 
 ---
 

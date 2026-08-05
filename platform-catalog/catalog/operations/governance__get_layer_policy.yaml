@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_layer_policy
   domain: governance
   title: get layer policy
-  description: ''
+  description: Política de uma camada (responsabilidades, can/cannot do, exemplos).
   owner: platform
   tags:
   - governance
@@ -30,7 +30,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        layer:
+          type: string
+          enum:
+          - frontend
+          - backend
+          - database
+          - integrations
+          - infrastructure
+          - security
+          - observability
+          - testing
+      required:
+      - layer
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

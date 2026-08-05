@@ -5,7 +5,8 @@ metadata:
   uid: infra.audit_env_files
   domain: infra
   title: audit env files
-  description: ''
+  description: Escaneia todos os arquivos .env.* de um diretorio e reporta problemas.
+    Detecta secrets hardcoded, arquivos fora do padrao canonico, e cobertura no ConfigStore.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,24 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - directory
+      additionalProperties: false
+      properties:
+        directory:
+          type: string
+          description: 'Caminho do diretorio a escanear (ex: /path/to/platform-auth).'
+        include_pattern:
+          type: string
+          default: .env*
+          description: 'Glob para os arquivos. Default: .env*.'
+        check_store:
+          type: boolean
+          default: true
+          description: 'Verificar se os secrets ja estao no ConfigStore. Default:
+            true.'
     outputs: {}
     preconditions: []
     postconditions: []

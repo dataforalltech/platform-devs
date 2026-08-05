@@ -5,7 +5,10 @@ metadata:
   uid: delivery.list_local_repos
   domain: delivery
   title: list local repos
-  description: ''
+  description: 'Lista repositorios clonados em REPOS_ROOT. Para cada repo com .git
+    retorna: branch atual, remote origin, ultimo commit, dirty flag, latest tag. filter_name:
+    filtra por substring no nome. include_git_info=false retorna apenas nomes (muito
+    mais rapido para muitos repos).'
   owner: platform
   tags:
   - delivery
@@ -32,7 +35,20 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repos_root:
+          type: string
+          description: Caminho da pasta de repos (sobrepoe REPOS_ROOT configurado).
+        filter_name:
+          type: string
+          description: Filtro substring case-insensitive no nome do repo.
+        include_git_info:
+          type: boolean
+          default: true
+          description: 'Coleta branch, remote, commits de cada repo. Default: true.'
     outputs: {}
     preconditions: []
     postconditions: []

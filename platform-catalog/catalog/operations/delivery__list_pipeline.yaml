@@ -5,7 +5,8 @@ metadata:
   uid: delivery.list_pipeline
   domain: delivery
   title: list pipeline
-  description: ''
+  description: Lista serviços registrados no pipeline. Suporta filtros por env (dev/homol/prod/blocked/rollback)
+    e status (active/blocked).
   owner: platform
   tags:
   - delivery
@@ -31,7 +32,25 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        env:
+          type: string
+          enum:
+          - dev
+          - homol
+          - prod
+          - blocked
+          - rollback
+          description: Filtrar por ambiente atual do serviço.
+        status:
+          type: string
+          enum:
+          - active
+          - blocked
+          description: Filtrar por status de bloqueio.
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

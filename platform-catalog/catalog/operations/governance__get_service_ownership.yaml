@@ -5,7 +5,9 @@ metadata:
   uid: governance.get_service_ownership
   domain: governance
   title: get service ownership
-  description: ''
+  description: O que o serviço possui, o que NÃO deve fazer (explicit_non_responsibilities),
+    e quem ele chama. Responde 'onde implementar' antes de começar a tarefa. Dados
+    extraídos do ecosystem.yaml + AGENTS.md §49.
   owner: platform
   tags:
   - governance
@@ -30,7 +32,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service_name:
+          type: string
+          description: id canônico ou alias do serviço.
+      required:
+      - service_name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

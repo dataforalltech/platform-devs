@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_unit_tests
   domain: testing
   title: generate unit tests
-  description: ''
+  description: Gera um esqueleto de testes unitários determinístico (pytest|jest)
+    para o alvo.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        framework:
+          type: string
+          description: 'Framework: pytest|jest.'
+        target:
+          type: string
+          description: Alvo/módulo sob teste.
+        cases:
+          type: array
+          description: Casos [{name,description?}] (opcional; usa placeholder).
+      required:
+      - framework
+      - target
     outputs: {}
     preconditions: []
     postconditions: []

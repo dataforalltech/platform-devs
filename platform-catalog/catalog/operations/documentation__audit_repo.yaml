@@ -5,7 +5,8 @@ metadata:
   uid: documentation.audit_repo
   domain: documentation
   title: audit repo
-  description: ''
+  description: 'Auditoria completa: required docs, padrões e docs desatualizados.
+    Score ponderado; salva no histórico do store.'
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        standard:
+          type: string
+          enum:
+          - minimal
+          - standard
+          - full
+          - service
+          description: Nível de exigência documental
+          default: standard
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

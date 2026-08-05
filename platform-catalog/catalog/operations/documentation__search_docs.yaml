@@ -5,7 +5,8 @@ metadata:
   uid: documentation.search_docs
   domain: documentation
   title: search docs
-  description: ''
+  description: Busca full-text em todos os docs do repo_path. Retorna trechos (snippets)
+    ao redor de cada match.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,27 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        query:
+          type: string
+          description: Texto a buscar nos documentos
+        case_sensitive:
+          type: boolean
+          description: Busca case-sensitive
+          default: false
+        file_types:
+          type: array
+          items:
+            type: string
+          description: 'Extensões a buscar (ex: [''md'', ''rst''])'
+      required:
+      - repo_path
+      - query
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,7 @@ metadata:
   uid: development.generate_api_contract
   domain: development
   title: generate api contract
-  description: ''
+  description: Gera um fragmento OpenAPI 3.1 (YAML) determinístico a partir de title+paths.
   owner: platform
   tags:
   - development
@@ -30,7 +30,22 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          description: Título da API.
+        paths:
+          type: array
+          description: Paths [{path,method,summary?,operationId?,status?}].
+        version:
+          type: string
+          description: Versão da API (default '1.0.0').
+      required:
+      - title
+      - paths
     outputs: {}
     preconditions: []
     postconditions: []

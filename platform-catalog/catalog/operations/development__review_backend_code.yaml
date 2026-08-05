@@ -5,13 +5,14 @@ metadata:
   uid: development.review_backend_code
   domain: development
   title: review backend code
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - development
   - backend
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: development

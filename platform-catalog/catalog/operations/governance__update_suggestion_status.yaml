@@ -5,7 +5,9 @@ metadata:
   uid: governance.update_suggestion_status
   domain: governance
   title: update suggestion status
-  description: ''
+  description: Muda o status de uma sugestão. Registra histórico (ts, status, note,
+    by). Use 'acknowledged' quando você viu mas ainda não decidiu, 'accepted' quando
+    vai virar trabalho, 'done' quando implementado.
   owner: platform
   tags:
   - governance
@@ -30,7 +32,29 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        suggestion_id:
+          type: string
+        new_status:
+          type: string
+          enum:
+          - pending
+          - acknowledged
+          - accepted
+          - rejected
+          - done
+          - duplicate
+        note:
+          type: string
+        by:
+          type: string
+          description: Quem fez a mudança (agent id, user, etc.).
+      required:
+      - suggestion_id
+      - new_status
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

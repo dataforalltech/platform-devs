@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_pipeline_overview
   domain: delivery
   title: get pipeline overview
-  description: ''
+  description: 'Retorna visão geral do pipeline: total de serviços por ambiente, contagem
+    de bloqueados/ativos, e serviços com gates com falha.'
   owner: platform
   tags:
   - delivery
@@ -31,7 +32,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

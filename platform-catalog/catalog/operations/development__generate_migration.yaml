@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_migration
   domain: development
   title: generate migration
-  description: ''
+  description: Gera um esqueleto de migration alembic (upgrade/downgrade) determinístico
+    a partir de revision+ops.
   owner: platform
   tags:
   - development
@@ -30,7 +31,26 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        revision:
+          type: string
+          description: Id da revisão.
+        ops:
+          type: array
+          description: Operações (str SQL ou {op,table,column?,type?}); downgrade
+            é o inverso.
+        down_revision:
+          type: string
+          description: Revisão anterior (opcional).
+        message:
+          type: string
+          description: Mensagem/descrição da migration (opcional).
+      required:
+      - revision
+      - ops
     outputs: {}
     preconditions: []
     postconditions: []

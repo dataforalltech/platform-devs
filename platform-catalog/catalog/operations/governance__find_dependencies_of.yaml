@@ -5,7 +5,7 @@ metadata:
   uid: governance.find_dependencies_of
   domain: governance
   title: find dependencies of
-  description: ''
+  description: Lista dependências do nó. Por padrão, apenas diretas (include_transitive=false).
   owner: platform
   tags:
   - governance
@@ -30,7 +30,24 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        node_id:
+          type: string
+        include_transitive:
+          type: boolean
+          default: false
+          description: Se true, inclui dependências transitivas (max_depth até 5).
+        max_depth:
+          type: integer
+          minimum: 1
+          maximum: 5
+          default: 1
+          description: Profundidade máxima (só relevante com include_transitive=true).
+      required:
+      - node_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

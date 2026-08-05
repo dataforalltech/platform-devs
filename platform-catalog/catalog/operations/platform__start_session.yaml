@@ -5,7 +5,9 @@ metadata:
   uid: platform.start_session
   domain: platform
   title: start session
-  description: ''
+  description: 'Registra nova sessão. Informe ''repo'' (repo-scoped: devolve branch_name
+    + next_action) OU ''project_id'' (project-scoped — ADR-017). ''base_branch'' default:
+    develop.'
   owner: platform
   tags:
   - platform
@@ -30,7 +32,53 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        title:
+          type: string
+          description: 'Título curto da sessão (ex: ''Refactor auth JWT'')'
+        objective:
+          type: string
+          description: Objetivo detalhado do que será feito nesta sessão
+        repo:
+          type: string
+          description: Repositório dono da sessão (repo-scoped). Opcional se project_id
+            for informado.
+        base_branch:
+          type: string
+          description: 'Branch base (default: develop) — usada como from_ref ao criar
+            a branch da sessão.'
+        project_id:
+          type: string
+          description: Projeto canônico (sessão project-scoped). Opcional se repo
+            for informado.
+        agent_client:
+          type: string
+          description: 'Cliente-agente de código (ex: ''claude-code'', ''codex'').'
+        environment:
+          type: object
+          description: Snapshot de ambiente enviado pelo cliente/tunnel.
+          properties:
+            os:
+              type: string
+            arch:
+              type: string
+            agent_client:
+              type: object
+              properties:
+                name:
+                  type: string
+                version:
+                  type: string
+            repos_root:
+              type: string
+            tool_versions:
+              type: object
+      required:
+      - title
+      - objective
     outputs: {}
     preconditions: []
     postconditions: []

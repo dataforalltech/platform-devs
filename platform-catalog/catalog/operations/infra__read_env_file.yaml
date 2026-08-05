@@ -5,7 +5,8 @@ metadata:
   uid: infra.read_env_file
   domain: infra
   title: read env file
-  description: ''
+  description: Le um arquivo .env do disco e retorna as variaveis como dict. Complemento
+    ao get_env_config que le do store encriptado.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho absoluto do arquivo .env.
+        key_filter:
+          type: string
+          description: 'Filtro substring nas chaves (case-insensitive). Ex: ''URL''.'
     outputs: {}
     preconditions: []
     postconditions: []

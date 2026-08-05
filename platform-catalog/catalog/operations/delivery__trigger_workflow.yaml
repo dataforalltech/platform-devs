@@ -5,7 +5,9 @@ metadata:
   uid: delivery.trigger_workflow
   domain: delivery
   title: trigger workflow
-  description: ''
+  description: Dispara um workflow via workflow_dispatch. workflow_id pode ser o nome
+    do arquivo (deploy.yml) ou ID numérico. A API não retorna o run_id — use list_workflow_runs
+    após para localizar o run.
   owner: platform
   tags:
   - delivery
@@ -32,7 +34,27 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        workflow_id:
+          type: string
+          description: 'Nome do arquivo do workflow (ex: deploy.yml) ou ID.'
+        ref:
+          type: string
+          description: Branch, tag ou SHA para o dispatch.
+        inputs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Inputs do workflow_dispatch (chave → valor string).
+      required:
+      - repo
+      - workflow_id
+      - ref
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

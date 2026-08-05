@@ -5,7 +5,8 @@ metadata:
   uid: documentation.list_templates
   domain: documentation
   title: list templates
-  description: ''
+  description: 'Retorna catálogo de templates disponíveis: README, CHANGELOG, ADR,
+    AGENTS, RUNBOOK e API. Inclui variáveis e caso de uso de cada template.'
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      required: []
     outputs: {}
     preconditions: []
     postconditions: []

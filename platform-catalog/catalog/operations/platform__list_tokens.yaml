@@ -5,7 +5,8 @@ metadata:
   uid: platform.list_tokens
   domain: platform
   title: list tokens
-  description: ''
+  description: Admin — Lista metadados de usuários/tokens (sem exibir valores). Requer
+    TWIN_ADMIN_TOKEN.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        admin_token:
+          type: string
+        include_revoked:
+          type: boolean
+          description: 'Incluir tokens revogados. Default: false.'
+          default: false
+      required:
+      - admin_token
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,11 @@ metadata:
   uid: delivery.promote_service
   domain: delivery
   title: promote service
-  description: ''
+  description: 'Promove um serviço entre ambientes (dev→homol ou homol→prod). Verifica
+    todos os gates obrigatórios antes de promover. DEV→HML e HML→PROD: cria PR via
+    GitHub e aguarda aprovação humana (status=waiting_approval). Após aprovação humana,
+    chame approve_promotion(promotion_id). Retorna can_promote=false com lista de
+    gates pendentes se houver falhas.'
   owner: platform
   tags:
   - delivery
@@ -31,7 +35,36 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        from_env:
+          type: string
+          enum:
+          - dev
+          - homol
+          description: Ambiente de origem.
+        to_env:
+          type: string
+          enum:
+          - homol
+          - prod
+          description: Ambiente de destino.
+        promoted_by:
+          type: string
+          description: Identificador de quem solicitou a promoção (usuário ou agente).
+        reason:
+          type: string
+          description: Motivo da promoção (opcional).
+      required:
+      - service
+      - from_env
+      - to_env
+      - promoted_by
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

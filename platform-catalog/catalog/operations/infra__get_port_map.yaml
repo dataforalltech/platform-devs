@@ -5,7 +5,8 @@ metadata:
   uid: infra.get_port_map
   domain: infra
   title: get port map
-  description: ''
+  description: Retornamapade portaâ†’ servico paratodos os servicos registrados com
+    porta. Ãštil paradetectar conflitos de porta.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

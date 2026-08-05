@@ -5,7 +5,8 @@ metadata:
   uid: infra.list_environments
   domain: infra
   title: list environments
-  description: ''
+  description: Lista os ambientes configurados e a quantidade de variáveis em cada
+    um.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

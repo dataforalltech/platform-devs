@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_unit_tests
   domain: testing
   title: run unit tests
-  description: ''
+  description: Roda testes unitários (pytest/jest) com cobertura opcional. Detecta
+    framework automaticamente.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,31 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        framework:
+          type: string
+          enum:
+          - auto
+          - pytest
+          - jest
+          default: auto
+        test_path:
+          type: string
+          default: .
+        coverage:
+          type: boolean
+          default: false
+        timeout:
+          type: integer
+          description: Timeout em segundos
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

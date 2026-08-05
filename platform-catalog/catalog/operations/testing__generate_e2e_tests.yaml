@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_e2e_tests
   domain: testing
   title: generate e2e tests
-  description: ''
+  description: Gera um esqueleto de testes e2e determinístico (playwright|cypress)
+    a partir dos fluxos.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        framework:
+          type: string
+          description: 'Framework: playwright|cypress.'
+        flows:
+          type: array
+          description: Fluxos [{name,steps?}] (steps str ou {type,selector,value}).
+        suite:
+          type: string
+          description: Nome da suite (default 'e2e').
+      required:
+      - framework
+      - flows
     outputs: {}
     preconditions: []
     postconditions: []

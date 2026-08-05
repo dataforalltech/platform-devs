@@ -5,7 +5,8 @@ metadata:
   uid: platform.revoke_token
   domain: platform
   title: revoke token
-  description: ''
+  description: Admin — Revoga um token ou todos os tokens de um user_id. Requer admin_token.
+    O usuário perde acesso imediatamente.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        admin_token:
+          type: string
+        identifier:
+          type: string
+          description: Token completo ou user_id a revogar.
+      required:
+      - admin_token
+      - identifier
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

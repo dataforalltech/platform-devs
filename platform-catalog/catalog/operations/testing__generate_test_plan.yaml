@@ -5,13 +5,14 @@ metadata:
   uid: testing.generate_test_plan
   domain: testing
   title: generate test plan
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - testing
   - test-authoring
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: testing

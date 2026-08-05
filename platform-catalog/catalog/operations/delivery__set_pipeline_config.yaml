@@ -5,7 +5,9 @@ metadata:
   uid: delivery.set_pipeline_config
   domain: delivery
   title: set pipeline config
-  description: ''
+  description: 'Configura quais gates são obrigatórios por ambiente para um serviço.
+    Substitui a configuração padrão (homol: [qa_tests, pr_approved]; prod: [qa_tests,
+    security_scan, pr_approved, health_check]).'
   owner: platform
   tags:
   - delivery
@@ -31,7 +33,24 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        gates_required:
+          type: object
+          description: 'Mapa de ambiente → lista de gates obrigatórios. Ex: {"homol":
+            ["qa_tests"], "prod": ["qa_tests", "pr_approved"]}'
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      required:
+      - service
+      - gates_required
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

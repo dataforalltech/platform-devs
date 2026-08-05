@@ -5,7 +5,9 @@ metadata:
   uid: delivery.add_gate_result
   domain: delivery
   title: add gate result
-  description: ''
+  description: 'Registra o resultado de um gate de qualidade para um serviço/ambiente.
+    Types válidos: qa_tests, security_scan, pr_approved, health_check, manual_approval,
+    audit_compliance. Se o gate já existir, atualiza o resultado.'
   owner: platform
   tags:
   - delivery
@@ -31,7 +33,44 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        env:
+          type: string
+          enum:
+          - dev
+          - homol
+          - prod
+          description: Ambiente ao qual o gate se refere.
+        gate_type:
+          type: string
+          enum:
+          - qa_tests
+          - security_scan
+          - pr_approved
+          - health_check
+          - manual_approval
+          - audit_compliance
+          description: Tipo do gate.
+        passed:
+          type: boolean
+          description: True se o gate passou, False se falhou.
+        details:
+          type: string
+          description: Detalhes adicionais (URL do relatório, mensagem de erro, etc.).
+        evaluated_by:
+          type: string
+          description: Identificador de quem/o que avaliou o gate.
+      required:
+      - service
+      - env
+      - gate_type
+      - passed
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

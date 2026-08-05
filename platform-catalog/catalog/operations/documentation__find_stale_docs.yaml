@@ -5,7 +5,8 @@ metadata:
   uid: documentation.find_stale_docs
   domain: documentation
   title: find stale docs
-  description: ''
+  description: Detecta documentos não atualizados há mais de X dias. Usa `git log`
+    para obter data do último commit; fallback para mtime.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        days_threshold:
+          type: integer
+          description: 'Dias sem atualização para considerar stale (default: settings.stale_days_threshold)'
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

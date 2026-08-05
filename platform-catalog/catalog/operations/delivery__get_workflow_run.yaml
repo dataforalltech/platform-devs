@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_workflow_run
   domain: delivery
   title: get workflow run
-  description: ''
+  description: 'Retorna status detalhado de um workflow run: status (queued/in_progress/completed),
+    conclusion (success/failure/cancelled), branch, SHA, URL e logs_url.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        run_id:
+          type: integer
+          description: ID numérico do run.
+      required:
+      - repo
+      - run_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

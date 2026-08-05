@@ -5,7 +5,8 @@ metadata:
   uid: platform.add_task
   domain: platform
   title: add task
-  description: ''
+  description: Cria tarefa na sessão (single ou bulk). needs_human_decision=true bloqueia
+    start_task até approve_task.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,41 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão
+        title:
+          type: string
+          description: Título da tarefa (modo single)
+        description:
+          type: string
+          description: Descrição opcional da tarefa (modo single)
+        needs_human_decision:
+          type: boolean
+          description: Se true, start_task fica bloqueado até approve_task. Default
+            false.
+          default: false
+        tasks:
+          type: array
+          description: Lista de tarefas a criar em lote (modo bulk)
+          items:
+            type: object
+            additionalProperties: false
+            properties:
+              title:
+                type: string
+              description:
+                type: string
+              needs_human_decision:
+                type: boolean
+            required:
+            - title
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

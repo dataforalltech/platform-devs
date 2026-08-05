@@ -5,13 +5,14 @@ metadata:
   uid: security.review_secure_code
   domain: security
   title: review secure code
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - security
   - app-security
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: security

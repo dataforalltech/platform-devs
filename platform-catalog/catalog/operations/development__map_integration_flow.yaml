@@ -5,13 +5,14 @@ metadata:
   uid: development.map_integration_flow
   domain: development
   title: map integration flow
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - development
   - backend
   - write
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: development

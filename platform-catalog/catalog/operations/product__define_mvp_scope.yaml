@@ -5,13 +5,14 @@ metadata:
   uid: product.define_mvp_scope
   domain: product
   title: define mvp scope
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - product
   - product-ownership
   - write
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: product

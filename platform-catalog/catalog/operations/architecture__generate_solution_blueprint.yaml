@@ -5,13 +5,14 @@ metadata:
   uid: architecture.generate_solution_blueprint
   domain: architecture
   title: generate solution blueprint
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - architecture
   - architecture
   - write
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: architecture

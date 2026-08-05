@@ -5,7 +5,9 @@ metadata:
   uid: infra.cost_estimate_infracost
   domain: infra
   title: cost estimate infracost
-  description: ''
+  description: 'Roda `infracost diff --path <tfplan> --format json` e devolve delta
+    mensal de custo. Marca hard_stop=True se delta > threshold (default +US$ 100/mês
+    ou +20%, conforme cicd-deploy.md §4 #4).'
   owner: platform
   tags:
   - infra
@@ -31,7 +33,20 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_path:
+          type: string
+        delta_usd_threshold:
+          type: number
+          default: 100.0
+        delta_pct_threshold:
+          type: number
+          default: 20.0
+      required:
+      - plan_path
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

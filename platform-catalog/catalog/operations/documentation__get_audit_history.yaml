@@ -5,7 +5,8 @@ metadata:
   uid: documentation.get_audit_history
   domain: documentation
   title: get audit history
-  description: ''
+  description: Retorna histórico de auditorias salvas no store, ordenadas pela mais
+    recente. Filtra por repo_path opcionalmente.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Filtrar por repositório (opcional)
+        limit:
+          type: integer
+          description: Máximo de auditorias a retornar
+          default: 10
+      required: []
     outputs: {}
     preconditions: []
     postconditions: []

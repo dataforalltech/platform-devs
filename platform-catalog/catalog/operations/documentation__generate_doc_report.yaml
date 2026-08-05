@@ -5,7 +5,8 @@ metadata:
   uid: documentation.generate_doc_report
   domain: documentation
   title: generate doc report
-  description: ''
+  description: Relatório de qualidade documental com score, grade, trend e action
+    items. Executa audit_repo se não houver histórico.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

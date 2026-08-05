@@ -5,7 +5,7 @@ metadata:
   uid: infra.list_my_leases
   domain: infra
   title: list my leases
-  description: ''
+  description: Lista leases do owner (filtro opcional por status).
   owner: platform
   tags:
   - infra
@@ -31,7 +31,21 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        owner:
+          type: string
+        status:
+          type: string
+          enum:
+          - PENDING
+          - ACTIVE
+          - RELEASED
+          - EXPIRED
+      required:
+      - owner
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_forbidden_actions
   domain: governance
   title: get forbidden actions
-  description: ''
+  description: Lista canônica de ações proibidas, com motivo e alternativa correta.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,13 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        context:
+          type: string
+          description: 'Filtro opcional: id da regra ou nome de camada.'
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

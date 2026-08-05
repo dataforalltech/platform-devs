@@ -5,7 +5,8 @@ metadata:
   uid: security.generate_security_controls
   domain: security
   title: generate security controls
-  description: ''
+  description: Gera uma matriz de controles de segurança (controles × assets) determinística
+    a partir da spec.
   owner: platform
   tags:
   - security
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        framework:
+          type: string
+          description: Framework de referência (nist_csf/iso_27001/cis/...).
+        assets:
+          type: array
+          description: Assets [str | {name}] que compõem as colunas (opcional).
+        controls:
+          type: array
+          description: Controles [{key|control_key,name?,category?,framework_ref?,applies_to?}].
+      required:
+      - framework
+      - controls
     outputs: {}
     preconditions: []
     postconditions: []

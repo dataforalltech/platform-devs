@@ -5,7 +5,8 @@ metadata:
   uid: testing.get_validation_status
   domain: testing
   title: get validation status
-  description: ''
+  description: 'Retorna status completo de validação: cobertura %, pass rate %, findings
+    por severidade, grade (A-F) e se está pronto para ship.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+      required:
+      - plan_id
     outputs: {}
     preconditions: []
     postconditions: []

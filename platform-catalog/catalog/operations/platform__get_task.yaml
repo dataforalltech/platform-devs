@@ -5,7 +5,7 @@ metadata:
   uid: platform.get_task
   domain: platform
   title: get task
-  description: ''
+  description: Retorna os dados completos de uma tarefa pelo ID.
   owner: platform
   tags:
   - platform
@@ -30,7 +30,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        task_id:
+          type: integer
+          description: ID da tarefa
+      required:
+      - task_id
     outputs: {}
     preconditions: []
     postconditions: []

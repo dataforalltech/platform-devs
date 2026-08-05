@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_type_check
   domain: testing
   title: run type check
-  description: ''
+  description: Type checking com mypy (Python) ou tsc (TypeScript). Retorna erros
+    e warnings por arquivo.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        framework:
+          type: string
+          enum:
+          - auto
+          - python
+          - javascript
+          - typescript
+          default: auto
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

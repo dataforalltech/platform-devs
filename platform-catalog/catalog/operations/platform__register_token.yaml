@@ -5,7 +5,8 @@ metadata:
   uid: platform.register_token
   domain: platform
   title: register token
-  description: ''
+  description: 'Admin — Registra usuário e emite token de acesso (exibido uma única
+    vez). Requer TWIN_ADMIN_TOKEN. Roles: developer | admin | agent | readonly.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,54 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        admin_token:
+          type: string
+          description: Token de admin (TWIN_ADMIN_TOKEN).
+        name:
+          type: string
+          description: Nome de exibição.
+        email:
+          type: string
+          description: Email do usuário.
+        role:
+          type: string
+          enum:
+          - developer
+          - admin
+          - agent
+          - readonly
+          description: 'Papel do usuário. Default: developer.'
+          default: developer
+        environment:
+          type: string
+          enum:
+          - dev
+          - staging
+          - production
+          description: 'Ambiente de atuação. Default: dev.'
+          default: dev
+        scopes:
+          type: array
+          items:
+            type: string
+          description: 'Escopos permitidos. Default: [''*''] (tudo).'
+        expires_in_days:
+          type: integer
+          minimum: 1
+          description: Validade em dias. Omitir = sem expiração.
+        tenant_id:
+          type: string
+          description: 'Tenant padrão do usuário. Ex: ''tenant_abc123''. Quando definido,
+            o config-mcp usa get_session_tenant_config para retornar a config deste
+            tenant automaticamente.'
+      required:
+      - admin_token
+      - name
+      - email
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_qa_report
   domain: testing
   title: generate qa report
-  description: ''
+  description: 'Gera relatório QA agregado com score 0-100 e grade A-F. Pondera: unit_tests
+    30%, security 25%, linter 20%, coverage 15%, dependencies 10%.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        last_n_runs:
+          type: integer
+          description: Considera último N run de cada tipo
+          default: 1
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

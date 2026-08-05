@@ -5,7 +5,9 @@ metadata:
   uid: delivery.list_acr_images
   domain: delivery
   title: list acr images
-  description: ''
+  description: Lista as tags disponíveis de uma imagem no ACR, ordenadas por data
+    (mais recente primeiro). Útil para verificar quais versões estão publicadas antes
+    de um rollback ou deploy.
   owner: platform
   tags:
   - delivery
@@ -32,7 +34,21 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service_name:
+          type: string
+          description: 'Nome do serviço/imagem (ex: platform-analytics).'
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: 'Máximo de tags a retornar. Default: 20.'
+          default: 20
+      required:
+      - service_name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

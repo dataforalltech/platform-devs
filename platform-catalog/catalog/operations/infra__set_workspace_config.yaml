@@ -5,7 +5,8 @@ metadata:
   uid: infra.set_workspace_config
   domain: infra
   title: set workspace config
-  description: ''
+  description: 'Define ou atualiza uma chave no namespace ''workspace'' do ConfigStore.
+    Para REPOS_ROOT: valida que o caminho existe (use create_dir=true para criar).'
   owner: platform
   tags:
   - infra
@@ -30,7 +31,24 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - key
+      - value
+      additionalProperties: false
+      properties:
+        key:
+          type: string
+          description: 'Nome da chave (ex: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV).'
+        value:
+          type: string
+          description: Valor a armazenar.
+        create_dir:
+          type: boolean
+          default: false
+          description: 'Para REPOS_ROOT: cria o diretorio se nao existir. Default:
+            false.'
     outputs: {}
     preconditions: []
     postconditions: []

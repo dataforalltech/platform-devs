@@ -5,7 +5,7 @@ metadata:
   uid: development.generate_database_schema
   domain: development
   title: generate database schema
-  description: ''
+  description: Gera DDL SQL (CREATE TABLE) determinístico a partir de tables[{name,columns[{name,type,pk,fk}]}].
   owner: platform
   tags:
   - development
@@ -30,7 +30,15 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        tables:
+          type: array
+          description: Tabelas [{name, columns:[{name,type,pk?,fk?}]}].
+      required:
+      - tables
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,7 @@ metadata:
   uid: testing.list_test_plans
   domain: testing
   title: list test plans
-  description: ''
+  description: Lista planos de teste, opcionalmente filtrados por status.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,19 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        status:
+          type: string
+          description: Filtrar por status
+          enum:
+          - active
+          - completed
+          - archived
+        limit:
+          type: integer
+          description: Máximo de planos retornados (default 20)
     outputs: {}
     preconditions: []
     postconditions: []

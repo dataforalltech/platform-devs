@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_compliance_checklist
   domain: governance
   title: get compliance checklist
-  description: ''
+  description: Retorna checklist dinâmico para um repo/ambiente (preview sem persistir)
   owner: platform
   tags:
   - governance
@@ -30,7 +30,26 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço
+        repo:
+          type: string
+          description: Nome do repositório
+        env:
+          type: string
+          description: 'Ambiente: dev, hml, prod'
+          enum:
+          - dev
+          - hml
+          - prod
+      required:
+      - service
+      - repo
+      - env
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,13 +5,14 @@ metadata:
   uid: product.prioritize_backlog
   domain: product
   title: prioritize backlog
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - product
   - product-ownership
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: product

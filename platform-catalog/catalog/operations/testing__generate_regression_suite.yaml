@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_regression_suite
   domain: testing
   title: generate regression suite
-  description: ''
+  description: Gera um manifesto YAML de suite de regressão determinístico a partir
+    dos módulos.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        modules:
+          type: array
+          description: Módulos [{name,priority?,cases?}] ou strings.
+        name:
+          type: string
+          description: Nome da suite (default 'regression').
+      required:
+      - modules
     outputs: {}
     preconditions: []
     postconditions: []

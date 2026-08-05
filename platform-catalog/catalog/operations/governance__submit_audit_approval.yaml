@@ -5,7 +5,7 @@ metadata:
   uid: governance.submit_audit_approval
   domain: governance
   title: submit audit approval
-  description: ''
+  description: Submete aprovação ou rejeição manual de uma auditoria
   owner: platform
   tags:
   - governance
@@ -30,7 +30,31 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        audit_id:
+          type: string
+          description: ID da auditoria (audit_...)
+        approved_by:
+          type: string
+          description: Identificador de quem aprova
+        decision:
+          type: string
+          description: 'Decisão: approved ou rejected'
+          enum:
+          - approved
+          - rejected
+        role:
+          type: string
+          description: Role do aprovador (developer, lead, architect)
+        notes:
+          type: string
+          description: Notas da aprovação
+      required:
+      - audit_id
+      - approved_by
+      - decision
     outputs: {}
     preconditions: []
     postconditions: []

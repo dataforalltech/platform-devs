@@ -5,7 +5,8 @@ metadata:
   uid: documentation.validate_doc
   domain: documentation
   title: validate doc
-  description: ''
+  description: Valida documento contra regras do tipo (seções, mínimo de palavras,
+    status ADR). Auto-detecta tipo pelo nome.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,26 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        file_path:
+          type: string
+          description: Caminho absoluto do arquivo markdown
+        doc_type:
+          type: string
+          enum:
+          - auto
+          - readme
+          - changelog
+          - adr
+          - agents
+          - runbook
+          - api
+          description: Tipo do documento (auto = detecta pelo nome)
+          default: auto
+      required:
+      - file_path
     outputs: {}
     preconditions: []
     postconditions: []

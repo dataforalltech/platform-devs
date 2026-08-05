@@ -5,7 +5,9 @@ metadata:
   uid: governance.find_consumers_of
   domain: governance
   title: find consumers of
-  description: ''
+  description: Lista quem consome o que o nó produz/provê. Resolve via contratos para
+    serviços (provides_api/produces_event → consumes/consumes_event) e via uses_lib
+    para libraries.
   owner: platform
   tags:
   - governance
@@ -30,7 +32,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        node_id:
+          type: string
+          description: id canônico do nó (service/contract/library)
+      required:
+      - node_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

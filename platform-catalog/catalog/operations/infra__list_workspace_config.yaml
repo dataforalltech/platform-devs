@@ -5,7 +5,8 @@ metadata:
   uid: infra.list_workspace_config
   domain: infra
   title: list workspace config
-  description: ''
+  description: 'Lista todas as chaves do namespace ''workspace'' com valores e descricoes.
+    Chaves canonicas: REPOS_ROOT, PYTHON_BIN, EDITOR, DEFAULT_ENV.'
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties: {}
     outputs: {}
     preconditions: []
     postconditions: []

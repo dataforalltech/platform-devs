@@ -5,7 +5,11 @@ metadata:
   uid: infra.sync_registry
   domain: infra
   title: sync registry
-  description: ''
+  description: 'Scan completo de descoberta -  sincronizabanco e MAPPING_GATEWAY.
+    Executa: (1) scan Docker (docker ps) descobrindo containers e portas; (2) scan
+    de portas nos ranges configurados procurando servicos HTTP; (3) scan por nomes
+    de servicos viaDocker DNS ou localhost. Chamado automaticamente no startup do
+    services-mcp.'
   owner: platform
   tags:
   - infra
@@ -30,7 +34,32 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        port_ranges:
+          type: string
+          description: 'Ranges de portaseparados por virgula. Ex: ''8000-8100,27100-27130''.
+            Default: PORT_SCAN_RANGES env ou ''8000-8100''.'
+        service_names:
+          type: array
+          items:
+            type: string
+          description: 'Listade nomes de servicos pararesolver viaDNS. Default: SERVICE_NAMES
+            env.'
+        include_docker:
+          type: boolean
+          default: true
+          description: Incluir scan Docker (docker ps).
+        probe_health:
+          type: boolean
+          default: true
+          description: Probar /health em cadaservico encontrado.
+        docker_timeout:
+          type: integer
+          default: 10
+          description: Timeout em segundos paradocker ps.
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

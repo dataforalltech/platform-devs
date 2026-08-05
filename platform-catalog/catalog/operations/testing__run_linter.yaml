@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_linter
   domain: testing
   title: run linter
-  description: ''
+  description: Análise estática com ruff (Python) ou eslint (JS/TS). Detecta framework
+    automaticamente. Suporta fix automático.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,26 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        framework:
+          type: string
+          enum:
+          - auto
+          - python
+          - javascript
+          - typescript
+          default: auto
+        fix:
+          type: boolean
+          default: false
+          description: Aplicar correções automáticas
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

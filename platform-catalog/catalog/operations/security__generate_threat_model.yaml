@@ -5,13 +5,14 @@ metadata:
   uid: security.generate_threat_model
   domain: security
   title: generate threat model
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - security
   - app-security
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: security

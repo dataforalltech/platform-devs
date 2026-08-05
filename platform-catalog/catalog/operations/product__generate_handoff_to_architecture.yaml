@@ -5,7 +5,8 @@ metadata:
   uid: product.generate_handoff_to_architecture
   domain: product
   title: generate handoff to architecture
-  description: ''
+  description: Gera um documento de handoff para Arquitetura determinístico a partir
+    da feature/requisitos.
   owner: platform
   tags:
   - product
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        feature:
+          type: string
+          description: Feature alvo do handoff.
+        requirements:
+          type: array
+          description: Requisitos a repassar (opcional).
+      required:
+      - feature
     outputs: {}
     preconditions: []
     postconditions: []

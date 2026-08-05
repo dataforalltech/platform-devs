@@ -5,7 +5,8 @@ metadata:
   uid: platform.get_twin_context
   domain: platform
   title: get twin context
-  description: ''
+  description: 'Contexto completo da sessão: identidade, git/OS/hostname e MCPs disponíveis.
+    Coleta lazy na primeira chamada (cache 60s).'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

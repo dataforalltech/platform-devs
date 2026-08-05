@@ -5,7 +5,8 @@ metadata:
   uid: testing.get_coverage_report
   domain: testing
   title: get coverage report
-  description: ''
+  description: 'Lê relatório de cobertura de testes. Python: coverage.json; Jest:
+    coverage/coverage-summary.json.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        framework:
+          type: string
+          enum:
+          - auto
+          - python
+          - javascript
+          - typescript
+          default: auto
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

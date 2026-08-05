@@ -5,7 +5,10 @@ metadata:
   uid: infra.get_lease_ssh_key
   domain: infra
   title: get lease ssh key
-  description: ''
+  description: 'Retorna a chave privada Ed25519 (PEM) para conectar via SSH à VM do
+    lease. Requer lease em status ACTIVE. owner deve ser o titular do lease. A chave
+    é deletada quando o lease é liberado — salve localmente antes do release. Uso:
+    salvar em arquivo com chmod 600 e usar com ssh -i key.pem ubuntu@<host>.'
   owner: platform
   tags:
   - infra
@@ -31,7 +34,18 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        lease_id:
+          type: string
+        owner:
+          type: string
+          description: Identificador do agente titular do lease (autenticação).
+      required:
+      - lease_id
+      - owner
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

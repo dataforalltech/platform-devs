@@ -5,7 +5,8 @@ metadata:
   uid: delivery.block_service
   domain: delivery
   title: block service
-  description: ''
+  description: Bloqueia a promoção de um serviço no pipeline. Um serviço bloqueado
+    não pode ser promovido até ser desbloqueado manualmente.
   owner: platform
   tags:
   - delivery
@@ -31,7 +32,23 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        reason:
+          type: string
+          description: Motivo do bloqueio.
+        blocked_by:
+          type: string
+          description: Identificador de quem bloqueou.
+      required:
+      - service
+      - reason
+      - blocked_by
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

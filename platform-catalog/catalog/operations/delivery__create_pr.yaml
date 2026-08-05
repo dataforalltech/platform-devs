@@ -5,7 +5,8 @@ metadata:
   uid: delivery.create_pr
   domain: delivery
   title: create pr
-  description: ''
+  description: Abre um Pull Request. Suporta labels, reviewers e modo draft. Retorna
+    número do PR, URL e estado inicial.
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,42 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        title:
+          type: string
+          description: Título do PR.
+        body:
+          type: string
+          description: Descrição em markdown.
+        head:
+          type: string
+          description: Branch de origem (feature/minha-feature).
+        base:
+          type: string
+          description: 'Branch de destino. Default: develop.'
+        labels:
+          type: array
+          items:
+            type: string
+          description: Labels a aplicar.
+        reviewers:
+          type: array
+          items:
+            type: string
+          description: Logins de reviewers.
+        draft:
+          type: boolean
+          description: 'Criar como rascunho. Default: false.'
+          default: false
+      required:
+      - repo
+      - title
+      - head
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []
