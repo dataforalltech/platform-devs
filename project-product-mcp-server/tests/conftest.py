@@ -27,7 +27,14 @@ _DEFAULTS = {
     "JWT_ISSUER": "https://admin.invalid",
     "JWT_AUDIENCE": "platform-project-product",
     "JWT_JWKS_URL": "https://admin.invalid/.well-known/jwks.json",
+    # O que a API ACEITA na própria /api/internal/* (papel de destino).
     "INTERNAL_API_TOKEN": "internal-test-token",
+    # O que o SIDECAR APRESENTA, uma credencial por destino — STD-SEC-002, passo 1
+    # da "Estratégia de migração". O destino faz parte do NOME; um nome sem
+    # destino só consegue designar um valor para todos eles.
+    "INTERNAL_API_TARGETS": "platform-project-product,platform-governance",
+    "INTERNAL_API_TOKEN__PLATFORM_PROJECT_PRODUCT": "token-para-project-product",
+    "INTERNAL_API_TOKEN__PLATFORM_GOVERNANCE": "token-para-governance",
     "METRICS_SCRAPE_TOKEN": "metrics-test-token",
     "RATE_LIMIT_STORAGE_URI": "",
     "METRICS_ENABLED": "false",

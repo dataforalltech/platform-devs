@@ -44,31 +44,75 @@ _log = logging.getLogger(__name__)
 NAMESPACE = "deploy-mcp"
 
 
-def load_secret(key: str, fallback: str = "") -> str:
-    """Resolve um segredo via Vault (STD-SEC-004), degradando p/ env com graça.
+class SecretResolutionError(RuntimeError):
+    """Segredo obrigatório não pôde ser resolvido pela fonte aprovada."""
 
-    Só tenta o ``platform_crypto.VaultSecretsClient`` quando ``VAULT_ADDR`` está
-    setado; o import é LAZY (dentro do try) para não acoplar o boot ao Vault. Em
-    QUALQUER falha (Vault indisponível, import ausente, segredo vazio) degrada
-    para o valor de env (``fallback``) — o boot NUNCA quebra por causa do Vault.
-    Loga apenas a FONTE do segredo, nunca o valor (STD-OBS-001).
+
+def load_secret(
+    name: str,
+    fallback: str = "",
+    *,
+    runtime_env: str = "local",
+    required: bool = False,
+) -> str:
+    """Resolve um segredo pelo bootstrap de segredos do STD-SEC-004.
+
+    Em ``cloud`` a fonte é o Vault e **só** o Vault: qualquer falha de auth/fetch
+    levanta ``SecretResolutionError`` e o serviço não sobe — "a ausência ou
+    invalidez de uma credencial exigida MUST falhar fechada" (STD-SEC-002, §MUST).
+    O ``fallback`` de env/.env é deliberadamente ignorado em cloud, senão o
+    bootstrap degrada em silêncio para uma fonte que o standard não admite ali.
+
+    Em ``local`` o Vault é opcional — só é consultado quando ``VAULT_ADDR`` está
+    setado — e qualquer falha degrada para o valor de env, que é o "fallback local
+    controlado" que o STD-SEC-004 permite.
+
+    ``required`` decide o que fazer com valor AUSENTE (Vault vazio e sem fallback
+    utilizável); falha de comunicação em cloud levanta independentemente dele.
+
+    Loga apenas o nome lógico e a FONTE do segredo, nunca o valor (STD-OBS-001).
     """
-    vault_addr = os.getenv("VAULT_ADDR", "").strip()
-    if not vault_addr:
-        _log.debug("secret_source key=%s source=env", key)
+    is_cloud = runtime_env == "cloud"
+    if not is_cloud and not os.getenv("VAULT_ADDR", "").strip():
+        _log.debug("secret_source name=%s source=env", name)
+        if required and not fallback:
+            raise SecretResolutionError(
+                f"segredo obrigatório '{name}' ausente no runtime local"
+            )
         return fallback
     try:
-        from platform_crypto import VaultSecretsClient  # lazy: só quando há Vault
+        from platform_crypto import VaultSecretsClient  # lazy: import opcional
 
-        value = VaultSecretsClient(vault_addr).get_secret(key)
-        if value:
-            _log.info("secret_source key=%s source=vault", key)
-            return value
-        _log.warning("secret_empty_from_vault key=%s source=env", key)
+        # `service` é o espaço de segredos do serviço (path dataforall/<service>/<name>);
+        # `name` é a chave lógica dentro dele. Passar o endereço do Vault aqui — como
+        # fazia a versão anterior — monta um path que ninguém provisionou.
+        value = VaultSecretsClient(service=NAMESPACE).get(name)
+    except Exception as exc:  # noqa: BLE001 — fronteira de bootstrap, mensagem sanitizada
+        if is_cloud:
+            raise SecretResolutionError(
+                f"segredo obrigatório '{name}' não pôde ser resolvido do Vault "
+                f"({type(exc).__name__})"
+            ) from exc
+        _log.warning(
+            "vault_unavailable name=%s source=env err=%s", name, type(exc).__name__
+        )
+        if required and not fallback:
+            raise SecretResolutionError(
+                f"segredo obrigatório '{name}' indisponível"
+            ) from exc
         return fallback
-    except Exception as exc:  # noqa: BLE001 — Vault NUNCA derruba o boot (degrada p/ env)
-        _log.warning("vault_unavailable key=%s source=env err=%s", key, type(exc).__name__)
-        return fallback
+    if value:
+        _log.info("secret_source name=%s source=vault service=%s", name, NAMESPACE)
+        return value
+    if is_cloud and required:
+        raise SecretResolutionError(f"segredo obrigatório '{name}' vazio no Vault")
+    if is_cloud:
+        _log.warning("secret_empty_from_vault name=%s source=absent", name)
+        return ""
+    _log.warning("secret_empty_from_vault name=%s source=env", name)
+    if required and not fallback:
+        raise SecretResolutionError(f"segredo obrigatório '{name}' ausente")
+    return fallback
 
 
 class DeploySettings(BaseSettings):
@@ -189,13 +233,13 @@ class DeploySettings(BaseSettings):
         Vault, o comportamento é idêntico ao de antes (segredo vem do env). Nenhum
         valor com cara de credencial fica no código.
         """
-        self.github_token = load_secret(f"{NAMESPACE}/github_token", self.github_token)
+        self.github_token = load_secret("github_token", self.github_token, runtime_env=self.runtime_env)
         # acr_password é opcional (str | None): mantém o None quando nem env nem
         # Vault trazem valor, preservando o contrato "não configurado".
-        self.acr_password = load_secret(f"{NAMESPACE}/acr_password", self.acr_password or "") or None
+        self.acr_password = load_secret("acr_password", self.acr_password or "", runtime_env=self.runtime_env) or None
         # Senhas do banco (tenant + admin) via Vault-fallback (env se Vault ausente).
-        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", self.DB_PASSWORD)
-        self.ADMIN_DB_PASSWORD = load_secret(f"{NAMESPACE}/admin_db_password", self.ADMIN_DB_PASSWORD)
+        self.DB_PASSWORD = load_secret("db_password", self.DB_PASSWORD, runtime_env=self.runtime_env)
+        self.ADMIN_DB_PASSWORD = load_secret("admin_db_password", self.ADMIN_DB_PASSWORD, runtime_env=self.runtime_env)
         return self
 
     def enforce_security_invariants(self) -> None:

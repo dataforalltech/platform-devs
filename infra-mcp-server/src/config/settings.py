@@ -239,10 +239,28 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_secrets(self) -> Settings:
-        """Resolve as senhas (tenant + admin) via Vault-fallback (env se Vault ausente)."""
-        self.DB_PASSWORD = load_secret(f"{NAMESPACE}/db_password", env_fallback=self.DB_PASSWORD) or ""
+        """Resolve as senhas (tenant + admin) pelo bootstrap do STD-SEC-004.
+
+        O espaço do serviço no Vault agora é o ``service=`` do cliente, então o
+        nome da chave é só ``db_password`` — prefixá-lo com o namespace montava
+        ``dataforall/<ns>/<ns>/db_password``, um path que ninguém provisiona.
+        Em cloud, Vault fora do ar recusa o boot em vez de degradar para env.
+        """
+        self.DB_PASSWORD = (
+            load_secret(
+                "db_password",
+                env_fallback=self.DB_PASSWORD,
+                runtime_env=self.runtime_env,
+            )
+            or ""
+        )
         self.ADMIN_DB_PASSWORD = (
-            load_secret(f"{NAMESPACE}/admin_db_password", env_fallback=self.ADMIN_DB_PASSWORD) or ""
+            load_secret(
+                "admin_db_password",
+                env_fallback=self.ADMIN_DB_PASSWORD,
+                runtime_env=self.runtime_env,
+            )
+            or ""
         )
         return self
 

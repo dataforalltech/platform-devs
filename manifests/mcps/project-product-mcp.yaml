@@ -29,10 +29,17 @@ runtime:
     SERVICE_READINESS_URL: http://platform-project-product-api:9090/health/ready
     SERVICE_ALLOWED_HOSTS: '["platform-project-product-api","localhost","127.0.0.1"]'
     PRIVATE_NETWORK_ENCRYPTED: "false"
-    INTERNAL_API_TOKEN: ${PROJECT_PRODUCT_INTERNAL_API_TOKEN:?required}
+    # Credencial de saída do sidecar, UMA POR DESTINO — STD-SEC-002, "Estratégia
+    # de migração", passo 1. Repare que a variável de origem já NÃO é a mesma que
+    # o serviço companheiro recebe em INTERNAL_API_TOKEN (o papel de ACEITAR):
+    # um símbolo único para os dois papéis faz o valor que a API aceita ser
+    # exatamente o que o seu próprio sidecar apresenta, e quem chama a API passa
+    # a poder passar-se por ela no destino.
+    INTERNAL_API_TARGETS: platform-project-product,platform-governance
+    INTERNAL_API_TOKEN__PLATFORM_PROJECT_PRODUCT: ${PROJECT_PRODUCT_MCP_TOKEN_TO_API:?required}
+    INTERNAL_API_TOKEN__PLATFORM_GOVERNANCE: ${PROJECT_PRODUCT_MCP_TOKEN_TO_GOVERNANCE:?required}
     GOVERNANCE_BASE_URL: ${GOVERNANCE_BASE_URL:?required}
     GOVERNANCE_ALLOWED_HOSTS: '["platform-governance","host.docker.internal","localhost"]'
-    GOVERNANCE_INTERNAL_TOKEN: ${GOVERNANCE_INTERNAL_TOKEN:?required}
     MCP_TWIN_AUDIENCE: mcp:portfolio
     MCP_TWIN_ISSUER: ${MCP_TWIN_ISSUER:?required}
     URL_ADMIN_TWIN_JWKS: ${URL_ADMIN_TWIN_JWKS:?required}
