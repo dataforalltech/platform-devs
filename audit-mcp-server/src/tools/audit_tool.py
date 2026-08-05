@@ -80,8 +80,17 @@ async def run_audit(
         policy = _load_policy(settings.policies_path, env)
         approval_rule = policy.get("approval_rules", {}).get(criticality, {})
 
+        # Um item OBRIGATÓRIO que não foi executado não tem evidência nenhuma a
+        # favor nem contra — e por isso NÃO pode abrir caminho para auto-aprovação.
+        # Antes desta checagem, os dois placeholders de vulnerabilidade do
+        # SecurityChecker devolviam passed=True e uma promoção podia ser
+        # auto-aprovada por varreduras que nunca rodaram.
+        unexecuted_required = [
+            i["name"] for i in all_items if i.get("required") and not i.get("executed", True)
+        ]
+
         auto_approve_if_score = approval_rule.get("auto_approve_if_score")
-        if auto_approve_if_score and score >= auto_approve_if_score:
+        if auto_approve_if_score and score >= auto_approve_if_score and not unexecuted_required:
             status = "auto_approved"
             await store.update_audit_status(audit_id, status, score, True)
         else:
@@ -98,6 +107,10 @@ async def run_audit(
             "passed": score >= policy["min_score"],
             "status": status,
             "checklist_count": len(all_items),
+            # Torna visível para quem consome o resultado QUAIS obrigatórios não
+            # rodaram — sem isso, "pending_approval" não distingue "reprovou" de
+            # "não foi possível avaliar".
+            "unexecuted_required": unexecuted_required,
             "approvals_required": (
                 0 if status == "auto_approved" else approval_rule.get("required_approvals", 1)
             ),

@@ -183,7 +183,12 @@ def validate_agent_decision(
     recommendations: list[str] = []
     notes: list[str] = []
     risk = "low"
-    approved = True
+    # `blocking` acumula as violações CRITICAL. A aprovação NÃO é o default: ela é
+    # calculada no fim, e exige (a) nenhuma violação bloqueante E (b) entrada
+    # avaliável. Um validador que aprova quando nada casou com regra nenhuma
+    # aprova também a entrada vazia — que é exatamente o caso em que ele não
+    # verificou coisa alguma.
+    blocking = False
 
     # ------------------------------------------------------------------ #
     # CRITICAL — bloqueio imediato                                        #
@@ -197,7 +202,7 @@ def validate_agent_decision(
             "Remover o fallback silencioso. Propagar a exceção com contexto, logar com "
             "log.exception(...), emitir métrica e tratar explicitamente no caller."
         )
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     if flag_fallback and not re.search(
@@ -210,7 +215,7 @@ def validate_agent_decision(
         required_actions.append(
             "Adicionar log.warning('fallback_triggered', ...), métrica de fallback e alerta. Ver fallback.md."
         )
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _HARDCODED_PATTERNS):
@@ -218,7 +223,7 @@ def validate_agent_decision(
             "Valor que parece credencial/URL/token hardcoded na proposta. Proibido pelo AGENTS.md §2."
         )
         required_actions.append("Mover o valor para configuração (env var via Settings tipado / cofre).")
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _AUTH_BYPASS_PATTERNS) or (
@@ -230,13 +235,13 @@ def validate_agent_decision(
         required_actions.append(
             "Remover o bypass. Se a rota precisa ser pública, abrir ADR e revisão de segurança."
         )
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _MOCK_IN_PROD_PATTERNS):
         violations.append("Mock/Fake/Stub aparentemente em código produtivo. Proibido pelo AGENTS.md §2.")
         required_actions.append("Remover mock de código produtivo. Mocks só em código de teste.")
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     if _matches_any(blob, _DELETE_TEST_PATTERNS):
@@ -244,7 +249,7 @@ def validate_agent_decision(
         required_actions.append(
             "Restaurar o teste. Se o teste estava errado, abrir PR explicando a correção do teste."
         )
-        approved = False
+        blocking = True
         risk = _bump_risk(risk, "critical")
 
     # ------------------------------------------------------------------ #
@@ -327,7 +332,7 @@ def validate_agent_decision(
             )
             required_actions.append("Mover operação destrutiva para runbook controlado. Ver database.md.")
             risk = _bump_risk(risk, "critical")
-            approved = False
+            blocking = True
         if not re.search(r"(migration|alembic|reversível|reversivel)", blob, re.IGNORECASE):
             recommendations.append("Alterações em banco devem ir por migration versionada e reversível.")
             risk = _bump_risk(risk, "medium")
@@ -351,8 +356,35 @@ def validate_agent_decision(
             "Antes do merge: rodar testes, verificar checklist de resposta final (final-response-format.md)."
         )
 
+    # ------------------------------------------------------------------ #
+    # Decisão final — fail-closed                                         #
+    # ------------------------------------------------------------------ #
+    # `approved` significa "nenhuma violação conhecida foi detectada", e não
+    # "a mudança é segura": este validador é uma DENYLIST. A distinção importa
+    # porque metade das regras acima (camada, banco destrutivo, observabilidade
+    # de integrações) só roda quando a mudança está ESCOPADA. Sem arquivos nem
+    # camadas, essas regras não tiveram sobre o que casar, e devolver
+    # `approved=True` transformaria ausência de evidência em evidência de
+    # ausência. `proposed_change` e `task_description` já são obrigatórios na
+    # entrada (require_non_empty_string), então o que resta verificar é o escopo.
+    inconclusive = not files and not layers
+
+    if inconclusive:
+        notes.append(
+            "INCONCLUSIVO: nem affected_files nem affected_layers foram informados. "
+            "As regras de camada — inclusive a de operação destrutiva em banco — não "
+            "puderam ser avaliadas; o resultado NÃO é uma aprovação."
+        )
+        required_actions.append(
+            "Reenviar a decisão com affected_files e/ou affected_layers preenchidos."
+        )
+        risk = _bump_risk(risk, "medium")
+
+    approved = not blocking and not inconclusive
+
     return {
         "approved": approved,
+        "inconclusive": inconclusive,
         "risk_level": risk,
         "violations": violations,
         "required_actions": required_actions,
