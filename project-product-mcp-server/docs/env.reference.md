@@ -10,12 +10,16 @@ Valores secretos abaixo são nomes lógicos: em cloud vêm exclusivamente de Vau
 | `ADMIN_DB_PASSWORD` | API/job local | segredo; cloud usa Vault `admin_db_password` |
 | `READINESS_TENANT_ID` | API | tenant autorizado usado pelo probe real; UUID no PostgreSQL, identificador seguro no MySQL |
 | `JWT_ISSUER/AUDIENCE/JWKS_URL` | API | contrato RS256 do `platform-admin` |
-| `INTERNAL_API_TOKEN` | ambas local | S2S; cloud usa Vault `internal_api_token` |
+| `INTERNAL_API_TOKEN` | API local | credencial que a API **aceita** na própria `/api/internal/*`; cloud usa Vault `internal_api_token`. Não é a que o sidecar apresenta |
+| `INTERNAL_API_TARGETS` | MCP | CSV dos destinos chamados, por nome canônico. Destino declarado sem credencial resolvida recusa o boot em **qualquer** ambiente |
+| `INTERNAL_API_TOKEN__PLATFORM_PROJECT_PRODUCT` | MCP local | credencial que o sidecar **apresenta** à API privada; cloud usa Vault `internal_api_token__platform-project-product` |
+| `INTERNAL_API_TOKEN__PLATFORM_GOVERNANCE` | MCP local | credencial que o sidecar **apresenta** ao `platform-governance`; cloud usa Vault `internal_api_token__platform-governance` |
+| `SERVICE_TARGET_NAME` | MCP | nome canônico do destino do adaptador; declarado, nunca derivado de `APP_NAME`. Default `platform-project-product` |
+| `GOVERNANCE_TARGET_NAME` | MCP | idem para o segundo destino. Default `platform-governance` |
 | `SERVICE_BASE_URL` | MCP | URL exata da API privada |
 | `SERVICE_READINESS_URL` | MCP | endpoint de readiness real da API na porta de management |
 | `SERVICE_ALLOWED_HOSTS` | MCP | allowlist JSON de hosts exatos |
 | `GOVERNANCE_BASE_URL` | MCP | URL de `platform-governance` |
-| `GOVERNANCE_INTERNAL_TOKEN` | MCP local | cloud usa Vault `governance_internal_token` |
 | `MCP_TWIN_ISSUER/AUDIENCE` | MCP | issuer exato e audiência `mcp:portfolio`, coerente com capabilities `portfolio.*` |
 | `URL_ADMIN_TWIN_JWKS` | MCP | JWKS do `platform-admin` |
 | `RATE_LIMIT_STORAGE_URI` | ambas local | URI Redis compartilhada; cloud usa Vault `rate_limit_storage_uri` |

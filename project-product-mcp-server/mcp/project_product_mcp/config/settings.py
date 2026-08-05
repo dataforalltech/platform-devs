@@ -125,6 +125,64 @@ def load_secret(
     return None
 
 
+def _dotenv_lookup(env_file: object, variable: str) -> str | None:
+    """Lê o `.env` configurado para um nome que não tem campo em Settings.
+
+    pydantic-settings carrega o `.env` para dentro dos CAMPOS declarados, nunca
+    para dentro de ``os.environ``. A credencial por destino é nomeada em runtime
+    e não tem campo, então sem esta leitura o valor do `.env` ficaria invisível —
+    enquanto a variável irmã ``INTERNAL_API_TOKEN``, que tem campo, carregaria
+    normalmente. Essa assimetria silenciosa é pior que a ausência do fallback.
+
+    Respeita ``env_file`` falsy: é assim que os testes desligam a dependência de
+    um `.env` no cwd, e a credencial por destino não pode furar essa proteção.
+    """
+    if not env_file:
+        return None
+    try:
+        from dotenv import dotenv_values
+    except ImportError:  # pragma: no cover — acompanha pydantic-settings[dotenv]
+        return None
+    return dotenv_values(str(env_file)).get(variable)
+
+
+def _parse_internal_targets(raw: str | None) -> list[str]:
+    """Normaliza INTERNAL_API_TARGETS em nomes canônicos de destino.
+
+    Recusa nome fora do formato canônico em vez de aceitar e derivar um nome de
+    segredo que ninguém provisionou: um destino escrito errado resolveria uma
+    entrada inexistente no Vault e só apareceria como 401 no primeiro hop.
+    """
+    if not raw:
+        return []
+    targets: list[str] = []
+    for chunk in raw.split(","):
+        target = chunk.strip()
+        if not target:
+            continue
+        if not _SERVICE_NAME_RE.fullmatch(target):
+            raise ValueError(
+                f"INTERNAL_API_TARGETS contém '{target}', que não é um nome "
+                "canônico de serviço (^[a-z0-9][a-z0-9-]{1,62}$). Use o "
+                "metadata.name do service profile do DESTINO — ver "
+                "docs/standards/STD-SEC-002-service-to-service.md, seção "
+                "'Token de serviço target-bound'."
+            )
+        if target not in targets:
+            targets.append(target)
+    return targets
+
+
+def target_env_var(target: str) -> str:
+    """``INTERNAL_API_TOKEN__<DESTINO>`` — nome canônico em maiúsculas, '-' → '_'."""
+    return f"INTERNAL_API_TOKEN__{target.replace('-', '_').upper()}"
+
+
+def target_vault_name(target: str) -> str:
+    """``internal_api_token__<destino>`` — nome lógico no Vault, hífens preservados."""
+    return f"internal_api_token__{target}"
+
+
 def _normalise_host(value: str) -> str:
     host = value.strip().lower().rstrip(".")
     if not host or any(char in host for char in ("/", "?", "#", "@", "%", "*")):
@@ -248,6 +306,26 @@ class Settings(BaseSettings):
     SERVICE_TLS_CA_FILE: str | None = None
     SERVICE_TLS_CLIENT_CERT_FILE: str | None = None
     SERVICE_TLS_CLIENT_KEY_FILE: str | None = None
+    # Nome canônico do serviço privado que este sidecar chama — o DESTINO, nunca
+    # este processo. MUST ser declarado, jamais derivado de APP_NAME por remoção
+    # do sufixo "-mcp": é ele que compõe ``internal_api_token__<destino>``, e um
+    # nome adivinhado errado resolve uma entrada que ninguém provisionou
+    # (STD-SEC-002, §Parâmetros de configuração).
+    SERVICE_TARGET_NAME: str = "platform-project-product"
+    # Segundo destino do sidecar. Declarado pelo mesmo motivo que o primeiro: o
+    # nome entra na credencial, então adivinhá-lo a partir de GOVERNANCE_BASE_URL
+    # produziria um nome de segredo que ninguém provisiona.
+    GOVERNANCE_TARGET_NAME: str = "platform-governance"
+    # CSV dos destinos cuja /api/internal/* este sidecar chama, por nome canônico.
+    # Cada destino declarado MUST ter a sua credencial resolvida; destino sem
+    # segredo provisionado recusa o boot em QUALQUER ambiente (STD-SEC-002).
+    # Vazio ⇒ derivado dos dois nomes acima, que é a topologia real deste sidecar.
+    INTERNAL_API_TARGETS: str | None = None
+    # Credencial que este sidecar APRESENTA, uma por destino. Preenchido pelo
+    # bootstrap; NUNCA lido do ambiente como dict.
+    INTERNAL_API_TOKENS: dict[str, str] = Field(default_factory=dict, repr=False)
+    # Vista por papel sobre INTERNAL_API_TOKENS, mantida para os clientes já
+    # existentes. O valor vem de ``internal_api_token__<SERVICE_TARGET_NAME>``.
     INTERNAL_API_TOKEN: SecretStr | None = None
 
     MCP_TWIN_AUDIENCE: str
@@ -257,6 +335,7 @@ class Settings(BaseSettings):
 
     GOVERNANCE_BASE_URL: str
     GOVERNANCE_ALLOWED_HOSTS: list[str]
+    # Idem: vista sobre ``internal_api_token__<GOVERNANCE_TARGET_NAME>``.
     GOVERNANCE_INTERNAL_TOKEN: SecretStr | None = None
 
     MCP_PORT: int = Field(default=7100, ge=1, le=65535)
@@ -277,6 +356,18 @@ class Settings(BaseSettings):
         value = value.strip().lower()
         if not _SERVICE_NAME_RE.fullmatch(value):
             raise ValueError("APP_NAME must be a lower-case kebab service name")
+        return value
+
+    @field_validator("SERVICE_TARGET_NAME", "GOVERNANCE_TARGET_NAME")
+    @classmethod
+    def _validate_target_name(cls, value: str) -> str:
+        value = value.strip().lower()
+        if not _SERVICE_NAME_RE.fullmatch(value):
+            raise ValueError(
+                "o nome do destino deve ser o metadata.name canônico do serviço "
+                "chamado (^[a-z0-9][a-z0-9-]{1,62}$), em kebab minúsculo — ver "
+                "docs/standards/STD-SEC-002-service-to-service.md"
+            )
         return value
 
     @field_validator("RUNTIME_ENV")
@@ -319,24 +410,87 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _hydrate_secrets(self) -> Settings:
-        local_token = _secret_text(self.INTERNAL_API_TOKEN)
-        token = load_secret(
-            "internal_api_token",
-            service=self.APP_NAME,
-            runtime_env=self.RUNTIME_ENV,
-            local_value=local_token,
-            required=True,
-        )
-        object.__setattr__(self, "INTERNAL_API_TOKEN", SecretStr(token or ""))
+        # Passo 1 da "Estratégia de migração" do STD-SEC-002: o destino entra no
+        # NOME do segredo. Enquanto o nome for `internal_api_token`, existe um
+        # slot só por serviço e o compartilhamento entre destinos não é desvio de
+        # operação — é a única configuração possível.
+        # Antes de resolver: um destino igual ao próprio sidecar produziria o nome
+        # de segredo `internal_api_token__<este-processo>`, e a recusa sairia como
+        # "destino sem credencial" — verdadeira, mas escondendo a causa real.
+        for campo, valor in (
+            ("SERVICE_TARGET_NAME", self.SERVICE_TARGET_NAME),
+            ("GOVERNANCE_TARGET_NAME", self.GOVERNANCE_TARGET_NAME),
+        ):
+            if valor == self.APP_NAME:
+                raise ValueError(
+                    f"{campo} deve nomear o serviço de DESTINO, não este sidecar "
+                    f"({self.APP_NAME}); uma credencial escopada ao próprio "
+                    "chamador não está escopada a nada."
+                )
 
-        governance_token = load_secret(
-            "governance_internal_token",
-            service=self.APP_NAME,
-            runtime_env=self.RUNTIME_ENV,
-            local_value=_secret_text(self.GOVERNANCE_INTERNAL_TOKEN),
-            required=True,
+        targets = _parse_internal_targets(self.INTERNAL_API_TARGETS) or [
+            self.SERVICE_TARGET_NAME,
+            self.GOVERNANCE_TARGET_NAME,
+        ]
+        # Valor pré-carregado pelos campos-vista, usado só como fallback local.
+        pre_carregado = {
+            self.SERVICE_TARGET_NAME: _secret_text(self.INTERNAL_API_TOKEN),
+            self.GOVERNANCE_TARGET_NAME: _secret_text(self.GOVERNANCE_INTERNAL_TOKEN),
+        }
+
+        outbound: dict[str, str] = {}
+        unresolved: list[str] = []
+        for target in targets:
+            env_var = target_env_var(target)
+            resolved = load_secret(
+                target_vault_name(target),
+                # `service` é o espaço de segredos do CHAMADOR, não do destino: o
+                # valor é "o meu segredo para o destino X", nunca "o segredo do
+                # destino X". Quem carrega o destino é o nome, não o espaço.
+                service=self.APP_NAME,
+                runtime_env=self.RUNTIME_ENV,
+                # `required=False` DE PROPÓSITO: com `True`, o load_secret deste
+                # sidecar levanta o seu erro genérico ("required local secret X is
+                # missing") e a recusa deixa de dizer o que provisionar. A falha
+                # fechada não se perde — ela passa a ser o bloco `unresolved`
+                # abaixo, que vale em QUALQUER ambiente e nomeia o segredo. Em
+                # cloud, falha de comunicação com o Vault continua levantando
+                # dentro do próprio load_secret, independentemente deste flag.
+                required=False,
+                local_value=_dotenv_lookup(self.model_config.get("env_file"), env_var)
+                or os.getenv(env_var)
+                or pre_carregado.get(target),
+            )
+            if resolved:
+                outbound[target] = resolved
+            else:
+                unresolved.append(target)
+
+        # Falha fechada em QUALQUER ambiente, não só em cloud: um destino
+        # declarado e não provisionado sumiria do dicionário em silêncio, e sumir
+        # é pior que faltar — as duas checagens de segredo universal iteram sobre
+        # este dicionário, e um destino ausente delas escapa. O boot que mais
+        # precisa ser recusado seria o único não inspecionado.
+        if unresolved:
+            primeiro = unresolved[0]
+            raise ValueError(
+                "INTERNAL_API_TARGETS declara destino sem credencial resolvida: "
+                f"{', '.join(unresolved)}. Provisione "
+                f"{target_vault_name(primeiro)} no Vault, ou "
+                f"{target_env_var(primeiro)} em env/.env no runtime local. Um "
+                "destino declarado e não provisionado falha aqui, e não como 401 "
+                "no primeiro hop (ver docs/standards/"
+                "STD-SEC-002-service-to-service.md, seção 'Parâmetros de configuração')."
+            )
+        object.__setattr__(self, "INTERNAL_API_TOKENS", outbound)
+        object.__setattr__(
+            self, "INTERNAL_API_TOKEN", SecretStr(outbound.get(self.SERVICE_TARGET_NAME, ""))
         )
-        object.__setattr__(self, "GOVERNANCE_INTERNAL_TOKEN", SecretStr(governance_token or ""))
+        object.__setattr__(
+            self,
+            "GOVERNANCE_INTERNAL_TOKEN",
+            SecretStr(outbound.get(self.GOVERNANCE_TARGET_NAME, "")),
+        )
 
         local_rate_uri = _secret_text(self.RATE_LIMIT_STORAGE_URI)
         rate_uri = load_secret(
@@ -359,6 +513,37 @@ class Settings(BaseSettings):
             raise ValueError("DOCS_ENABLED must remain false for the MCP sidecar")
         if not _secret_text(self.INTERNAL_API_TOKEN):
             raise ValueError("INTERNAL_API_TOKEN must be resolved by the approved bootstrap")
+        if self.SERVICE_TARGET_NAME == self.APP_NAME:
+            raise ValueError(
+                "SERVICE_TARGET_NAME deve nomear o serviço de DESTINO, não este "
+                "sidecar; uma credencial escopada ao próprio chamador não está "
+                "escopada a nada."
+            )
+        if self.GOVERNANCE_TARGET_NAME == self.APP_NAME:
+            raise ValueError(
+                "GOVERNANCE_TARGET_NAME deve nomear o serviço de DESTINO, não "
+                "este sidecar."
+            )
+
+        # Passo 1 do STD-SEC-002: extinguir o segredo universal. Estas são as
+        # DUAS violações detectáveis de dentro do processo — um valor partilhado
+        # entre serviços DIFERENTES continua invisível daqui, e quem o detecta é a
+        # revisão do provisionamento no Vault. Nenhuma mensagem cita valor de
+        # segredo, só nome de destino.
+        _por_valor: dict[str, str] = {}
+        for _destino, _valor in sorted(self.INTERNAL_API_TOKENS.items()):
+            _primeiro = _por_valor.get(_valor)
+            if _primeiro is not None:
+                raise ValueError(
+                    f"Os destinos '{_primeiro}' e '{_destino}' compartilham a mesma "
+                    "credencial de saída. O segredo é POR DESTINO: um valor que "
+                    "autentica em dois destinos permite que um deles se passe pelo "
+                    "chamador no outro. Provisione "
+                    f"{target_vault_name(_primeiro)} e {target_vault_name(_destino)} "
+                    "com valores distintos (ver docs/standards/"
+                    "STD-SEC-002-service-to-service.md, 'Estratégia de migração', passo 1)."
+                )
+            _por_valor[_valor] = _destino
 
         validate_service_base_url(
             self.SERVICE_BASE_URL,

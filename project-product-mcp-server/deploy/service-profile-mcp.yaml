@@ -1,0 +1,68 @@
+apiVersion: dataforall.io/v1alpha1
+kind: ServiceProfile
+# Perfil do SIDECAR MCP, distinto do perfil da API privada
+# (deploy/service-profile.yaml, metadata.name: platform-project-product).
+#
+# A separação não é burocracia: quem CHAMA `/api/internal/*` é o sidecar, e é o
+# perfil de quem chama que declara `internalApi.targets` e as credenciais de
+# saída. Declarar os destinos no perfil da API faria a API afirmar que chama a si
+# mesma — o caso degenerado que o STD-SEC-002 recusa via `SERVICE_TARGET_NAME ==
+# APP_NAME`.
+metadata:
+  name: platform-project-product-mcp
+  type: mcp-sidecar
+  domain: portfolio
+  owner: platform-engineering
+  repository: dataforalltech/platform-devs
+  criticality: high
+runtime:
+  official: docker-swarm
+  process: python -m project_product_mcp
+  image:
+    repository: registry.dataforall.tech/platform-project-product-mcp
+    referencePolicy: digest
+  deploymentArtifact: deploy/stack.yaml
+  ports: {mcp: 7121}
+  kubernetesProfile: absent
+exposure:
+  public: false
+  internalRoutesPublished: false
+  # Só o gateway MCP central alcança o sidecar.
+  trustedCallers: [platform-mcp]
+internalApi:
+  # O sidecar não EXPÕE /api/internal/*; ele apenas a CONSOME. Por isso não
+  # declara INTERNAL_AUTH_MODE nem `internal_api_token` (o papel de aceitar).
+  enabled: false
+  # Destinos cuja /api/internal/* este sidecar chama, por nome canônico
+  # (metadata.name do perfil do DESTINO). Cada um MUST ter a sua credencial
+  # resolvida; destino declarado sem segredo provisionado recusa o boot em
+  # qualquer ambiente — STD-SEC-002, "Parâmetros de configuração".
+  targets: [platform-project-product, platform-governance]
+identity:
+  # Superfície Model C: o inner token do gateway MCP. É outra família de
+  # audiência — `mcp:<namespace>` — e NÃO se confunde com o `aud` do token de
+  # serviço target-bound, que é o metadata.name do destino.
+  algorithm: RS256
+  issuer: runtime-supplied-platform-admin-twin
+  audience: mcp:portfolio
+  jwksUrl: runtime-supplied-platform-admin-twin-jwks
+secrets:
+  provider: vault-kv
+  auth: aws
+  # Uma credencial POR DESTINO. O destino faz parte do NOME: um nome sem destino
+  # só consegue designar um valor para todos eles, que é exatamente o segredo
+  # universal que o passo 1 da "Estratégia de migração" existe para extinguir.
+  # No ambiente, os mesmos nomes em maiúsculas com '-' → '_':
+  #   INTERNAL_API_TOKEN__PLATFORM_PROJECT_PRODUCT
+  #   INTERNAL_API_TOKEN__PLATFORM_GOVERNANCE
+  requiredNames:
+    - internal_api_token__platform-project-product
+    - internal_api_token__platform-governance
+    - rate_limit_storage_uri
+observability:
+  otlpEndpoint: runtime-supplied
+standards:
+  - STD-SEC-002  # serviço-a-serviço; credencial por destino (passo 1)
+  - STD-SEC-004  # bootstrap de segredos: Vault em cloud, .env só local
+  - STD-SEC-006  # inner token Model C
+  - STD-MCP-001  # contrato de integração com o gateway MCP

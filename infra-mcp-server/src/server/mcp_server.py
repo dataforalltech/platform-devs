@@ -732,8 +732,13 @@ def build_server() -> tuple[Any, Settings, FastAPI]:
     configure(settings)  # bootstrap credencial-zero (ORM-H-12): admin source p/ for_tenant
 
     provisioner = _build_provisioner(settings)
-    # Segredo Fernet (cifra chaves SSH): Vault-fallback → env (STD-SEC-004).
-    fernet_raw = load_secret("INFRA_LEASE_SECRET", env_fallback=settings.lease_secret)
+    # Segredo Fernet (cifra chaves SSH): bootstrap do STD-SEC-004 — Vault em cloud
+    # (falha fechada), env como fallback local controlado.
+    fernet_raw = load_secret(
+        "infra_lease_secret",
+        env_fallback=settings.lease_secret,
+        runtime_env=settings.runtime_env,
+    )
     fernet_key = fernet_raw.encode() if fernet_raw else None
 
     http_app = _build_http_app(settings, provisioner, fernet_key)

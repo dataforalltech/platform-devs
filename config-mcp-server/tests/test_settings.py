@@ -4,8 +4,40 @@ from __future__ import annotations
 
 import pytest
 
-from src.config.secrets import load_secret
+from src.config.secrets import SERVICE, SecretResolutionError, load_secret
 from src.config.settings import NAMESPACE, ConfigMcpSettings, Settings, get_settings
+
+
+def _vault_duplo(monkeypatch, **valores: str) -> dict[str, str]:
+    """Instala um Vault de mentira com a API REAL da lib (``service=`` / ``get()``).
+
+    Necessário em qualquer teste que construa Settings com ``RUNTIME_ENV="cloud"``:
+    ali o bootstrap resolve do Vault e NÃO aceita fallback de env (STD-SEC-002
+    §MUST — falha fechada). Sem o dublê, a própria construção recusa.
+    """
+    visto: dict[str, str] = {}
+
+    class _FakeVault:
+        def __init__(self, service: str) -> None:
+            visto["service"] = service
+
+        def get(self, name: str, *, field: str = "value") -> str:
+            visto["name"] = name
+            return valores.get(name, "")
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "platform_crypto",
+        type("m", (), {"VaultSecretsClient": _FakeVault}),
+    )
+    return visto
+
+
+_VAULT_CLOUD_COMPLETO = {
+    "db_password": "pw",
+    "admin_db_password": "admin-pw",
+    "config_mcp_master_key": "k",
+}
 
 
 class TestSettings:
@@ -67,7 +99,8 @@ class TestRuntimeEnv:
     def test_default_local(self):
         assert Settings(_env_file=None).runtime_env == "local"
 
-    def test_normalizes_case_and_whitespace(self):
+    def test_normalizes_case_and_whitespace(self, monkeypatch):
+        _vault_duplo(monkeypatch, **_VAULT_CLOUD_COMPLETO)
         assert Settings(RUNTIME_ENV="  CLOUD ", _env_file=None).runtime_env == "cloud"
 
     def test_invalid_raises(self):
@@ -99,21 +132,26 @@ class TestEnforceSecurityInvariants:
         with pytest.raises(RuntimeError, match="STD-SEC-006"):
             self._s(MCP_TWIN_AUDIENCE="config-mcp").enforce_security_invariants()
 
-    def test_cloud_requires_jwks(self):
+    def test_cloud_requires_jwks(self, monkeypatch):
+        _vault_duplo(monkeypatch, **_VAULT_CLOUD_COMPLETO)
         with pytest.raises(RuntimeError, match="URL_ADMIN_TWIN_JWKS"):
             self._s(RUNTIME_ENV="cloud", URL_ADMIN_TWIN_JWKS="").enforce_security_invariants()
 
-    def test_cloud_requires_admin_db(self):
+    def test_cloud_requires_admin_db(self, monkeypatch):
+        _vault_duplo(monkeypatch, **_VAULT_CLOUD_COMPLETO)
         with pytest.raises(RuntimeError, match="ADMIN_DB_HOST"):
             self._s(RUNTIME_ENV="cloud", ADMIN_DB_HOST="").enforce_security_invariants()
 
     def test_cloud_requires_master_key(self, monkeypatch):
-        monkeypatch.delenv("VAULT_ADDR", raising=False)
+        # Em cloud a fonte da master key é o Vault, não o env: para o invariante
+        # disparar, quem tem de estar sem o segredo é o Vault.
         monkeypatch.delenv("CONFIG_MCP_MASTER_KEY", raising=False)
+        _vault_duplo(monkeypatch, db_password="pw", admin_db_password="admin-pw")
         with pytest.raises(RuntimeError, match="CONFIG_MCP_MASTER_KEY"):
             self._s(RUNTIME_ENV="cloud", CONFIG_MCP_MASTER_KEY="").enforce_security_invariants()
 
-    def test_cloud_ok_with_all(self):
+    def test_cloud_ok_with_all(self, monkeypatch):
+        _vault_duplo(monkeypatch, **_VAULT_CLOUD_COMPLETO)
         self._s(RUNTIME_ENV="cloud").enforce_security_invariants()  # não levanta
 
 
@@ -129,14 +167,43 @@ class TestLoadSecret:
 
     def test_vault_success(self, monkeypatch):
         monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
+        visto = _vault_duplo(monkeypatch, config_mcp_master_key="from-vault")
+        assert (
+            load_secret(
+                "CONFIG_MCP_MASTER_KEY", "from-field", vault_key="config_mcp_master_key"
+            )
+            == "from-vault"
+        )
+        # Regressão: o 1º argumento do cliente é o ESPAÇO do serviço, nunca a URL
+        # do Vault — o bug original era `VaultSecretsClient().get_secret(key)`,
+        # que nem sequer satisfazia a assinatura da lib.
+        assert visto["service"] == SERVICE
+        assert visto["name"] == "config_mcp_master_key"
 
-        class _FakeClient:
-            def get_secret(self, key):
-                return "from-vault"
+    def test_cloud_vault_indisponivel_recusa(self, monkeypatch):
+        """Em cloud, Vault fora do ar recusa o boot — não degrada para env."""
+        monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
 
-        fake_mod = type("m", (), {"VaultSecretsClient": _FakeClient})
-        monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
-        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field") == "from-vault"
+        class _Quebrado:
+            def __init__(self, service: str) -> None:
+                pass
+
+            def get(self, name: str, *, field: str = "value") -> str:
+                raise RuntimeError("vault down")
+
+        monkeypatch.setitem(
+            __import__("sys").modules,
+            "platform_crypto",
+            type("m", (), {"VaultSecretsClient": _Quebrado}),
+        )
+        with pytest.raises(SecretResolutionError):
+            load_secret("CONFIG_MCP_MASTER_KEY", "from-field", runtime_env="cloud")
+
+    def test_cloud_ignora_fallback_de_env(self, monkeypatch):
+        """O valor de env não é fonte admitida em cloud, mesmo estando presente."""
+        monkeypatch.setenv("VAULT_ADDR", "http://vault:8200")
+        _vault_duplo(monkeypatch)
+        assert load_secret("CONFIG_MCP_MASTER_KEY", "from-field", runtime_env="cloud") == ""
 
     def test_vault_unavailable_falls_back(self, monkeypatch):
         # VAULT_ADDR setado mas a lib não existe → degradação graciosa p/ o env.

@@ -66,7 +66,11 @@ dependencies:
 secrets:
   provider: vault-kv
   auth: aws
-  requiredNames: [admin_db_password, internal_api_token, governance_internal_token, metrics_scrape_token, rate_limit_storage_uri]
+  # `internal_api_token` (sem sufixo) é o que ESTE serviço ACEITA na própria
+  # /api/internal/*. A credencial que se APRESENTA ao chamar vive no perfil do
+  # SIDECAR (deploy/service-profile-mcp.yaml), com o destino no nome —
+  # STD-SEC-002, "Estratégia de migração", passo 1.
+  requiredNames: [admin_db_password, internal_api_token, metrics_scrape_token, rate_limit_storage_uri]
 observability:
   otlpEndpoint: runtime-supplied
   metricsPath: /metrics

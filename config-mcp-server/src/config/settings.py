@@ -100,10 +100,29 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_secrets(self) -> Settings:
-        """Resolve os segredos (DB + admin + master key) via Vault-fallback (env se ausente)."""
-        self.DB_PASSWORD = load_secret("DB_PASSWORD", self.DB_PASSWORD)
-        self.ADMIN_DB_PASSWORD = load_secret("ADMIN_DB_PASSWORD", self.ADMIN_DB_PASSWORD)
-        self.master_key = load_secret("CONFIG_MCP_MASTER_KEY", self.master_key)
+        """Resolve os segredos (DB + admin + master key) pelo bootstrap do STD-SEC-004.
+
+        Em cloud a fonte é o Vault e só ele: Vault fora do ar recusa o boot em vez
+        de degradar para env em silêncio (STD-SEC-002, §MUST — falha fechada).
+        """
+        self.DB_PASSWORD = load_secret(
+            "DB_PASSWORD",
+            self.DB_PASSWORD,
+            vault_key="db_password",
+            runtime_env=self.runtime_env,
+        )
+        self.ADMIN_DB_PASSWORD = load_secret(
+            "ADMIN_DB_PASSWORD",
+            self.ADMIN_DB_PASSWORD,
+            vault_key="admin_db_password",
+            runtime_env=self.runtime_env,
+        )
+        self.master_key = load_secret(
+            "CONFIG_MCP_MASTER_KEY",
+            self.master_key,
+            vault_key="config_mcp_master_key",
+            runtime_env=self.runtime_env,
+        )
         return self
 
     def resolve_master_key(self) -> str:

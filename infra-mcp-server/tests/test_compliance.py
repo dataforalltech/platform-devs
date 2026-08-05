@@ -13,8 +13,33 @@ import pytest
 from pydantic import ValidationError
 
 from src.config.logging import JsonLogFormatter, configure_logging
-from src.config.secrets import load_secret
+from src.config.secrets import SERVICE, SecretResolutionError, load_secret
 from src.config.settings import Settings
+
+
+def _vault_duplo(monkeypatch, **valores: str) -> dict[str, str]:
+    """Instala um Vault de mentira com a API REAL da lib (``service=`` / ``get()``).
+
+    Necessário em qualquer teste que construa Settings com ``RUNTIME_ENV="cloud"``:
+    ali o bootstrap resolve do Vault e NÃO aceita fallback de env (STD-SEC-002
+    §MUST — falha fechada). Sem o dublê, a própria construção recusa.
+    """
+    visto: dict[str, str] = {}
+
+    class _FakeVault:
+        def __init__(self, service: str) -> None:
+            visto["service"] = service
+
+        def get(self, name: str, *, field: str = "value") -> str:
+            visto["name"] = name
+            return valores.get(name, "")
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "platform_crypto",
+        type("m", (), {"VaultSecretsClient": _FakeVault}),
+    )
+    return visto
 
 
 # ── RUNTIME_ENV validator ─────────────────────────────────────────────────────
@@ -22,7 +47,8 @@ def test_runtime_env_default_local():
     assert Settings().runtime_env == "local"
 
 
-def test_runtime_env_normalizes_case():
+def test_runtime_env_normalizes_case(monkeypatch):
+    _vault_duplo(monkeypatch, db_password="pw", admin_db_password="pw")
     assert Settings(RUNTIME_ENV="CLOUD").runtime_env == "cloud"
 
 
@@ -49,15 +75,18 @@ def test_enforce_rejects_bad_audience():
         s.enforce_security_invariants()
 
 
-def test_enforce_requires_jwks_in_cloud():
+def test_enforce_requires_jwks_in_cloud(monkeypatch):
+    _vault_duplo(monkeypatch, db_password="pw", admin_db_password="pw")
     s = Settings(RUNTIME_ENV="cloud", MCP_TWIN_AUDIENCE="mcp:infra-mcp", URL_ADMIN_TWIN_JWKS="")
     with pytest.raises(RuntimeError, match="URL_ADMIN_TWIN_JWKS"):
         s.enforce_security_invariants()
 
 
-def test_enforce_requires_admin_db_in_cloud():
+def test_enforce_requires_admin_db_in_cloud(monkeypatch):
     # cloud + jwks mas SEM ADMIN_DB_HOST/PASSWORD → o allocator agora é tenant-scoped no
     # ORM (há credencial de DB de verdade), então o boot falha fechado (STD-SEC-004).
+    # Em cloud a fonte da senha é o Vault, não o env: é ele que precisa não ter a chave.
+    _vault_duplo(monkeypatch, db_password="pw")
     s = Settings(
         RUNTIME_ENV="cloud",
         MCP_TWIN_AUDIENCE="mcp:infra-mcp",
@@ -67,46 +96,72 @@ def test_enforce_requires_admin_db_in_cloud():
         s.enforce_security_invariants()
 
 
-def test_enforce_ok_in_cloud_with_jwks_and_admin_db():
+def test_enforce_ok_in_cloud_with_jwks_and_admin_db(monkeypatch):
+    _vault_duplo(monkeypatch, db_password="pw", admin_db_password="s3cr3t")
     s = Settings(
         RUNTIME_ENV="cloud",
         MCP_TWIN_AUDIENCE="mcp:infra-mcp",
         URL_ADMIN_TWIN_JWKS="http://admin.local/jwks",
         ADMIN_DB_HOST="admin-db.local",
-        ADMIN_DB_PASSWORD="s3cr3t",  # noqa: S106 — valor fake de teste, sem I/O real
     )
     assert s.enforce_security_invariants() is None
 
 
-# ── load_secret (Vault-fallback) ──────────────────────────────────────────────
+# ── load_secret (bootstrap STD-SEC-004) ───────────────────────────────────────
 def test_load_secret_env_fallback_when_no_vault(monkeypatch):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
-    assert load_secret("INFRA_LEASE_SECRET", env_fallback="from-env") == "from-env"
+    assert load_secret("infra_lease_secret", env_fallback="from-env") == "from-env"
 
 
 def test_load_secret_absent_returns_none(monkeypatch):
     monkeypatch.delenv("VAULT_ADDR", raising=False)
-    assert load_secret("INFRA_LEASE_SECRET") is None
+    assert load_secret("infra_lease_secret") is None
 
 
 def test_load_secret_degrades_when_vault_import_fails(monkeypatch):
     # VAULT_ADDR setado mas platform_crypto não instalado → ImportError capturado,
-    # degrada graciosamente para env (boot nunca quebra por Vault).
+    # degrada para env. Isto continua valendo em LOCAL — e só nele.
     monkeypatch.setenv("VAULT_ADDR", "http://vault.local:8200")
-    assert load_secret("INFRA_LEASE_SECRET", env_fallback="env-val") == "env-val"
+    assert load_secret("infra_lease_secret", env_fallback="env-val") == "env-val"
 
 
 def test_load_secret_uses_vault_when_available(monkeypatch):
     monkeypatch.setenv("VAULT_ADDR", "http://vault.local:8200")
+    visto = _vault_duplo(monkeypatch, infra_lease_secret="vault-val")
+    assert load_secret("infra_lease_secret", env_fallback="env-val") == "vault-val"
+    # Regressão: o 1º argumento do cliente é o ESPAÇO do serviço, nunca a URL do
+    # Vault — o bug original era `VaultSecretsClient(vault_addr).get_secret(key)`.
+    assert visto["service"] == SERVICE
+    assert "://" not in visto["service"]
 
-    class _FakeClient:
-        def get_secret(self, name: str) -> str:
-            assert name == "INFRA_LEASE_SECRET"
-            return "vault-val"
 
-    fake_mod = type("m", (), {"VaultSecretsClient": _FakeClient})
-    monkeypatch.setitem(__import__("sys").modules, "platform_crypto", fake_mod)
-    assert load_secret("INFRA_LEASE_SECRET", env_fallback="env-val") == "vault-val"
+# ── falha fechada em cloud (STD-SEC-002 §MUST) ────────────────────────────────
+def test_load_secret_cloud_vault_indisponivel_recusa(monkeypatch):
+    monkeypatch.setenv("VAULT_ADDR", "http://vault.local:8200")
+
+    class _Quebrado:
+        def __init__(self, service: str) -> None:
+            pass
+
+        def get(self, name: str, *, field: str = "value") -> str:
+            raise RuntimeError("vault down")
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "platform_crypto",
+        type("m", (), {"VaultSecretsClient": _Quebrado}),
+    )
+    with pytest.raises(SecretResolutionError):
+        load_secret("infra_lease_secret", env_fallback="env-val", runtime_env="cloud")
+
+
+def test_load_secret_cloud_ignora_fallback_de_env(monkeypatch):
+    monkeypatch.setenv("VAULT_ADDR", "http://vault.local:8200")
+    _vault_duplo(monkeypatch)
+    assert (
+        load_secret("infra_lease_secret", env_fallback="env-val", runtime_env="cloud")
+        is None
+    )
 
 
 # ── JsonLogFormatter / configure_logging (STD-OBS-001) ────────────────────────
