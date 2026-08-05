@@ -26,9 +26,21 @@ def catalog():
     return load_catalog(ROOT)
 
 
+# Diretórios de MCP server que existem em disco e NENHUM manifesto reivindica.
+# A lista é um registro explícito de dívida, não uma permissão: qualquer órfão novo
+# faz este teste falhar. Reduzi-la a vazio é o objetivo.
+#
+# `frontend-pixelfera-mcp-server` era declarado em `legacy_source_paths` do
+# devteam-mcp, o que o dava por consolidado. Não estava: não existe domínio
+# `frontend-pixelfera` em `devteam-mcp-server/src/domains`, e ele segue em
+# TypeScript, fora do Model C. A reivindicação falsa mascarava o órfão; removê-la
+# o tornou visível. O destino dele é decisão de produto — ver BACKLOG.
+ORFAOS_CONHECIDOS = ["frontend-pixelfera-mcp-server"]
+
+
 def test_catalog_is_valid_and_inventory_is_complete(catalog) -> None:
     assert validate_catalog(catalog) == []
-    assert audit_inventory(catalog).uncovered_directories == []
+    assert sorted(audit_inventory(catalog).uncovered_directories) == sorted(ORFAOS_CONHECIDOS)
 
 
 def test_generated_artifacts_have_no_drift(catalog) -> None:

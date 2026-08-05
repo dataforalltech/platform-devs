@@ -1,7 +1,7 @@
 schema_version: 1
 id: devteam-mcp
 display_name: DevTeam MCP
-description: Consolidated provider for the twenty DevTeam persona and system domains.
+description: Consolidated provider for the 21 DevTeam persona and system domains (20 consolidated from legacy servers, plus guardian, born here).
 status: experimental
 classification:
   type: system
@@ -10,11 +10,16 @@ ownership:
   team: platform-engineering
   source_repo: dataforalltech/platform-devs
   source_path: devteam-mcp-server
+  # Os 20 servidores cujo conteúdo foi copiado para src/domains/ no fan-out de
+  # 2026-07-17. NÃO inclui frontend-pixelfera-mcp-server: ele era reivindicado
+  # aqui, mas não existe domínio `frontend-pixelfera` em src/domains — o fan-out
+  # nunca o incluiu, e ele segue em TypeScript, fora do Model C. O destino dele é
+  # decisão em aberto (ver BACKLOG). O 21º domínio, `guardian`, não tem servidor
+  # de origem: nasceu já dentro do agregador em 2026-07-22.
   legacy_source_paths:
     - architecture-mcp-server
     - backend-mcp-server
     - frontend-mcp-server
-    - frontend-pixelfera-mcp-server
     - devops-mcp-server
     - product-owner-mcp-server
     - product-manager-mcp-server

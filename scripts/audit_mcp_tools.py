@@ -124,12 +124,38 @@ def _read(path: Path) -> str:
         return ""
 
 
+def _looks_like_mcp_implementation(directory: Path) -> bool:
+    """Detecta um MCP server pela ESTRUTURA, e não pelo nome do diretório.
+
+    O filtro anterior era ``endswith("-mcp-server") or endswith("-mcp")``, mais um
+    caso especial hardcoded para ``devteam-observatory``. Com isso,
+    ``cross-devteam-validators`` e ``quality-gates-system`` — que têm entrypoint
+    próprio e expõem tools — NUNCA eram enumerados, e qualquer número extraído
+    deste script subestimava a frota. Um censo que depende da convenção de nome
+    não é censo: é a lista de quem obedeceu à convenção.
+    """
+    marcadores = (
+        Path("src") / "tools" / "index.ts",
+        Path("src") / "server.ts",
+        Path("src") / "server" / "mcp_server.py",
+        Path("src") / "tools" / "__init__.py",
+    )
+    if any((directory / marcador).is_file() for marcador in marcadores):
+        return True
+    # Entrypoint Python no topo do diretório (ex.: cross_devteam_validators_mcp.py).
+    return any(directory.glob("*_mcp.py")) or any(directory.glob("*-mcp.py"))
+
+
 def discover_implementations(root: Path) -> list[Path]:
     candidates: set[Path] = set()
     for child in root.iterdir():
         if not child.is_dir() or child.name in IGNORED_PARTS:
             continue
-        if child.name.endswith("-mcp-server") or child.name.endswith("-mcp") or child.name == "devteam-observatory":
+        if (
+            child.name.endswith("-mcp-server")
+            or child.name.endswith("-mcp")
+            or _looks_like_mcp_implementation(child)
+        ):
             candidates.add(child)
     services = root / "services"
     if services.is_dir():
@@ -297,11 +323,35 @@ def _identity(path: Path, catalog: Any) -> tuple[str, str, Any | None]:
     return name.removesuffix("-server"), "unregistered", None
 
 
+# Artefatos GERADOS que vivem sob docs/ e não são documentação. O relatório desta
+# própria auditoria lista o nome de todas as tools da frota; sem esta exclusão, a
+# primeira execução escreve o baseline e a SEGUINTE passa a considerar toda tool
+# "documentada" porque o nome dela aparece no relatório. É evidência circular
+# alimentando o gate de promoção — e era a causa de duas execuções consecutivas
+# produzirem números diferentes.
+_DOCS_GERADOS = (
+    Path("docs") / "reviews" / "mcp-tools-quality-baseline.md",
+    Path("docs") / "generated",
+)
+
+
+def _e_doc_gerado(path: Path, root: Path) -> bool:
+    try:
+        relativo = path.relative_to(root)
+    except ValueError:
+        return False
+    return any(relativo == alvo or alvo in relativo.parents for alvo in _DOCS_GERADOS)
+
+
 def audit_repository(root: Path = ROOT) -> list[MCPAudit]:
     catalog = load_catalog(root)
     records: list[MCPAudit] = []
     duplicate_index: defaultdict[str, list[int]] = defaultdict(list)
-    docs_text = "\n".join(_read(path) for path in _files(root / "docs", {".md", ".rst"}))
+    docs_text = "\n".join(
+        _read(path)
+        for path in _files(root / "docs", {".md", ".rst"})
+        if not _e_doc_gerado(path, root)
+    )
 
     for implementation in discover_implementations(root):
         provider, provider_type, manifest = _identity(implementation, catalog)
@@ -490,23 +540,75 @@ def runtime_gaps(records: list[MCPAudit], root: Path = ROOT) -> list[str]:
     return errors
 
 
+_BASELINE_MD = Path("docs/reviews/mcp-tools-quality-baseline.md")
+_BASELINE_JSON = Path("generated/mcp-tools-audit.json")
+
+
+def _evidence_payload(records: list) -> str:
+    payload = {
+        "schema_version": 1,
+        "repository": "dataforalltech/platform-devs",
+        "mcps": [asdict(item) for item in records],
+    }
+    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+
+def _check_drift(records: list, markdown: str) -> int:
+    """Compara os artefatos versionados com o que o HEAD produz agora.
+
+    Existe porque os números de maturidade envelheceram em silêncio: o
+    `mcp-tools-audit.json` versionado ficou semanas atrás do código, e qualquer
+    documento que o citasse citava número errado. O `generate_mcp_artifacts.py`
+    já tinha um `--check` para os artefatos derivados do manifesto; estes dois
+    não tinham dono nenhum.
+    """
+    esperado = {_BASELINE_MD: markdown, _BASELINE_JSON: _evidence_payload(records)}
+    drift: list[str] = []
+    for relativo, conteudo in esperado.items():
+        caminho = ROOT / relativo
+        if not caminho.is_file():
+            drift.append(f"missing generated artifact: {relativo.as_posix()}")
+        elif caminho.read_text(encoding="utf-8") != conteudo:
+            drift.append(f"generated artifact drift: {relativo.as_posix()}")
+
+    if drift:
+        for item in drift:
+            print(f"ERROR: {item}", file=sys.stderr)
+        print(
+            "Regenere com: python scripts/audit_mcp_tools.py "
+            f"--output {_BASELINE_MD.as_posix()} --json-output {_BASELINE_JSON.as_posix()}",
+            file=sys.stderr,
+        )
+        return 1
+    print("OK: quality baseline matches the current tree", file=sys.stderr)
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, help="write the Markdown report")
     parser.add_argument("--json-output", type=Path, help="write machine-readable evidence")
     parser.add_argument("--fail-on-runtime-gaps", action="store_true")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="não escreve; sai com 1 se os artefatos versionados estiverem defasados",
+    )
     args = parser.parse_args()
     records = audit_repository(ROOT)
     markdown = render_markdown(records)
+
+    if args.check:
+        return _check_drift(records, markdown)
+
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(markdown, encoding="utf-8", newline="\n")
     else:
         print(markdown)
     if args.json_output:
-        payload = {"schema_version": 1, "repository": "dataforalltech/platform-devs", "mcps": [asdict(item) for item in records]}
         args.json_output.parent.mkdir(parents=True, exist_ok=True)
-        args.json_output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+        args.json_output.write_text(_evidence_payload(records), encoding="utf-8", newline="\n")
     gaps = runtime_gaps(records)
     if args.fail_on_runtime_gaps and gaps:
         for gap in gaps:
