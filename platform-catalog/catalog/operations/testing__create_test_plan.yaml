@@ -5,7 +5,8 @@ metadata:
   uid: testing.create_test_plan
   domain: testing
   title: create test plan
-  description: ''
+  description: Cria um plano de testes para uma feature ou endpoint. Retorna plan_id
+    usado em todas as operações subsequentes.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,21 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        title:
+          type: string
+          description: 'Título do plano (ex: ''GET /api/users'')'
+        scope:
+          type: string
+          description: O que será testado e quais limites
+        feature:
+          type: string
+          description: Nome da feature ou ticket relacionado
+      required:
+      - title
+      - scope
     outputs: {}
     preconditions: []
     postconditions: []

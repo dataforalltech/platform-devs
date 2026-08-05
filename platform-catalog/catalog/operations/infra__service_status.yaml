@@ -5,7 +5,8 @@ metadata:
   uid: infra.service_status
   domain: infra
   title: service status
-  description: ''
+  description: 'Retornadados do servico + health check em umaunicachamada. overall_status:
+    healthy | unhealthy | unknown.'
   owner: platform
   tags:
   - infra
@@ -30,7 +31,21 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico.
+        timeout:
+          type: number
+          minimum: 0.1
+          maximum: 30.0
+          description: 'Timeout HTTP em segundos. Default: 3.0.'
+          default: 3.0
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

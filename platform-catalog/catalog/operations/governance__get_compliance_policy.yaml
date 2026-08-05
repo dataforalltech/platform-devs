@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_compliance_policy
   domain: governance
   title: get compliance policy
-  description: ''
+  description: Retorna política de conformidade para um ambiente
   owner: platform
   tags:
   - governance
@@ -30,7 +30,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        env:
+          type: string
+          description: 'Ambiente: dev, hml, prod'
+          enum:
+          - dev
+          - hml
+          - prod
+      required:
+      - env
     outputs: {}
     preconditions: []
     postconditions: []

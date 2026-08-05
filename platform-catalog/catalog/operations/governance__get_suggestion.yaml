@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_suggestion
   domain: governance
   title: get suggestion
-  description: ''
+  description: Devolve o payload completo de uma sugestão pelo id.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        suggestion_id:
+          type: string
+          description: 'Formato: YYYYMMDDTHHMMSS-XXXXXXXX'
+      required:
+      - suggestion_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,9 @@ metadata:
   uid: governance.create_adr
   domain: governance
   title: create adr
-  description: ''
+  description: Cria docs/decisions/adr-NNNN.md no repositório alvo. Numeração automática
+    (próximo número livre). Use quando uma decisão arquitetural justifica ADR (substituir
+    biblioteca, mudar padrão de cache, novo protocolo).
   owner: platform
   tags:
   - governance
@@ -30,7 +32,30 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Título curto da decisão.
+        context:
+          type: string
+          description: Cenário, forças, restrições.
+        decision:
+          type: string
+          description: 'Decisão em voz ativa: ''Vamos usar X para Y porque Z.'''
+        consequences:
+          type: string
+          description: Positivas, negativas, neutras.
+        repo_path:
+          type: string
+          description: 'Caminho absoluto do repo alvo. Default: pai da knowledge-base.'
+      required:
+      - title
+      - context
+      - decision
+      - consequences
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

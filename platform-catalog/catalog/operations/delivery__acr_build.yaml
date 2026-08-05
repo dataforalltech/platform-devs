@@ -5,7 +5,15 @@ metadata:
   uid: delivery.acr_build
   domain: delivery
   title: acr build
-  description: ''
+  description: 'Constrói e empurra uma imagem Docker para o ACR localmente via docker
+    CLI. Não depende de GitHub Actions — útil para deploy imediato.
+
+
+    Fluxo: docker login → docker build (:vX + :latest) → docker push.
+
+    Tag padrão: v3.{YYYYMMDD}-{sha7}.
+
+    Imagem: {ACR_REGISTRY}/{ACR_NAMESPACE}/{image_name}.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +40,30 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório com o Dockerfile.
+        image_name:
+          type: string
+          description: 'Nome da imagem (ex: platform-analytics).'
+        tag:
+          type: string
+          description: 'Tag da imagem. Default: v3.{YYYYMMDD}-{sha7}.'
+        dockerfile:
+          type: string
+          description: 'Caminho do Dockerfile relativo a repo_path. Default: Dockerfile.'
+          default: Dockerfile
+        push:
+          type: boolean
+          description: 'Empurrar para o ACR após o build. Default: true.'
+          default: true
+      required:
+      - repo_path
+      - image_name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

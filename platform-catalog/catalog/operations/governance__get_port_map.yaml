@@ -5,7 +5,8 @@ metadata:
   uid: governance.get_port_map
   domain: governance
   title: get port map
-  description: ''
+  description: Mapeamento canônico porta → serviço (AGENTS.md §47), com próxima porta
+    livre no range reservado 8022-8029. Útil ao planejar serviço novo.
   owner: platform
   tags:
   - governance
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

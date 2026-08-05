@@ -5,7 +5,9 @@ metadata:
   uid: infra.kafka_status
   domain: infra
   title: kafka status
-  description: ''
+  description: Verifica conectividade TCP com o broker Kafka. Se bootstrap_servers
+    nao for passado, busca no registry (type='kafka' ou nome 'kafka'/'platform-kafka').
+    Retorna lista de brokers com reachable=true/false e latencia em ms.
   owner: platform
   tags:
   - infra
@@ -31,7 +33,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        bootstrap_servers:
+          type: string
+          description: 'Broker(s) Kafka: ''host:port'' ou ''h1:p1,h2:p2''. Se omitido,
+            usa registry.'
     outputs: {}
     preconditions: []
     postconditions: []

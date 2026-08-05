@@ -5,7 +5,7 @@ metadata:
   uid: governance.run_audit
   domain: governance
   title: run audit
-  description: ''
+  description: Executa auditoria completa de um repo em um ambiente
   owner: platform
   tags:
   - governance
@@ -30,7 +30,29 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço
+        repo:
+          type: string
+          description: Nome do repositório
+        env:
+          type: string
+          description: 'Ambiente: dev, hml, prod'
+          enum:
+          - dev
+          - hml
+          - prod
+        repo_path:
+          type: string
+          description: Caminho local do repo (opcional, tenta resolver automaticamente)
+      required:
+      - service
+      - repo
+      - env
     outputs: {}
     preconditions: []
     postconditions: []

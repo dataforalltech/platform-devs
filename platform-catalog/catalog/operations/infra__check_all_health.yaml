@@ -5,7 +5,8 @@ metadata:
   uid: infra.check_all_health
   domain: infra
   title: check all health
-  description: ''
+  description: 'Verificasaude de todos os servicos com health_path definido. Atualizastatus
+    automaticamente: healthyâ†’running, unhealthyâ†’stopped.'
   owner: platform
   tags:
   - infra
@@ -30,7 +31,16 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        timeout:
+          type: number
+          minimum: 0.1
+          maximum: 30.0
+          description: 'Timeout HTTP em segundos. Default: 3.0.'
+          default: 3.0
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

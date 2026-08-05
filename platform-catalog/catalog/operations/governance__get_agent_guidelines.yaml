@@ -5,7 +5,8 @@ metadata:
   uid: governance.get_agent_guidelines
   domain: governance
   title: get agent guidelines
-  description: ''
+  description: 'Retorna diretrizes aplicáveis ao contexto: regras obrigatórias, ações
+    proibidas e checklist recomendado. Chamar antes de iniciar a tarefa.'
   owner: platform
   tags:
   - governance
@@ -30,7 +31,28 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repository_name:
+          type: string
+          description: Nome do repositório alvo (opcional).
+        task_type:
+          type: string
+          description: feature | bugfix | refactor | migration | infra | docs | test
+            | chore
+        layer:
+          type: string
+          enum:
+          - frontend
+          - backend
+          - database
+          - integrations
+          - infrastructure
+          - security
+          - observability
+          - testing
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

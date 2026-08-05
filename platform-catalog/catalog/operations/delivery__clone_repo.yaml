@@ -5,7 +5,9 @@ metadata:
   uid: delivery.clone_repo
   domain: delivery
   title: clone repo
-  description: ''
+  description: 'Clona um repositorio do GitHub para REPOS_ROOT/<repo>. repo: nome
+    simples (''platform-auth'') ou ''owner/repo''. Usa o GITHUB_TOKEN configurado
+    (sem expor o token no remote URL retornado). depth: shallow clone para repos grandes.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +34,28 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - repo
+      additionalProperties: false
+      properties:
+        repo:
+          type: string
+          description: Nome do repo ('platform-auth') ou 'owner/repo'.
+        branch:
+          type: string
+          description: 'Branch/tag/SHA a clonar. Default: branch padrao do repo.'
+        repos_root:
+          type: string
+          description: Pasta destino (sobrepoe REPOS_ROOT configurado).
+        target_dir:
+          type: string
+          description: 'Nome do diretorio destino. Default: nome do repo.'
+        depth:
+          type: integer
+          minimum: 1
+          description: 'Shallow clone --depth N. Default: clone completo.'
     outputs: {}
     preconditions: []
     postconditions: []

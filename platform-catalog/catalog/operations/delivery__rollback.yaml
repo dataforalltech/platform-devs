@@ -5,7 +5,8 @@ metadata:
   uid: delivery.rollback
   domain: delivery
   title: rollback
-  description: ''
+  description: Registra um rollback de versão para um serviço em um ambiente. Atualiza
+    o status do serviço para 'rollback' e registra no histórico.
   owner: platform
   tags:
   - delivery
@@ -31,7 +32,34 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        env:
+          type: string
+          enum:
+          - dev
+          - homol
+          - prod
+          description: Ambiente onde o rollback será realizado.
+        to_version:
+          type: string
+          description: Versão/SHA/tag para onde reverter.
+        rolled_back_by:
+          type: string
+          description: Identificador de quem executou o rollback.
+        reason:
+          type: string
+          description: Motivo do rollback (opcional).
+      required:
+      - service
+      - env
+      - to_version
+      - rolled_back_by
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

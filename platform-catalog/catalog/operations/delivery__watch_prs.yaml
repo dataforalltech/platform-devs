@@ -5,7 +5,10 @@ metadata:
   uid: delivery.watch_prs
   domain: delivery
   title: watch prs
-  description: ''
+  description: 'Escaneia PRs abertas nos repos registrados no pipeline. PRs targeting
+    ''develop'': auto-aprova e mergia se gates passam (DEV — autonomia total). PRs
+    targeting ''homol'' ou ''main'': lista para aprovação humana sem tocar. Configure
+    PIPELINE_GITHUB_TOKEN e PIPELINE_GITHUB_ORG para usar.'
   owner: platform
   tags:
   - delivery
@@ -31,7 +34,15 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repos:
+          type: array
+          items:
+            type: string
+          description: 'Repos específicos a verificar. Default: todos os registrados.'
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

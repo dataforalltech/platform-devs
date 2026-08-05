@@ -5,7 +5,8 @@ metadata:
   uid: platform.cancel_task
   domain: platform
   title: cancel task
-  description: ''
+  description: Cancela uma tarefa (de 'pending' ou 'in_progress'). actor + reason
+    obrigatórios (governança).
   owner: platform
   tags:
   - platform
@@ -30,7 +31,36 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        task_id:
+          type: integer
+        actor:
+          type: object
+          additionalProperties: false
+          description: Quem tomou a decisão (governança).
+          properties:
+            type:
+              type: string
+              enum:
+              - human
+              - agent
+              - system
+            id:
+              type: string
+              description: Email do humano, session_id do agente, ou nome do sistema.
+          required:
+          - type
+          - id
+        reason:
+          type: string
+          description: Motivo do cancelamento
+      required:
+      - task_id
+      - actor
+      - reason
     outputs: {}
     preconditions: []
     postconditions: []

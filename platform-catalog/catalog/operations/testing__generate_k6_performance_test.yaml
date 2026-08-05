@@ -5,7 +5,7 @@ metadata:
   uid: testing.generate_k6_performance_test
   domain: testing
   title: generate k6 performance test
-  description: ''
+  description: Gera um script de performance k6 (JS) determinístico com VUs/duração/thresholds.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,24 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        target:
+          type: string
+          description: URL alvo do teste de carga.
+        vus:
+          type: integer
+          description: Virtual users (default 10).
+        duration:
+          type: string
+          description: Duração (default '30s').
+        thresholds:
+          type: object
+          description: 'Thresholds {metric: condição|[condições]} (opcional).'
+      required:
+      - target
     outputs: {}
     preconditions: []
     postconditions: []

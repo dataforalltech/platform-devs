@@ -5,7 +5,10 @@ metadata:
   uid: infra.update_service_gateway
   domain: infra
   title: update service gateway
-  description: ''
+  description: Atualizaas URLs de gateway (internal_url e external_url) de um servico
+    no banco. Se internal_url naoo fornecida, derivado nome do container. Se external_url
+    naoo fornecida, derivade host:port. Com probe=true, testaas URLs antes de salvar
+    e marcao status.
   owner: platform
   tags:
   - infra
@@ -30,7 +33,31 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico.
+        internal_url:
+          type: string
+          description: 'URL internaDocker (ex: http://container-name:7100).'
+        external_url:
+          type: string
+          description: 'URL externaacessivel do host (ex: http://localhost:27101).'
+        host:
+          type: string
+          description: Host externo.
+        port:
+          type: integer
+          description: Portaexterna.
+        probe:
+          type: boolean
+          default: true
+          description: Testar URLs antes de salvar.
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

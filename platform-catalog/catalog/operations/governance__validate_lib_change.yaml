@@ -5,7 +5,10 @@ metadata:
   uid: governance.validate_lib_change
   domain: governance
   title: validate lib change
-  description: ''
+  description: 'HARD STOP §18 AGENTS.md: bloqueia mudanças em libs privadas (platform-*-lib,
+    platform-db-vector). Retorna template de LIB CHANGE REQUEST pré-preenchido com
+    consumidores identificados automaticamente no grafo, e os next steps para aprovação
+    por @caiog.'
   owner: platform
   tags:
   - governance
@@ -30,7 +33,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        lib_name:
+          type: string
+        proposed_change:
+          type: string
+          description: Descrição da mudança que se quer fazer na lib.
+      required:
+      - lib_name
+      - proposed_change
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

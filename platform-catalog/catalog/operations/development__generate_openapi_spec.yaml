@@ -5,13 +5,14 @@ metadata:
   uid: development.generate_openapi_spec
   domain: development
   title: generate openapi spec
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - development
   - backend
   - write
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: development

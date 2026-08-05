@@ -5,7 +5,9 @@ metadata:
   uid: infra.search_logs
   domain: infra
   title: search logs
-  description: ''
+  description: 'Busca por padrao regex nos logs recentes de um servico. Varre as ultimas
+    N linhas e retorna apenas as que batem com o padrao. lines: quantas linhas vasculhar
+    antes de filtrar (default 500). since: restringe a janela temporal (opcional).'
   owner: platform
   tags:
   - infra
@@ -30,7 +32,26 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - name
+      - pattern
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do servico no registry.
+        pattern:
+          type: string
+          description: Padrao regex a buscar nos logs (case-insensitive).
+        lines:
+          type: integer
+          default: 500
+          description: 'Janela de linhas a vasculhar. Default: 500.'
+        since:
+          type: string
+          description: 'Janela de tempo: ''30m'', ''1h'', ''5s'' ou ISO 8601. Opcional.'
     outputs: {}
     preconditions: []
     postconditions: []

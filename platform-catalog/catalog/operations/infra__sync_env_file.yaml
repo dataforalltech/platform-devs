@@ -5,7 +5,8 @@ metadata:
   uid: infra.sync_env_file
   domain: infra
   title: sync env file
-  description: ''
+  description: Gera ou atualiza um arquivo .env com as variáveis do store para um
+    ambiente. Com merge=true (padrão), mantém variáveis locais que não estão no store.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,23 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        target_path:
+          type: string
+          description: 'Caminho do arquivo .env. Ex: ''/path/to/repo/.env.dev''.'
+        environment:
+          type: string
+          description: 'Perfil cujas variáveis serão escritas. Ex: ''dev''.'
+        merge:
+          type: boolean
+          description: 'Manter variáveis locais não presentes no store. Default: true.'
+          default: true
+      required:
+      - target_path
+      - environment
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

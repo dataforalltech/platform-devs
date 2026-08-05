@@ -5,7 +5,7 @@ metadata:
   uid: platform.defer_suggestion
   domain: platform
   title: defer suggestion
-  description: ''
+  description: Difere uma sugestão pendente. actor obrigatório, reason opcional.
   owner: platform
   tags:
   - platform
@@ -30,7 +30,34 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        suggestion_id:
+          type: integer
+        actor:
+          type: object
+          additionalProperties: false
+          description: Quem tomou a decisão (governança).
+          properties:
+            type:
+              type: string
+              enum:
+              - human
+              - agent
+              - system
+            id:
+              type: string
+              description: Email do humano, session_id do agente, ou nome do sistema.
+          required:
+          - type
+          - id
+        reason:
+          type: string
+      required:
+      - suggestion_id
+      - actor
     outputs: {}
     preconditions: []
     postconditions: []

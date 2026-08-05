@@ -7,20 +7,99 @@ metadata:
   title: get governed MCP contract
   description: Read one canonical governed tool contract.
   owner: platform-engineering
-  tags: [contracts, read]
+  tags:
+  - contracts
+  - read
   lifecycle: stable
   version: 1.0.0
 spec:
   domain: contracts
   capability: contract-governance
-  resource: {type: contract, parent: null, namespace: null}
+  resource:
+    type: contract
+    parent: null
+    namespace: null
   operation: get
   authz: read
-  risk: {effects: [read], requires: [], blast_radius: none, default_level: low, approval_required: none}
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: none
+    default_level: low
+    approval_required: none
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        provider_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+      required:
+      - provider_id
+      - name
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        found:
+          type: boolean
+        contract:
+          anyOf:
+          - type: object
+            additionalProperties: false
+            properties:
+              provider_id:
+                type: string
+              name:
+                type: string
+              description:
+                type: string
+              status:
+                type: string
+                enum:
+                - active
+                - disabled
+              required_scope:
+                type: string
+              mutating:
+                type: boolean
+              risk:
+                type: object
+              secret_reference_only:
+                type: boolean
+              input_schema:
+                type: object
+              output_schema:
+                type: object
+            required:
+            - provider_id
+            - name
+            - description
+            - status
+            - required_scope
+            - mutating
+            - risk
+            - secret_reference_only
+            - input_schema
+            - output_schema
+          - type: 'null'
+      required:
+      - found
+      - contract
     preconditions: []
     postconditions: []
-    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
-relations: [{verb: acts-on, target: 'resource:contract'}]
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:contract

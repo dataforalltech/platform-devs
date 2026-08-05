@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_test_matrix
   domain: testing
   title: generate test matrix
-  description: ''
+  description: 'Gera e executa matriz de testes: cada cenário × payload é um caso.
+    Ideal para testar variações de input em endpoints.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,43 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        base_url:
+          type: string
+        scenarios:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              endpoint:
+                type: string
+              method:
+                type: string
+              payloads:
+                type: array
+                items:
+                  type: object
+              expected_statuses:
+                type: array
+                items:
+                  type: integer
+              expected_keys:
+                type: array
+                items:
+                  type: array
+                  items:
+                    type: string
+            required:
+            - name
+            - endpoint
+      required:
+      - base_url
+      - scenarios
     outputs: {}
     preconditions: []
     postconditions: []

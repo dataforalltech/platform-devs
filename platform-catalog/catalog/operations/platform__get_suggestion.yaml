@@ -5,7 +5,7 @@ metadata:
   uid: platform.get_suggestion
   domain: platform
   title: get suggestion
-  description: ''
+  description: Retorna o registro completo de uma sugestão pelo ID.
   owner: platform
   tags:
   - platform
@@ -30,7 +30,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        suggestion_id:
+          type: integer
+      required:
+      - suggestion_id
     outputs: {}
     preconditions: []
     postconditions: []

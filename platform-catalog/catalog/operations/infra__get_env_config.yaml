@@ -5,7 +5,7 @@ metadata:
   uid: infra.get_env_config
   domain: infra
   title: get env config
-  description: ''
+  description: Retorna variáveis de um perfil de ambiente (dev/staging/production).
   owner: platform
   tags:
   - infra
@@ -30,7 +30,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        environment:
+          type: string
+          description: 'Perfil. Ex: ''dev'', ''staging'', ''production''.'
+        key_pattern:
+          type: string
+          description: 'Filtrar variáveis por nome (substring). Ex: ''DATABASE''.'
+        limit:
+          type: integer
+          description: 'Máximo de variáveis retornadas. Padrão: 50.'
+          default: 50
+      required:
+      - environment
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

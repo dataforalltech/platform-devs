@@ -5,7 +5,7 @@ metadata:
   uid: platform.start_task
   domain: platform
   title: start task
-  description: ''
+  description: Marca uma tarefa como 'in_progress'. Só funciona a partir de 'pending'.
   owner: platform
   tags:
   - platform
@@ -30,7 +30,15 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        task_id:
+          type: integer
+          description: ID da tarefa
+      required:
+      - task_id
     outputs: {}
     preconditions: []
     postconditions: []

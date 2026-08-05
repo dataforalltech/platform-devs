@@ -5,7 +5,10 @@ metadata:
   uid: governance.check_scope
   domain: governance
   title: check scope
-  description: ''
+  description: 'Detecta drift de escopo: volume excessivo, infra central, libs privadas
+    (HARD STOP §18), múltiplos serviços, arquivos suspeitos para a tarefa declarada.
+    Retorna risk_level + drift_indicators + required_actions. Rodar antes de abrir
+    PR.'
   owner: platform
   tags:
   - governance
@@ -30,7 +33,19 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        task_description:
+          type: string
+        changed_files:
+          type: array
+          items:
+            type: string
+          description: Lista de paths relativos modificados pela tarefa.
+      required:
+      - task_description
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

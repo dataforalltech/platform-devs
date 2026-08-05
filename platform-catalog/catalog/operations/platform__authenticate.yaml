@@ -5,7 +5,8 @@ metadata:
   uid: platform.authenticate
   domain: platform
   title: authenticate
-  description: ''
+  description: PRIMEIRA tool por sessão. Valida TWIN_TOKEN, carrega perfil (nome,
+    role, escopos, ambiente). Sem authenticate(), whoami() e get_twin_context() falham.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,15 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Token do usuário/agente (TWIN_TOKEN do ambiente).
+      required:
+      - token
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

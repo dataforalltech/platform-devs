@@ -5,7 +5,8 @@ metadata:
   uid: testing.check_dependencies
   domain: testing
   title: check dependencies
-  description: ''
+  description: Verifica vulnerabilidades em dependências com pip-audit/safety (Python)
+    ou npm audit (Node). Detecta tipo de projeto automaticamente.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,14 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

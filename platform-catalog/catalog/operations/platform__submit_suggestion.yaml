@@ -5,7 +5,8 @@ metadata:
   uid: platform.submit_suggestion
   domain: platform
   title: submit suggestion
-  description: ''
+  description: 'Cross-repo: source_repo propõe melhoria para target_repo. Entra na
+    fila pending e aparece no resume_session do target_repo.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,46 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        source_repo:
+          type: string
+          description: Repo que está sugerindo.
+        target_repo:
+          type: string
+          description: Repo que vai receber/avaliar a sugestão.
+        title:
+          type: string
+        description:
+          type: string
+        kind:
+          type: string
+          enum:
+          - improvement
+          - correction
+          - addition
+          - question
+          - other
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        needs_human_decision:
+          type: boolean
+          description: Default true — sugestões cross-repo passam por decisão humana.
+          default: true
+        source_session_id:
+          type: string
+          description: Sessão originária (opcional, para auditoria).
+      required:
+      - source_repo
+      - target_repo
+      - title
     outputs: {}
     preconditions: []
     postconditions: []

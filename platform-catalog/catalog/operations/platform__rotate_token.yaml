@@ -5,7 +5,8 @@ metadata:
   uid: platform.rotate_token
   domain: platform
   title: rotate token
-  description: ''
+  description: Admin — Revoga o token atual e emite um novo para o mesmo usuário.
+    Útil para rotação periódica de segurança. O novo token é exibido uma única vez.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        admin_token:
+          type: string
+        identifier:
+          type: string
+          description: Token ou user_id a rotacionar.
+      required:
+      - admin_token
+      - identifier
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

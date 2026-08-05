@@ -5,7 +5,8 @@ metadata:
   uid: platform.add_service_dependency
   domain: platform
   title: add service dependency
-  description: ''
+  description: Vincula serviço auxiliar à sessão. service = nome canônico do services-mcp;
+    role classifica o papel (database, cache, auth).
   owner: platform
   tags:
   - platform
@@ -30,7 +31,25 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão
+        service:
+          type: string
+          description: Nome canônico do serviço no services-mcp
+        role:
+          type: string
+          description: 'Papel do serviço na sessão (ex: database, cache, auth)'
+        notes:
+          type: string
+          description: Observações livres sobre o uso do serviço
+      required:
+      - session_id
+      - service
     outputs: {}
     preconditions: []
     postconditions: []

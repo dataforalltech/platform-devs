@@ -5,7 +5,8 @@ metadata:
   uid: platform.complete_task
   domain: platform
   title: complete task
-  description: ''
+  description: Marca tarefa como concluída. Requer commit_sha + commit_message do
+    deploy-mcp.commit_files chamado ANTES desta tool.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,26 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        task_id:
+          type: integer
+          description: ID da tarefa
+        commit_sha:
+          type: string
+          description: Sha do commit retornado por mcp__deploy-mcp__commit_files.
+        commit_message:
+          type: string
+          description: Mensagem do commit (a mesma usada no commit_files).
+        result:
+          type: string
+          description: Notas livres sobre o resultado (campo informativo).
+      required:
+      - task_id
+      - commit_sha
+      - commit_message
     outputs: {}
     preconditions: []
     postconditions: []

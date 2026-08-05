@@ -5,7 +5,9 @@ metadata:
   uid: delivery.get_gate_status
   domain: delivery
   title: get gate status
-  description: ''
+  description: 'Retorna o status de todos os gates para um serviço/ambiente. Indica
+    quais gates são obrigatórios, quais passaram, falharam ou estão ausentes. Inclui
+    campo can_promote: true/false.'
   owner: platform
   tags:
   - delivery
@@ -31,7 +33,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+        env:
+          type: string
+          enum:
+          - dev
+          - homol
+          - prod
+          description: Ambiente a consultar.
+      required:
+      - service
+      - env
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

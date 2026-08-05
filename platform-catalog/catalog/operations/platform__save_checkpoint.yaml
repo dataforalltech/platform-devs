@@ -5,7 +5,8 @@ metadata:
   uid: platform.save_checkpoint
   domain: platform
   title: save checkpoint
-  description: ''
+  description: Salva snapshot do progresso. Use ao concluir etapas ou antes do contexto
+    esgotar. context aceita JSON com estado de retomada.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,23 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: 'ID da sessão (ex: sess_abc123)'
+        summary:
+          type: string
+          description: Resumo do estado atual — o que foi feito e o que falta
+        context:
+          type: object
+          description: Contexto estruturado opcional (arquivos pendentes, decisões,
+            próximos passos)
+      required:
+      - session_id
+      - summary
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,11 @@ metadata:
   uid: infra.sync_service_urls
   domain: infra
   title: sync service urls
-  description: ''
+  description: 'Sincronizavariaveis URL_* de um arquivo .env com as URLs registradas
+    no registry. ParacadaURL_<NAME>, buscao servico ''name'' ou ''platform-name''
+    no registry e atualizao valor. Preservao path existente daURL (ex: /api/v1) amenos
+    que url_suffix sejainformado. Use url_map paramapeamentos explicitos. Use dry_run=true
+    parasimular sem alterar.'
   owner: platform
   tags:
   - infra
@@ -30,7 +34,30 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho do arquivo .env aatualizar.
+        url_map:
+          type: object
+          additionalProperties:
+            type: string
+          description: 'Mapeamento explicito {ENV_VAR: service_name}. Ex: {"URL_ADMIN":
+            "platform-admin"}.'
+        url_suffix:
+          type: string
+          default: ''
+          description: 'Sufixo de path aforcar. Ex: ''/api/v1''. Se vazio, preservao
+            path atual.'
+        dry_run:
+          type: boolean
+          default: false
+          description: Se true, apenas simulaas mudancas sem alterar o arquivo.
     outputs: {}
     preconditions: []
     postconditions: []

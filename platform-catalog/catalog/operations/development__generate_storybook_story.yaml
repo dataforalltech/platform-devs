@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_storybook_story
   domain: development
   title: generate storybook story
-  description: ''
+  description: Gera uma story do Storybook (CSF3) determinística a partir do componente
+    e variantes.
   owner: platform
   tags:
   - development
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        component:
+          type: string
+          description: Componente-alvo da story.
+        variants:
+          type: array
+          description: 'Variantes: nomes ou [{name,args?}] (opcional).'
+      required:
+      - component
     outputs: {}
     preconditions: []
     postconditions: []

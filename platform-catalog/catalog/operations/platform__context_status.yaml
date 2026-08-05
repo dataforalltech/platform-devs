@@ -5,7 +5,9 @@ metadata:
   uid: platform.context_status
   domain: platform
   title: context status
-  description: ''
+  description: 'Retorna métricas de uso do contexto Claude: tool_calls desde autenticação,
+    tempo decorrido e recomendação de /compact (ok | compact_soon | compact_now).
+    Use periodicamente para saber quando compactar o contexto e reduzir custo de tokens.'
   owner: platform
   tags:
   - platform
@@ -30,7 +32,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

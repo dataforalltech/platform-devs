@@ -5,7 +5,8 @@ metadata:
   uid: governance.list_suggestions
   domain: governance
   title: list suggestions
-  description: ''
+  description: 'Lista sugestões com filtros (target_repo, status, category, severity,
+    source_agent). Default: 20 mais recentes.'
   owner: platform
   tags:
   - governance
@@ -30,7 +31,46 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        target_repo:
+          type: string
+        status:
+          type: string
+          enum:
+          - pending
+          - acknowledged
+          - accepted
+          - rejected
+          - done
+          - duplicate
+        category:
+          type: string
+          enum:
+          - bug
+          - improvement
+          - refactor
+          - security
+          - performance
+          - docs
+          - test
+          - contract
+          - observability
+        severity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        source_agent:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 200
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,10 @@ metadata:
   uid: governance.validate_migration
   domain: governance
   title: validate migration
-  description: ''
+  description: 'Valida conteúdo de arquivo de migration Alembic contra AGENTS.md §29:
+    sem ORM (op.execute(sa.text(...))), idempotência (IF NOT EXISTS), sem DROP destrutivo
+    na upgrade(), downgrade obrigatório. O caller PASSA o conteúdo como string — a
+    tool não toca em filesystem.'
   owner: platform
   tags:
   - governance
@@ -30,7 +33,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        content:
+          type: string
+          description: Conteúdo completo do arquivo de migration.
+      required:
+      - content
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

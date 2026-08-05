@@ -5,7 +5,8 @@ metadata:
   uid: infra.scan_processes
   domain: infra
   title: scan processes
-  description: ''
+  description: Usapsutil paralistar processos em LISTEN. Retornalistade processos
+    com pid, nome e porta.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,16 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        min_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          description: 'Portaminimaaincluir. Default: 1024.'
+          default: 1024
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

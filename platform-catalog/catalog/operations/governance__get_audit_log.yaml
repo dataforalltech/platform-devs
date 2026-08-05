@@ -5,7 +5,9 @@ metadata:
   uid: governance.get_audit_log
   domain: governance
   title: get audit log
-  description: ''
+  description: 'Consulta a trilha de auditoria de validate_agent_decision. query=''stats''
+    devolve métricas agregadas (total, bloqueados, by_risk_level, top_repos, top_violations).
+    Sem query: lista registros em ordem cronológica reversa, com filtros opcionais.'
   owner: platform
   tags:
   - governance
@@ -30,7 +32,36 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        query:
+          type: string
+          description: '''stats'' para métricas agregadas; omitir para listar.'
+        filter_repo:
+          type: string
+          description: Filtro por repositório (substring, case-insensitive).
+        risk_level:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+          description: Filtro exato por nível de risco.
+        approved:
+          type: boolean
+          description: true=só aprovados; false=só bloqueados.
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          description: Máximo de registros (default 50).
+        offset:
+          type: integer
+          minimum: 0
+          description: Pular os primeiros N resultados (paginação).
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_dockerfile
   domain: development
   title: generate dockerfile
-  description: ''
+  description: Gera um Dockerfile (multi-stage quando faz sentido) determinístico
+    a partir da spec.
   owner: platform
   tags:
   - development
@@ -31,7 +32,33 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        language:
+          type: string
+          description: 'Linguagem: python|node|go|java.'
+        framework:
+          type: string
+          description: Framework (opcional).
+        app_dir:
+          type: string
+          description: Diretório da aplicação (default '.').
+        port:
+          type: integer
+          description: Porta exposta (opcional).
+        package_manager:
+          type: string
+          description: Gerenciador de pacotes (opcional).
+        version:
+          type: string
+          description: Versão do runtime base (opcional).
+        extra_system_deps:
+          type: array
+          description: Pacotes de sistema extras (opcional).
+      required:
+      - language
     outputs: {}
     preconditions: []
     postconditions: []

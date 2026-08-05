@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_fallback_policy
   domain: governance
   title: get fallback policy
-  description: ''
+  description: Política para uso de fallback em um cenário específico.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,16 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        scenario:
+          type: string
+        service_name:
+          type: string
+      required:
+      - scenario
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

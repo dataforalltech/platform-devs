@@ -5,13 +5,14 @@ metadata:
   uid: product.map_user_personas
   domain: product
   title: map user personas
-  description: ''
+  description: Sem tool correspondente no runtime. Operation mantida como registro
+    histórico.
   owner: platform
   tags:
   - product
   - product-ownership
   - read
-  lifecycle: stable
+  lifecycle: retired
   version: 1.0.0
 spec:
   domain: product

@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_service_layer
   domain: development
   title: generate service layer
-  description: ''
+  description: Gera o scaffold de uma classe de service determinística a partir de
+    entity+methods.
   owner: platform
   tags:
   - development
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        entity:
+          type: string
+          description: Entidade alvo (nome da classe de service).
+        methods:
+          type: array
+          description: Métodos (str ou {name}); default CRUD (create/get/list/update/delete).
+      required:
+      - entity
     outputs: {}
     preconditions: []
     postconditions: []

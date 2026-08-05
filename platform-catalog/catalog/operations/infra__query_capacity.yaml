@@ -5,7 +5,9 @@ metadata:
   uid: infra.query_capacity
   domain: infra
   title: query capacity
-  description: ''
+  description: 'Planejamento sem efeito: ''haveria slot para essa spec sem violar
+    hard stops?'' Retorna can_satisfy_now + by_existing_vm/would_provision + blocked_by
+    quando recusado.'
   owner: platform
   tags:
   - infra
@@ -31,7 +33,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        spec:
+          type: string
+          enum:
+          - cpu-small
+          - cpu-medium
+          - cpu-large
+          - high-mem
+          - gpu-a100
+        owner:
+          type: string
+          description: Para checar quota por agente.
+      required:
+      - spec
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

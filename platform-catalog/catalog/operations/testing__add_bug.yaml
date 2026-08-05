@@ -5,7 +5,11 @@ metadata:
   uid: testing.add_bug
   domain: testing
   title: add bug
-  description: ''
+  description: 'Registra um BUG no banco vinculado a um plano de teste. USE ESTA TOOL
+    sempre que encontrar um bug, erro, falha ou comportamento inesperado. Bugs críticos
+    bloqueiam a aprovação do plano (double_check retorna BLOQUEADO). Severidades:
+    critical (sistema inoperante) | high (funcionalidade quebrada) | medium (degradação)
+    | low (cosmético).'
   owner: platform
   tags:
   - testing
@@ -30,7 +34,35 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste ao qual o bug pertence
+        severity:
+          type: string
+          enum:
+          - critical
+          - high
+          - medium
+          - low
+          description: critical=sistema parado | high=funcionalidade quebrada | medium=degradação
+            | low=cosmético
+        title:
+          type: string
+          description: Título curto e descritivo do bug
+        description:
+          type: string
+          description: 'Descrição detalhada: passos para reproduzir, esperado vs atual'
+        evidence:
+          type: string
+          description: Log, screenshot, stack trace ou link para evidência
+      required:
+      - plan_id
+      - severity
+      - title
+      - description
     outputs: {}
     preconditions: []
     postconditions: []

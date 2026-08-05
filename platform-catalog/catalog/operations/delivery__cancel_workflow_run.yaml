@@ -5,7 +5,7 @@ metadata:
   uid: delivery.cancel_workflow_run
   domain: delivery
   title: cancel workflow run
-  description: ''
+  description: Cancela um workflow run em andamento (queued ou in_progress).
   owner: platform
   tags:
   - delivery
@@ -32,7 +32,17 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        run_id:
+          type: integer
+      required:
+      - repo
+      - run_id
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

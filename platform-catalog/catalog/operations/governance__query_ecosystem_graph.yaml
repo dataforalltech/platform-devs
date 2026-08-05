@@ -5,7 +5,8 @@ metadata:
   uid: governance.query_ecosystem_graph
   domain: governance
   title: query ecosystem graph
-  description: ''
+  description: 'Consulta o grafo do ecossistema. Sem node_id: lista nós paginados.
+    Com node_id: vizinhos diretos. query=''stats'': métricas globais.'
   owner: platform
   tags:
   - governance
@@ -30,7 +31,62 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        query:
+          type: string
+          description: use 'stats' para métricas globais
+        kind:
+          type: string
+          enum:
+          - repository
+          - service
+          - library
+          - contract
+          - team
+          - port
+        status:
+          type: string
+          enum:
+          - active
+          - deprecated
+          - planned
+        node_id:
+          type: string
+        relation:
+          type: string
+          enum:
+          - depends_on
+          - consumes
+          - produces
+          - owns
+          - deprecated_by
+          - replaces
+          - runs_on_port
+          - uses_lib
+          - provides_api
+          - consumes_event
+          - produces_event
+          - based_on
+        direction:
+          type: string
+          enum:
+          - out
+          - in
+          - both
+        filter_text:
+          type: string
+          description: Filtro de texto livre nos nós.
+        limit:
+          type: integer
+          default: 20
+          description: 'Máximo de resultados. Padrão: 20.'
+        offset:
+          type: integer
+          default: 0
+          description: 'Paginação: pular N resultados.'
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

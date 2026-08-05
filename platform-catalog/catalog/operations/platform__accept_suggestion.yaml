@@ -5,7 +5,8 @@ metadata:
   uid: platform.accept_suggestion
   domain: platform
   title: accept suggestion
-  description: ''
+  description: Aceita sugestão e cria task na sessão do target_repo. Task herda needs_human_decision=true.
+    actor obrigatório.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,42 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        suggestion_id:
+          type: integer
+        session_id:
+          type: string
+          description: Sessão (do target_repo) onde a task será criada.
+        actor:
+          type: object
+          additionalProperties: false
+          description: Quem tomou a decisão (governança).
+          properties:
+            type:
+              type: string
+              enum:
+              - human
+              - agent
+              - system
+            id:
+              type: string
+              description: Email do humano, session_id do agente, ou nome do sistema.
+          required:
+          - type
+          - id
+        rationale:
+          type: string
+          description: Por que aceitar (opcional mas recomendado).
+        needs_human_decision:
+          type: boolean
+          description: Sobrescreve o default (true) ao criar a task.
+      required:
+      - suggestion_id
+      - session_id
+      - actor
     outputs: {}
     preconditions: []
     postconditions: []

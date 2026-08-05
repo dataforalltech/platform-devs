@@ -5,7 +5,8 @@ metadata:
   uid: platform.list_tasks
   domain: platform
   title: list tasks
-  description: ''
+  description: 'Lista as tarefas de uma sessão, opcionalmente filtrando por status.
+    Estados possíveis: pending | in_progress | completed | failed | cancelled.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,24 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão
+        status:
+          type: string
+          enum:
+          - pending
+          - in_progress
+          - completed
+          - failed
+          - cancelled
+          description: Filtrar por status
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,11 @@ metadata:
   uid: delivery.deploy
   domain: delivery
   title: deploy
-  description: ''
+  description: "Dispara o deploy de um serviço para um ambiente. Mapeia automaticamente\
+    \ ambiente → workflow:\n  dev  → cd-dev.yml   @ develop\n  hml  → cd-hml.yml \
+    \  @ release/<versao>  (ref obrigatório)\n  prod → cd-prod.yml  @ v<semver>  \
+    \         (ref obrigatório)\nPara prod é necessário aprovação manual configurada\
+    \ no GitHub Environment."
   owner: platform
   tags:
   - delivery
@@ -32,7 +36,35 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço (usado como nome do repo se repo não informado).
+        environment:
+          type: string
+          enum:
+          - dev
+          - hml
+          - prod
+          description: Ambiente alvo.
+        ref:
+          type: string
+          description: Branch/tag para o dispatch. Obrigatório para hml (release/1.0.0)
+            e prod (v1.0.0). Para dev o default é develop.
+        repo:
+          type: string
+          description: Nome do repo (se diferente do service).
+        inputs:
+          type: object
+          additionalProperties:
+            type: string
+          description: Inputs extras para o workflow_dispatch.
+      required:
+      - service
+      - environment
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

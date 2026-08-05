@@ -31,8 +31,194 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[A-Za-z0-9._:-]+$
+        project_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        expected_version:
+          type: integer
+          minimum: 1
+        changes:
+          type: object
+          additionalProperties: false
+          minProperties: 1
+          properties:
+            slug:
+              type: string
+              minLength: 1
+              maxLength: 80
+              pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+            name:
+              type: string
+              minLength: 1
+              maxLength: 200
+            description:
+              anyOf:
+              - type: string
+                maxLength: 4000
+              - type: 'null'
+            status:
+              type: string
+              enum:
+              - planned
+              - active
+              - paused
+              - completed
+              - archived
+            owner_user_refs:
+              type: array
+              maxItems: 100
+              uniqueItems: true
+              items:
+                type: string
+                minLength: 1
+                maxLength: 512
+            service_refs:
+              type: object
+              additionalProperties: false
+              properties:
+                governance_ref:
+                  anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 512
+                  - type: 'null'
+                schedule_ref:
+                  anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 512
+                  - type: 'null'
+                communication_ref:
+                  anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 512
+                  - type: 'null'
+                notification_ref:
+                  anyOf:
+                  - type: string
+                    minLength: 1
+                    maxLength: 512
+                  - type: 'null'
+      required:
+      - idempotency_key
+      - project_id
+      - expected_version
+      - changes
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        product_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+        description:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+        status:
+          type: string
+          enum:
+          - planned
+          - active
+          - paused
+          - completed
+          - archived
+        owner_user_refs:
+          type: array
+          maxItems: 100
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 512
+        service_refs:
+          type: object
+          additionalProperties: false
+          properties:
+            governance_ref:
+              anyOf:
+              - type: string
+                minLength: 1
+                maxLength: 512
+              - type: 'null'
+            schedule_ref:
+              anyOf:
+              - type: string
+                minLength: 1
+                maxLength: 512
+              - type: 'null'
+            communication_ref:
+              anyOf:
+              - type: string
+                minLength: 1
+                maxLength: 512
+              - type: 'null'
+            notification_ref:
+              anyOf:
+              - type: string
+                minLength: 1
+                maxLength: 512
+              - type: 'null'
+        version:
+          type: integer
+          minimum: 1
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        created_by_ref:
+          type: string
+          minLength: 1
+          maxLength: 512
+        updated_by_ref:
+          type: string
+          minLength: 1
+          maxLength: 512
+      required:
+      - project_id
+      - product_id
+      - slug
+      - name
+      - description
+      - status
+      - owner_user_refs
+      - service_refs
+      - version
+      - created_at
+      - updated_at
+      - created_by_ref
+      - updated_by_ref
     preconditions:
     - trusted tenant context
     postconditions:

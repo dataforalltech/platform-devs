@@ -5,7 +5,9 @@ metadata:
   uid: testing.create_checklist
   domain: testing
   title: create checklist
-  description: ''
+  description: 'Cria um checklist de verificação a partir de template ou com itens
+    customizados. Templates: pre_deploy, post_deploy, code_review, security, accessibility,
+    data_integrity.'
   owner: platform
   tags:
   - testing
@@ -30,7 +32,46 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        title:
+          type: string
+          description: Título do checklist
+        checklist_type:
+          type: string
+          enum:
+          - pre_deploy
+          - post_deploy
+          - code_review
+          - security
+          - accessibility
+          - data_integrity
+          - custom
+        plan_id:
+          type: string
+          description: Associar ao plano de teste (opcional)
+        use_template:
+          type: boolean
+          description: Usar template padrão para o tipo informado (default true)
+        items:
+          type: array
+          description: Itens customizados (obrigatório quando use_template=false ou
+            type='custom')
+          items:
+            type: object
+            properties:
+              description:
+                type: string
+              required:
+                type: boolean
+              category:
+                type: string
+            required:
+            - description
+      required:
+      - title
+      - checklist_type
     outputs: {}
     preconditions: []
     postconditions: []

@@ -31,8 +31,41 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[A-Za-z0-9._:-]+$
+        project_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - idempotency_key
+      - project_id
+      - expected_version
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        project_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        deleted:
+          const: true
+      required:
+      - project_id
+      - deleted
     preconditions:
     - trusted tenant context
     postconditions:

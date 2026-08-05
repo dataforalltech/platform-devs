@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_checklist
   domain: testing
   title: run checklist
-  description: ''
+  description: Inicia uma execução (run) de um checklist. Retorna todos os itens a
+    verificar com seus IDs.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,17 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        checklist_id:
+          type: string
+          description: ID do checklist
+        executor:
+          type: string
+          description: Nome ou identificador de quem está executando
+      required:
+      - checklist_id
     outputs: {}
     preconditions: []
     postconditions: []

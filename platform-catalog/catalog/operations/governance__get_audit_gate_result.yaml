@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_audit_gate_result
   domain: governance
   title: get audit gate result
-  description: ''
+  description: Retorna resultado do gate audit_compliance para integração com pipeline-mcp
   owner: platform
   tags:
   - governance
@@ -30,7 +30,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço
+        env:
+          type: string
+          description: 'Ambiente: dev, hml, prod'
+          enum:
+          - dev
+          - hml
+          - prod
+      required:
+      - service
+      - env
     outputs: {}
     preconditions: []
     postconditions: []

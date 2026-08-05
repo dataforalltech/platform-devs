@@ -31,8 +31,41 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        idempotency_key:
+          type: string
+          minLength: 8
+          maxLength: 128
+          pattern: ^[A-Za-z0-9._:-]+$
+        binding_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        expected_version:
+          type: integer
+          minimum: 1
+      required:
+      - idempotency_key
+      - binding_id
+      - expected_version
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        binding_id:
+          type: string
+          format: uuid
+          minLength: 36
+          maxLength: 36
+        detached:
+          const: true
+      required:
+      - binding_id
+      - detached
     preconditions:
     - trusted tenant context
     postconditions:

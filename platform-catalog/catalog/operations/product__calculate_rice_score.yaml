@@ -5,7 +5,8 @@ metadata:
   uid: product.calculate_rice_score
   domain: product
   title: calculate rice score
-  description: ''
+  description: Calcula o score RICE = (reach × impact × confidence) / effort de forma
+    determinística.
   owner: platform
   tags:
   - product
@@ -30,7 +31,27 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        reach:
+          type: number
+          description: Alcance (nº de pessoas/eventos por período).
+        impact:
+          type: number
+          description: Impacto (peso por pessoa).
+        confidence:
+          type: number
+          description: 'Confiança (ex.: 0-100 ou 0-1).'
+        effort:
+          type: number
+          description: Esforço (person-months; deve ser > 0).
+      required:
+      - reach
+      - impact
+      - confidence
+      - effort
     outputs: {}
     preconditions: []
     postconditions: []

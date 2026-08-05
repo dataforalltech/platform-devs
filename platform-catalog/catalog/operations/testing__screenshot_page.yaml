@@ -5,7 +5,8 @@ metadata:
   uid: testing.screenshot_page
   domain: testing
   title: screenshot page
-  description: ''
+  description: Tira screenshot de uma página via Playwright. Suporta viewports desktop/tablet/mobile
+    e captura de elemento por selector.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          description: URL da página
+        viewport:
+          type: string
+          enum:
+          - desktop
+          - tablet
+          - mobile
+          default: desktop
+        selector:
+          type: string
+          description: CSS selector para capturar elemento específico
+        output_dir:
+          type: string
+          description: 'Diretório de saída (default: settings.screenshots_dir)'
+      required:
+      - url
     outputs: {}
     preconditions: []
     postconditions: []

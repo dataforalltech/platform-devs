@@ -5,7 +5,7 @@ metadata:
   uid: infra.get_service
   domain: infra
   title: get service
-  description: ''
+  description: Retornaos dados de um servico pelo nome.
   owner: platform
   tags:
   - infra
@@ -30,7 +30,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico.
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

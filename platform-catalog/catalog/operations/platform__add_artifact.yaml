@@ -5,7 +5,8 @@ metadata:
   uid: platform.add_artifact
   domain: platform
   title: add artifact
-  description: ''
+  description: 'Registra um artefato ou evento relevante na sessão. Tipos: file_changed,
+    file_created, file_deleted, decision, tool_call, error, note.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,31 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+        artifact_type:
+          type: string
+          enum:
+          - file_changed
+          - file_created
+          - file_deleted
+          - decision
+          - tool_call
+          - error
+          - note
+          description: Tipo do artefato
+        content:
+          type: string
+          description: Conteúdo do artefato (caminho do arquivo, descrição da decisão,
+            etc.)
+      required:
+      - session_id
+      - artifact_type
+      - content
     outputs: {}
     preconditions: []
     postconditions: []

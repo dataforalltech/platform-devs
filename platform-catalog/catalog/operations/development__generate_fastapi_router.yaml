@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_fastapi_router
   domain: development
   title: generate fastapi router
-  description: ''
+  description: Gera o scaffold de um APIRouter FastAPI determinístico a partir de
+    resource+routes.
   owner: platform
   tags:
   - development
@@ -30,7 +31,22 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        resource:
+          type: string
+          description: Recurso/entidade do router (usado no prefix/tag).
+        routes:
+          type: array
+          description: Rotas [{method,path,handler}]; path params viram args do handler.
+        prefix:
+          type: string
+          description: Prefixo do router (default '/<resource>').
+      required:
+      - resource
+      - routes
     outputs: {}
     preconditions: []
     postconditions: []

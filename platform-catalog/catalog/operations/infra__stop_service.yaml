@@ -5,7 +5,9 @@ metadata:
   uid: infra.stop_service
   domain: infra
   title: stop service
-  description: ''
+  description: 'Paraum servico registrado. Detectaautomaticamente o tipo: docker/docker-compose
+    â†'' docker stop; process/uvicorn â†'' SIGTERM no PID. Atualizastatus=stopped
+    no registry apos parar.'
   owner: platform
   tags:
   - infra
@@ -30,7 +32,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - name
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do servico aparar.
+        mode:
+          type: string
+          enum:
+          - docker
+          - docker-compose
+          - process
+          description: Forcar tipo de stop. Se omitido, detectapelo registro.
+        timeout:
+          type: integer
+          minimum: 1
+          maximum: 120
+          default: 10
+          description: 'Timeout em segundos paradocker stop. Default: 10.'
     outputs: {}
     preconditions: []
     postconditions: []

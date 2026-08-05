@@ -221,6 +221,8 @@ providers atrás do próprio catálogo.
 
 ### B13 · Preencher `contract.inputs` / `contract.outputs` / `description` das operations
 
+> **✅ Concluído** — Contratos preenchidos a partir do CODIGO por `scripts/fill_operation_contracts.py`, de duas fontes: os contratos canonicos de `contracts/tools/` (19 operations, com inputs E outputs) e o `_TOOL_SCHEMAS` do agregador (247, so inputs). 4 ambiguas ficaram intocadas e 37 viraram `lifecycle: retired` — nenhuma tool do runtime as implementa. `outputs` segue vazio nas 288 nao-governadas: nenhum servidor de persona declara output schema, e inventar um seria a mesma afirmacao sem evidencia que o catalogo ja tinha demais.
+
 `platform-catalog/catalog/operations/*.yaml` — **307 arquivos**.
 
 Exemplo canônico do problema: `development__generate_fastapi_router.yaml` tem

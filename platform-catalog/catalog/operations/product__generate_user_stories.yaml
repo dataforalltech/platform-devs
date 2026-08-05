@@ -5,7 +5,8 @@ metadata:
   uid: product.generate_user_stories
   domain: product
   title: generate user stories
-  description: ''
+  description: Formata uma user story markdown 'Como... quero... para...' com critérios
+    de aceite.
   owner: platform
   tags:
   - product
@@ -30,7 +31,25 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        role:
+          type: string
+          description: Papel/persona ('Como ...').
+        goal:
+          type: string
+          description: Objetivo/ação ('quero ...').
+        benefit:
+          type: string
+          description: Benefício ('para ...'; opcional).
+        criteria:
+          type: array
+          description: Critérios de aceite (strings ou dicts; opcional).
+      required:
+      - role
+      - goal
     outputs: {}
     preconditions: []
     postconditions: []

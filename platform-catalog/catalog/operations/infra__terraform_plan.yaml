@@ -5,7 +5,9 @@ metadata:
   uid: infra.terraform_plan
   domain: infra
   title: terraform plan
-  description: ''
+  description: Roda `terraform plan -no-color -out=<file> -detailed-exitcode`. Retorna
+    summary (add/change/destroy) + path do .tfplan binário (input para infracost e
+    show-plan). Pode chamar provider remoto (rate limit).
   owner: platform
   tags:
   - infra
@@ -31,7 +33,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        path:
+          type: string
+        out_file:
+          type: string
+          description: 'Caminho do .tfplan a gravar. Default: <path>/.infra-mcp.tfplan'
+        var_file:
+          type: string
+          description: -var-file=... opcional
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

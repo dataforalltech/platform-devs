@@ -5,7 +5,8 @@ metadata:
   uid: platform.get_session
   domain: platform
   title: get session
-  description: ''
+  description: 'Retorna dados completos de uma sessão: metadados, último checkpoint
+    e contagem de artefatos.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

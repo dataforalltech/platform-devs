@@ -5,7 +5,7 @@ metadata:
   uid: testing.record_result
   domain: testing
   title: record result
-  description: ''
+  description: Registra o resultado da execução de um cenário de teste.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,35 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+        scenario_id:
+          type: integer
+          description: ID numérico do cenário
+        status:
+          type: string
+          enum:
+          - passed
+          - failed
+          - blocked
+          - skipped
+        actual_result:
+          type: string
+          description: O que realmente aconteceu
+        notes:
+          type: string
+          description: Observações adicionais
+        evidence:
+          type: string
+          description: Link ou referência para evidência (screenshot, log, etc.)
+      required:
+      - plan_id
+      - scenario_id
+      - status
     outputs: {}
     preconditions: []
     postconditions: []

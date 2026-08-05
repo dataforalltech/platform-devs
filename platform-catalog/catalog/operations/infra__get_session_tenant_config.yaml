@@ -5,7 +5,8 @@ metadata:
   uid: infra.get_session_tenant_config
   domain: infra
   title: get session tenant config
-  description: ''
+  description: Retorna config do tenant da sessão autenticada atual. Resolve tenant_id
+    automaticamente via dev-twin-mcp — o agente não precisa conhecer o tenant_id.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

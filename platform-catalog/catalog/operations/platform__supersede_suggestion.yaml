@@ -5,7 +5,8 @@ metadata:
   uid: platform.supersede_suggestion
   domain: platform
   title: supersede suggestion
-  description: ''
+  description: Marca uma sugestão como superseded. actor obrigatório, by_suggestion_id
+    opcional.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,36 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        suggestion_id:
+          type: integer
+        actor:
+          type: object
+          additionalProperties: false
+          description: Quem tomou a decisão (governança).
+          properties:
+            type:
+              type: string
+              enum:
+              - human
+              - agent
+              - system
+            id:
+              type: string
+              description: Email do humano, session_id do agente, ou nome do sistema.
+          required:
+          - type
+          - id
+        by_suggestion_id:
+          type: integer
+        reason:
+          type: string
+      required:
+      - suggestion_id
+      - actor
     outputs: {}
     preconditions: []
     postconditions: []

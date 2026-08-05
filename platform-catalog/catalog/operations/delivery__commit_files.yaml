@@ -5,7 +5,9 @@ metadata:
   uid: delivery.commit_files
   domain: delivery
   title: commit files
-  description: ''
+  description: Cria ou atualiza arquivos em um commit. Para 1 arquivo usa Contents
+    API. Para N arquivos usa Git Data API (1 commit atômico). Cria o arquivo se não
+    existir, atualiza se existir.
   owner: platform
   tags:
   - delivery
@@ -32,7 +34,45 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        branch:
+          type: string
+          description: Branch de destino.
+        message:
+          type: string
+          description: Mensagem do commit.
+        files:
+          type: array
+          description: Arquivos a criar/atualizar.
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                description: 'Caminho relativo ao root (ex: src/main.py).'
+              content:
+                type: string
+                description: Conteúdo completo do arquivo.
+            required:
+            - path
+            - content
+            additionalProperties: false
+          minItems: 1
+        author_name:
+          type: string
+          description: 'Nome do autor (override). Default: usa o token.'
+        author_email:
+          type: string
+      required:
+      - repo
+      - branch
+      - message
+      - files
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

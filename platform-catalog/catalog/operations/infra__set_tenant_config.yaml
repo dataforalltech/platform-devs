@@ -5,7 +5,8 @@ metadata:
   uid: infra.set_tenant_config
   domain: infra
   title: set tenant config
-  description: ''
+  description: Define uma variável de configuração para o tenant. O tenant_id é resolvido
+    das claims do inner token (gateway) — nunca de argumento do cliente (INV-3).
   owner: platform
   tags:
   - infra
@@ -30,7 +31,18 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        key:
+          type: string
+          description: 'Ex: ''DATABASE_URL''.'
+        value:
+          type: string
+      required:
+      - key
+      - value
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

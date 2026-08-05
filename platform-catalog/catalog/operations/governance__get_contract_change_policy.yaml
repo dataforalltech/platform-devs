@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_contract_change_policy
   domain: governance
   title: get contract change policy
-  description: ''
+  description: Regras + checklist + testes obrigatórios para mudança de contrato.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,30 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        provider_service:
+          type: string
+        consumer_services:
+          type: array
+          items:
+            type: string
+        contract_type:
+          type: string
+          enum:
+          - api
+          - event
+          - database
+          - file
+          - schema
+        proposed_change:
+          type: string
+      required:
+      - provider_service
+      - contract_type
+      - proposed_change
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

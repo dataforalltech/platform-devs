@@ -5,7 +5,8 @@ metadata:
   uid: delivery.get_pipeline
   domain: delivery
   title: get pipeline
-  description: ''
+  description: Retorna o status atual do pipeline de um serviço, incluindo ambiente
+    atual, status de bloqueio e últimas 10 promoções.
   owner: platform
   tags:
   - delivery
@@ -31,7 +32,15 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço.
+      required:
+      - service
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

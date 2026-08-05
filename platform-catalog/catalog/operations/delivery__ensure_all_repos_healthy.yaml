@@ -5,7 +5,13 @@ metadata:
   uid: delivery.ensure_all_repos_healthy
   domain: delivery
   title: ensure all repos healthy
-  description: ''
+  description: "Verifica e garante que todos os repositórios elegíveis para automação\
+    \ (active=true AND allows_automation=true — ADR-002) tenham CI passando e imagem\
+    \ Docker publicada no ACR.\n\nPara cada repo classifica: HEALTHY | CI_FAILING\
+    \ | ACR_MISSING | CI_FAILING_AND_ACR_MISSING.\n\nRemediação automática (dry_run=false):\n\
+    \  • CI falhando/ausente → scaffold ci+cd-dev se necessário → trigger ci.yml →\
+    \ polling\n  • ACR ausente → setup_repo (injeta secrets ACR) → trigger cd-dev.yml\n\
+    \nUse dry_run=true para apenas inspecionar sem modificar nada."
   owner: platform
   tags:
   - delivery
@@ -32,7 +38,38 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        org:
+          type: string
+          description: 'Organização GitHub. Default: dataforalltech.'
+          default: dataforalltech
+        workflow_id:
+          type: string
+          description: 'Arquivo do workflow CI a verificar/disparar. Default: ci.yml.'
+          default: ci.yml
+        cd_workflow_id:
+          type: string
+          description: 'Arquivo do workflow CD para build ACR. Default: cd-dev.yml.'
+          default: cd-dev.yml
+        ref:
+          type: string
+          description: 'Branch para verificar e disparar workflows. Default: develop.'
+          default: develop
+        wait_minutes:
+          type: integer
+          description: 'Tempo máximo aguardando CI após remediação (minutos). Default:
+            10.'
+          minimum: 1
+          maximum: 60
+          default: 10
+        dry_run:
+          type: boolean
+          description: 'Se true, apenas inspeciona e reporta sem executar nenhuma
+            ação. Default: false.'
+          default: false
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

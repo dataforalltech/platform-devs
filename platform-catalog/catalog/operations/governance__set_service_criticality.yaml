@@ -5,7 +5,7 @@ metadata:
   uid: governance.set_service_criticality
   domain: governance
   title: set service criticality
-  description: ''
+  description: Define nível de criticidade de um serviço
   owner: platform
   tags:
   - governance
@@ -30,7 +30,27 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        service:
+          type: string
+          description: Nome do serviço
+        criticality:
+          type: string
+          description: Nível de criticidade
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        updated_by:
+          type: string
+          description: Quem está atualizando
+      required:
+      - service
+      - criticality
+      - updated_by
     outputs: {}
     preconditions: []
     postconditions: []

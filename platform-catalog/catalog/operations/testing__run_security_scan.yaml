@@ -5,7 +5,8 @@ metadata:
   uid: testing.run_security_scan
   domain: testing
   title: run security scan
-  description: ''
+  description: 'Scan de segurança com bandit (Python) ou npm audit (JS/TS). Classifica
+    por severity: HIGH, MEDIUM, LOW.'
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        framework:
+          type: string
+          enum:
+          - auto
+          - python
+          - javascript
+          - typescript
+          default: auto
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: infra.list_tenants
   domain: infra
   title: list tenants
-  description: ''
+  description: Lista todos os tenants configurados e a quantidade de variáveis de
+    cada um.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

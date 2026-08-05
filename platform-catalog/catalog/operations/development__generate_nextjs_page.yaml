@@ -5,7 +5,7 @@ metadata:
   uid: development.generate_nextjs_page
   domain: development
   title: generate nextjs page
-  description: ''
+  description: Gera uma página Next.js (app router) determinística a partir de route/title/sections.
   owner: platform
   tags:
   - development
@@ -30,7 +30,21 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        route:
+          type: string
+          description: 'Rota da página (ex.: /dashboard).'
+        title:
+          type: string
+          description: Título/metadata (derivado da rota se ausente).
+        sections:
+          type: array
+          description: Seções a esboçar na página (opcional).
+      required:
+      - route
     outputs: {}
     preconditions: []
     postconditions: []

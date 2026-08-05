@@ -5,7 +5,8 @@ metadata:
   uid: documentation.check_doc_standards
   domain: documentation
   title: check doc standards
-  description: ''
+  description: Verifica padrões documentais (completeness, validity, quality). Retorna
+    score 0-100 e grade A-F.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        standard:
+          type: string
+          enum:
+          - minimal
+          - standard
+          - full
+          - service
+          description: Nível de exigência documental
+          default: standard
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

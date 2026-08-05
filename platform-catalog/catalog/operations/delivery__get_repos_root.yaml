@@ -5,7 +5,9 @@ metadata:
   uid: delivery.get_repos_root
   domain: delivery
   title: get repos root
-  description: ''
+  description: 'Retorna o caminho resolvido de REPOS_ROOT e quantos repos existem
+    la. Resolucao: argumento > DEPLOY_REPOS_ROOT > REPOS_ROOT > config-mcp workspace
+    > auto-detect. Use para descobrir onde os repos estao antes de clonar ou listar.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +34,13 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        explicit:
+          type: string
+          description: Caminho explicito a usar (sobrepoe todas as outras fontes).
     outputs: {}
     preconditions: []
     postconditions: []

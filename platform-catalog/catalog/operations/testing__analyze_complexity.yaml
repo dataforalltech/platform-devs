@@ -5,7 +5,8 @@ metadata:
   uid: testing.analyze_complexity
   domain: testing
   title: analyze complexity
-  description: ''
+  description: Analisa complexidade ciclomática com radon (Python) ou grep simples
+    (JS/TS). Identifica hotspots acima do threshold.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        repo_path:
+          type: string
+        threshold:
+          type: integer
+          description: 'CC máximo antes de considerar complexo (default: complexity_threshold)'
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

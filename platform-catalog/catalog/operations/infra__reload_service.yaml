@@ -5,7 +5,11 @@ metadata:
   uid: infra.reload_service
   domain: infra
   title: reload service
-  description: ''
+  description: 'Recarrega/reiniciaum servico registrado. Estrategiaautomaticapor tipo:
+    docker â†’ `docker restart <name>` | process â†’ mataprocesso naporta(esperareinicio
+    pelo process manager) | remote â†’ POST em /reload ou /actuator/restart | unknown
+    â†’ re-verificahealth. Aguardawait_seconds e faz health check automatico apos
+    o reload.'
   owner: platform
   tags:
   - infra
@@ -30,7 +34,28 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Nome do servico arecarregar.
+        wait_seconds:
+          type: number
+          minimum: 0
+          maximum: 60
+          default: 3.0
+          description: 'Segundos paraaguardar antes de verificar health. Default:
+            3.'
+        health_timeout:
+          type: number
+          minimum: 0.5
+          maximum: 30
+          default: 5.0
+          description: 'Timeout do health check pos-reload em segundos. Default: 5.'
+      required:
+      - name
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

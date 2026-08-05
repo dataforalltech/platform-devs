@@ -5,7 +5,8 @@ metadata:
   uid: testing.visual_regression
   domain: testing
   title: visual regression
-  description: ''
+  description: Compara screenshot atual com baseline via Pillow. Cria baseline se
+    não existir. Retorna diff em % de pixels.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,33 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+        baseline_name:
+          type: string
+          description: Nome do baseline (sem extensão)
+        viewport:
+          type: string
+          enum:
+          - desktop
+          - tablet
+          - mobile
+          default: desktop
+        threshold_pct:
+          type: number
+          description: '% máximo de pixels diferentes para passar'
+          default: 2.0
+        update_baseline:
+          type: boolean
+          description: Se True, salva novo baseline
+          default: false
+      required:
+      - url
+      - baseline_name
     outputs: {}
     preconditions: []
     postconditions: []

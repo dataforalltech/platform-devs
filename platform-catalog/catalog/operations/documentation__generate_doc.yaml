@@ -5,7 +5,8 @@ metadata:
   uid: documentation.generate_doc
   domain: documentation
   title: generate doc
-  description: ''
+  description: Gera documento a partir de template com substituição {{var}}. Salva
+    no disco se output_path fornecido.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,30 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        template_name:
+          type: string
+          enum:
+          - README
+          - CHANGELOG
+          - ADR
+          - AGENTS
+          - RUNBOOK
+          - API
+          description: Nome do template a usar
+        variables:
+          type: object
+          description: 'Mapa de variáveis para substituição (ex: {service_name: ''meu-serviço''})'
+          additionalProperties:
+            type: string
+        output_path:
+          type: string
+          description: Caminho absoluto para salvar o arquivo gerado (opcional)
+      required:
+      - template_name
+      - variables
     outputs: {}
     preconditions: []
     postconditions: []

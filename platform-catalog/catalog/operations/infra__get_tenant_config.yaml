@@ -5,7 +5,8 @@ metadata:
   uid: infra.get_tenant_config
   domain: infra
   title: get tenant config
-  description: ''
+  description: Retorna variáveis de configuração do tenant. O tenant_id é resolvido
+    das claims do inner token (gateway); via stdio direto pode ser informado.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,17 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        key_pattern:
+          type: string
+          description: 'Filtrar variáveis por nome (substring). Ex: ''DATABASE''.'
+        limit:
+          type: integer
+          description: 'Máximo de variáveis retornadas. Padrão: 50.'
+          default: 50
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

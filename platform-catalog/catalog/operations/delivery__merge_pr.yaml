@@ -5,7 +5,8 @@ metadata:
   uid: delivery.merge_pr
   domain: delivery
   title: merge pr
-  description: ''
+  description: 'Faz merge de um PR. Estratégias: squash (padrão), merge, rebase. Verifique
+    get_pr antes para garantir checks passando.'
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,31 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo:
+          type: string
+        pr_number:
+          type: integer
+        method:
+          type: string
+          enum:
+          - squash
+          - merge
+          - rebase
+          description: 'Estratégia de merge. Default: squash.'
+          default: squash
+        commit_title:
+          type: string
+          description: Título do commit de merge (override).
+        commit_message:
+          type: string
+          description: Mensagem do commit de merge (override).
+      required:
+      - repo
+      - pr_number
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

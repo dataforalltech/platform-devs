@@ -5,7 +5,7 @@ metadata:
   uid: testing.generate_quality_gate
   domain: testing
   title: generate quality gate
-  description: ''
+  description: Gera uma config JSON de quality gate determinística a partir das métricas/thresholds.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,21 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        metrics:
+          type: object
+          description: Métricas {coverage,lint,tests,...} → thresholds.
+        service:
+          type: string
+          description: Serviço alvo (opcional).
+        on_failure:
+          type: string
+          description: Ação em falha (default 'block').
+      required:
+      - metrics
     outputs: {}
     preconditions: []
     postconditions: []

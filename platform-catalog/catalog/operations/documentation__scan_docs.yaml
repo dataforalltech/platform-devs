@@ -5,7 +5,8 @@ metadata:
   uid: documentation.scan_docs
   domain: documentation
   title: scan docs
-  description: ''
+  description: Encontra todos os arquivos de documentação em repo_path. Detecta tipo
+    (readme, changelog, adr, etc.) e indexa no store.
   owner: platform
   tags:
   - documentation
@@ -30,7 +31,23 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repo_path:
+          type: string
+          description: Caminho absoluto do repositório
+        patterns:
+          type: array
+          items:
+            type: string
+          description: 'Padrões glob (default: [''**/*.md'', ''**/*.rst'', ''**/*.txt''])'
+        include_hidden:
+          type: boolean
+          description: Incluir arquivos/diretórios ocultos
+          default: false
+      required:
+      - repo_path
     outputs: {}
     preconditions: []
     postconditions: []

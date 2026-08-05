@@ -5,7 +5,7 @@ metadata:
   uid: testing.add_scenario
   domain: testing
   title: add scenario
-  description: ''
+  description: Adiciona um cenário de teste específico e customizado ao plano.
   owner: platform
   tags:
   - testing
@@ -30,7 +30,51 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+        name:
+          type: string
+          description: Nome descritivo do cenário
+        category:
+          type: string
+          enum:
+          - happy_path
+          - auth
+          - boundary
+          - error
+          - edge_case
+          - empty_state
+          - pagination
+          - performance
+          - schema
+          - concurrency
+        steps:
+          type: string
+          description: Passos para executar o cenário
+        expected_result:
+          type: string
+          description: Resultado esperado
+        priority:
+          type: string
+          enum:
+          - critical
+          - high
+          - medium
+          - low
+          description: Prioridade do cenário (default medium)
+        preconditions:
+          type: string
+          description: Pré-condições necessárias
+      required:
+      - plan_id
+      - name
+      - category
+      - steps
+      - expected_result
     outputs: {}
     preconditions: []
     postconditions: []

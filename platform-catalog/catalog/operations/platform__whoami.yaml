@@ -5,7 +5,8 @@ metadata:
   uid: platform.whoami
   domain: platform
   title: whoami
-  description: ''
+  description: 'Retorna o usuário autenticado na sessão: user_id, name, email, role,
+    scopes, environment, authenticated_at. Requer authenticate() anterior.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,10 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

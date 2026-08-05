@@ -5,7 +5,8 @@ metadata:
   uid: infra.list_services
   domain: infra
   title: list services
-  description: ''
+  description: Lista servicos registrados. Suporta filtros por environment, type,
+    status, tag, runtime e deploy_mode.
   owner: platform
   tags:
   - infra
@@ -30,7 +31,57 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        environment:
+          type: string
+          enum:
+          - local
+          - dev
+          - hml
+          - prod
+          description: Filtrar por ambiente.
+        type:
+          type: string
+          enum:
+          - docker
+          - process
+          - remote
+          - unknown
+          - mysql
+          - mariadb
+          - postgres
+          - redis
+          - kafka
+          - mongodb
+          description: Filtrar por tipo.
+        status:
+          type: string
+          enum:
+          - running
+          - stopped
+          - unknown
+          description: Filtrar por status.
+        tag:
+          type: string
+          description: Filtrar por tag.
+        runtime:
+          type: string
+          description: 'Filtrar por runtime (ex: uvicorn, gunicorn, node, docker).'
+        deploy_mode:
+          type: string
+          enum:
+          - asgi
+          - wsgi
+          - node
+          - jvm
+          - proxy
+          - docker
+          - script
+          - unknown
+          description: Filtrar por modo de deploy.
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

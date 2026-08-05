@@ -5,7 +5,8 @@ metadata:
   uid: development.generate_kubernetes_manifest
   domain: development
   title: generate kubernetes manifest
-  description: ''
+  description: Gera um manifesto Kubernetes (Deployment|Service|Ingress|ConfigMap)
+    determinístico.
   owner: platform
   tags:
   - development
@@ -30,7 +31,37 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          description: Deployment|Service|Ingress|ConfigMap.
+        name:
+          type: string
+          description: Nome do recurso.
+        image:
+          type: string
+          description: Imagem do container (opcional).
+        replicas:
+          type: integer
+          description: Réplicas (default 1).
+        port:
+          type: integer
+          description: Porta (opcional).
+        env:
+          type: object
+          description: Variáveis de ambiente (opcional).
+        resources:
+          type: object
+          description: requests/limits de recursos (opcional).
+        namespace:
+          type: string
+          description: Namespace (opcional).
+      required:
+      - kind
+      - name
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,7 @@ metadata:
   uid: product.generate_release_plan
   domain: product
   title: generate release plan
-  description: ''
+  description: Gera um plano de release em Markdown determinístico a partir de versão/escopo/milestones.
   owner: platform
   tags:
   - product
@@ -30,7 +30,21 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+          description: 'Versão do release (ex.: ''2.1.0'').'
+        scope:
+          type: array
+          description: Itens de escopo do release (opcional).
+        milestones:
+          type: array
+          description: Marcos [{name,date?,items?}] ou strings (opcional).
+      required:
+      - version
     outputs: {}
     preconditions: []
     postconditions: []

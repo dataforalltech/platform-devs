@@ -5,7 +5,10 @@ metadata:
   uid: infra.scan_infra
   domain: infra
   title: scan infra
-  description: ''
+  description: Varre containers Docker em execucao e registra automaticamente os de
+    infraestrutura (mysql, mariadb, postgres, redis, kafka, mongodb) detectados pelo
+    nome da imagem. Para Kafka, usa a porta EXTERNAL (9094) se disponivel. Nao afeta
+    containers de aplicacao (plataform-*, mcp-*, etc).
   owner: platform
   tags:
   - infra
@@ -30,7 +33,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        timeout:
+          type: integer
+          default: 10
+          description: 'Timeout do docker ps em segundos. Default: 10.'
+        environment:
+          type: string
+          default: local
+          description: 'Ambiente a marcar nos registros. Default: local.'
     outputs: {}
     preconditions: []
     postconditions: []

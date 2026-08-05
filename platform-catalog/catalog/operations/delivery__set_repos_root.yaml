@@ -5,7 +5,10 @@ metadata:
   uid: delivery.set_repos_root
   domain: delivery
   title: set repos root
-  description: ''
+  description: Define a pasta raiz dos repositorios locais. Persiste REPOS_ROOT no
+    config-mcp (namespace workspace) para uso em todas as sessoes. create_dir=true
+    cria o diretorio se nao existir. persist=false (default true) apenas valida sem
+    salvar no config-mcp.
   owner: platform
   tags:
   - delivery
@@ -32,7 +35,24 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      required:
+      - path
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          description: Caminho absoluto (ou ~ expandido) da pasta de repos.
+        create_dir:
+          type: boolean
+          default: false
+          description: 'Cria o diretorio se nao existir. Default: false.'
+        persist:
+          type: boolean
+          default: true
+          description: 'Salva no config-mcp para persistir entre sessoes. Default:
+            true.'
     outputs: {}
     preconditions: []
     postconditions: []

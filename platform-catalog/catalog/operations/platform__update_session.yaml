@@ -5,7 +5,8 @@ metadata:
   uid: platform.update_session
   domain: platform
   title: update session
-  description: ''
+  description: 'Atualiza o status e/ou progresso de uma sessão. Status: active | paused
+    | completed.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,24 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+        status:
+          type: string
+          enum:
+          - active
+          - paused
+          - completed
+          description: Novo status da sessão
+        progress:
+          type: string
+          description: Texto livre descrevendo o progresso atual
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

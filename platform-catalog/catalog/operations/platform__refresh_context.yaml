@@ -5,7 +5,8 @@ metadata:
   uid: platform.refresh_context
   domain: platform
   title: refresh context
-  description: ''
+  description: Recaptura contexto de ambiente (git branch, cwd) sem invalidar autenticação.
+    Use após trocar de branch ou diretório.
   owner: platform
   tags:
   - platform
@@ -30,7 +31,10 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties: {}
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

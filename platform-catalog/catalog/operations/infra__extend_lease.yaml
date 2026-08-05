@@ -5,7 +5,8 @@ metadata:
   uid: infra.extend_lease
   domain: infra
   title: extend lease
-  description: ''
+  description: 'Estende a validade de um lease ativo. Cap absoluto: 24h totais e no
+    máximo 3 extensões por lease.'
   owner: platform
   tags:
   - infra
@@ -31,7 +32,19 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        lease_id:
+          type: string
+        additional_min:
+          type: integer
+          minimum: 1
+          maximum: 720
+      required:
+      - lease_id
+      - additional_min
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

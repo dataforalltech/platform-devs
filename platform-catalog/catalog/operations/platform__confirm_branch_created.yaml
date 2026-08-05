@@ -5,7 +5,8 @@ metadata:
   uid: platform.confirm_branch_created
   domain: platform
   title: confirm branch created
-  description: ''
+  description: Confirma que a branch da sessão foi criada via deploy-mcp.create_branch.
+    sha base opcional (auditoria).
   owner: platform
   tags:
   - platform
@@ -30,7 +31,18 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão
+        sha:
+          type: string
+          description: Sha base da branch (retornado por deploy-mcp.create_branch).
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

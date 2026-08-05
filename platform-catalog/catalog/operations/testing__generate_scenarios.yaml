@@ -5,7 +5,9 @@ metadata:
   uid: testing.generate_scenarios
   domain: testing
   title: generate scenarios
-  description: ''
+  description: 'Gera e salva automaticamente cenários de teste baseados em templates
+    para a categoria informada. Categorias: rest_api, react_component, auth_flow,
+    db_migration, websocket, form_validation, ui_data_validation.'
   owner: platform
   tags:
   - testing
@@ -30,7 +32,30 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        plan_id:
+          type: string
+          description: ID do plano de teste
+        category:
+          type: string
+          description: Categoria da feature
+          enum:
+          - rest_api
+          - react_component
+          - auth_flow
+          - db_migration
+          - websocket
+          - form_validation
+          - ui_data_validation
+        context:
+          type: string
+          description: 'Contexto específico (ex: ''/api/users'') para personalizar
+            os cenários'
+      required:
+      - plan_id
+      - category
     outputs: {}
     preconditions: []
     postconditions: []

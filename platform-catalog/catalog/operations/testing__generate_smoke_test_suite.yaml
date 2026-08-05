@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_smoke_test_suite
   domain: testing
   title: generate smoke test suite
-  description: ''
+  description: Gera um manifesto YAML de smoke suite determinístico a partir de endpoints
+    e/ou páginas.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,16 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        endpoints:
+          type: array
+          description: Endpoints [{method?,path?,expected_status?}] ou strings.
+        pages:
+          type: array
+          description: Páginas [{url?,name?}] ou strings.
     outputs: {}
     preconditions: []
     postconditions: []

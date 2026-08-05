@@ -5,7 +5,8 @@ metadata:
   uid: testing.check_accessibility
   domain: testing
   title: check accessibility
-  description: ''
+  description: Verifica acessibilidade via Playwright + axe-core. Suporta WCAG2A,
+    WCAG2AA, WCAG2AAA. Retorna violations, passes e incomplete.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,22 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+          description: URL da página a verificar
+        standard:
+          type: string
+          enum:
+          - WCAG2A
+          - WCAG2AA
+          - WCAG2AAA
+          default: WCAG2AA
+      required:
+      - url
     outputs: {}
     preconditions: []
     postconditions: []

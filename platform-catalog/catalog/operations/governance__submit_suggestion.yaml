@@ -5,7 +5,10 @@ metadata:
   uid: governance.submit_suggestion
   domain: governance
   title: submit suggestion
-  description: ''
+  description: Cria uma sugestão de correção/melhoria para OUTRO serviço/repo. Use
+    quando, no curso da sua tarefa atual, você notar algo que melhoraria em outro
+    repositório do ecossistema. target_repo deve ser o id canônico (ou alias); aliases
+    e nodes deprecados são automaticamente redirecionados para o canônico.
   owner: platform
   tags:
   - governance
@@ -30,7 +33,65 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        source_agent:
+          type: string
+          description: 'Identificador do agente que abriu (ex.: ''claude-code'', ''cursor:caiog'').'
+        source_repo:
+          type: string
+          description: Repositório onde o agente estava trabalhando (opcional).
+        target_repo:
+          type: string
+          description: Repositório destinatário. id canônico do ecosystem.yaml (ou
+            alias).
+        category:
+          type: string
+          enum:
+          - bug
+          - improvement
+          - refactor
+          - security
+          - performance
+          - docs
+          - test
+          - contract
+          - observability
+        severity:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          - critical
+        title:
+          type: string
+          maxLength: 200
+          description: 'Linha curta imperativa. Ex.: ''Adicionar timeout no provider
+            X''.'
+        description:
+          type: string
+          maxLength: 8000
+          description: Markdown ok. Inclua contexto, evidência, alternativas avaliadas.
+        related_files:
+          type: array
+          items:
+            type: string
+          description: Caminhos relativos dentro do target_repo.
+        references:
+          type: array
+          items:
+            type: string
+          description: 'Links/IDs externos: PR, issue, ADR, commit.'
+      required:
+      - source_agent
+      - target_repo
+      - category
+      - severity
+      - title
+      - description
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: delivery.list_repos
   domain: delivery
   title: list repos
-  description: ''
+  description: Lista repositórios da organização GitHub. Útil para descobrir nomes
+    exatos antes de operar em um repo.
   owner: platform
   tags:
   - delivery
@@ -32,7 +33,20 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        org:
+          type: string
+          description: 'Organização. Default: DEPLOY_GITHUB_ORG.'
+        filter_name:
+          type: string
+          description: Filtro substring no nome (case-insensitive).
+        include_archived:
+          type: boolean
+          description: 'Incluir repos arquivados. Default: false.'
+          default: false
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,12 @@ metadata:
   uid: infra.request_vm
   domain: infra
   title: request vm
-  description: ''
+  description: 'Solicita capacidade ao allocator. Servidor decide entre lease em VM
+    existente (compartilhamento), provisão de nova, fila ou denial. Spec restrita
+    à whitelist (cpu-small/medium/large). gpu-a100 e high-mem exigem uma aprovação
+    verificada pelo gateway. Phase 2c: provisão via terraform real (INFRA_TF_MODULES_ROOT).
+    Lease inicia PENDING e vai ACTIVE quando VM fica READY. Use get_lease(lease_id)
+    para verificar connection_hint (endpoint SSH).'
   owner: platform
   tags:
   - infra
@@ -31,7 +36,42 @@ spec:
     default_level: high
     approval_required: N2
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        spec:
+          type: string
+          enum:
+          - cpu-small
+          - cpu-medium
+          - cpu-large
+          - high-mem
+          - gpu-a100
+        duration_min:
+          type: integer
+          minimum: 1
+          maximum: 4320
+        owner:
+          type: string
+          description: Identificador do agente.
+        exclusive:
+          type: boolean
+          default: false
+        priority:
+          type: string
+          enum:
+          - low
+          - medium
+          - high
+          default: low
+        purpose:
+          type: string
+          description: Descrição curta para audit.
+      required:
+      - spec
+      - duration_min
+      - owner
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

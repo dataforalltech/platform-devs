@@ -5,22 +5,73 @@ metadata:
   uid: provenance.provenance_verify_artifact
   domain: provenance
   title: verify repository artifact
-  description: Verify a repository artifact against an expected SHA-256 digest.
+  description: Verify an artifact against an expected SHA-256 digest.
   owner: security
-  tags: [provenance, verify, read]
+  tags:
+  - provenance
+  - verify
+  - read
   lifecycle: stable
   version: 1.0.0
 spec:
   domain: provenance
   capability: artifact-provenance
-  resource: {type: artifact, parent: null, namespace: null}
+  resource:
+    type: artifact
+    parent: null
+    namespace: null
   operation: verify
   authz: read
-  risk: {effects: [read], requires: [], blast_radius: workspace, default_level: low, approval_required: none}
+  risk:
+    effects:
+    - read
+    requires: []
+    blast_radius: workspace
+    default_level: low
+    approval_required: none
   contract:
-    inputs: {}
-    outputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+          minLength: 1
+          maxLength: 4096
+        expected_sha256:
+          type: string
+          pattern: ^[A-Fa-f0-9]{64}$
+      required:
+      - path
+      - expected_sha256
+    outputs:
+      type: object
+      additionalProperties: false
+      properties:
+        path:
+          type: string
+        expected_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        actual_sha256:
+          type: string
+          pattern: ^[a-f0-9]{64}$
+        matches:
+          type: boolean
+      required:
+      - path
+      - expected_sha256
+      - actual_sha256
+      - matches
     preconditions: []
     postconditions: []
-    execution: {idempotent: true, side_effects: false, is_async: false, streaming: false, timeout_s: 60, retry_policy: read-only}
-relations: [{verb: acts-on, target: 'resource:artifact'}]
+    execution:
+      idempotent: true
+      side_effects: false
+      is_async: false
+      streaming: false
+      timeout_s: 60
+      retry_policy: read-only
+relations:
+- verb: acts-on
+  target: resource:artifact

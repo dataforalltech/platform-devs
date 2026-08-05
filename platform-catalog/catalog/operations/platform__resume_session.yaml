@@ -5,7 +5,8 @@ metadata:
   uid: platform.resume_session
   domain: platform
   title: resume session
-  description: ''
+  description: 'Retorna contexto completo para retomada: checkpoints, artefatos recentes
+    e hint. Reativa sessões pausadas.'
   owner: platform
   tags:
   - platform
@@ -30,7 +31,15 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        session_id:
+          type: string
+          description: ID da sessão a retomar
+      required:
+      - session_id
     outputs: {}
     preconditions: []
     postconditions: []

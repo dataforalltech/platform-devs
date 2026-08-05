@@ -5,7 +5,7 @@ metadata:
   uid: governance.get_pre_execution_checklist
   domain: governance
   title: get pre execution checklist
-  description: ''
+  description: Checklist a executar ANTES de tocar em qualquer arquivo.
   owner: platform
   tags:
   - governance
@@ -30,7 +30,28 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      properties:
+        repository_name:
+          type: string
+        task_description:
+          type: string
+        layer:
+          type: string
+          enum:
+          - frontend
+          - backend
+          - database
+          - integrations
+          - infrastructure
+          - security
+          - observability
+          - testing
+      required:
+      - repository_name
+      - task_description
+      additionalProperties: false
     outputs: {}
     preconditions: []
     postconditions: []

@@ -5,7 +5,8 @@ metadata:
   uid: testing.generate_uat_checklist
   domain: testing
   title: generate uat checklist
-  description: ''
+  description: Gera um checklist UAT em markdown determinístico a partir dos critérios
+    de aceite.
   owner: platform
   tags:
   - testing
@@ -30,7 +31,18 @@ spec:
     default_level: low
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        acceptance_criteria:
+          type: array
+          description: Critérios [{id?,description?}] ou strings.
+        feature:
+          type: string
+          description: Funcionalidade alvo (opcional).
+      required:
+      - acceptance_criteria
     outputs: {}
     preconditions: []
     postconditions: []

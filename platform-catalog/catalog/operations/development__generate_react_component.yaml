@@ -5,7 +5,7 @@ metadata:
   uid: development.generate_react_component
   domain: development
   title: generate react component
-  description: ''
+  description: Gera um componente React (TSX) determinístico a partir de name/props/hooks.
   owner: platform
   tags:
   - development
@@ -30,7 +30,21 @@ spec:
     default_level: medium
     approval_required: none
   contract:
-    inputs: {}
+    inputs:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          description: Nome do componente.
+        props:
+          type: array
+          description: 'Props: nomes ou [{name,type?,optional?}] (opcional).'
+        hooks:
+          type: array
+          description: 'Hooks a incluir (ex.: useState, useEffect; opcional).'
+      required:
+      - name
     outputs: {}
     preconditions: []
     postconditions: []
