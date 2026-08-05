@@ -8,7 +8,14 @@ ownership:
   team: identity
   source_repo: dataforalltech/platform-auth
   source_path: mcp
-  legacy_source_paths: [auth-mcp-server, services/auth-mcp-server]
+  # `services/auth-mcp-server` NÃO existe em disco (services/ tem só o
+  # cache-mcp-server). O caminho fantasma fazia a auditoria emitir uma SEGUNDA
+  # entrada id=auth-mcp, zerada em todas as colunas, inflando a contagem de
+  # superfícies da frota com um provedor que não existe.
+  # O que resta em `auth-mcp-server/` é espelho legado e não é o MCP: são o
+  # Authorization Server OAuth (authorization_server.py, oidc_upstream.py). O MCP
+  # canônico vive em dataforalltech/platform-auth, sob `source_path: mcp`.
+  legacy_source_paths: [auth-mcp-server]
 runtime: {mode: external, language: python, version: "3.12", base_url_env: AUTH_MCP_URL, exposes_tools: true}
 transport:
   stdio: false

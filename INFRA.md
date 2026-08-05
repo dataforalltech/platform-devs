@@ -240,7 +240,7 @@ O `devteam-mcp` tem **ponte HTTP própria** sem validação de schema em nenhuma
 annotations e sem `approvalRequired`. A verificação de token e de contexto assinado **está**
 lá e é fail-closed; o que falta é a camada de contrato de tool.
 
-**Consequência agregada [HEAD]: 19 de 936 tools da frota declaram output schema** —
+**Consequência agregada [HEAD]: 19 de 946 tools da frota declaram output schema** —
 exatamente as 3+3+13 dos servidores que usam o `secure_runtime`.
 
 ---
@@ -442,6 +442,29 @@ Os gates existem apenas como blocos PowerShell no README: `validate_mcp_manifest
 `check_mcp_runtime_quality.py`, `generate_mcp_artifacts.py --check`,
 `pytest tests/control_plane`, `pytest mcp-gateway/tests`. Existe
 `scripts/ci_assert_audience.py` que nenhum pipeline invoca.
+
+### 15.0 Os três guardas de drift
+
+Cada gerador é dono da própria checagem. Rodar os três é o que impede que um número
+publicado envelheça em silêncio — foi assim que o baseline de qualidade ficou semanas
+atrás do código e que o índice do catálogo ficou três semanas atrás do próprio catálogo.
+
+```bash
+python scripts/generate_mcp_artifacts.py --check && python scripts/audit_mcp_tools.py --check && python scripts/reindex_platform_catalog.py --check
+```
+
+| Gate | Cobre |
+|---|---|
+| `generate_mcp_artifacts.py --check` | `.mcp.json`, runtime registry, `docker-compose.yml`, catálogo gerado, schemas |
+| `audit_mcp_tools.py --check` | `generated/mcp-tools-audit.json`, `docs/reviews/mcp-tools-quality-baseline.md` |
+| `reindex_platform_catalog.py --check` | `platform-catalog/catalog/index.json` |
+
+> **Evidência circular removida em 2026-08-05.** O auditor tratava como documentação
+> qualquer `.md` sob `docs/` — inclusive o **próprio relatório**, que lista o nome de todas
+> as tools da frota. Cada execução, portanto, fazia a seguinte declarar "documentada" toda
+> tool que ela mesma tinha acabado de listar. Duas execuções consecutivas produziam números
+> diferentes, e `documented_tools` estava inflado em **595 tools**. `docs/generated/` e o
+> baseline agora ficam fora do corpus, e a auditoria é idempotente.
 
 **Política:** GitHub Actions foi **aposentado em 2026-07-15** por decisão de ecossistema
 (ADR-0024 do `platform-service-template`). **É proibido criar `.github/workflows`** — a

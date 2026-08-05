@@ -4,10 +4,15 @@
 > topologia e deploy vivem em [INFRA.md](INFRA.md).
 > **Companheiros:** [ROADMAP.md](ROADMAP.md) (o que falta) e [BACKLOG.md](BACKLOG.md) (tarefas).
 
-**Medido em:** `develop` @ `f6ba78f`, 2026-08-05.
-Os números marcados **[HEAD]** foram medidos executando `scripts/audit_mcp_tools.py`
-e `scripts/generate_mcp_artifacts.py --check` neste commit — não copiados do artefato
-versionado, que está defasado (ver [BACKLOG B10](BACKLOG.md)).
+**Medido em:** `develop` @ `e1ba048`, 2026-08-05.
+Os números marcados **[HEAD]** vêm de `scripts/audit_mcp_tools.py` executado neste
+commit. O artefato versionado foi regenerado e agora tem um `--check` próprio, então
+citá-lo voltou a ser seguro.
+
+> **Nota sobre a cobertura de documentação.** Até 2026-08-05 o auditor lia o próprio
+> relatório (`docs/reviews/mcp-tools-quality-baseline.md`, que lista o nome de todas as
+> tools) como se fosse documentação. Isso inflava `documented_tools` em **595 tools**.
+> Com o laço cortado, a frota tem **374 tools documentadas de 946**, e não 957.
 
 ---
 
@@ -112,15 +117,15 @@ Esta seção é o guardrail do documento. Ignorá-la produz um RELEASES que ment
 ### 5.1 As 451 tools do `devteam-mcp`
 
 **[HEAD]** 446 declared / 227 listed / 451 dispatchable / **0 catalog** / 7 contract /
-227 input schema / **0 output schema** / **50 tested** / 425 documented.
+227 input schema / **0 output schema** / **50 tested** / 167 documented.
 
 Nenhuma é alcançável: `gateway.enabled: false`, `registry.enabled: false`, ausente do
 `docker-compose.yml` e do runtime registry. Além disso: **48 placeholders**,
-**26 tools que retornam sucesso falso**, **401 sem teste**, 409 com nome duplicado
+**27 tools que retornam sucesso falso**, **401 sem teste**, 409 com nome duplicado
 entre domínios.
 
 **A contagem bruta de tools não é métrica de capacidade entregue.** O total da frota é
-**936 tools declaradas [HEAD]**, e 19 delas estão governadas.
+**946 tools declaradas [HEAD]**, e 19 delas estão governadas.
 
 ### 5.2 Quatro sistemas TypeScript que afirmam falsidade
 

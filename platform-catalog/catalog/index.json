@@ -1,22 +1,22 @@
 {
   "apiVersion": "catalog.platform.dev/v1",
   "counts": {
-    "operations": 288,
-    "tools": 298,
-    "providers": 20
+    "operations": 307,
+    "tools": 317,
+    "providers": 23
   },
   "portability": {
     "operations_with_multiple_tools": 10,
     "examples": {
-      "infra.set_env_var": 2,
+      "development.status": 2,
+      "infra.audit_env_files": 2,
       "infra.list_environments": 2,
       "infra.read_env_file": 2,
-      "infra.audit_env_files": 2,
       "infra.redact_env_secrets": 2,
-      "development.status": 2,
+      "infra.set_env_var": 2,
+      "product.define_product_vision": 2,
       "product.generate_feature_spec": 2,
       "product.generate_go_to_market_brief": 2,
-      "product.define_product_vision": 2,
       "product.generate_release_plan": 2
     }
   }

@@ -159,6 +159,8 @@ explícita: *dublê de dependência externa deve espelhar a assinatura real da l
 
 ### B09 · Regenerar o baseline de qualidade das tools
 
+> **✅ Concluído** — Artefatos regenerados. A execucao revelou um laco circular: o auditor lia o proprio relatorio (`docs/reviews/mcp-tools-quality-baseline.md`, que lista TODAS as tools) como documentacao, inflando `documented_tools` em 595. Corrigido — `docs/generated/` e o baseline saem do corpus. A frota tem 374 tools documentadas de 946, nao 957.
+
 `generated/mcp-tools-audit.json` e `docs/reviews/mcp-tools-quality-baseline.md`.
 
 ```bash
@@ -176,6 +178,8 @@ artefato versionado cita número errado.
 
 ### B10 · Adicionar o baseline de qualidade ao guarda de drift
 
+> **✅ Concluído** — O auditor ganhou `--check` proprio, espelhando o `generate_mcp_artifacts.py --check`. Acoplar ao `check_all` tornaria o gate do control-plane lento sem necessidade: cada gerador passa a ser dono da propria checagem de drift.
+
 `src/control_plane/artifact_generator.py:292-306` (`check_all`).
 
 `check_all` cobre `.mcp.json`, o runtime registry, `docker-compose.yml`, o catálogo
@@ -186,6 +190,8 @@ gerado e os schemas — **mas não** `generated/mcp-tools-audit.json` nem
 que aconteceu (B09). Não há CI que os regenere — ver [INFRA §15](INFRA.md).
 
 ### B11 · Corrigir a description e os `legacy_source_paths` do manifesto do `devteam-mcp`
+
+> **✅ Concluído** — Manifesto corrigido: description passa a declarar 21 dominios (20 consolidados + guardian, nascido no agregador) e `frontend-pixelfera-mcp-server` sai de `legacy_source_paths` — nunca houve dominio correspondente em src/domains.
 
 `manifests/mcps/devteam-mcp.yaml:4` e `:13-34`.
 
@@ -201,6 +207,8 @@ e seu único commit é de 2026-07-18. Ele afirma uma consolidação que não aco
 desconhece um domínio inteiro.
 
 ### B12 · Regenerar `platform-catalog/catalog/index.json`
+
+> **✅ Concluído** — `index.json` regravado (307/317/23). Novo `scripts/reindex_platform_catalog.py`, com `--check`, que deriva o indice dos YAMLs EM DISCO. Nao usa o `generate_seed.main()` de proposito: aquele apaga e reescreve operations/tools/providers inteiros, o que e demais para corrigir uma contagem.
 
 `platform-catalog/catalog/index.json:3-8`.
 
@@ -257,6 +265,8 @@ no próprio `pyproject.toml`. **É o bloqueio nº 1 da promoção do produto** �
 ## P2 — higiene e consistência
 
 ### B16 · Consertar o ponto cego do discovery da auditoria
+
+> **✅ Concluído** — Descoberta passa a ser ESTRUTURAL (presenca de entrypoint/tools) em vez de por sufixo de nome. `cross-devteam-validators` e `quality-gates-system` entram no censo: 29 -> 31 superficies, 936 -> 946 tools declaradas.
 
 `scripts/audit_mcp_tools.py:132` — filtro por nome mais um caso especial hardcoded faz
 com que `cross-devteam-validators` e `quality-gates-system` **nunca sejam enumerados**,
@@ -372,8 +382,8 @@ o CDN servir; em ambiente sem egress a tool simplesmente não roda.
 
 Entrada: `generated/mcp-tools-audit.json` **após B09**.
 
-As listas `placeholder_tools` (106 na frota), `false_success_tools` (46) e
-`destructive_tools` (711) **[HEAD]** vêm de regex e produzem ruído: `destructive_tools`
+As listas `placeholder_tools` (108 na frota), `false_success_tools` (48) e
+`destructive_tools` (712) **[HEAD]** vêm de regex e produzem ruído: `destructive_tools`
 marca qualquer nome contendo delete/execute; no `frontend-pixelfera` a extração AST
 confunde valores de enum (`default`, `error`, `loading`, `pass`, `success`) com nomes de
 tool.
@@ -399,6 +409,8 @@ excluído**, e é justamente uma das tools marcadas como sucesso falso. Decidir:
 corrigir a implementação.
 
 ### B27 · Resolver o caminho fantasma do `auth-mcp`
+
+> **✅ Concluído** — Caminho fantasma `services/auth-mcp-server` removido do manifesto do auth-mcp — `services/` so tem o cache-mcp-server.
 
 `manifests/mcps/auth-mcp.yaml:11` — `legacy_source_paths` lista `services/auth-mcp-server`,
 que **não existe**. A auditoria gera uma entrada fantasma com 0 tools; **[HEAD]** há duas

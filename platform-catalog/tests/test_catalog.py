@@ -45,8 +45,25 @@ def test_provider_id_strips_server_suffix():
 
 # --- seed materializado -----------------------------------------------------
 def test_seed_present_and_counts():
+    """O índice tem de bater com o catálogo EM DISCO — não com um número fixo.
+
+    A versão anterior travava `{operations: 288, tools: 298, providers: 20}`. O
+    catálogo cresceu para 307/317/23 em 2026-07-21 e o índice não foi regravado;
+    como o teste afirmava o número velho, ele passava verde sobre um índice
+    defasado por três semanas. Um teste que fixa a contagem não protege a
+    consistência: protege a desatualização.
+
+    Guarda de drift equivalente para uso fora da suíte:
+    `python scripts/reindex_platform_catalog.py --check`.
+    """
     idx = json.loads((CATALOG / "index.json").read_text(encoding="utf-8"))
-    assert idx["counts"] == {"operations": 288, "tools": 298, "providers": 20}
+    em_disco = {
+        "operations": len(list((CATALOG / "operations").glob("*.yaml"))),
+        "tools": len(list((CATALOG / "tools").glob("*.yaml"))),
+        "providers": len(list((CATALOG / "providers").glob("*.yaml"))),
+    }
+    assert idx["counts"] == em_disco
+    assert all(quantidade > 0 for quantidade in em_disco.values())
     # portabilidade: há Operations com >1 Tool binding (ex.: product-owner × product-manager)
     assert idx["portability"]["operations_with_multiple_tools"] >= 1
     assert "product.generate_feature_spec" in idx["portability"]["examples"]
