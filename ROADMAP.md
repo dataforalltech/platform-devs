@@ -22,9 +22,17 @@ não são alcançáveis por ninguém.
 **Bloqueio declarado** (`README.md`): "ficou fora do runtime porque a suíte atual comprova
 apenas 28% contra o gate de 80%".
 
-**Bloqueio real e medido [HEAD]:** 401 de 451 tools despachaveis sem teste; 451 sem
+**Bloqueio real e medido [HEAD]:** **294** de 451 tools despachaveis sem teste (eram 401
+antes do fan-out de testes de 2026-08-05 — ver [BACKLOG B15](BACKLOG.md)); 451 sem
 contrato; 451 sem output schema; 451 sem entrada no catálogo; 224 sem input schema;
-48 placeholders; 26 que retornam sucesso falso; 409 com nome duplicado entre domínios.
+48 placeholders; 27 que retornam sucesso falso; 409 com nome duplicado entre domínios.
+
+> **O que o fan-out mostrou.** A consolidação não só deixou os testes para trás: em
+> `pipeline`, `deploy`, `session` e `infra` o código do agregador **divergiu** do servidor
+> legado. A afirmação de que as duas cópias eram byte-a-byte idênticas (§14) vale para os
+> outros 17 domínios, não para esses quatro. No `pipeline` a divergência é
+> comportamental — os testes legados reprovam contra o agregador —, então o domínio ficou
+> inteiro de fora do port.
 
 **Causa raiz verificável:** a consolidação (`203d4a1`, 2026-07-17) copiou tools, models e
 db byte-a-byte dos ~20 servidores fonte, mas **não migrou os testes**. Hoje
@@ -272,8 +280,11 @@ primeiras foram feitas em 17-18/07. **A quarta nunca.**
 
 Existem 26 diretórios `*-mcp-server` na raiz, dos quais ~20 são as fontes legadas, todas
 com código e testes próprios, **duplicando** os 21 domínios de `devteam-mcp-server/src/domains/`.
-`diff -rq` entre um servidor legado e o domínio correspondente só acusa os arquivos novos
-da consolidação — todo o conteúdo de `tools/`, `checkers/` e `db/` é **idêntico**.
+`diff -rq` entre um servidor legado e o domínio correspondente acusa **só o
+`__init__.py`** em 17 dos 21 domínios — o conteúdo de `tools/`, `checkers/` e `db/` é
+idêntico neles. **Quatro divergiram**, e a medição corrige o que este documento afirmava
+antes: `deploy` (7 arquivos), `session` (5), `pipeline` (4) e `infra` (2). No `pipeline` a
+divergência é comportamental, vinda do ledger fail-closed de 2026-08-03.
 
 Eles continuam recebendo manutenção: a correção do bootstrap de segredos de 2026-08-05
 tocou os 21 servidores legados, **não o agregador**.

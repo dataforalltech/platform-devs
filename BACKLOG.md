@@ -250,6 +250,8 @@ a auditoria reporta `catalog_tools = 0` para o `devteam-mcp`.
 
 ### B15 · Escrever testes por domínio no `devteam-mcp`
 
+> **✅ Concluído (parcial)** — Fan-out de testes por `scripts/port_domain_tests.py`: 40 arquivos / 438 funcoes portadas dos servidores legados para `tests/domains/<dominio>/`. O codigo de tool e byte-a-byte o mesmo, entao muda so o caminho de import. `devteam-mcp` sai de 50 para 157 tools testadas; sem teste cai de 401 para 294. NAO foi portado: o dominio `pipeline` (o codigo do agregador divergiu do legado, e o teste antigo cobraria o comportamento anterior) e os 67 arquivos que exigem MySQL real — este repo nao tem executor de CI que o suba.
+
 `devteam-mcp-server/tests/` — hoje 6 arquivos `test_*.py` para **21 domínios** **[HEAD]**.
 O `conftest.py:1-8` admite: "Testes de integração chegam no fan-out da Fase 2/3, por
 domínio".
