@@ -20,6 +20,8 @@ rastreamento do projeto até que exista outro.
 
 ### B01 · Remover os dois checks fabricados do `SecurityChecker`
 
+> **✅ Concluído** — SecurityChecker: os dois checks de vulnerabilidade passam a `executed=False` e saem do denominador do score; o `run_audit` recusa auto-aprovacao quando ha obrigatorio nao executado. Corrigido nas duas copias.
+
 `devteam-mcp-server/src/domains/audit/checkers/security_checker.py:42-62`
 e a cópia byte-a-byte em `audit-mcp-server/src/checkers/security_checker.py:49,60`.
 
@@ -38,6 +40,8 @@ Corrigir nas **duas** cópias (ver [ROADMAP §14](ROADMAP.md)).
 
 ### B02 · Corrigir o filtro de arquivos do `_scan_for_credentials`
 
+> **✅ Concluído** — Varredura de credenciais: `.env` reconhecido por NOME, exclusao por diretorio conhecido em vez de "comeca com ponto", teto elevado para 5000 e truncamento sinalizado (varredura truncada vira INCONCLUSIVA, nao aprovada).
+
 `devteam-mcp-server/src/domains/audit/checkers/security_checker.py:74-104` (linhas 85 e 89).
 
 1. `if file_path.suffix not in [".py",".yaml",".yml",".env",".conf"]` **nunca casa
@@ -55,6 +59,8 @@ check de segurança que roda de verdade.**
 
 ### B03 · Inverter o default de `validate_agent_decision` para fail-closed
 
+> **✅ Concluído** — `validate_agent_decision`: `approved` deixa de ser o default. Passa a ser calculado no fim como `not blocking and not inconclusive` — sem `affected_files` nem `affected_layers` as regras de camada nao rodam, e o resultado e INCONCLUSIVO.
+
 `devteam-mcp-server/src/domains/ai-governance/tools/decision_tool.py:186` (inicializa
 `approved = True`), com inversões em 200, 213, 221, 233, 239, 247, 330 e retorno em 355-356.
 
@@ -68,6 +74,8 @@ isso.
 
 ### B04 · Marcar erro de tool como erro no transporte HTTP do `devteam-mcp`
 
+> **✅ Concluído** — Falha de execucao passa a devolver HTTP 500 com `isError: true`, em vez de payload de erro dentro do envelope de sucesso.
+
 `devteam-mcp-server/src/server/mcp_server.py:277-281`.
 
 O `except Exception` genérico transforma qualquer exceção em
@@ -79,6 +87,8 @@ bem-sucedida cujo retorno por acaso tem uma chave "error". É a mesma classe de 
 dos stubs que mentem, gerada pelo **transporte**.
 
 ### B05 · Fazer o `/v1/health/ready` do `devteam-mcp` verificar alguma coisa
+
+> **✅ Concluído** — `/v1/health/ready` ganhou handler proprio e verifica a fonte admin com `SELECT 1` no pool dedicado de health; 503 quando nao responde. `/live` segue sem depender do banco.
 
 `devteam-mcp-server/src/server/mcp_server.py:215-223`.
 
@@ -94,6 +104,8 @@ o serviço pronto com o MySQL fora, e a primeira chamada de tool falha em
 `_ensure_tenant_schema`.
 
 ### B06 · Gatear `/mcp/tools/call` por pertencimento a `_TOOL_SCHEMAS`
+
+> **✅ Concluído** — `/mcp/tools/call` recusa com 404 qualquer nome fora de `_TOOL_SCHEMAS`, antes do dispatch. A superficie executavel passa a ser exatamente a publicada.
 
 `devteam-mcp-server/src/server/mcp_server.py:240-276`.
 

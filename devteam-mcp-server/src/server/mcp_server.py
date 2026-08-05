@@ -53,7 +53,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from mcp.server import Server
 from mcp.types import TextContent, Tool
-from platform_database import close_tenant_pools
+from platform_database import close_health_pool, close_tenant_pools, init_health_pool
 from platform_database.orm import configure, for_tenant
 from platform_database.orm.dialects import dialect_for_pool
 from platform_database.tenant_resolver import get_pool_for_tenant
@@ -196,6 +196,37 @@ async def _run_tool(
         return await _dispatch(name, arguments, session)
 
 
+class _AdminHealthSettings:
+    """Adapta ``ADMIN_DB_*`` ao protocolo ``DBSettings`` do pool de health.
+
+    O pool de health da lib lê os nomes ``DB_*``; aqui eles apontam para a conexão
+    ADMIN, que é quem resolve a credencial de cada tenant em
+    ``ADMIN_DATAFORALL.PLATFORMS``. É a dependência sem a qual nenhuma tool
+    funciona — e portanto a que readiness precisa provar.
+    """
+
+    def __init__(self, settings: DevteamSettings) -> None:
+        self.DB_ENGINE = settings.DB_ENGINE
+        self.DB_HOST = settings.ADMIN_DB_HOST
+        self.DB_PORT = settings.ADMIN_DB_PORT
+        self.DB_NAME = "ADMIN_DATAFORALL"
+        self.DB_USER = settings.ADMIN_DB_USER
+        self.DB_PASSWORD = settings.ADMIN_DB_PASSWORD
+        self.DB_SSLMODE = settings.DB_SSLMODE
+        self.DB_HEALTH_POOL_SIZE = settings.DB_HEALTH_POOL_SIZE
+
+
+async def _check_admin_source(settings: DevteamSettings) -> None:
+    """``SELECT 1`` na fonte admin. Levanta se ela não responder.
+
+    Usa o pool dedicado de health da lib (1-2 conexões, timeout de 2s) para que o
+    probe não falhe quando o pool principal estiver saturado — o que mataria o
+    container justamente no pior momento. ``init_health_pool`` é idempotente.
+    """
+    pool = await init_health_pool(_AdminHealthSettings(settings))  # type: ignore[arg-type]
+    await pool.fetchval("SELECT 1")
+
+
 # ── HTTP Sidecar ──────────────────────────────────────────────────────────────
 
 
@@ -214,13 +245,42 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
 
     @app.get("/v1/health")
     @app.get("/v1/health/live")
-    @app.get("/v1/health/ready")
     def health() -> dict[str, Any]:
+        """Liveness: o processo respondeu. Não afirma nada sobre dependências."""
         return {
             "status": "ok",
             "service": "devteam-mcp",
             "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
         }
+
+    @app.get("/v1/health/ready")
+    async def health_ready() -> Any:
+        """Readiness: a conexão admin responde?
+
+        Antes, `/ready` compartilhava o handler de `/live` e devolvia 200 sem tocar
+        em nada. O orquestrador dava o serviço por pronto com o banco fora, e a
+        falha aparecia só na primeira chamada de tool, dentro de
+        `_ensure_tenant_schema`. Readiness que não verifica dependência é liveness
+        com outro nome.
+
+        A verificação é a resolução da fonte admin (ADMIN_DB_*) — é dela que sai a
+        credencial de cada tenant no modelo credencial-zero, então sem ela nenhuma
+        tool funciona. Não se abre pool por tenant aqui: o tenant vem dos claims de
+        cada requisição, e o probe não tem nenhum.
+        """
+        base = {
+            "service": "devteam-mcp",
+            "tools": len(_TOOL_SCHEMAS) - len(_EXCLUDE_TOOLS),
+        }
+        try:
+            await _check_admin_source(settings)
+        except Exception as exc:  # noqa: BLE001 — readiness falha fechada
+            _log.warning("readiness_failed detail=%s", type(exc).__name__)
+            return JSONResponse(
+                status_code=503,
+                content={**base, "status": "unavailable", "reason": "admin_source_unreachable"},
+            )
+        return {**base, "status": "ok"}
 
     @app.get("/mcp/tools/list")
     def http_list_tools() -> dict:
@@ -245,6 +305,14 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
 
         if name in _EXCLUDE_TOOLS:
             return JSONResponse(status_code=403, content={"error": "tool_excluded", "tool": name})
+
+        # A superfície executável é a PUBLICADA, e nada além dela. Sem esta
+        # checagem, qualquer nome que o dispatch de um domínio saiba rotear
+        # executava — mesmo sem constar em /mcp/tools/list e, portanto, sem
+        # capability nem required_scope publicados para o gateway policiar.
+        # É o que separava as tools listadas das despachaveis.
+        if name not in _TOOL_SCHEMAS:
+            return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
 
         # Toda tool do devteam toca estado do tenant → inner token obrigatório (não há
         # _EXEMPT_TOOLS). O tenant vem SEMPRE dos claims (SEC-035 / INV-3), nunca do arg.
@@ -275,8 +343,30 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
         except KeyError:
             return JSONResponse(status_code=404, content={"error": "unknown_tool", "tool": name})
         except Exception:  # noqa: BLE001 — resposta genérica; detalhe fica apenas no log
+            # Falha de execução é ERRO, e precisa chegar como erro. Antes, o
+            # payload de erro ia dentro do envelope de resultado normal, com HTTP
+            # 200 e sem `isError` — para o gateway e para o agente consumidor isso
+            # é indistinguível de uma execução bem-sucedida cujo retorno por acaso
+            # tem uma chave "error". É a mesma classe de problema dos stubs que
+            # mentem, só que produzida pelo transporte.
             _log.exception("tool_internal_error: %s", name)
-            payload = {"error": "internal_error", "tool": name}
+            erro = [
+                TextContent(
+                    type="text",
+                    text=json.dumps(
+                        {"error": "internal_error", "tool": name}, ensure_ascii=False, indent=2
+                    ),
+                )
+            ]
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "result": {
+                        "content": [c.model_dump(exclude_none=True) for c in erro],
+                        "isError": True,
+                    }
+                },
+            )
         content = [TextContent(type="text", text=json.dumps(payload, ensure_ascii=False, indent=2))]
         return {"result": {"content": [c.model_dump(exclude_none=True) for c in content]}}
 
@@ -284,6 +374,8 @@ def _build_http_app(settings: DevteamSettings) -> FastAPI:
     async def _close_pools() -> None:
         # Fecha os pools por-tenant no shutdown (registry compartilhado da lib).
         await close_tenant_pools()
+        # O pool de health é separado e tem ciclo de vida próprio.
+        await close_health_pool()
 
     return app
 

@@ -234,7 +234,42 @@ def test_negated_silent_fallback_is_not_violation(repo):
         repository_name="x",
         task_description="ajuste seguro",
         proposed_change="Sem fallback silencioso. Propago a exceção com log.exception.",
+        # A mudança precisa estar escopada: sem arquivo nem camada, as regras de
+        # camada não rodam e o resultado é INCONCLUSIVO, não aprovado.
+        affected_files=["src/service.py"],
     )
+    assert res["approved"] is True
+    assert res["inconclusive"] is False
+
+
+def test_sem_escopo_e_inconclusivo_e_nao_aprovado(repo):
+    """Sem arquivos nem camadas, metade das regras não roda — não é aprovação.
+
+    Antes, `approved` era inicializado como True e uma decisão que não casasse
+    com nenhum padrão saía aprovada. Uma denylist só pode afirmar "nenhuma
+    violação conhecida" sobre aquilo que ela conseguiu inspecionar.
+    """
+    res = validate_agent_decision(
+        repo,
+        repository_name="x",
+        task_description="ajuste seguro",
+        proposed_change="Nada de especial aqui.",
+    )
+    assert res["inconclusive"] is True
+    assert res["approved"] is False
+    assert any("INCONCLUSIVO" in n for n in res["notes"])
+
+
+def test_escopo_por_camada_basta(repo):
+    """`affected_layers` sozinho já escopa: as regras de camada conseguem rodar."""
+    res = validate_agent_decision(
+        repo,
+        repository_name="x",
+        task_description="ajuste seguro",
+        proposed_change="Nada de especial aqui.",
+        affected_layers=["backend"],
+    )
+    assert res["inconclusive"] is False
     assert res["approved"] is True
 
 
